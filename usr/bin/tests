@@ -1,0 +1,162 @@
+#!/bin/bash
+
+color=yes
+filenames=yes
+sem=":"
+
+while [ -n "$1" ]; do
+	case "$1" in
+	-h|--help)
+		echo "${0##*/} [-nc] [-s mark] [-F] <files>
+Displays files /directories/ details reported by test(1)
+ -nc       no color
+ -s mark   mark instead of semicolon next by filenames
+ -F        with no filenames"
+		exit 0
+		;;
+	-nc)	color=no
+		;;
+	-s)	shift
+		sem="$1"
+		;;
+	-F)	filenames=no
+		;;
+	-*)	shift;;
+	*)	break;;
+	esac
+	shift
+done
+
+if [ $color = yes ]; then
+	# default colors
+	NO="[00m"
+	RF="[00m"
+	DIR="[01;34m"
+	SL="[01;36m"
+	PI="[40;33m"
+	SO="[40;33m"
+	DO="[40;33m"
+	BS="[44;33;01m"
+	CS="[44;33;01m"
+	NONE="[40;31;01m"
+	UNREAD="[40;31;01m"
+	SUID="[01;41m"
+	SGID="[30;41m"
+	STICKY="[35;40m"
+	X="[01;32m"
+	W="[00;42m"
+
+	# determine colors bases on LS_COLORS
+	oldifs="$IFS"
+	IFS=":"
+	for typecolor in $LS_COLORS; do
+		type=${typecolor/=*}
+		color="[${typecolor/*=}m"
+		case $type in
+		no)	NO="$color";;
+		fi)	RF="$color";;
+		di)	DIR="$color";;
+		ln)	SL="$color";;
+		pi)	PI="$color";;
+		so)	SO="$color";;
+		do)	DO="$color";;
+		bd)	BS="$color";;
+		cd)	CS="$color";;
+		mi)	NONE="$color";;
+		or)	UNREAD="$color";;
+		su)	SUID="$color";;
+		sg)	SGID="$color";;
+		st)	STICKY="$color";;
+		ex)	X="$color";;
+		ow)	W="$color";;
+		esac
+	done
+	IFS="$oldifs"
+else			# no color
+	NO=
+	RF=
+	DIR=
+	SL=
+	PI=
+	SO=
+	DO=
+	BS=
+	CS=
+	NONE=
+	UNREAD=
+	SUID=
+	SGID=
+	STICKY=
+	X=
+	W=
+fi
+
+#for line in `cat`; do
+for line in "$@"; do
+	bs=
+	cs=
+	d=
+	l=
+	rf=
+	sgid=
+	suid=
+	g=
+	o=
+	st=
+	gtz=
+	r=
+	w=
+	x=
+	so=
+	pi=
+
+	if [ -e "$line" ]; then
+		[ -b "$line" ] && bs=y
+		[ -c "$line" ] && cs=y
+		[ -d "$line" ] && d=y
+		[ -L "$line" ] && l=y
+		[ -f "$line" ] && rf=y
+		[ -g "$line" ] && sgid=y
+		[ -u "$line" ] && suid=y
+		[ -G "$line" ] && g=y
+		[ -O "$line" ] && o=y
+		[ -k "$line" ] && st=y
+		[ -s "$line" ] && gtz=y
+		[ -r "$line" ] && r=y
+		[ -w "$line" ] && w=y
+		[ -x "$line" ] && x=y
+		[ -S "$line" ] && so=y
+		[ -p "$line" ] && pi=y
+
+		if [ -n "$r" -a -z "$w" ]; then 
+			res="${RF}R/O${NO}"
+		elif [ -n "$r" -a -n "$w" ]; then
+			res="${W}R/W${NO}"
+		else
+			res="${UNREAD}unreadable${NO}"
+		fi
+		if [ -n "$rf" -a -z "$gtz" ]; then res="$res ${NO}empty${NO}"; fi
+		if [ -n "$x" -a -z "$d" ]; then res="$res ${X}executable${NO}";
+		elif [ -n "$x" ]; then res="$res ${X}browsable${NO}"; fi
+		[ -n "$bs"   ] && res="$res ${BS}block_special${NO}"
+		[ -n "$cs"   ] && res="$res ${CS}character_special${NO}"
+		[ -n "$so"   ] && res="$res ${SO}socket${NO}"
+		[ -n "$pi"   ] && res="$res ${PI}named_pipe${NO}"
+		[ -n "$d"    ] && res="$res ${DIR}directory${NO}"
+		[ -n "$l"    ] && res="$res ${SL}symbolic_link${NO}"
+		[ -n "$rf"   ] && res="$res ${RF}regular_file${NO}"
+		[ -n "$sgid" ] && res="$res ${SGID}set_group_ID${NO}"
+		[ -n "$suid" ] && res="$res ${SUID}set_user_ID${NO}"
+		[ -n "$g"    ] && res="$res ${NO}owned_by_EGID${NO}"		# ${SGID}
+		[ -n "$u"    ] && res="$res ${SUID}owned_by_EUID${NO}"
+		[ -n "$st"   ] && res="$res ${STICKY}set_sticky_bit${NO}"
+	else
+		res="${NONE}nonexistent${NO}"
+	fi
+
+	if [ $filenames = yes ]; then
+		res="${NO}${line}${sem} $res${NO}"
+	fi
+	echo "$res"
+done
+

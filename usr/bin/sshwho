@@ -1,0 +1,106 @@
+#!/bin/bash
+
+set -e
+OPTERR=1
+declare -a argv
+declare -A flag
+
+psgetenv()
+{
+	grep -aPo "\x00$2=[^\x00]+" "/proc/$1/environ" | cut -f2- -d=
+}
+
+while getopts hntd opt
+do
+	Usage="Usage: $0 [-n] [-t] [-d]
+ -n   Do not resolve IP addresses
+ -t   Display time as unix timestamp
+ -d   Replace inherited details with '%' sign"
+ 	if [ ."$1" = .--help ]
+ 	then
+ 		echo "$Usage" >&2
+		exit 0
+	fi
+	case "$opt" in
+	h)		echo "$Usage" >&2
+			exit 0;;
+	n|t|d)	flag[$opt]=1;;
+	'?')	exit 1;;
+	esac
+done
+
+master_ssh_pid=`cat /var/run/sshd.pid`
+test -n "$master_ssh_pid"
+
+{	echo "USER;TTY;FROM;LOGIN@;PID;WHAT"
+
+	for slave_sshd_pid in `ps o pid= --ppid "$master_ssh_pid"`
+	do
+		user_sshd_pid=`ps o pid= --ppid $slave_sshd_pid`
+		user_sshd_pid=${user_sshd_pid//[!0-9]/}
+		test -n "$user_sshd_pid"
+		
+		username=`stat -c %U "/proc/$user_sshd_pid"`
+		start_time=`stat -c %Y "/proc/$user_sshd_pid"`
+		if [ "${flag[t]}" != 1 ]
+		then
+			start_time=`date -d@$start_time`
+		fi
+
+		shells=0
+		for shell_pid in `ps o pid= --ppid "$user_sshd_pid"`
+		do
+			shell_pid=${shell_pid//[!0-9]/}
+			test -n "$shell_pid" || continue
+			shells=$[shells+1]
+		
+			#tty=`readlink "/proc/$shell_pid/fd/0"`
+			tty=`psgetenv "$shell_pid" SSH_TTY`
+			tty=${tty#/dev/}
+			tty=${tty:--}
+
+			if [ "${flag[d]}" = 1 -a $shells -gt 1 ]
+			then
+				from=%
+			else
+				env_ssh_client=`psgetenv "$shell_pid" SSH_CLIENT`
+				hostip=`cut -f1 -d' ' <<<"$env_ssh_client"`
+				port=`cut -f2 -d' ' <<<"$env_ssh_client"`
+				if [ "${flag[n]}" != 1 ]
+				then
+					if type resolveip >/dev/null 2>&1
+					then
+						set +e
+						host=`resolveip -s "$hostip"`
+						if [ -z "$host" ]
+						then
+							host=$hostip
+						fi
+						set -e
+					else
+						host=`dig +short -x "$hostip"`
+					fi
+				else
+					host=$hostip
+				fi
+				from=$host:$port
+			fi
+			
+			exe=`readlink "/proc/$shell_pid/exe"`
+			comm=`cat "/proc/$shell_pid/comm"`
+			argv=(`tr "\0" "\n" <"/proc/$shell_pid/cmdline"`)
+			exe_if_spoofed=
+			[ "${argv[0]}" != "$exe" ] && exe_if_spoofed=" ($exe)"
+			
+			echo "$username;$tty;$from;$start_time;$shell_pid;${argv[@]}$exe_if_spoofed"
+			
+			if [ "${flag[d]}" = 1 -a $shells = 1 ]
+			then
+				username=%
+				start_time=%
+			fi
+		done
+	done
+}|\
+column -t -s';' -n
+

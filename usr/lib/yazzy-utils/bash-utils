@@ -1,0 +1,62 @@
+#!/bin/bash
+
+pipe()
+{
+	local pid1 pid2 myin myout lnk0 lnk1 wtr rdr
+
+	myin=`readlink /proc/self/fd/0`
+	myout=`readlink /proc/self/fd/1`
+
+	sleep inf | sleep inf &
+	pid2=$!
+	pid1=$(jobs -p %+)
+
+	while true
+	do
+		lnk0=`readlink /proc/$pid2/fd/0`
+		lnk1=`readlink /proc/$pid1/fd/1`
+		if [ "$lnk0" != "$myin" -a "$lnk1" != "$myout" ]
+		then
+			break
+		fi
+	done
+
+	exec {wtr}>/proc/$pid1/fd/1 {rdr}</proc/$pid2/fd/0
+
+	disown $pid2
+	kill $pid1 $pid2
+
+	eval $1=$rdr
+	eval $2=$wtr
+}
+
+close()
+{
+	local fd
+	for fd in "$@"
+	do
+		eval "exec $fd>&-"
+	done
+}
+
+capture2()
+{
+	local x r w
+	pipe r w
+	capture2_stdout=$("$@" 2>&$w)
+	x=$?
+	close $w
+	capture2_stderr=$(cat <&$r)
+	close $r
+	return $x
+}
+
+is_digit()
+{
+	[ "$1" = 0 -o "$1" = 1 -o "$1" = 2 -o "$1" = 3 -o "$1" = 4 -o "$1" = 5 -o "$1" = 6 -o "$1" = 7 -o "$1" = 8 -o "$1" = 9 ]
+}
+
+is_integer()
+{
+	[ "$1" -ge 0 -o "$1" -lt 0 ] 2>/dev/null
+}

@@ -1,0 +1,19 @@
+#!/bin/bash
+
+set -u
+
+swapdevice=$1
+
+swapon -s | grep -qw "$swapdevice" && swapoff "$swapdevice" &
+pid=$!
+while [ -d /proc/$pid ]; do
+	swapon -s | grep -w ^"$swapdevice"
+	sleep 1
+done | \
+awk '{printf "\r[K%.2f%%", $4*100/$3}'
+echo
+
+if [ "${swapdevice:0:9}" = /dev/zram ]; then
+	modprobe -i -r zram
+fi
+

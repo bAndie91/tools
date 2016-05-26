@@ -1,0 +1,134 @@
+#!/bin/bash
+
+shopt -s nullglob
+declare -A seen
+declare -A prop
+DRY=0
+
+
+loadprops()
+{
+	prop=()
+	local IFS=$'\n'
+	for line in $(cat "$1")
+	do
+		key=${line%%=*}
+		prop[${key,,}]=${line#*=}
+	done
+}
+
+ison()
+{
+	local v=${prop[$1]}
+	v=${v,,}
+	test "$v" = true -o "$v" = on -o "$v" = 1 -o "$v" = yes
+}
+
+inlist()
+{
+	local needle=$1
+	local glue=$2
+	local haystack=$3
+	local IFS=$glue
+	for x in $haystack
+	do
+		if [ "$x" = "$needle" ]
+		then
+			return 0
+		fi
+	done
+	return 1
+}
+
+runwd()
+{
+	if [ -n "${prop[path]}" ]
+	then
+		(
+			set -e
+			cd "${prop[path]}"
+			run "$@"
+		)
+	else
+		run "$@"
+	fi
+}
+
+run()
+{
+	if [ "$DRY" = 1 ]
+	then
+		echo FILE=$desktop_file EXEC="$@"
+	else
+		(
+			exec "$@"
+		)&
+		disown
+	fi
+}
+
+
+
+while [ -n "$1" ]
+do
+	case "$1" in
+	-h|--help)
+		echo "Options:
+ -n   Do not run anything, only show"
+		exit
+		;;
+	-n)
+		DRY=1
+		;;
+	*)
+		echo "Unknown option: $1" >&2
+		exit 1
+		;;
+	esac
+	shift
+done
+
+
+
+for desktop_file in $HOME/.config/autostart/*.desktop /etc/xdg/autostart/*.desktop
+do
+	loadprops "$desktop_file"
+	Name=${prop[name]}
+
+	if [ "${seen[$Name]}" != 1 ]
+	then
+		seen[$Name]=1
+
+		if ison hidden
+		then
+			continue
+		fi
+		if [ -n "${prop[notshowin]}" ] && inlist icewm ';' "${prop[notshowin],,}"
+		then
+			continue
+		fi
+		if [ -n "${prop[onlyshowin]}" ] && ! inlist icewm ';' "${prop[onlyshowin],,}"
+		then
+			continue
+		fi
+		if [ -n "${prop[tryexec]}" ] && ! type "${prop[tryexec]}" >/dev/null 2>&1
+		then
+			continue
+		fi
+		if [ "${prop[type],,}" != application ]
+		then
+			continue
+		fi
+		
+		
+		cmd=${prop[exec]}
+		
+		if ison terminal
+		then
+			cmd="x-terminal-emulator -e $cmd"
+		fi
+		
+		runwd $cmd
+	fi
+done
+

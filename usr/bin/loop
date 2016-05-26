@@ -1,0 +1,20 @@
+
+. /usr/lib/yazzy-utils/bash-utils
+
+    if is_integer "$1"; then
+        num=$1
+        shift
+    else
+        num=""
+    fi
+    
+    if [ -n "$num" ]; then
+        for ((i=1; i<=num; i++))
+        do
+            eval "$@";
+        done
+    else
+        while true; do
+            eval "$@"
+        done
+    fi

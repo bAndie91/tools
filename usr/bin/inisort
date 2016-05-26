@@ -1,0 +1,118 @@
+#!/usr/bin/env perl
+
+use Fcntl;
+use Data::Dumper;
+$re_sect_pre  = '^(?:\xEF\xBB\xBF|\xFE\xFF)?\s*\[';
+$re_sect_post = '\]';
+$re_sect = $re_sect_pre . '(.+?)' . $re_sect_post;
+$re_key_pre = '^\s*';
+$re_key_post = '\s*=';
+$re_key = $re_key_pre . '(.+?)' . $re_key_post;
+$re_comment = '^\s*[\x23;]';
+
+
+sub seek_to_section
+{
+	my ($sect) = @_;
+	seek $srt_hnd, 0, Fcntl::SEEK_SET;
+	while(<$srt_hnd>)
+	{
+		if(/$re_sect_pre\Q$sect\E$re_sect_post/)
+		{
+			$section_offset = tell $srt_hnd;
+			return $_;
+		}
+	}
+	return undef;
+}
+
+sub keys_left
+{
+	my ($offset) = @_;
+	seek $srt_hnd, $offset, Fcntl::SEEK_SET;
+	while(<$srt_hnd>)
+	{
+		if(/$re_sect/)
+		{
+			last;
+		}
+		elsif(/$re_key/)
+		{
+			my $key = $1;
+			if(not grep {$key eq $_} @ref_keys)
+			{
+				print;
+			}
+		}
+	}
+}
+
+
+
+($srt_file, $ref_file) = @ARGV;
+open $srt_hnd, '<', $srt_file or die "$srt_file: $!\n";
+open $ref_hnd, '<', $ref_file or die "$ref_file: $!\n";
+
+
+while(<$ref_hnd>)
+{
+	if(/$re_sect/)
+	{
+		$old_section = $section;
+		$section = $1;
+		if(defined $old_section)
+		{
+			keys_left($section_offset);
+			@ref_keys = ();
+		}
+		
+		push @ref_sections, $section;
+		undef $section_offset;
+		$section_header = seek_to_section($section);
+		if($section_header)
+		{
+			print $section_header;
+		}
+	}
+	elsif(defined $section_header)
+	{
+		if(/$re_comment/)
+		{
+			next;
+		}
+		elsif(/$re_key/)
+		{
+			$key = $1;
+			push @ref_keys, $key;
+			seek $srt_hnd, $section_offset, Fcntl::SEEK_SET;
+			while(<$srt_hnd>)
+			{
+				if(/$re_key_pre\Q$key\E$re_key_post/)
+				{
+					print;
+					last;
+				}
+			}
+		}
+	}
+}
+
+if(defined $section_offset)
+{
+	keys_left($section_offset);
+}
+# sections_left:
+seek $srt_hnd, 0, Fcntl::SEEK_SET;
+$do_print = 0;
+while(<$srt_hnd>)
+{
+	if(/$re_sect/)
+	{
+		$sect = $1;
+		$do_print = not grep {$sect eq $_} @ref_sections;
+	}
+	if($do_print)
+	{
+		print;
+	}
+}

@@ -1,0 +1,181 @@
+#!/bin/bash
+
+main()
+{
+	local file
+	local owner
+	
+	for file in "$@"
+	do
+		while [ "${file: -1}" = / ]
+		do
+			file=${file%/}
+		done
+		
+		if [ -e "$file" ]
+		then
+			owner=`stat -c %u "$file"`
+			copy="$file.takeown"
+			
+			if [ -d "$file" ]
+			then
+				if [ "$only_dir" != on ]
+				then
+					shopt -s nullglob
+					entries=("$file"/*)
+					shopt -u nullglob
+					
+					if [ ${#entries[@]} != 0 ]
+					then
+						main "$file"/*
+					fi
+				fi
+	
+				if [ "$owner" != "$UID" ]
+				then
+					takeown_dir "$file"
+				fi
+				
+			elif [ "$owner" != "$UID" ]
+			then
+				takeown_file "$file"
+			fi
+		else
+			echo "$file: not exists" >&2
+			exit 1
+		fi
+	done
+}
+
+cpy_attr()
+{
+	chmod ${verbose:+-v} -f --reference="$1" "$2" || true
+	chgrp ${verbose:+-v} -f --reference="$1" --no-dereference "$2" || true
+}
+
+takeown_file_cleanup()
+{
+	rm ${verbose:+-v} --force "$copy"
+}
+
+takeown_dir_cleanup()
+{
+	rmdir ${verbose:+-v} "$copy"
+}
+
+takeown_file()
+{
+	local file
+	local copy
+	file=$1
+	copy="$1.takeown"
+
+	set -e
+	trap takeown_file_cleanup ERR
+		touch -r "$file" "$copy"
+		cpy_attr "$file" "$copy"
+		cp ${verbose:+-v} --no-dereference --preserve=all --force "$file" "$copy"
+		cpy_attr "$file" "$copy"
+		mv ${verbose:+-v} --force "$copy" "$file"
+	trap '' ERR
+	set +e
+}
+
+takeown_dir()
+{
+	local file
+	local copy
+	file=$1
+	copy="$1.takeown"
+
+	local group
+	local modes
+	local entries
+	declare -a entries
+
+	group=`stat -c %G "$file"`
+	modes=`stat -c %a "$file"`
+	shopt -s nullglob
+	entries=("$file"/*)
+	shopt -u nullglob
+
+	if [ "${#entries[@]}" = 0 ]
+	then
+		rmdir ${verbose:+-v} "$file"
+		install ${verbose:+-v} -m "$modes" -d "$file"
+		chgrp ${verbose:+-v} -f "$group" "$file" || true
+	else
+		install ${verbose:+-v} -m "$modes" -d "$copy"
+		# FIXME attributumok
+		chgrp ${verbose:+-v} -f "$group" "$copy" || true
+		chmod ${verbose:+-v} u+x "$copy"
+		mv ${verbose:+-v} -f "$file"/* "$copy"
+		chmod ${verbose:+-v} "$modes" "$copy"
+		trap takeown_dir_cleanup ERR
+		set -e
+			rmdir ${verbose:+-v} "$file"
+			mv ${verbose:+-v} -fT "$copy" "$file"
+		set +e
+		trap '' ERR
+	fi
+}
+
+
+set -u
+shopt -s dotglob
+verbose=
+only_dir=
+
+while [ -n "$1" ]
+do
+	case "$1" in
+	-h|--help)
+		echo "Usage: takeown [-v | -d] files
+ -v   verbose
+ -d   do not recurse into directories"
+		exit 0
+		;;
+	-v|--verbose)
+		verbose=on
+		;;
+	-d)
+		only_dir=on
+		;;
+	-*)	echo "Unknown option: $1" >&2
+		exit 1
+		;;
+	--)	shift
+		break
+		;;
+	*)	break
+		;;
+	esac
+	shift
+done
+
+main "$@"
+
+
+
+true <<EOF
+
+=pod
+
+=head1 NAME
+
+takeown - Take ownership on files, also for unprivileged users
+
+=head1 SYNOPSIS
+
+takeown [B<files> and B<directories>]
+
+=head1 DESCRIPTION
+
+chown(2) is permitted only for root (or a process having CAP_CHOWN), but normal users can emulate this behavior. 
+You can copy other's file for your own in a directory writable by you, and then replace the original file with your copy.
+It is quite tricky and expensive sometimes, but works in case. Say, when somebody forgot to use the right user account 
+when saving files.
+
+=cut
+
+EOF

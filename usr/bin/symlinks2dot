@@ -1,0 +1,87 @@
+#!/bin/bash
+
+opt_mark=1
+
+while [ -n "$1" ]; do
+case "$1" in
+-h|--help)
+	echo "$0 [-M] <files...>
+Options:
+  -M    do not show file type"
+ 	exit 0
+	;;
+-M|--no-mark)
+	opt_mark=0
+	;;
+--)	shift
+	break
+	;;
+-*)	echo "Unknown option: $1" >&2
+	exit 1
+	;;
+*)	break
+	;;
+esac
+shift
+done
+
+
+echo "digraph \"symlinks\" {
+	rankdir=LR;
+	concentrate=true;
+	bgcolor=transparent;
+	node [fontsize=10,width=.1,height=.1,shape=box];
+"
+
+declare -a rank_same
+
+for file in "$@"; do
+
+	if [ -L "$file" ]; then
+		target=`readlink -n "$file"`
+		target_absolute=`readlink -nf "$file"`
+		if [ "$opt_mark" = 1 ]; then
+			if [ -d "$file" ]; then
+				mark='~'
+			else
+				mark='@'
+			fi
+		else
+			mark=
+		fi
+
+		attr=
+		if [ ! -e "$target_absolute" ]; then
+			attr="$attr,color=red"
+		fi
+		if [ "X${target:0:1}" = "X/" ]; then
+			attr="$attr,penwidth=2"
+		fi
+		echo "\"$file\" [label=\"$file$mark\"];"
+		echo "\"$file\" -> \"$target\" [$attr];"
+	else
+		if [ "$opt_mark" = 1 ]; then
+			if [ -d "$file" ]; then
+				mark='/'
+			else
+				mark=
+			fi
+		else
+			mark=
+		fi
+		attr="label=\"$file$mark\""
+		echo "\"$file\" [$attr];"
+		
+		rank_same+=($file)
+	fi
+
+done
+
+echo -n "{rank=same";
+for node in "${rank_same[@]}"; do
+	echo -n " \"$node\"";
+done
+echo "}"
+
+echo "}"
+

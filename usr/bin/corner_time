@@ -1,0 +1,12 @@
+#!/bin/bash
+
+fmt=${1:-%H:%M:%S}
+str=$(date +"$fmt")
+
+[ -z "$COLUMNS" ] && COLUMNS=`tput cols`
+
+while [ -w /proc/$$/fd/1 ]; do
+	echo -ne "\033[s\033[1;"$((COLUMNS-${#str}+1))"H$(date +"$fmt")\033[u"
+	sleep 0.25
+done
+

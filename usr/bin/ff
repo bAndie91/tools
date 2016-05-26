@@ -1,0 +1,49 @@
+#!/bin/bash
+
+maxdepth=
+depth=0
+
+if [ "$1" -ge 0 ] 2>/dev/null
+then
+	maxdepth=$1
+	shift
+fi
+pattern=$1
+shift
+
+declare -a progress
+progress=()
+[ -t 1 -a -t 2 ] && progress=(-o \( -type d -fprintf /dev/stderr "\r[K%p ..." \))
+
+
+while [ -z "$maxdepth" -o "$depth" -le "${maxdepth:-0}" ]
+do
+	echo -e "\r[KDepth $depth" >&2
+	find "${@:-.}" -mindepth "$depth" -maxdepth "$depth" -xdev \( -iname "*$pattern*" -fprintf /dev/stderr "\r[K" -printf "%p\n" \) "${progress[@]}"
+	cont=`find "${@:-.}" -mindepth "$depth" -maxdepth "$depth" -xdev -printf 1 -quit 2>/dev/null`
+	[ -z "$cont" ] && break
+	let depth++
+done
+
+[ -t 1 -a -t 2 ] && printf "\r[K"
+
+
+true <<EOF
+
+=pod
+
+=head1 NAME
+
+ff - horizontal file finder
+
+=head1 SYNOPSIS
+
+ff [B<depth>] <B<pattern>> [B<path>-1] [B<path>-2] ... [B<path>-n]
+
+=head1 DESCRIPTION
+
+Searches for B<pattern> in files and folders given in B<path>s recursively (optionally at most B<depth> depth), case-insensitively, horizontaly.
+
+=cut
+
+EOF

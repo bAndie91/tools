@@ -1,0 +1,11 @@
+#!/bin/bash
+
+n=0
+
+cat /dev/urandom | \
+tr -d -c 'A-Za-z0-9_.:;!@%-' | \
+while read -n "${1:-8}" pass; do 
+	let n++
+	[ $n -gt "${2:-10}" ] && break
+	echo "$pass"
+done

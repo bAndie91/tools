@@ -1,0 +1,114 @@
+#!/bin/bash
+
+interactive=1
+list_all=
+verbose=
+sourced=
+
+. /usr/lib/yazzy-utils/bash-utils
+
+parse_opts()
+{
+	local OPTIND=1
+	Usage="Usage: $0 [-Iav]
+ -I   No interactive, use first socket having keys
+ -a   List all sockets
+ -v   Verbose"
+ 	if [ ."$1" = .--help ]
+ 	then
+ 		echo "$Usage" >&2
+ 		return 1
+ 	fi
+	while getopts hIav opt "$@"
+	do
+		case "$opt" in
+		h)		echo "$Usage" >&2
+				return 1;;
+		I)		interactive=;;
+		a)		list_all=1;;
+		v)		verbose=1;;
+		'?')	return 1;;
+		esac
+	done
+	return 0
+}
+
+
+
+
+if [ "$0" != "$BASH_SOURCE" ]
+then
+	sourced=1
+fi
+
+
+parse_opts "$@"
+code=$?
+if [ $code != 0 ]
+then
+	if [ "$sourced" ]
+	then
+		return $code
+	else
+		exit $code
+	fi
+fi
+
+
+for file in /tmp/ssh-*/agent.* $HOME/.cache/keyring-*/ssh
+do
+	if [ -S "$file" ]
+	then
+		SSH_AUTH_SOCK=$file capture2 ssh-add -l
+		code=$?
+		if [ "$code" = 0 ]
+		then
+			has_keys=1
+			use=1
+		else
+			has_keys=
+			use=
+		fi
+		
+		if [ \( "$has_keys" -a \( "$interactive" -o "$verbose" \) \) -o "$list_all" ]
+		then
+			echo =============
+			if [ "$SSH_AUTH_SOCK" = "$file" ]
+			then
+				echo -n "(current) *** "
+			fi
+			echo "SSH_AUTH_SOCK $file"
+			[ -n "$capture2_stdout" ] && echo "$capture2_stdout"
+			[ -n "$capture2_stderr" ] && echo "$capture2_stderr" >&2
+		fi
+
+		if [ "$has_keys" -o "$list_all" ]
+		then
+			if [ "$interactive" ]
+			then
+				use=
+				[ "$has_keys" ] && default=Y || default=N
+				read -e -p "Use this socket? [$default] "
+				if [ -z "$REPLY" ]
+				then
+					[ "$code" = 0 ] && use=1
+				else
+					REPLY=${REPLY^^}
+					REPLY=${REPLY:0:1}
+					[ "$REPLY" = Y ] && use=1
+				fi
+			fi
+			if [ "$use" ]
+			then
+				if [ "$sourced" ]
+				then
+					export SSH_AUTH_SOCK=$file
+				else
+					echo "export SSH_AUTH_SOCK='${file//\'/\'\\\'\'}'"
+				fi
+				break
+			fi
+		fi
+	fi
+done
+

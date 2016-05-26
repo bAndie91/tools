@@ -1,0 +1,55 @@
+#!/bin/bash
+
+self=${0##*/}
+gts=-1
+lts=-1
+
+
+if expr "$self" : ".*old" >/dev/null
+then
+        # findOLDESTfile
+        find "$@" -type f -printf "%T@ %p\n" | while read ts fn
+        do
+                ts=${ts%.*}
+                if [ $lts -eq -1 -o $ts -lt $lts ]
+                then
+                        lts=$ts
+                        echo `date -d @$lts` "$fn"
+                fi
+        done
+else
+        # findNEWESTfile
+        find "$@" -type f -printf "%T@ %p\n" | while read ts fn
+        do
+                ts=${ts%.*}
+                if [ $gts -eq -1 -o $ts -gt $gts ]
+                then
+                        gts=$ts
+                        echo `date -d @$gts` "$fn"
+                fi
+        done
+fi
+
+
+true <<EOF
+
+=pod
+
+=head1 NAME
+
+findnewestfile, findoldestfile - search for the newest/oldest file
+
+=head1 SYNOPSIS
+
+findnewestfile [B<path>]
+
+findoldestfile [B<path>]
+
+=head1 DESCRIPTION
+
+Search for the newest/oldest file in given directory and in its subdirectories 
+showing files immediately when found one newer/older than the past ones.
+
+=cut
+
+EOF

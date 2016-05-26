@@ -1,0 +1,38 @@
+#!/bin/bash
+# This script swaps two files.
+
+set -e
+
+if [ $# -ne 2 ]
+then
+	echo "swap: 2 arguments needed"
+	exit 1
+fi
+if [ ! -e "$1" ]
+then
+	echo "swap: file does not exist: $1"
+	exit 1
+fi
+if [ ! -e "$2" ]
+then
+	echo "swap: file does not exist: $2"
+	exit 1
+fi
+
+
+TMP=`TMPDIR=. mktemp $([ -d "$1" ] && echo --directory) --dry-run -t .swap.XXXXXX`
+
+if mv -Tv "$1" "$TMP"
+then
+	if mv -Tv "$2" "$1"
+	then
+		if mv -Tv "$TMP" "$2"
+		then
+			exit 0
+		fi
+		exit 4
+	fi
+	exit 3
+fi
+
+exit 2

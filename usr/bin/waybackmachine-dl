@@ -1,0 +1,22 @@
+#!/bin/bash
+
+set -e
+set -u
+url=$1
+set +u
+
+if [ -z "$2" ]
+then
+snapshot=`curl -sS "http://archive.org/wayback/available?url=$url" | sed -e 's/^.*timestamp":"\([0-9]\+\)".*/\1/'`
+else
+snapshot=$2
+fi
+
+set -u
+
+while [ -n "$snapshot" ]
+do
+echo ${snapshot:0:4}-${snapshot:4:2}-${snapshot:6:2} ${snapshot:8:2}:${snapshot:10:2}:${snapshot:12:2}
+curl -sS "http://wayback.archive.org/web/$snapshot/$url" >$snapshot.html
+snapshot=`grep -m 1 "Previous capture" $snapshot.html | grep "<a href" | sed -e 's@^.*/web/\([0-9]\+\).*@\1@'`
+done

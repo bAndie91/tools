@@ -1,0 +1,213 @@
+#!/usr/bin/env perl
+
+use LWP::Simple;
+use Date::Parse;
+use Data::Dumper;
+eval q{ use Linux::UserXAttr qw/:all/; };
+$use_xattr = $@ ? 0 : 1;
+use Getopt::Long;
+use POSIX;
+use constant {EC_DOWNLOADED=>0, EC_ERROR=>1, EC_CACHED=>2, EC_NOTOK=>3, EC_NOTMODIFIED=>4, EC_NOTUPDATED=>5,};
+
+$now = time;
+$use_caching = 1;
+GetOptions(
+	'C!' => sub{ $use_caching = 0; },
+)or die;
+
+($url, $file) = @ARGV;
+($file) = $url =~ /([^\/]+)$/ if not $file;
+
+exit main($url, $file);
+
+
+
+sub file_mtime { return((stat $_[0])[9]); }
+sub file_atime { return((stat $_[0])[8]); }
+
+sub process_response
+{
+	my ($data, $rsp, $prt) = @_;
+	my $file = $GLOB{file};
+	my $chunk_n = ++$GLOB{chunk_n};
+
+	sub cb_return { die join(' ', @_)."\n"; }
+
+	if($chunk_n == 1)
+	{
+		my $file_mtime;
+		
+		if(not $rsp->is_success)
+		{
+			cb_return EC_NOTOK;
+		}
+		if(-e $file)
+		{
+			$file_mtime = file_mtime($file);
+		}
+		
+		my $url_mtime = str2time($rsp->header("Last-Modified"));
+		if(defined $url_mtime)
+		{
+			if($url_mtime <= $file_mtime)
+			{
+				cb_return EC_NOTUPDATED;
+			}
+			$GLOB{url_mtime} = $url_mtime;
+		}
+		
+		my $expires = $rsp->header("Expires");
+		my $cache_control = $rsp->header("Cache-Control");
+		my $maxage;
+
+		for my $prm (split /\s*,\s*/, $cache_control)
+		{
+			if($prm =~ /max-age=(\d+)/)
+			{
+				$maxage = $1;
+				last;
+			}
+		}
+		
+		open $GLOB{fh}, '>', $file or cb_return EC_ERROR, "$file: $!";
+
+		if($use_xattr)
+		{
+			# https://www.freedesktop.org/wiki/CommonExtendedAttributes/
+			setxattr($GLOB{fh}, "user.xdg.origin.url", $rsp->request()->uri);
+			setxattr($GLOB{fh}, "user.cache.expires", $expires) if defined $expires;
+			setxattr($GLOB{fh}, "user.cache.control.max_age", $maxage) if defined $maxage;
+		}
+	}
+	
+	print {$GLOB{fh}} $data or cb_return EC_ERROR, "$file: $!";
+}
+
+sub time2rfc
+{
+	my ($localtime) = @_;
+	my $lc_time = POSIX::setlocale(POSIX::LC_TIME);
+	POSIX::setlocale(POSIX::LC_TIME, "C");
+	my $str = POSIX::strftime("%a, %d %b %Y %T %Z", localtime $localtime);
+	POSIX::setlocale(POSIX::LC_TIME, $lc_time);
+	return $str;
+}
+
+sub main
+{
+	my ($url, $file) = @_;
+	my $local_expires;
+	my $local_maxage;
+	my %headers;
+	
+	if(-e $file)
+	{
+		my $file_mtime = file_mtime($file);
+		if($use_xattr and $use_caching)
+		{
+			my $local_expires = getxattr($file, "user.cache.expires");
+			my $local_maxage = getxattr($file, "user.cache.control.max_age");
+			if(str2time($local_expires) > $now and $file_mtime + $local_maxage > $now)
+			{
+				return EC_CACHED;
+			}
+		}
+		$headers{"If-Modified-Since"} = time2rfc($file_mtime);
+	}
+
+	my $ua = LWP::UserAgent->new;
+	%GLOB = (file => $file);
+	my $rsp = $ua->get($url, ':content_cb' => \&process_response, %headers);
+	
+	if($rsp->is_success)
+	{
+		my ($rc, $msg) = split /\s+/, $rsp->header("X-Died"), 2;
+		if(defined $rc)
+		{
+			warn "$msg\n" if $msg;
+			return $rc;
+		}
+		close $GLOB{fh};
+		if(defined $GLOB{url_mtime})
+		{
+			utime file_atime($file), $GLOB{url_mtime}, $file or warn "$file: $!\n";
+		}
+		return EC_DOWNLOADED;
+	}
+	else
+	{
+		warn "HTTP " . $rsp->code . " " . $rsp->message . "\n";
+		if($rsp->code == 304)
+		{
+			return EC_NOTMODIFIED;
+		}
+		return EC_NOTOK;
+	}
+}
+
+
+=pod
+
+=head1 NAME
+
+dlnew
+
+=head1 SYNOPSIS
+
+dlnew <-C> [B<url>] <B<file>>
+
+=head1 DESCRIPTION
+
+Download content from web if newer than local copy (based on Last-Modified and caching headers).
+
+=head1 PARAMETERS
+
+=over 8
+
+=item B<-C>
+
+Bypass validating cache.
+
+=item B<url>
+
+URL to be downloaded. Schema can be HTTP or HTTPS.
+
+=item B<file>
+
+Local file data have to written in. If omitted, last component (basename) of B<url> will be used.
+
+=back
+
+=head1 EXIT STATUS
+
+=over 8
+
+=item B<0>
+
+B<Url> ia found and downloaded.
+
+=item B<1>
+
+General error, system errors.
+
+=item B<2>
+
+Local B<file>'s freshness validated by saved cache metadata, not downloaded.
+
+=item B<3>
+
+Download not OK. (usually Not Found)
+
+=item B<4>
+
+B<Url> found but not modified. (HTTP 304)
+
+=item B<5>
+
+B<Url> found but not updated, based on Last-Modified header.
+
+=back
+
+=cut
+
+EOF

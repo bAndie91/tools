@@ -1,0 +1,3 @@
+#!/bin/bash
+
+diff -bBiy --suppress-common-lines <(cd "$1"; find . -type f -printf "%p %s\n" -or -type d -printf "%p\n" | sort) <(cd "$2"; find . -type f -printf "%p %s\n" -or -type d -printf "%p\n" | sort)

@@ -1,0 +1,59 @@
+#!/bin/bash
+
+set -e
+
+now=`date +%s`
+terminus=`date +%s -d "$1"`
+shift
+declare -a command
+command=("$@")
+
+
+if [ -z "$1" ]
+then
+	echo "No command specified." >&2
+	exit 252
+fi
+if [ $terminus -lt $now ]
+then
+	echo "Time past." >&2
+	exit 253
+fi
+
+at=`date -d @$terminus`
+echo "Command scheduled to run at $at." >&2
+
+
+while [ $terminus -gt $now ]
+do
+	set +e
+	sleep $[$terminus - $now]
+	set -e
+	now=`date +%s`
+done
+
+exec "${command[@]}"
+exit $?
+
+
+
+true <<EOF
+
+=pod
+
+=head1 NAME
+
+fgat - Execute command in foreground
+
+=head1 SYNOPSIS
+
+fgat <B<time-spec>> <B<command>> [B<arguments>]
+
+=head1 DESCRIPTION
+
+In opposite of at(1), fgat(1) stays in console's foreground and waits for B<time-spec>, after that runs B<command>.
+B<time-spec> can be any string accepted by date(1).
+
+=cut
+
+EOF

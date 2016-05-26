@@ -1,0 +1,9 @@
+
+name=$1
+shift
+if [ ".${name:0:1}" = .- ]
+then
+	echo "Usage: straceall <process name> [strace options]" >&2
+	exit 1
+fi
+exec strace "$@" $(for pid in $(pgrep -x "$name"); do echo -p $pid; done)

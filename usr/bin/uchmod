@@ -1,0 +1,66 @@
+#!/bin/bash
+
+declare -a chmod_opt
+chmod_opt=()
+maxdepth="-maxdepth 0"
+
+help()
+{
+	echo "Usage: $0 [--verbose | --changes | --recursive] <files and folders>" >&2
+	exit ${1:-1}
+}
+
+while [ -n "$1" ]
+do
+	case "$1" in
+	-v|--verbose|-c|--changes)
+		chmod_opt+=("$1")
+		;;
+	-R|--recursive)
+		maxdepth=
+		;;
+	-h|--help)
+		help 0
+		;;
+	--)	shift
+		break
+		;;
+	-*)	echo "Unknown option: $1" >&2
+		exit 1
+		;;
+	*)	break
+		;;
+	esac
+shift
+done
+
+if [ -z "$1" ]
+then
+	help 1
+fi
+
+fmod=`umask -S | tr -d x`
+dmod=`umask -S`
+find "$@" $maxdepth \( -type f -exec chmod "${chmod_opt[@]}" "$fmod" {} \; \) -o \( -type d -exec chmod "${chmod_opt[@]}" "$dmod" {} \; \)
+
+
+true <<EOF
+
+=pod
+
+=head1 NAME
+
+uchmod - umask and chmod
+
+=head1 SYNOPSIS
+
+uchmod [-v] [-R] [B<path>-1] [B<path>-2] ... [B<path>-n]
+
+=head1 DESCRIPTION
+
+Change mode bits of files and directories according to umask(1) settings using chmod(1).
+Use it when file modes were messed up, B<uchmod> change them like mode of newly created files.
+
+=cut
+
+EOF

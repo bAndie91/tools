@@ -1,0 +1,47 @@
+#!/bin/bash
+
+usagedie()
+{
+	echo "Usage:
+ slay [-SIGNAL] <PID>
+ slayall [-SIGNAL] <PROCESS-NAME>" >&2
+	exit 1
+}
+
+myname=${0##*/}
+declare -a argv
+
+while [ -n "$1" ]
+do
+	case "$1" in
+	--help)	usagedie;;
+	-*)
+		argv+=("$1")
+		;;
+	*)
+		prm=$1
+		argv+=("$1")
+		;;
+	esac
+	shift
+done
+
+set -u
+
+if [ "$myname" = slay ]
+then
+	while [ -d "/proc/$prm" ]
+	do
+		kill "${argv[@]}"
+		sleep 0.1
+	done
+elif [ "$myname" = slayall ]
+then
+	while killall -0 "$prm"
+	do
+		killall "${argv[@]}"
+		sleep 0.1
+	done
+else
+	usagedie
+fi

@@ -1,0 +1,33 @@
+#!/bin/bash
+
+f="/etc/network/run/ifstate"
+
+export IFS="$IFS="
+cat "$f" | \
+{
+declare -A ifaces
+
+while read alias phy
+do
+	ifaces[$alias]=1
+	if [ -z "$1" -o "$alias" = "$1" ]
+	then
+		if ! ip link show "$phy" | grep -q -w UP
+		then
+			sed -i "$f" -e "/^$alias=$phy\$/d"
+		fi
+	fi
+done
+ip -o link show | \
+while read n iface rest
+do
+	iface=${iface%:*}
+	if [ -z "${ifaces[$iface]}" ]
+	then
+		if grep -q -w UP <<<"$rest"
+		then
+			echo "$iface=$iface" >>"$f"
+		fi
+	fi
+done
+}

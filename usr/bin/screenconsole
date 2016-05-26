@@ -1,0 +1,15 @@
+#!/bin/bash
+
+if [ ".$1" = ".-i" ]; then
+	shift
+	while read -a cmd; do
+		[ -n "${cmd[*]}" ] && screen -S "$STY" -X "${cmd[@]}"
+	done
+else
+	STY=${1:-$STY}
+	if [ -z "$STY" ]; then
+		echo "$0: No \$STY set. Run within an attached Screen, or run 'screenconsole <ScreenID>'." >&2
+		exit 1
+	fi
+	STY=$STY exec rlwrap -S "$STY> " $0 -i
+fi

@@ -1,0 +1,10 @@
+#!/bin/bash
+
+for lnk in /sys/block/sd*
+do
+	dev=${lnk##*/}
+	trg=`readlink -f "$lnk"`
+	path=`sed -e 's@\(.\+\)/host[0-9]\+.*@\1@' <<<"$trg"`
+	hostnum=`sed -e 's@.\+/host\([0-9]\+\).*@\1@' <<<"$trg"`
+	echo "$dev $(cat $path/host$hostnum/scsi_host/host$hostnum/unique_id) $path/host$hostnum/scsi_host/host$hostnum"
+done

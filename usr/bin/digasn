@@ -1,0 +1,7 @@
+
+if [ "$1" -gt 0 ] 2>/dev/null
+then
+	dig +short txt AS$1.asn.cymru.com
+else
+	dig +short txt $(tr . "\n" <<<"$1" | tac | tr "\n" .)origin.asn.cymru.com
+fi

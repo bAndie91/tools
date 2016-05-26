@@ -1,0 +1,24 @@
+#!/bin/bash
+
+cat /proc/${1:-$$}/environ  | tr "\0" "\n" | sort
+
+
+true <<EOF
+
+=pod
+
+=head1 NAME
+
+lsenv - List environment variables of a process
+
+=head1 SYNOPSIS
+
+lsenv <B<pid>>
+
+=head1 DESCRIPTION
+
+
+
+=cut
+
+EOF

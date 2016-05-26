@@ -1,0 +1,166 @@
+#!/bin/bash
+
+NL=$'\n'
+sel=0
+declare -a printers
+declare -a optvals
+
+clear_input_buffer()
+{
+	while read -r -t 0
+	do
+		read -r -s -N 1
+	done
+}
+
+clear_screen()
+{
+	echo -n "[2J[H"
+}
+
+selected()
+{
+	[ $sel = $nopts ]
+}
+
+while true
+do
+	dflt_prn=`LANG=C lpstat -d | sed -ne 's/.*\s\(\S\+\)/\1/p'`
+	printers=(`LANG=C lpstat -p | sed -ne 's/^\S\+\s\+\(\S\+\).*/\1/p' | sed -e "s/^\($dflt_prn\)\$/*\1/"`)
+	output="DefaultPrinter/Default Printer: ${printers[@]}$NL"
+	output=$output`lpoptions -l`
+
+	clear_screen
+	nopts=0
+	while IFS=: read -r key vals
+	do
+		label=${key#*/}
+		key=${key%%/*}
+		
+		if selected
+		then
+			optname=$key
+			optvals=()
+			optsetv=
+			echo -n "> [1m"
+		else
+			echo -n "  "
+		fi
+		echo -n "$label[m: "
+		
+		nval=0
+		for val in $vals
+		do
+			on=0
+			if [ "${val:0:1}" = '*' ]
+			then
+				on=1
+				val=${val:1}
+				echo -n "[7m"
+			fi
+			if selected
+			then
+				optvals+=("$val")
+				if [ $on = 1 ]
+				then
+					optsetv=$nval
+				fi
+			fi
+			echo -n "$val"
+			echo -n "[m"
+			echo -n " "
+			let nval++
+		done
+		echo
+		let nopts++
+	done <<<"$output"
+	
+	if lpstat -o "$dflt_prn" | read
+	then
+		echo "==================================="
+		lpq | sed -e 1d
+	fi
+	echo "==================================="
+	n=`LANG=C lpstat -l -p "$dflt_prn" | sed -ne '/^\s*After fault/='`
+	lpstat -l -p "$dflt_prn" | head -n ${n:-11}
+	
+
+	while true
+	do
+		read -r -s -N 1 c
+		case "$c" in
+		"")
+			read -r -s -N 1 c2
+			case "$c2" in
+			"")
+				break 2
+				;;
+			"[")
+				read -r -s -N 1 c3
+				case "$c3" in
+				A)	if [ $sel -gt 0 ]
+					then
+						let sel--
+					else
+						sel=$[nopts-1]
+					fi
+					break 1 ;;
+				B)	if [ $sel -lt $[nopts-1] ]
+					then
+						let sel++
+					else
+						sel=0
+					fi
+					break 1 ;;
+				C|D)
+					max=${#optvals[@]}
+					let max--
+					case "$c3" in
+					D)	if [ $optsetv -gt 0 ]
+						then
+							newvaln=$[optsetv-1]
+						else
+							newvaln=$max
+						fi ;;
+					C)	if [ $optsetv -lt $max ]
+						then
+							newvaln=$[optsetv+1]
+						else
+							newvaln=0
+						fi ;;
+					esac
+					newval=${optvals[$newvaln]}
+					if [ "$optname" = DefaultPrinter ]
+					then
+						lpoptions -d "$newval" >/dev/null
+					else
+						lpoptions -o "$optname=$newval"
+					fi
+					break 1 
+					;;
+				*)	clear_input_buffer
+					;;
+				esac
+				;;
+			*)	clear_input_buffer
+				;;
+			esac
+			;;
+		d|e|r|a)
+			case "$c" in
+			d)	cmd=cupsdisable;;
+			e)	cmd=cupsenable;;
+			r)	cmd=cupsreject;;
+			a)	cmd=cupsaccept;;
+			esac
+			command $cmd "$dflt_prn"
+			break 1
+			;;
+		q|Q)
+			break 2
+			;;
+		esac
+	done
+done
+
+# LANG=C lpstat -d -p -o

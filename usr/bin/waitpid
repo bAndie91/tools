@@ -1,0 +1,14 @@
+#!/bin/bash
+
+if [ "$1" -gt 0 ] 2>/dev/null
+then
+	pid=$1
+	while [ -d /proc/$pid ]
+	do
+		sleep 0.5
+	done
+	exit 0
+else
+	echo "Usage: $0 [pid]" >&2
+	exit 1
+fi

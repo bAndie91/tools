@@ -1,0 +1,88 @@
+#!/usr/bin/env perl
+
+use Data::Dumper;
+use Getopt::Long;
+
+# defaults
+$divider = 1024;
+$useNBH = 1;
+@suff = split/,/,"b,K,M,G,T,P";
+%mult = map { $_ => $n++ } @suff;
+%patt = ( used=>"=", free=>"·", );
+
+# commandline parameters
+GetOptions(
+	"relative" => \$mode{"relative"},
+	"br|barrelative" => sub { $mode{"barrelative"} = $mode{"relative"} = 1 },
+	"used=s" => \$patt{"used"},
+	"free=s" => \$patt{"free"},
+	"divider=i" => \$divider,
+	"human!" => \$useNBH,
+	"help" => sub { print "$0 [--relative | --barrelative | --used=* | --free=. | --divider=1024 | --human]\n"; exit; },
+);
+
+
+*hsize = ($useNBH and eval "use Number::Bytes::Human 'format_bytes'; 1") ? 
+sub {
+	return format_bytes($_[0] * $divider ** $mult{$_[1]}, bs=>$divider);
+} :
+sub {
+	$x=$_[0];
+	$suffi = $mult{$_[1]};
+	while($x >= $divider and $suffi < $#suff) { 
+		$x/=$divider;
+		$suffi++;
+	}
+	return sprintf "%0.2f%s", $x, $suff[$suffi];
+};
+
+$COLUMNS = $ENV{"COLUMNS"} || join "", grep {/\d/} (split //, `tput cols`);
+if(-t 0) {
+	@lines = split /[\n\r]+/, `df -kPT`;
+}
+else {
+	print STDERR "Input 'df -kPT' lines.\n";
+	@lines=<>;
+}
+shift @lines;	# skip header
+
+
+for(@lines) {
+	@_ = split /\s+/; 
+	$percent = ($_[5] =~ /^(\d+)/)[0];
+	push @table, [$_[0], $_[6], hsize($_[2],"K"), $percent, $_[2]];
+	#          device, mountpoint, size-human, used%, size-machine
+}
+
+# calculate table cellsizes
+for $i (0..2) {
+	$maxfield[$i] = length((sort {length $$a[$i] <=> length $$b[$i]} @table)[-1][$i]);
+}
+# reminder space for percetange bars
+$barfull = ($COLUMNS-($maxfield[0]+1+$maxfield[1]+1+3+$maxfield[2]+1));
+# largest disk
+$maxdisk = (sort {$$b[4] <=> $$a[4]} @table)[0][4];
+
+
+
+for(@table) {
+	@e = @$_;
+	$ratio = $barratio = 1;
+	$freepatt = $patt{"free"};
+	$usedpatt = $patt{"used"};
+	if($mode{"relative"}) {
+		$ratio = sprintf "%0.4f", $e[4]/$maxdisk;
+		if($mode{"barrelative"}) {
+			$barratio = $ratio;
+		}
+		# do not show free space if it isnt relative to other bars in relative mode
+		else { $freepatt = " " }
+	}
+	$used = int($barfull * $ratio * $e[3] * 0.01);
+	$free = int($barfull * $barratio) - $used;
+	$pad = $barfull - int($barfull * $barratio);
+
+	printf "%-".$maxfield[0]."s %-".$maxfield[1]."s [%s%s]%".$pad."s %".$maxfield[2]."s\n", 
+		$e[0], $e[1], $usedpatt x $used, $freepatt x $free, "", $e[2];
+}
+

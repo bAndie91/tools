@@ -1,0 +1,28 @@
+#!/bin/bash
+
+
+if [ .${1:0:1} = .- ]; then
+	signal=$1
+	shift
+else
+	signal=
+fi
+
+if [ "$1" -eq 0 -o "$1" -eq 1 ] 2>/dev/null; then
+	[ "$1" -eq 0 ] && fd_my=0 && fd_her=1
+	[ "$1" -eq 1 ] && fd_my=1 && fd_her=0
+	pipe=`readlink -n /proc/$$/fd/$fd_my`
+	pipe=`find /proc -maxdepth 3 -mindepth 3 -name $fd_her -lname "pipe:\[${pipe//[!0-9]/}\]" -print -quit 2>/dev/null`
+	pid_her=${pipe:6}
+	pid_her=${pid_her%%/*}
+	if [ -n "$pid_her" ]; then
+		echo kill $signal "$pid_her"
+	else
+		echo "pipekill: piped process not found." >&2
+		exit 1
+	fi
+else
+	echo "Usage: pipekill [-signal] <0|1>" >&2
+	exit 1
+fi
+

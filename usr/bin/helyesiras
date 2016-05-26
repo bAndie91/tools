@@ -1,0 +1,9 @@
+#!/bin/bash
+# script
+# dependencies: curl od tr grep html2text
+
+text=$(echo -n "$*" | od -t x1 -A n | tr " " % | tr -d "\n\r")
+
+curl -sS http://www.xn--helyesrs-fza2j.hu -d suggests=on -d text="$text" |\
+grep "pspell-suggests" |\
+html2text -utf8

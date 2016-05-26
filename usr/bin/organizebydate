@@ -1,0 +1,177 @@
+#!/bin/bash
+
+target_template="%Y/%m/%d/"
+time_field=Y
+verbose_mv=
+dryrun=0
+minlevel=
+maxlevel=
+files_type=
+copy=1
+do_touch=
+
+usage() {
+	echo -n "Usage: ./organizebydate [-t <template>] [-c | -m | -a] [-v] [-n] [[-i | -x] <num>] <files, directories>
+ --template, -t   Target path name using date(1)-style macros
+                  Default: $target_template
+                  Extra macros accepted:
+                   %@    File's directory path
+                   %.    File's name itself
+ --move, --copy   Move or copy files, default is copy
+ --ctime, -c, --mtime, -m, --atime, -a
+                  Timestamping based on change-, modify- (default) or access-time
+ --email, -E      Files are raw Emails, timestamping based on Date header
+ --jpeg, -J       Files are JPEG images, timestamping based on EXIF tags
+ --touch          Change copied (moved) files' mtime
+ --verbose, -v    Verbose mode
+ --dry-run, -n    Dry run
+ --min, -i        Minimum directory level
+ --max, -x        Maximum directory level
+"
+}
+
+while [ -n "$1" ]; do
+	case "$1" in
+	-h|--help)
+		usage
+		exit 0
+		;;
+	-t|--target|--template)
+		shift
+		target_template="$1"
+		;;
+	-c|--ctime)
+		time_field=Z
+		;;
+	-m|--mtime)
+		time_field=Y
+		;;
+	-a|--atime)
+		time_field=X
+		;;
+	-E|--rfc822|--email)
+		files_type=email
+		;;
+	-J|--jpeg)
+		files_type=jpeg
+		;;
+	--touch)
+		do_touch=1
+		;;
+	-v|--verbose)
+		verbose_mv=-v
+		;;
+	-n|--dry-run)
+		dryrun=1
+		;;
+	-i|--min)
+		shift
+		minlevel=$1
+		;;
+	-x|--max)
+		shift
+		maxlevel=$1
+		;;
+	--move)
+		copy=0
+		;;
+	--copy)
+		copy=1
+		;;
+	-*)
+		echo "$0: unknown option: $1" >&2
+		exit 1
+		;;
+	--)
+		shift
+		break
+		;;
+	*)
+		break
+		;;
+	esac
+	shift
+done
+
+if [ -z "$1" ]; then
+	usage
+	exit 1
+fi
+
+find "$@" ${minlevel:+-mindepth $minlevel} ${maxlevel:+-maxdepth $maxlevel} -type f -print | \
+{
+	set -e
+	while read file
+	do
+		basedir=`dirname "$file"`
+		basename=`basename "$file"`
+		datetime=
+		filetime=
+		
+		case "$files_type" in
+		email)
+			datetime=`grep -m 1 -i -E ^Date: "$file" | cut -d' ' -f2-`
+			;;
+		jpeg)
+			if type exif >/dev/null 2>&1
+			then
+				for tagid in 0x0132 0x9003 0x9004
+				do
+					datetime=`exif -m -t $tagid "$file"`
+					if [ -n "$datetime" ]
+					then
+						break
+					fi
+				done
+			else
+				datetime=`exiftool -CreateDate -s3 "$file"`
+			fi
+			date=${datetime:0:10}
+			time=${datetime:10}
+			datetime=${date//:/-}${time}
+			;;
+		'')
+			filetime=`stat -c %$time_field "$file"`
+			;;
+		esac
+
+		if [ -n "$datetime" ]
+		then
+			filetime=`date +%s -d "$datetime"`
+		fi
+		
+		if [ -z "$filetime" ]
+		then
+			continue
+		fi
+		
+		target=`date +"$target_template" -d "@$filetime" | sed -e "s,%@,${basedir//,/\\,},g; s,%\.,${basename//,/\\,},g;"`
+		
+		if [ "$dryrun" = 1 ]
+		then
+			sgn=-
+			[ "$copy" = 1 ] && sgn==
+			echo "$file $sgn> $target"
+		else
+			if [ "${target: -1}" = / ]
+			then
+				target_dir=$target
+			else
+				target_dir=`dirname "$target"`
+			fi
+			[ -d "$target_dir" ] || mkdir -p "$target_dir"
+			
+			if [ "$copy" = 1 ]
+			then
+				cp $verbose_mv -n "$file" "$target"
+			else
+				mv $verbose_mv -n "$file" "$target"
+			fi
+			if [ "$do_touch" = 1 ]
+			then
+				touch -t `date +%Y%m%d%H%M.%S -d "@$filetime"` "$target"
+			fi
+		fi
+	done
+}
+

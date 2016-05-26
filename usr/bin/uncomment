@@ -1,0 +1,25 @@
+#!/bin/bash
+
+grep -Ev '^[[:space:]]*(#|;|//|$)' -r "$@"
+
+
+true <<EOF
+
+=pod
+
+=head1 NAME
+
+uncomment - stripping comment lines from config files
+
+=head1 SYNOPSIS
+
+uncomment [B<files> and B<directories>]
+
+=head1 DESCRIPTION
+
+This command does not overwrite nor write files, just prints them without comments. 
+I.e. removing lines starting hashmark or semicolon.
+
+=cut
+
+EOF

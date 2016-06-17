@@ -1,0 +1,23 @@
+
+set -e
+set -u
+
+
+baseurl=https://www.debuggex.com
+
+regex=$1
+regexjson=${regex//\\/\\\\}
+regexjson=${regexjson//\"/\\\"}
+
+
+token=$(
+  curl "$baseurl/api/image" \
+    -sS \
+    -H "Accept: application/json" \
+    -H "Content-Type: application/json;charset=utf-8" \
+    -d "{\"flavor\":\"python\",\"regex\":\"$regexjson\",\"strFlags\":\"\",\"testString\":\"My test data\",\"unitTests\":\"[]\"}" |\
+  grep -Eo 'token("[^"]+){2}' | cut -f3 -d'"'
+)
+
+test -n "$token"
+wget "$baseurl/i/$token.png"

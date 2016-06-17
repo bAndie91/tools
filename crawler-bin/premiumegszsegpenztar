@@ -1,0 +1,18 @@
+#!/bin/bash
+
+if [ -z "$2" ]
+then
+	echo "Usage: $0 <Tagkod> <Jelszo>" >&2
+	exit 1
+fi
+
+set -e
+set -u
+
+baseurl=https://portal.premiumegeszsegpenztar.hu
+sessid=`curl -sSi $baseurl/ep-bejelentkezes -d Tagkod="$1" -d Jelszo="$2" | grep -Eio "PHPSESSID=[a-z0-9]+"`
+
+curl -sS -b "$sessid" $baseurl/ajax.php?page=epp \
+	-d action=home/vagyonalakulas \
+	-H X-Requested-With:XMLHttpRequest |\
+sed -e 's/.*\(FelhasznalhatoEgyenleg\)":"\([^"]\+\).*/\1	\2\n/'

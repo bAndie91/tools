@@ -1,0 +1,30 @@
+#!/bin/bash
+
+if [ -z "$2" ]
+then
+	echo "Usage: $0 <Card10> <TeleCode>
+ Card10    Bankkartya szam utolso 10 szamjegye
+ TeleCode  Telekod, ami kezdetben a szamlaszam utolso 3 szamjegye" >&2
+	exit 1
+fi
+
+set -e
+set -u
+
+cardnum10=$1
+telecode=$2
+portalId=
+
+curl https://www.otpbankdirekt.hu/homebank/do/bankkartyaEgyenlegLekerdezes \
+ -sS \
+ -d muvelet=login \
+ -d azonosito=$cardnum10 \
+ -d telekod=$telecode \
+ -d honlapAzonosito=Default.User \
+ -d lang=hu \
+ -d cookieid=$portalId |
+perl -ne 'if(/(tartoz.+egyenleg|lek.+tt.+bet|devizanem)/i)
+ {$A=lc substr$1,0,1;
+ <>=~/<strong>(.+?)</;
+ $$A=$1;}
+ END{printf "Egyenleg: %s %s\nLekötés: %s\n",$t,$d,$l}'

@@ -1,0 +1,7 @@
+#!/bin/bash
+
+set -u
+
+curl -sS "http://www.domain.hu/domain/regcheck/?dname=${1}&host=${2}" |\
+perl -ne 'if(/^\.\.\.\./){if($o){exit}else{$o++}}elsif($o){s/<.*?>//g;if(!/^\s*$/){print}}'
+

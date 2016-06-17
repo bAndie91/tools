@@ -1,5 +1,10 @@
 |   |   |
 |---|---|
+| [crawler-bin/debuggex](crawler-bin/debuggex) | fetch a regex pattern's flowchart from debuggex.com
+| [crawler-bin/helyesiras](crawler-bin/helyesiras) | query helyesírás.hu for spellcheking Hungarian words
+| [crawler-bin/huregcheck](crawler-bin/huregcheck) | query .HU domain zone validity and integrity online
+| [crawler-bin/otp-egyenleg](crawler-bin/otp-egyenleg) | query account balance at OTP
+| [crawler-bin/premiumegszsegpenztar](crawler-bin/premiumegszsegpenztar) | query account balance
 | [usr/bin/bardf](usr/bin/bardf) | show disk usage (du) by ascii percetange bars
 | [usr/bin/chshebang](usr/bin/chshebang) | change script interpreter (shebang)
 | [usr/bin/corner_time](usr/bin/corner_time) | display a digital clock in terminal's upper-right side (run "corner_time &")
@@ -14,13 +19,11 @@
 | [usr/bin/fgat](usr/bin/fgat) | foreground command scheduler
 | [usr/bin/findnewestfile](usr/bin/findnewestfile) | search for even newer files and always display the newest one
 | [usr/bin/findoldestfile](usr/bin/findoldestfile) | same for oldest file
-| [usr/bin/Head](usr/bin/Head) | 
-| [usr/bin/header.sed](usr/bin/header.sed) | 
-| [usr/bin/helyesiras](usr/bin/helyesiras) | query helyesírás.hu for spellcheking Hungarian words
-| [usr/bin/huregcheck](usr/bin/huregcheck) | query .HU domain zone validity and integrity online
+| [usr/bin/Head](usr/bin/Head) | output only one screen from the beginning of input stream
+| [usr/bin/header.sed](usr/bin/header.sed) | output until the first double (CR)LF
 | [usr/bin/inisort](usr/bin/inisort) | sort INI file's content according to another one
 | [usr/bin/loop](usr/bin/loop) | repeat running a command (optionally N times)
-| [usr/bin/lpset](usr/bin/lpset) | 
+| [usr/bin/lpset](usr/bin/lpset) | setup printers and their options interactively
 | [usr/bin/lsata](usr/bin/lsata) | list ata device numbers and corresponding block devices
 | [usr/bin/lsenv](usr/bin/lsenv) | display a process' environment variables
 | [usr/bin/organizebydate](usr/bin/organizebydate) | copy/move/rename files based on atime/ctime/mtime, exif time, Date email header
@@ -38,14 +41,14 @@
 | [usr/bin/straceall](usr/bin/straceall) | strace all processes given by name
 | [usr/bin/swap](usr/bin/swap) | swap two files in name
 | [usr/bin/symlinks2dot](usr/bin/symlinks2dot) | output a graph (graphviz) illustrating forwarded symlinks
-| [usr/bin/Tail](usr/bin/Tail) | 
+| [usr/bin/Tail](usr/bin/Tail) | output only one screen at the end of input stream
 | [usr/bin/takeown](usr/bin/takeown) | take ownership on files if the direcotry is writable
 | [usr/bin/tests](usr/bin/tests) | check files with ``[``'s flags and display them colorized
 | [usr/bin/uchmod](usr/bin/uchmod) | chmod files to default mode (based on umask)
 | [usr/bin/uncomment](usr/bin/uncomment) | filter out comments
 | [usr/bin/waitpid](usr/bin/waitpid) | wait until a given (not mandatory a child) process is alive
 | [usr/bin/waybackmachine-dl](usr/bin/waybackmachine-dl) | download all copies of an URL from archive.org starting from the latest version
-| [usr/bin/xdg-autostart](usr/bin/xdg-autostart) | 
+| [usr/bin/xdg-autostart](usr/bin/xdg-autostart) | starts programms defined in *.desktop files. useful for DE's not supporting XDG autostart standard
 | [usr/lib/yazzy-utils/bash-utils](usr/lib/yazzy-utils/bash-utils) | common shell functions, sources by utility scripts
 | [usr/sbin/swapoff-progress](usr/sbin/swapoff-progress) | turn off a swap device and display percentage completeness
-| [usr/sbin/syncifstate](usr/sbin/syncifstate) | fix inconsistent /run/network/ifstate
+| [usr/sbin/syncifstate](usr/sbin/syncifstate) | fix inconsistent /run/network/ifstate content

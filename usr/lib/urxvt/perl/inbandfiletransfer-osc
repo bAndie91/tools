@@ -1,0 +1,442 @@
+#! perl
+
+use Data::Dumper;
+use MIME::Base64 qw/decode_base64 encode_base64 encoded_base64_length/;
+use Digest::MD5 qw/md5_hex/;
+use Gtk2 qw/-init -threads-init/;
+use threads;
+use Glib qw/TRUE FALSE/; 
+use Number::Bytes::Human qw/format_bytes/;
+use Time::HiRes qw/gettimeofday/;
+use constant {STAT_DEVNO=>0, STAT_INO=>1, STAT_MODE=>2, STAT_LINKS=>3, STAT_UID=>4, STAT_GID=>5, STAT_DEVIDENT=>6, STAT_SIZE=>7, STAT_ATIME=>8, STAT_MTIME=>9, STAT_CTIME=>10, STAT_PREFBLKSZ=>11, STAT_BLOCKS=>12};
+use constant {RXVT_CAPTURE=>1, RXVT_PASS=>()};
+
+my $is_download_in_progress = 0;
+my $is_upload_in_progress = 0;
+my $actual_filename;
+my $expect_filesize;
+my $file_handle;
+my $data_encoding;
+my $digest_handle;
+my $buffer = '';
+my $last_used_folder = '.';
+my $pbar_updated_time = 0;
+my $chunk_size = 72;
+my $chunk_sent;
+my $Conv = {
+	'base64' => {
+		'decode' => sub{ return decode_base64($_[0]); },
+		'closeline' => '^=====',
+	},
+	'uucp' => {
+		'decode' => sub{ },
+		'closeline' => '',
+	},
+	'QP' => {
+		'decode' => sub{ },
+		'closeline' => '',
+	},
+};
+
+my $gui = {
+	'wind' => Gtk2::Window->new,
+	'box1' => Gtk2::VBox->new,
+	'box3' => Gtk2::HBox->new,
+	'pbar' => Gtk2::ProgressBar->new,
+	'lab1' => Gtk2::Label->new,
+
+	'ibtn' => Gtk2::Button->new_with_label(" I "),
+	'iwnd' => Gtk2::Window->new,
+	'scrl' => Gtk2::ScrolledWindow->new,
+	'info' => Gtk2::TextView->new,
+};
+$gui->{'wind'}->add($gui->{'box1'});
+$gui->{'wind'}->set_title("rxvt In-Band File Transfer");
+$gui->{'wind'}->set_default_size(400, 50);
+$gui->{'wind'}->signal_connect('delete_event' => \&hide_win);
+$gui->{'lab1'}->set_alignment(0, 0.5);
+$gui->{'lab1'}->set_justify('left');
+$gui->{'ibtn'}->signal_connect('clicked' => \&show_log_win);
+$gui->{'box1'}->pack_start($gui->{'pbar'}, TRUE, FALSE, 0);
+$gui->{'box1'}->pack_start($gui->{'box3'}, TRUE, TRUE, 0);
+$gui->{'box3'}->pack_start($gui->{'lab1'}, TRUE, TRUE, 0);
+$gui->{'box3'}->pack_start($gui->{'ibtn'}, FALSE, FALSE, 0);
+
+$gui->{'iwnd'}->add($gui->{'scrl'});
+$gui->{'iwnd'}->set_title("rxvt In-Band File Transfer - Log");
+$gui->{'iwnd'}->set_default_size(370, 450);
+$gui->{'iwnd'}->signal_connect('delete_event' => \&hide_win);
+$gui->{'scrl'}->set_border_width(5);
+$gui->{'scrl'}->set_policy('automatic', 'automatic');
+$gui->{'scrl'}->add($gui->{'info'});
+$gui->{'info'}->set_editable(FALSE);
+my $g_thread = threads->new(\&rungui);
+
+
+
+sub on_osc_seq_perl
+{
+   my ($rxvt, $osc, $resp) = @_;
+
+   if($osc =~ /^inbandfiletransfer;(.+)/)
+   {
+      my ($action, $encoding, $filename, $size) = split /;/, $1;
+      
+	  if(grep {$encoding eq $_} keys %$Conv)
+      {
+      	$data_encoding = $encoding;
+
+      	if($action eq 'download')
+      	{
+	      	$filename =~ s{.*/}{};
+	      	
+			gui_lock();
+	      	my $file_chooser = Gtk2::FileChooserDialog->new("Download", undef, 'save', 'gtk-cancel'=>'cancel', 'gtk-save'=>'ok');
+	      	$file_chooser->set_do_overwrite_confirmation(TRUE);
+			$file_chooser->set_current_folder($last_used_folder);
+			$file_chooser->set_current_name($filename);
+			my $response = $file_chooser->run();
+			if($response eq 'ok')
+			{
+				$filename = $file_chooser->get_filename();
+				$last_used_folder = $file_chooser->get_current_folder();
+			}
+			$file_chooser->destroy();
+			gui_unlock();
+
+			if($response eq 'ok')
+			{
+				$rxvt->tt_write('y');
+		      	$actual_filename = $filename;
+		      	$expect_filesize = $size || -1;
+	      		add_log($actual_filename);
+    		  	if(open $file_handle, '>', $actual_filename)
+    	  		{
+	      			$is_download_in_progress = 1;
+	      			#$rxvt->enable('add_lines');
+		      		$digest_handle = Digest::MD5->new;
+		      		$buffer = '';
+		      		message("Download started");
+		      		zero_pbar();
+	    	  	}
+		      	else
+		      	{
+	    	  		error("File open error: $!");
+	      		}
+			}
+			else
+			{
+				$rxvt->tt_write('n');
+			}
+      	}
+      	elsif($action eq 'upload')
+      	{
+			gui_lock();
+	      	my $file_chooser = Gtk2::FileChooserDialog->new("Upload", undef, 'open', 'gtk-cancel'=>'cancel', 'gtk-open'=>'ok');
+			$file_chooser->set_current_folder($last_used_folder);
+			my $response = $file_chooser->run();
+			if($response eq 'ok')
+			{
+				$filename = $file_chooser->get_filename();
+				$last_used_folder = $file_chooser->get_current_folder();
+			}
+			$file_chooser->destroy();
+			gui_unlock();
+
+			if($response eq 'ok')
+			{
+				$rxvt->tt_write('y');
+				add_log($filename);
+				if(open($file_handle, '<', $filename))
+				{
+		      		$digest_handle = Digest::MD5->new;
+					$expect_filesize = (stat $filename)[STAT_SIZE];
+					
+					$is_upload_in_progress = 1;
+	      			#$rxvt->enable('add_lines');
+					$rxvt->tt_write($filename . "\n");
+					message("Upload started");
+					zero_pbar();
+					send_a_file_chunk($rxvt);
+				}
+				else
+				{
+					error("File open error: $!");
+				}
+			}
+			else
+			{
+				$rxvt->tt_write('n');
+			}
+	    }
+      	else
+      	{
+      		error("Unknown action: $action");
+      	}
+      }
+      else
+      {
+      	error("Unknown encoding: $encoding");
+      }
+	  return RXVT_CAPTURE;
+   }
+   return RXVT_PASS;
+}
+
+sub on_add_lines
+{
+	my ($rxvt, $data) = @_;
+	if($is_download_in_progress)
+	{
+		$data = $buffer . $data;
+		my $closeline = $Conv->{$data_encoding}->{'closeline'};
+		while($data =~ s/(.*\n)//)
+		{
+			my $line = $1;
+			if($line =~ /$closeline/)
+			{
+				$is_download_in_progress = 0;
+      			#$rxvt->disable('add_lines');
+				my $size = tell $file_handle;
+				my $md5 = uc $digest_handle->hexdigest;
+				gui_lock();
+				$gui->{'pbar'}->set_fraction(1);
+				$gui->{'pbar'}->set_text(sprintf "%sB (100%%)", size4human($size));
+				gui_unlock();
+				add_log("MD5 $md5");
+
+				if(close $file_handle)
+				{
+					message("Downloaded");
+				}
+				else
+				{
+					error("File close error: $!");
+				}
+
+				$rxvt->scr_add_lines($data);
+				return RXVT_CAPTURE;
+			}
+			else
+			{
+				if(defined $file_handle)
+				{
+					my $filedata = $Conv->{$data_encoding}->{'decode'}->($line);
+					my $part_size = tell($file_handle) + length($filedata);
+
+					gui_lock();
+					show_main_win();
+					if($pbar_updated_time + 0.5 < gettimeofday())
+					{
+						if($expect_filesize >= 0)
+						{
+							my $prc = $part_size / $expect_filesize;
+							$gui->{'pbar'}->set_fraction($prc);
+							$gui->{'pbar'}->set_text(sprintf "%sB (%d%%)", size4human($part_size), $prc*100);
+						}
+						else
+						{
+							$gui->{'pbar'}->pulse;
+							$gui->{'pbar'}->set_text(sprintf "%sB", size4human($part_size));
+						}
+						$pbar_updated_time = gettimeofday();
+					}
+					gui_unlock();
+					
+					$digest_handle->add($filedata);
+					my $ok = print {$file_handle} $filedata;
+					if(not $ok)
+					{
+						error("File write error: $!");
+						close $file_handle;
+						undef $file_handle;
+					}
+				}
+			}
+		}
+		$buffer = $data;
+		return RXVT_CAPTURE;
+	}
+	elsif($is_upload_in_progress)
+	{
+		$data = $buffer . $data;
+		while($data =~ s/(.*\n)//)
+		{
+			my $line = $1;
+			if($line =~ /^=(.+)$/)
+			{
+				my $msg = $1;
+				$msg =~ s/\s*$//;
+				if($msg eq 'received')
+				{
+					my $sent_size = tell $file_handle;
+					my $prc = $sent_size / $expect_filesize;
+					gui_lock();
+					$gui->{'pbar'}->set_fraction($prc);
+					$gui->{'pbar'}->set_text(sprintf "%sB (%d%%)", size4human($sent_size), $prc*100);
+					gui_unlock();
+					
+					my $now = time;
+					if($now < $chunk_sent + 1.0)
+					{
+						$chunk_size *= 2;
+					}
+					elsif($now > $chunk_sent + 1.8)
+					{
+						$chunk_size = int($chunk_size / 2);
+					}
+					send_a_file_chunk($rxvt);
+				}
+				else
+				{
+					print STDERR Dumper $msg;
+				}
+			}
+			else
+			{
+				$is_upload_in_progress = 0;
+				#$rxvt->disable('add_lines');
+				close $file_handle;
+				undef $file_handle;
+				error("Upload is interruped");
+				last;
+			}
+		}
+		$buffer = $data;
+		return RXVT_CAPTURE;
+	}
+	return RXVT_PASS;
+}
+
+sub on_destroy
+{
+	Gtk2->main_quit;
+	$g_thread->join;
+	0;
+}
+
+sub send_a_file_chunk
+{
+	if(defined $file_handle)
+	{
+		my ($rxvt) = @_;
+		my $buf;
+		if(read($file_handle, $buf, $chunk_size*57))
+		{
+			$digest_handle->add($buf);
+			$rxvt->tt_write(encoded_base64_length($buf) . "\n");
+			$rxvt->tt_write(encode_base64($buf));
+			$chunk_sent = time;
+		}
+		else
+		{
+			$is_upload_in_progress = 0;
+   			#$rxvt->disable('add_lines');
+			my $md5 = uc $digest_handle->hexdigest;
+			add_log("MD5 $md5");
+	
+			if(eof($file_handle))
+			{
+				$rxvt->tt_write("0\n");
+				#$rxvt->tt_write(chr(0x04));
+				message("Uploaded");
+			}
+			else
+			{
+				$rxvt->tt_write("\n");
+				error("File read error: $!");
+			}
+			close $file_handle;
+			undef $file_handle;
+		}
+	}
+}
+
+sub error
+{
+	add_log($_[0]);
+	upd_status('<span foreground="darkred"><b>'.$_[0].'</b></span>');
+}
+
+sub message
+{
+	add_log($_[0]);
+	upd_status($_[0]);
+}
+
+sub upd_status
+{
+	gui_lock();
+	show_main_win();
+	$gui->{'lab1'}->set_markup($_[0]);
+	gui_unlock();
+}
+
+sub add_log
+{
+	gui_lock();
+	my $buffer = $gui->{'info'}->get_buffer;
+	my (undef, $end) = $buffer->get_bounds;
+	$buffer->insert($end, $_[0] . "\n");
+	gui_unlock();
+}
+
+sub show_main_win
+{
+	$gui->{'wind'}->show_all;
+}
+
+sub show_log_win
+{
+	$gui->{'iwnd'}->show_all;
+}
+
+sub hide_win
+{
+	$_[0]->hide;
+	return Gtk2::EVENT_STOP;
+}
+
+sub guido
+{
+	gui_lock();
+	my $o = shift @_;
+	my $m = shift @_;
+	$gui->{$o}->$m(@_);
+	gui_unlock();
+}
+
+sub gui_lock
+{
+	Gtk2::Gdk::Threads->enter;
+}
+
+sub gui_unlock
+{
+	Gtk2::Gdk::Threads->leave;
+}
+
+sub rungtk
+{
+	Gtk2->main_iteration while Gtk2->events_pending;
+}
+
+sub rungui
+{
+	Gtk2->main;
+}
+
+sub zero_pbar
+{
+	gui_lock();
+	$gui->{'pbar'}->set_fraction(0);
+	$gui->{'pbar'}->set_text("(0%)");
+	gui_unlock();
+}
+
+sub size4human
+{
+	my ($n, $u) = format_bytes(int $_[0]) =~ /([\d\.,]+)(.*)/;
+	return "$n $u";
+}
+

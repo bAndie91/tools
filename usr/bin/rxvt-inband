@@ -1,0 +1,162 @@
+#!/bin/bash
+
+osc()
+{
+	echo -en "\033]777;inbandfiletransfer;$1\007"
+}
+
+act=download
+err=0
+
+while [ -n "$1" ]
+do
+	case "$1" in
+	-d)	act=download
+		;;
+	-u)	act=upload
+		;;
+	-*)	echo "Unknown option: $1" >&2
+		exit 1;;
+	--)	shift
+		break;;
+	*)	break;;
+	esac
+	shift
+done
+
+usage()
+{
+	terminalSystem=n/a
+	if [ -n "$SSH_CLIENT" ]
+	then
+		terminalSystem=${SSH_CLIENT%% *}
+	fi
+	
+	echo "Usage: $0 [-d <path> | -u [path]]
+ -d   Download from system running shell to system running terminal
+      $(hostname) => $terminalSystem
+      You can give a file to download or a folder to download it in tar.gz.
+      You will be prompted for the target file.
+ -u   Upload file from system running terminal to system running shell
+      $terminalSystem => $(hostname)
+      You will be prompted for the source file.
+      I save the file in the given path, or in working directory if path is
+      unspecified, as the same name as source file.
+      If path is not a directory, the I save in it and overwrite if exists.
+
+Don't forget to load rxvt extension by Xresouces directive:
+\"URxvt.perl-ext: default,inbandfiletransfer-osc\"" >&2
+}
+
+case "$act" in
+download)
+	if [ -z "$1" ]
+	then
+		usage
+		err=1
+	else
+		if [ -r "$1" ]
+		then
+			name=`readlink -f "$1"`
+			name=${name##*/}
+			name=${name//;/}
+			if [ -d "$1" ]
+			then
+				osc2="$name.tar.gz;-1"
+			else
+				size=`stat -c %s "$1"`
+				osc2="$name;$size"
+			fi
+			
+			stty -echo
+			osc "download;base64;$osc2"
+			read -n 1 -s accepted
+	
+			if [ "$accepted" = "y" ]
+			then
+				if [ -d "$1" ]
+				then
+					tar czf - "$1" 2>/dev/null | base64
+				else
+					cat "$1" | base64
+				fi
+				err=${PIPESTATUS[0]}
+				echo =====
+			else
+				echo "File transfer cancelled." >&2
+				err=2
+			fi
+			stty echo
+		else
+			echo "Can not read: $1" >&2
+			err=1
+		fi
+	fi
+	;;
+
+upload)
+	if [ -z "$1" ]
+	then
+		set .
+	fi
+	
+	dir=`dirname "$1"`
+	wrtbl=$1
+	[ ! -e "$1" ] && wrtbl=$dir
+
+	if [ -w "$wrtbl" ]
+	then
+		stty -echo
+		echo "Ready to upload" >&2
+		osc "upload;base64"
+		read -n 1 accepted
+
+		if [ "$accepted" = "y" ]
+		then
+			read name
+			if [ -d "$1" ]
+			then
+				name=${name##*/}
+				outfile=$1/$name
+			else
+				outfile=$1
+			fi
+			
+			while true
+			do
+				read size
+				if [ -z "$size" ] || ! [ "$size" -ge 0 ] 2>/dev/null
+				then
+					echo "Upload error" >&2
+					echo '!'
+					break
+				elif [ $size = 0 ]
+				then
+					break
+				fi
+				
+				read -N $size data
+				echo "$data"
+				echo =received >&2
+			done | base64 -d >"$outfile"
+
+			err=${PIPESTATUS[1]}
+			if [ $err = 0 ]
+			then
+				echo "File transfer completed: $outfile"
+			else
+				echo "Error $err" >&2
+			fi
+		else
+			echo "File transfer cancelled." >&2
+			err=2
+		fi
+		stty echo
+	else
+		echo "Can not write: $1" >&2
+		err=1
+	fi
+	;;
+esac
+
+exit $err

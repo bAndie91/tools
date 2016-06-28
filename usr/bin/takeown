@@ -1,5 +1,78 @@
 #!/bin/bash
 
+verbose()
+{
+	local cmd=$1
+	shift
+	command "$cmd" ${verbose:+-v} "$@"
+}
+
+run()
+{
+	if [ "$dryrun" = yes ]
+	then
+		[ "$1" != verbose ] || shift
+		echo "$@"
+	else
+		"$@"
+	fi
+}
+
+debug()
+{
+	[ "$debug" = yes ] && warn "$@"
+}
+
+warn()
+{
+	echo "$PROGNAME: $*" >&2
+}
+
+err()
+{
+	errno=$1
+	shift
+	warn "$@"
+	exit $errno
+}
+
+try()
+{
+	while [ -n "$1" ]
+	do
+		case "$1" in
+		--except)
+			shift
+			trap "$1" ERR
+			;;
+		*)
+			echo "Unknown option: $1" >&2
+			set -e
+			false
+			;;
+		esac
+		shift
+	done
+	set -e
+}
+
+yrt()
+{
+	trap '' ERR
+	set +e
+}
+
+is_empty_directory()
+{
+	local a=`find "$1" -mindepth 1 -print -quit`
+	[ -z "$a" ]
+}
+
+strict()
+{
+	[ "${strict[$1]}" = yes ]
+}
+
 main()
 {
 	local file
@@ -7,153 +80,227 @@ main()
 	
 	for file in "$@"
 	do
-		while [ "${file: -1}" = / ]
-		do
-			file=${file%/}
-		done
-		
 		if [ -e "$file" ]
 		then
 			owner=`stat -c %u "$file"`
-			copy="$file.takeown"
 			
-			if [ -d "$file" ]
+			if [ -L "$file" ]
 			then
-				if [ "$only_dir" != on ]
-				then
-					shopt -s nullglob
-					entries=("$file"/*)
-					shopt -u nullglob
-					
-					if [ ${#entries[@]} != 0 ]
-					then
-						main "$file"/*
-					fi
-				fi
-	
 				if [ "$owner" != "$UID" ]
 				then
-					takeown_dir "$file"
+					takeown symlink "$file"
+				fi
+			
+			elif [ -d "$file" ]
+			then
+				if [ "$owner" != "$UID" ]
+				then
+					takeown directory "$file"
+				fi
+			
+				if [ "$recursive" = yes ]
+				then
+					# Recurse into subdirectory.
+					main "$file"/*
 				fi
 				
 			elif [ "$owner" != "$UID" ]
 			then
-				takeown_file "$file"
+				takeown file "$file"
 			fi
+		
 		else
-			echo "$file: not exists" >&2
-			exit 1
+			err 1 "$file: not exists"
 		fi
 	done
 }
 
+subs_file_cmnt()
+{
+	# Replace filename in lines like: `# file: ...´
+	sed -e "s@^# file:.*@# file: ${1//@/\@}@"
+}
+
 cpy_attr()
 {
-	chmod ${verbose:+-v} -f --reference="$1" "$2" || true
-	chgrp ${verbose:+-v} -f --reference="$1" --no-dereference "$2" || true
+	run verbose chgrp --quiet --reference="$1" --no-dereference "$2" || ! strict group
+	run verbose chmod --quiet --reference="$1" "$2" || ! strict mode
+	getfacl --skip-base "$1" | subs_file_cmnt "$2" | run setfacl --restore=- || ! strict acl
+	getfattr --no-dereference --physical --dump "$1" | subs_file_cmnt "$2" | run setfattr --restore=- || ! strict xattr
 }
 
-takeown_file_cleanup()
+takeown()
 {
-	rm ${verbose:+-v} --force "$copy"
+	local file=$2
+	local copy=$2.takeown
+	local back=$2.tookown
+	
+	debug "${FUNCNAME[0]}-$1 $2"
+	
+	case "$1" in
+	symlink)
+		takeown_symlink
+		;;
+	file)
+		takeown_file
+		;;
+	directory)
+		takeown_directory
+		;;
+	esac
 }
 
-takeown_dir_cleanup()
+cleanup()
 {
-	rmdir ${verbose:+-v} "$copy"
+	case "$1" in
+	symlink)
+		run verbose rm --force "$copy"
+		;;
+	file)
+		run verbose rm --force "$copy"
+		;;
+	directory)
+		run verbose rmdir "$copy"
+		;;
+	directory-recursive)
+		run verbose rm -r "$copy"
+		if [ -e "$back" ]
+		then
+			run verbose mv --force --no-target-directory "$back" "$file"
+		fi
+		;;
+	esac
+}
+
+takeown_symlink()
+{
+	(try --except "cleanup symlink"
+		local target=`readlink "$file"`
+		run verbose ln --symbolic --no-target-directory --force "$target" "$copy"
+		run touch --no-dereference --reference="$file" "$copy"
+		run verbose mv --force --no-target-directory "$copy" "$file"
+	)
 }
 
 takeown_file()
 {
-	local file
-	local copy
-	file=$1
-	copy="$1.takeown"
-
-	set -e
-	trap takeown_file_cleanup ERR
-		touch -r "$file" "$copy"
+	(try --except "cleanup file"
+		run touch --reference="$file" "$copy"
 		cpy_attr "$file" "$copy"
-		cp ${verbose:+-v} --no-dereference --preserve=all --force "$file" "$copy"
+		run verbose cp --no-dereference --preserve=all --force "$file" "$copy"
 		cpy_attr "$file" "$copy"
-		mv ${verbose:+-v} --force "$copy" "$file"
-	trap '' ERR
-	set +e
+		run verbose mv --force "$copy" "$file"
+	)
 }
 
-takeown_dir()
+takeown_directory()
 {
-	local file
-	local copy
-	file=$1
-	copy="$1.takeown"
-
 	local group
 	local modes
-	local entries
-	declare -a entries
-
 	group=`stat -c %G "$file"`
 	modes=`stat -c %a "$file"`
-	shopt -s nullglob
-	entries=("$file"/*)
-	shopt -u nullglob
-
-	if [ "${#entries[@]}" = 0 ]
+	
+	if [ -w "$file" ]
 	then
-		rmdir ${verbose:+-v} "$file"
-		install ${verbose:+-v} -m "$modes" -d "$file"
-		chgrp ${verbose:+-v} -f "$group" "$file" || true
+		(try --except "cleanup directory"
+			run verbose install -m 0700 -d "$copy"
+			if ! is_empty_directory "$file"
+			then
+				run verbose mv --force "$file"/* "$copy"
+			fi
+			cpy_attr "$file" "$copy"
+		)
+		run verbose mv --force --no-target-directory "$copy" "$file"
 	else
-		install ${verbose:+-v} -m "$modes" -d "$copy"
-		# FIXME attributumok
-		chgrp ${verbose:+-v} -f "$group" "$copy" || true
-		chmod ${verbose:+-v} u+x "$copy"
-		mv ${verbose:+-v} -f "$file"/* "$copy"
-		chmod ${verbose:+-v} "$modes" "$copy"
-		trap takeown_dir_cleanup ERR
-		set -e
-			rmdir ${verbose:+-v} "$file"
-			mv ${verbose:+-v} -fT "$copy" "$file"
-		set +e
-		trap '' ERR
+		(try --except "cleanup directory-recursive"
+			run verbose cp --recursive --no-dereference --preserve=all --no-target-directory --force "$file" "$copy"
+			cpy_attr "$file" "$copy"
+			if ! is_empty_directory "$file"
+			then
+				run verbose mv --force --no-target-directory "$file" "$back"
+			fi
+			run verbose mv --force --no-target-directory "$copy" "$file"
+		)
 	fi
 }
 
 
-set -u
+
 shopt -s dotglob
+shopt -s nullglob
+
+PROGNAME=takeown
 verbose=
-only_dir=
+debug=
+dryrun=
+recursive=
+declare -A strict
+strict=([mode]= [group]= [acl]= [xattr]=)
+
 
 while [ -n "$1" ]
 do
 	case "$1" in
 	-h|--help)
-		echo "Usage: takeown [-v | -d] files
+		echo "Usage: takeown [options] <files>
+Options:
  -v   verbose
- -d   do not recurse into directories"
+ -D   debug
+ -n   dry run
+ -R   recurse into directories
+ -t   strict chmod, chgrp, setfacl, setfattr
+ -M   no strict chmod
+ -G   no strict chgrp
+ -A   no strict setfacl
+ -X   no strict setfattr"
 		exit 0
 		;;
 	-v|--verbose)
-		verbose=on
+		verbose=yes
 		;;
-	-d)
-		only_dir=on
+	-D|-debug)
+		debug=yes
 		;;
-	-*)	echo "Unknown option: $1" >&2
-		exit 1
+	-n|--dry-run)
+		dryrun=yes
 		;;
-	--)	shift
+	-R|--recursive)
+		recursive=yes
+		;;
+	-t|--strict)
+		for s in ${!strict[@]}
+		do
+			[ -z "${strict[$s]}" ] && strict[$s]=yes
+		done
+		;;
+	-M|--no-strict-mode|--no-strict-modes|--no-strict-chmod)
+		strict[mode]=no
+		;;
+	-G|--no-strict-group|--no-strict-chgrp)
+		strict[group]=no
+		;;
+	-A|--no-strict-acl|--no-strict-setfacl)
+		strict[acl]=no
+		;;
+	-X|--no-strict-xattr|--no-strict-setfattr)
+		strict[xattr]=no
+		;;
+	-*)
+		err 1 "Unknown option: $1"
+		;;
+	--)
+		shift
 		break
 		;;
-	*)	break
+	*)
+		break
 		;;
 	esac
 	shift
 done
 
 main "$@"
+exit $?
 
 
 
@@ -167,14 +314,14 @@ takeown - Take ownership on files, also for unprivileged users
 
 =head1 SYNOPSIS
 
-takeown [B<files> and B<directories>]
+takeown [I<options>] <I<files> and I<directories>>
 
 =head1 DESCRIPTION
 
-chown(2) is permitted only for root (or a process having CAP_CHOWN), but normal users can emulate this behavior. 
-You can copy other's file for your own in a directory writable by you, and then replace the original file with your copy.
-It is quite tricky and expensive sometimes, but works in case. Say, when somebody forgot to use the right user account 
-when saving files.
+chown(2) is permitted only for root (and processes with CAP_CHOWN), but normal users can emulate this behavior.
+You can copy others´ file for your own in a directory writable by you, and then replace the original file with your copy.
+It is quite tricky and expensive sometimes, but gives solution for some cases.
+Say, when somebody forgot to use the right user account when saving files directly to your folders.
 
 =cut
 

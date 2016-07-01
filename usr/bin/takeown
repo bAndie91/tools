@@ -1,5 +1,7 @@
 #!/bin/bash
 
+. /usr/lib/yazzy-utils/bash-utils || exit 1
+
 verbose()
 {
 	local cmd=$1
@@ -20,46 +22,12 @@ run()
 
 debug()
 {
-	[ "$debug" = yes ] && warn "$@"
+	[ "$debug" = yes ] && warnx "$@"
 }
 
-warn()
+warnx()
 {
 	echo "$PROGNAME: $*" >&2
-}
-
-err()
-{
-	errno=$1
-	shift
-	warn "$@"
-	exit $errno
-}
-
-try()
-{
-	while [ -n "$1" ]
-	do
-		case "$1" in
-		--except)
-			shift
-			trap "$1" ERR
-			;;
-		*)
-			echo "Unknown option: $1" >&2
-			set -e
-			false
-			;;
-		esac
-		shift
-	done
-	set -e
-}
-
-yrt()
-{
-	trap '' ERR
-	set +e
 }
 
 is_empty_directory()
@@ -68,9 +36,24 @@ is_empty_directory()
 	[ -z "$a" ]
 }
 
+strip_trailing_slashes()
+{
+	local var=$1
+	while [ "${!var: -1}" = / ]
+	do
+		local value=${!var%/}
+		eval $var=\$value
+	done
+}
+
 strict()
 {
 	[ "${strict[$1]}" = yes ]
+}
+
+no_strict()
+{
+	[ "${strict[$1]}" != yes ]
 }
 
 main()
@@ -80,6 +63,8 @@ main()
 	
 	for file in "$@"
 	do
+		strip_trailing_slashes file
+		
 		if [ -e "$file" ]
 		then
 			owner=`stat -c %u "$file"`
@@ -110,7 +95,7 @@ main()
 			fi
 		
 		else
-			err 1 "$file: not exists"
+			errx 1 "$file: not exists"
 		fi
 	done
 }
@@ -123,10 +108,13 @@ subs_file_cmnt()
 
 cpy_attr()
 {
-	run verbose chgrp --quiet --reference="$1" --no-dereference "$2" || ! strict group
-	run verbose chmod --quiet --reference="$1" "$2" || ! strict mode
-	getfacl --skip-base "$1" | subs_file_cmnt "$2" | run setfacl --restore=- || ! strict acl
-	getfattr --no-dereference --physical --dump "$1" | subs_file_cmnt "$2" | run setfattr --restore=- || ! strict xattr
+	if [ "$dochgrp" = yes ]
+	then
+		run verbose chgrp --quiet --reference="$1" --no-dereference "$2" || no_strict group
+	fi
+	run verbose chmod --quiet --reference="$1" "$2" || no_strict mode
+	getfacl --skip-base "$1" | subs_file_cmnt "$2" | run setfacl --restore=- || no_strict acl
+	getfattr --no-dereference --physical --dump "$1" | subs_file_cmnt "$2" | run setfattr --restore=- || no_strict xattr
 }
 
 takeown()
@@ -137,17 +125,29 @@ takeown()
 	
 	debug "${FUNCNAME[0]}-$1 $2"
 	
-	case "$1" in
-	symlink)
-		takeown_symlink
-		;;
-	file)
-		takeown_file
-		;;
-	directory)
-		takeown_directory
-		;;
-	esac
+	(
+		case "$1" in
+		symlink)
+			takeown_symlink
+			;;
+		file)
+			takeown_file
+			;;
+		directory)
+			takeown_directory
+			;;
+		esac
+	)
+	local ec=$?
+	if [ $ec != 0 ]
+	then
+		if [ "$ignoreerrors" = yes ]
+		then
+			Error=$ec
+		else
+			exit $ec
+		fi
+	fi
 }
 
 cleanup()
@@ -174,23 +174,23 @@ cleanup()
 
 takeown_symlink()
 {
-	(try --except "cleanup symlink"
+	try --except "cleanup symlink"
 		local target=`readlink "$file"`
 		run verbose ln --symbolic --no-target-directory --force "$target" "$copy"
 		run touch --no-dereference --reference="$file" "$copy"
 		run verbose mv --force --no-target-directory "$copy" "$file"
-	)
+	untry
 }
 
 takeown_file()
 {
-	(try --except "cleanup file"
+	try --except "cleanup file"
 		run touch --reference="$file" "$copy"
 		cpy_attr "$file" "$copy"
 		run verbose cp --no-dereference --preserve=all --force "$file" "$copy"
 		cpy_attr "$file" "$copy"
 		run verbose mv --force "$copy" "$file"
-	)
+	untry
 }
 
 takeown_directory()
@@ -202,17 +202,17 @@ takeown_directory()
 	
 	if [ -w "$file" ]
 	then
-		(try --except "cleanup directory"
+		try --except "cleanup directory"
 			run verbose install -m 0700 -d "$copy"
 			if ! is_empty_directory "$file"
 			then
 				run verbose mv --force "$file"/* "$copy"
 			fi
 			cpy_attr "$file" "$copy"
-		)
+		untry
 		run verbose mv --force --no-target-directory "$copy" "$file"
 	else
-		(try --except "cleanup directory-recursive"
+		try --except "cleanup directory-recursive"
 			run verbose cp --recursive --no-dereference --preserve=all --no-target-directory --force "$file" "$copy"
 			cpy_attr "$file" "$copy"
 			if ! is_empty_directory "$file"
@@ -220,7 +220,7 @@ takeown_directory()
 				run verbose mv --force --no-target-directory "$file" "$back"
 			fi
 			run verbose mv --force --no-target-directory "$copy" "$file"
-		)
+		untry
 	fi
 }
 
@@ -236,6 +236,8 @@ dryrun=
 recursive=
 declare -A strict
 strict=([mode]= [group]= [acl]= [xattr]=)
+dochgrp=yes
+ignoreerrors=
 
 
 while [ -n "$1" ]
@@ -244,15 +246,20 @@ do
 	-h|--help)
 		echo "Usage: takeown [options] <files>
 Options:
- -v   verbose
  -D   debug
+ -v   verbose
  -n   dry run
+ -i   ignore errors
  -R   recurse into directories
  -t   strict chmod, chgrp, setfacl, setfattr
  -M   no strict chmod
  -G   no strict chgrp
  -A   no strict setfacl
- -X   no strict setfattr"
+ -X   no strict setfattr
+ -g   no chgrp at all
+Exit code:
+ 0    all operations succeeded
+ 1+   error happended during progress, even ignored"
 		exit 0
 		;;
 	-v|--verbose)
@@ -266,6 +273,12 @@ Options:
 		;;
 	-R|--recursive)
 		recursive=yes
+		;;
+	-g|--no-group|--no-chgrp)
+		dochgrp=no
+		;;
+	-i|--ignore)
+		ignoreerrors=yes
 		;;
 	-t|--strict)
 		for s in ${!strict[@]}
@@ -286,7 +299,7 @@ Options:
 		strict[xattr]=no
 		;;
 	-*)
-		err 1 "Unknown option: $1"
+		errx 1 "Unknown option: $1"
 		;;
 	--)
 		shift
@@ -299,8 +312,9 @@ Options:
 	shift
 done
 
+declare -g Error=0
 main "$@"
-exit $?
+exit $Error
 
 
 

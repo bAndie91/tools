@@ -3,14 +3,14 @@
 pipe()
 {
 	local pid1 pid2 myin myout lnk0 lnk1 wtr rdr
-
+	
 	myin=`readlink /proc/self/fd/0`
 	myout=`readlink /proc/self/fd/1`
-
+	
 	sleep inf | sleep inf &
 	pid2=$!
 	pid1=$(jobs -p %+)
-
+	
 	while true
 	do
 		lnk0=`readlink /proc/$pid2/fd/0`
@@ -20,12 +20,12 @@ pipe()
 			break
 		fi
 	done
-
+	
 	exec {wtr}>/proc/$pid1/fd/1 {rdr}</proc/$pid2/fd/0
-
+	
 	disown $pid2
 	kill $pid1 $pid2
-
+	
 	eval $1=$rdr
 	eval $2=$wtr
 }
@@ -59,4 +59,76 @@ is_digit()
 is_integer()
 {
 	[ "$1" -ge 0 -o "$1" -lt 0 ] 2>/dev/null
+}
+
+warnx()
+{
+	echo "$0: $*" >&2
+}
+
+errx()
+{
+	errno=$1
+	shift
+	warnx "$@"
+	exit $errno
+}
+
+bash_isset()
+{
+	local sets=${2:-$-}
+	sets=${sets//[!$1]/}
+	echo ${sets:-_}
+}
+
+bash_trapbody()
+{
+	local a
+	a=`trap -p "$1"`
+	if [ -z "$a" ]
+	then
+		echo -
+		return
+	fi
+	a=${a:9}
+	a=${a:0:-${#1}-2}
+	echo "$a"
+}
+
+try()
+{
+	declare -g TRYSTACK
+	local savesets=$-
+	TRYSTACK+=($(bash_isset e $savesets)$(bash_isset E $savesets)"$(bash_trapbody ERR)")
+	trap - ERR
+	
+	while [ -n "$1" ]
+	do
+		case "$1" in
+		--except)
+			shift
+			trap "$1" ERR
+			;;
+		*)
+			echo "Unknown option: $1" >&2
+			set -o errexit
+			false
+			;;
+		esac
+		shift
+	done
+	
+	set -o errexit
+	set -o errtrace
+}
+
+untry()
+{
+	local trydata
+	trydata=${TRYSTACK[-1]}
+	unset TRYSTACK[${#TRYSTACK[@]}-1]
+	[ "${trydata:0:1}" = _ ] && set +o errexit || set -o errexit
+	[ "${trydata:1:1}" = _ ] && set +o errtrace || set -o errtrace
+	trap "${trydata:2}" ERR
+	return 0
 }

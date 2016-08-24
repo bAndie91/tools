@@ -1,0 +1,114 @@
+#!/bin/bash
+
+base_url=https://secure2.entropay.com
+curlopts=(-sSi -H "Cookie: ix_epcons_cookie=accept")
+showCardNumber=
+showExpirationDate=
+showCvvCode=
+
+
+while getopts "hu:p:NXC" OPT
+do
+	case "$OPT" in
+	u)
+		user=$OPTARG
+		;;
+	p)
+		pass=$OPTARG
+		;;
+	N)
+		showCardNumber=1
+		;;
+	X)
+		showExpirationDate=1
+		;;
+	C)
+		showCvvCode=1
+		;;
+	h)
+		echo "Usage: entropay -u USER -p PASS [-N] [-X] [-C]
+Options:
+  -N   show card number
+  -X   show expiration date
+  -C   show CVV code"
+		exit 0
+		;;
+	esac
+done
+
+set -e
+set -u
+test -n "$user"
+test -n "$pass"
+
+
+# Get login page
+page1=$(
+ curl "${curlopts[@]}" $base_url/unprot/login/login.html
+)
+
+JSESSIONID=$(
+ echo "$page1" |\
+ grep -Eo "^Set-Cookie: JSESSIONID=[^;]+" |\
+ cut -f2 -d=
+)
+csrf_token=$(
+ echo "$page1" |\
+ grep -Eo "__csrf_token = \".+\"" |\
+ cut -f2 -d\"
+)
+test -n "$JSESSIONID"
+test -n "$csrf_token"
+
+
+curlopts+=(-H "Cookie: JSESSIONID=$JSESSIONID" -d __csrf_token="$csrf_token")
+
+
+# Login
+curl "${curlopts[@]}" $base_url/unprot/login/login-fullscreen.html \
+ -d userName="$user" \
+ -d password="$pass" >/dev/null
+
+# Get cards' data
+content=$(
+ curl "${curlopts[@]}" $base_url/prot/card/manage/content.ajax \
+  -d listView= \
+  -d showDeletedCards= \
+  -d cur_page=1 \
+  -d maxResults=40
+)
+
+
+domget()
+{
+  [ "$#" = 1 ] && set -- "$1" "text{}"
+  pup "$1" "$2" <<<"$content"
+}
+
+
+# Display details
+
+declare -a cards
+cards=(`domget "[id$=cardName]" "attr{id}" | sed -e 's/.\{8\}$//'`)
+
+for cid in "${cards[@]}"
+do
+	name=`domget "[id=${cid}cardName] strong"`
+	balance1=`domget "strong[id=${cid}actualBalance]"`
+	balance2=`domget "strong[id=${cid}availableBalance]"`
+	[ $showCardNumber ] && number=`domget "[id=${cid}cardNumber]"` || number=
+	[ $showExpirationDate ] && expire=`domget "[id=${cid}endDate]"` || expire=
+	holder=`domget ":parent-of([id=${cid}cardNumber]) .cardUserName"`
+	[ $showCvvCode ] && { cvv=`domget "[id=${cid}CVV]"`; [ -n "$cvv" ] || cvv=n/a; } || cvv=
+	
+	if [ $showCardNumber$showExpirationDate$showCvvCode ]
+	then
+		echo "$name
+  $balance1 ($balance2)
+  ${number:+$number  }${expire:+[$expire]  }${cvv:+CVV:$cvv}
+  $holder"
+  	else
+  		echo "$name $balance1 ($balance2)"
+  	fi
+done
+

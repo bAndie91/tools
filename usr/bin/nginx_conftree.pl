@@ -49,21 +49,21 @@ sub readconffile {
 			printf "\"%s\" -> \"%s\";\n", $caller, $rel_file;
 		}
 		
-		open my $fh, '<', $file or warn "No such file: $file\n";
+		open my $fh, '<', $file or warn "$file: $!\n";
 		my $conf = <$fh>;
 		close $fh;
 		
 		if($output eq "merge") {
-			print "#", "#" x $indent, " file: $file\n";
+			print "\n#!", "#" x $indent, " file: $file\n";
 		}
 
 		while(1) {
-			if($conf =~ /(?:^|;)\s*include\s+(\S+?)\s*;/sm) {
+			if($conf =~ /(^|;)\s*include\s+(\S+?)\s*;/sm) {
 				if($output eq "merge") {
-					print $`;
+					print $`.$1;
 				}
 				
-				my $child = $1;
+				my $child = $2;
 				$conf = $';
 				readconffile($child, $indent+1, $rel_file);
 			}
@@ -76,7 +76,7 @@ sub readconffile {
 		}
 		
 		if($output eq "merge") {
-			print "#", "#" x $indent, " end of file: $file\n";
+			print "\n#!", "#" x $indent, " end of file: $file\n";
 		}
 	}
 }

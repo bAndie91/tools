@@ -1,0 +1,185 @@
+#!/bin/bash
+
+
+say()
+{
+	echo "$*" >&2
+}
+die()
+{
+	say "$@"
+	exit 1
+}
+shasum()
+{
+	if [ $sign = yes ]
+	then
+		sha256sum -b | cut -b 1-64
+	fi
+}
+
+
+keyfile=$HOME/.ssh/id_rsa
+pubfile=$HOME/.ssh/id_rsa.pub
+mode=encrypt
+sign=yes
+bs=256
+
+
+while [ -n "$1" ]
+do
+case "$1" in
+-h|--help)
+	say "Usage: $0 [Options] [FILE]
+Options:
+ --encrypt, -e     encrypt (default)
+ --decrypt, -d     decrypt
+ --recipient, -r PUBLIC_KEY
+ --key, -k PRIVATE_KEY
+ --no-sign, -S     there is no signature at the end of data
+"
+	exit 0
+	;;
+-r|--recipient)
+	shift
+	pubfile=$1
+	;;
+-k|--key)
+	shift
+	keyfile=$1
+	;;
+-e|--encrypt)
+	mode=encrypt
+	;;
+-d|--decrypt)
+	mode=decrypt
+	;;
+-S|--no-sign)
+	sign=no
+	;;
+--)
+	shift
+	break
+	;;
+-*)
+	die Invalid option: $1
+	;;
+*)
+	break
+	;;
+esac
+shift
+done
+
+if [ -n "$1" ]
+then
+	filename=$1
+else
+	filename=/dev/stdin
+fi
+
+set -o nounset
+set -o errexit
+set -o pipefail
+mainpid=$$
+
+
+if [ -e "$pubfile" ]
+then
+	if file -b "$pubfile" | grep -q OpenSSH
+	then
+		if [ ! -e "$pubfile.pem" ]
+		then
+			say Convert $pubfile to $pubfile.pem
+			ssh-keygen -f "$pubfile" -e -m PKCS8 >"$pubfile.pem"
+		fi
+		pubfile=$pubfile.pem
+	fi
+	say Using public key: $pubfile
+else
+	if [ $mode = encrypt -o \( $mode = decrypt -a $sign = yes \) ]
+	then
+		die Public key not found: $pubfile
+	fi
+fi
+if [ -e "$keyfile" ]
+then
+	say Using private key: $keyfile
+else
+	if [ $mode = decrypt -p \( $mode = encrypt -a $sign = yes \) ]
+	then
+		die Private key not found: $keyfile
+	fi
+fi
+
+
+
+
+if [ $mode = encrypt ]
+then
+	say Generating passkey
+	pass=`openssl rand -base64 32`
+	echo -n "$pass" | openssl rsautl -encrypt -inkey "$pubfile" -pubin
+
+	say Encrypting
+	exec 3>&1
+	hash=`tee /dev/fd/4 <"$filename" \
+		4> >(set -o errexit
+			set -o pipefail
+			trap 'kill $mainpid' ERR;
+			openssl enc -aes-256-cbc -salt -pass pass:$pass >&3) \
+		|shasum`
+	
+	if [ $sign = yes ]
+	then
+		say Signing
+		echo "$hash" | xxd -r -p | openssl rsautl -sign -inkey "$keyfile"
+	fi
+else
+	if [ $sign = yes ]
+	then
+		bits=`openssl rsa -text -noout -in "$pubfile" -pubin | sed -e '1s/.*(\([0-9]\+\) bit.*/\1/;q'`
+		let signbytes=bits/8
+		say Signature bytes: $signbytes
+	else
+		signbytes=0
+	fi
+	
+	{
+	say Extracting passkey
+	pass=`head -c $bs | openssl rsautl -decrypt -inkey "$keyfile"`
+	
+	say Decrypting
+	exec 3>&1
+	hashes=(`tee /dev/fd/4 \
+		4> >(set -o errexit
+			set -o pipefail
+			trap 'kill $mainpid' ERR;
+			head -c -$signbytes |\
+			openssl enc -d -aes-256-cbc -pass pass:$pass |\
+			tee /dev/fd/3 |\
+			shasum) \
+		1> >(set -o errexit
+			set -o pipefail
+			trap 'kill $mainpid' ERR;
+			if [ $sign = yes ]
+			then
+				tail -c $signbytes |\
+				openssl rsautl -verify -inkey "$pubfile" -pubin |\
+				xxd -p -c 32
+			fi)`)
+	
+	if [ $sign = yes ]
+	then
+		say Verify signature
+		if [ "${hashes[0]}" = "${hashes[1]}" ]
+		then
+			say Signature OK
+		else
+			die Signatures mismatch
+		fi
+	fi
+	}<"$filename"
+fi
+
+say Done

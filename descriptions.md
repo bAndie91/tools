@@ -1,6 +1,8 @@
 |   |   |
 |---|---|
 | [crawler-bin/debuggex](crawler-bin/debuggex) | fetch a regex pattern's flowchart from debuggex.com
+| [crawler-bin/entropay](crawler-bin/entropay) | 
+| [crawler-bin/erzsebetplusz.js](crawler-bin/erzsebetplusz.js) | 
 | [crawler-bin/helyesiras](crawler-bin/helyesiras) | query helyesírás.hu for spellcheking Hungarian words
 | [crawler-bin/huregcheck](crawler-bin/huregcheck) | query .HU domain zone validity and integrity online
 | [crawler-bin/otp-egyenleg](crawler-bin/otp-egyenleg) | query account balance at OTP
@@ -22,10 +24,10 @@
 | [usr/bin/Head](usr/bin/Head) | output only one screen from the beginning of input stream
 | [usr/bin/header.sed](usr/bin/header.sed) | output until the first double (CR)LF
 | [usr/bin/inisort](usr/bin/inisort) | sort INI file's content according to another one
-| [usr/bin/loop](usr/bin/loop) | repeat running a command (optionally N times)
 | [usr/bin/lpset](usr/bin/lpset) | setup printers and their options interactively
 | [usr/bin/lsata](usr/bin/lsata) | list ata device numbers and corresponding block devices
 | [usr/bin/lsenv](usr/bin/lsenv) | display a process' environment variables
+| [usr/bin/nginx_conftree.pl](usr/bin/nginx_conftree.pl) | 
 | [usr/bin/organizebydate](usr/bin/organizebydate) | copy/move/rename files based on atime/ctime/mtime, exif time, Date email header
 | [usr/bin/pipekill](usr/bin/pipekill) | signal process piping to/from us
 | [usr/bin/PMdirindex](usr/bin/PMdirindex) | 
@@ -33,6 +35,9 @@
 | [usr/bin/PMpwgen](usr/bin/PMpwgen) | poorman's password generator
 | [usr/bin/PMrecdiff](usr/bin/PMrecdiff) | poorman's recursive directory comparator
 | [usr/bin/renamemanual](usr/bin/renamemanual) | prompt user for filenames to rename files interactively
+| [usr/bin/repeat](usr/bin/repeat) | repeat running a command (optionally N times)
+| [usr/bin/rsacrypt](usr/bin/rsacrypt) | encrypt/decrypt streams with RSA keys
+| [usr/bin/rxvt-inband](usr/bin/rxvt-inband) | 
 | [usr/bin/screenconsole](usr/bin/screenconsole) | open a commandline, send commands to running GNU/screen session
 | [usr/bin/slay](usr/bin/slay) | continously kill a process while it gets killed
 | [usr/bin/slayall](usr/bin/slayall) | same but by process name
@@ -49,6 +54,7 @@
 | [usr/bin/waitpid](usr/bin/waitpid) | wait until a given (not mandatory a child) process is alive
 | [usr/bin/waybackmachine-dl](usr/bin/waybackmachine-dl) | download all copies of an URL from archive.org starting from the latest version
 | [usr/bin/xdg-autostart](usr/bin/xdg-autostart) | starts programms defined in *.desktop files. useful for DE's not supporting XDG autostart standard
+| [usr/lib/urxvt/perl/inbandfiletransfer-osc](usr/lib/urxvt/perl/inbandfiletransfer-osc) | 
 | [usr/lib/yazzy-utils/bash-utils](usr/lib/yazzy-utils/bash-utils) | common shell functions, sources by utility scripts
 | [usr/sbin/swapoff-progress](usr/sbin/swapoff-progress) | turn off a swap device and display percentage completeness
 | [usr/sbin/syncifstate](usr/sbin/syncifstate) | fix inconsistent /run/network/ifstate content

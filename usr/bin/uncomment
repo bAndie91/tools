@@ -1,6 +1,6 @@
 #!/bin/bash
 
-grep -Ev '^[[:space:]]*(#|;|//|$)' -r "$@"
+grep -Ev '^[[:space:]]*(#|;|//|$)' "$@"
 
 
 true <<EOF
@@ -13,12 +13,16 @@ uncomment - stripping comment lines from config files
 
 =head1 SYNOPSIS
 
-uncomment [B<files> and B<directories>]
+uncomment [B<grep-arguments>]
 
 =head1 DESCRIPTION
 
 This command does not overwrite nor write files, just prints them without comments. 
 I.e. removing lines starting hashmark or semicolon.
+
+=head1 SEE ALSO
+
+grep(1)
 
 =cut
 

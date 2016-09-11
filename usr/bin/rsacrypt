@@ -1,6 +1,5 @@
 #!/bin/bash
 
-
 say()
 {
 	echo "$*" >&2
@@ -17,13 +16,40 @@ shasum()
 		sha256sum -b | cut -b 1-64
 	fi
 }
+subshell_exception()
+{
+	say Error occured in subprocess, killing main process
+	kill $mainpid 2>/dev/null
+}
+set_filename()
+{
+	if [ -z "$filename" ]
+	then
+		if [ -n "$1" -a "$1" != - ]
+		then
+			filename=$1
+		else
+			filename=/dev/stdin
+		fi
+	else
+		die Give at most one file or pipe data on STDIN for ${mode}ion
+	fi
+}
 
 
+# Default key files are the user's own RSA keys default used for ssh.
+# Use -r and -k options to change.
 keyfile=$HOME/.ssh/id_rsa
 pubfile=$HOME/.ssh/id_rsa.pub
+# Default mode is encryption.
 mode=encrypt
+filename=
+# Sign encrypted data and verify signature by default.
 sign=yes
+signfile=
+signbytes=
 bs=256
+mainpid=$$
 
 
 while [ -n "$1" ]
@@ -32,11 +58,17 @@ case "$1" in
 -h|--help)
 	say "Usage: $0 [Options] [FILE]
 Options:
- --encrypt, -e     encrypt (default)
- --decrypt, -d     decrypt
+ --encrypt, -e  encrypt (default)
+ --decrypt, -d  decrypt
  --recipient, -r PUBLIC_KEY
  --key, -k PRIVATE_KEY
- --no-sign, -S     there is no signature at the end of data
+ --no-sign, -S  do not sign the secret, and do not search for the signature
+                at the end of data when decrypting
+ --ignore-sign --sign-bytes, -S -b N
+                there is an N bytes long signature at the end of data, but
+                do not verify it
+ --signature-file FILE
+                write/read signature to/from a separated file
 "
 	exit 0
 	;;
@@ -54,8 +86,16 @@ Options:
 -d|--decrypt)
 	mode=decrypt
 	;;
--S|--no-sign)
+-S|--no-sign|--ignore-sign)
 	sign=no
+	;;
+-b|--sign-bytes)
+	shift
+	let signbytes=$1
+	;;
+--signature-file)
+	shift
+	signfile=$1
 	;;
 --)
 	shift
@@ -65,23 +105,30 @@ Options:
 	die Invalid option: $1
 	;;
 *)
-	break
+	set_filename "$1"
 	;;
 esac
 shift
 done
 
-if [ -n "$1" ]
+for arg in "$@"
+do
+	set_filename "$arg"
+done
+
+if [ -z "$filename" ]
 then
-	filename=$1
-else
 	filename=/dev/stdin
 fi
 
+if [ $mode = encrypt -a -t 1 ]
+then
+	die Encrypted data not written to a terminal. Use output redirection.
+fi
+
+
 set -o nounset
-set -o errexit
-set -o pipefail
-mainpid=$$
+set -o errexit -o pipefail
 
 
 if [ -e "$pubfile" ]
@@ -120,29 +167,46 @@ then
 	say Generating passkey
 	pass=`openssl rand -base64 32`
 	echo -n "$pass" | openssl rsautl -encrypt -inkey "$pubfile" -pubin
-
+	
 	say Encrypting
 	exec 3>&1
 	hash=`tee /dev/fd/4 <"$filename" \
-		4> >(set -o errexit
-			set -o pipefail
-			trap 'kill $mainpid' ERR;
-			openssl enc -aes-256-cbc -salt -pass pass:$pass >&3) \
-		|shasum`
+		4> >(set -o errexit -o pipefail;
+			trap subshell_exception ERR;
+			openssl enc -aes-256-cbc -salt -pass pass:$pass >&3) |\
+		shasum`
 	
 	if [ $sign = yes ]
 	then
 		say Signing
-		echo "$hash" | xxd -r -p | openssl rsautl -sign -inkey "$keyfile"
+		if [ -z "$signfile" ]
+		then
+			signfile=/dev/stdout
+		fi
+		echo "$hash" |\
+		xxd -r -p |\
+		openssl rsautl -sign -inkey "$keyfile" >"$signfile"
 	fi
-else
-	if [ $sign = yes ]
+elif [ $mode = decrypt ]
+then
+	if [ -z "$signbytes" ]
 	then
-		bits=`openssl rsa -text -noout -in "$pubfile" -pubin | sed -e '1s/.*(\([0-9]\+\) bit.*/\1/;q'`
-		let signbytes=bits/8
-		say Signature bytes: $signbytes
-	else
-		signbytes=0
+		# Find out how many byte the signature is.
+		if [ $sign = yes ]
+		then
+			if [ -z "$signfile" ]
+			then
+				# There is no separated signature file,
+				# signature is as long as recipient's key.
+				bits=`openssl rsa -text -noout -in "$pubfile" -pubin | sed -e '1s/.*(\([0-9]\+\) bit.*/\1/;q'`
+				let signbytes=bits/8
+				say Signature bytes: $signbytes
+			else
+				signbytes=0
+			fi
+		else
+			signbytes=0
+		fi
 	fi
 	
 	{
@@ -150,21 +214,29 @@ else
 	pass=`head -c $bs | openssl rsautl -decrypt -inkey "$keyfile"`
 	
 	say Decrypting
+	# Feed openssl with crypted data except the signature at the end of it,
+	# send openssl's output to main stdout (ie. fd/3 in the inner subshell),
+	# calc checksum and put it on outer subshell's stdout captured by $hashes.
+	# In parallel, feed an other openssl with data stream's end for signature
+	# verification, let stored signature also captured by $hashes.
 	exec 3>&1
 	hashes=(`tee /dev/fd/4 \
-		4> >(set -o errexit
-			set -o pipefail
-			trap 'kill $mainpid' ERR;
+		4> >(set -o errexit -o pipefail;
+			trap subshell_exception ERR;
 			head -c -$signbytes |\
 			openssl enc -d -aes-256-cbc -pass pass:$pass |\
 			tee /dev/fd/3 |\
 			shasum) \
-		1> >(set -o errexit
-			set -o pipefail
-			trap 'kill $mainpid' ERR;
+		1> >(set -o errexit -o pipefail;
+			trap subshell_exception ERR;
 			if [ $sign = yes ]
 			then
-				tail -c $signbytes |\
+				if [ -z "$signfile" ]
+				then
+					tail -c $signbytes
+				else
+					cat "$signfile"
+				fi |\
 				openssl rsautl -verify -inkey "$pubfile" -pubin |\
 				xxd -p -c 32
 			fi)`)

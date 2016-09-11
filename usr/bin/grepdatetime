@@ -1,0 +1,93 @@
+#!/usr/bin/env perl
+
+use Date::Parse;
+use Getopt::Long;
+use feature qw/switch/;
+use POSIX qw/strftime/;
+
+$print_unparsed = 0;
+$prefix_filename = 0;
+
+sub prnt
+{
+	my ($fname, $_) = @_;
+	if($prefix_filename)
+	{
+		print "$fname:";
+	}
+	print;
+}
+
+Getopt::Long::Configure(qw/no_ignore_case/);
+GetOptions(
+	'f|from=s' => \$dt_from,
+	't|to|till=s' => \$dt_till,
+	'r|match-date=s' => \$re_match_date,
+	'u|print-unparsed!' => \$print_unparsed,
+	'p|prefix-filename!' => \$prefix_filename,
+) or
+die "Usage: $0 -f FROM -t TO [-r | -u] [FILES]";
+
+$ts_from = defined $dt_from ? str2time($dt_from) : undef;
+$ts_till = defined $dt_till ? str2time($dt_till) : undef;
+$re_match_date = '>(\S+\s+\S+\s+\S+)';
+
+printf STDERR "Searching from: %s\n", $ts_from ? strftime('%c', localtime $ts_from) : "ANY";
+printf STDERR "Searching till: %s\n", $ts_till ? strftime('%c', localtime $ts_till) : "ANY";
+
+for my $fname (@ARGV)
+{
+	my ($ext) = ($fname =~ /\.([^\.]+)$/);
+	my $openmode = '-|';
+	my $decompressor;
+	my @source;
+	
+	given($ext)
+	{
+		when('xz')
+		{
+			$decompressor = "unxz";
+		}
+		when('gz')
+		{
+			$decompressor = "gunzip";
+		}
+		default
+		{
+			$openmode = '<';
+		}
+	}
+	if(defined $decompressor)
+	{
+		@source = $decompressor, $fname;
+	}
+	else
+	{
+		@source = $fname;
+	}
+	if(open my $fh, $openmode, @source)
+	{
+		while(<$fh>)
+		{
+			my ($dt) = (m/$re_match_date/);
+			if($dt)
+			{
+				my $ts = str2time($dt);
+				if((not defined $ts_from or $ts >= $ts_from) and (not defined $ts_till or $ts <= $ts_till))
+				{
+					prnt $fname, $_;
+				}
+			}
+			elsif($print_unparsed)
+			{
+				prnt $fname, $_;
+			}
+		}
+		close $fh;
+	}
+	else
+	{
+		warn "$fname: $!\n";
+	}
+}
+

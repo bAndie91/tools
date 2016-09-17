@@ -1,0 +1,197 @@
+#!/bin/bash
+#
+# Linksys Wireless Router configuration commandline tool
+# tested on
+#  - WAP54G v3.1 with default firmware v3.04
+#
+
+self="${0##*/}"
+iwlist=
+
+get_page() {
+	curl -sSi -u "$user:$pass" http://$linksys_host/$1
+	#wget -q -O - --save-headers --http-user=$user --http-password=$pass http://$linksys_host/$1
+}
+get_ips() {
+	get_page Setup_static.asp | perl -e '
+		if(<> =~ /^.*\s401\b/) {
+			exit 4;
+		}
+		while(<>) { if($_ =~ /^f.GTK/) {
+			my $var = $_;
+			$var =~ s/^([^_]+_){2}([^\.]*)\..*$/$2/;
+			chomp $var;
+			$_ =~ s/^/\$/;
+			# print $$var;
+			$$var = eval $_;
+		}}
+		$\ = "\n";
+		print $devicename;
+		print join ".", ($ipaddr1, $ipaddr2, $ipaddr3, $ipaddr4);
+		print join ".", ($netmask1, $netmask2, $netmask3, $netmask4);
+		print join ".", ($gateway1, $gateway2, $gateway3, $gateway4);
+		exit 0;'
+}
+set_ips() {
+	query="action=GTK_Submit"
+	for vars in GTK_wl_devicename:dn GTK_wan_ipaddr:ipw GTK_wan_netmask:nm GTK_wan_gateway:gw GTK_lan_ipaddr:ipl GTK_lan_dhcp:dhcp; do
+		name=${vars%%:*}
+		env=${vars##*:}
+		value=${!env}
+		if [ -n "$value" ]; then
+			query="$query&$name=$value"
+		fi
+	done
+
+	curl -sSi -u "$user:$pass" -F "$query" http://$linksys_host/sysconf.cgi |\
+	sed -ne 1p
+}
+set_global() {
+	curl -sSi -u "$user:$pass" -F "$1" http://$linksys_host/sysconf.cgi |\
+	sed -ne 1p
+}
+set_admin() {
+	if [ "$npw" = "%" ]; then
+		read -s -e -p "New administration password: " pw1
+		echo
+		read -s -e -p "Retype: " pw2
+		echo
+	else
+		pw1="$npw"
+		pw2="$npw"
+	fi
+	if [ ."$pw1" != ."$pw2" ]; then 
+		return 2
+	fi
+	if [ ${#pw1} -lt 4 -o ${#pw1} -gt 16 ]; then
+		return 3
+	fi
+
+	query="action=Apply&page=password"
+	for vars in http_username:un http_passwd:pw1 confirm_http_passwd:pw1; do
+		name=${vars%%:*}
+		env=${vars##*:}
+		value=${!env}
+		if [ -n "$value" ]; then
+			query="$query&$name=$value"
+		fi
+	done
+
+	set_global "$query"
+}
+set_ap_client() {
+	perl -e 'exit 6 if("'"${mac_connect_to//\"/}"'" !~ /^([0-9A-F]{2}:){5}([0-9A-F]{2})$/i)'
+	query="ap_mode=1&ap_client_mac=$mac_connect_to"
+	set_global "$query"
+}
+error() {
+	case $1 in
+	0)	true;;
+	2)	echo "$self: passwords mismatch" >&2;;
+	3)	echo "$self: invalid length, ]4;16[" >&2;;
+	4)	echo "$self: unauthorized, wrong password?" >&2;;
+	6)	echo "$self: specify a MAC address, A1:2B:C3:4D:E5:6F" >&2;;
+	*)	echo "$self: unhandled error" >&2;;
+	esac
+	return $1
+}
+
+while [ -n "$1" ]; do
+	case "$1" in
+	-h|--help)
+		echo "$self [-option parameter] ... [host]
+Options:
+  -u         username to authenticate
+  -p         password to authenticate
+  -p %       prompt for password
+  --wan-ip   dot-separated IPv4 decimal octets
+  --gateway   
+  --netmask
+  --lan-ip
+  --dhcp     0|1
+  -dhcp      alias for --dhcp 0
+  +dhcp      alias for --dhcp 1
+  --ssid     valid SSID string
+  --device   valid name for the device
+  -P         set new admin password
+  -P %       prompt for new admin password
+  --list     lists of APs
+  --conn     switch to AP client mode and connect to MAC
+  host       hostname or ip address of Linksys router
+Tested on: WAP54G"
+  exit;;
+	-u)	shift; user=$1;;
+	-p)	shift; pass=$1;;
+	-P)	shift; npw=$1;;
+	--wan-ip)	shift; ipw=$1;;
+	--gateway)	shift; gw=$1;;
+	--netmask)	shift; nm=$1;;
+	--lan-ip)	shift; ipl=$1;;
+	--dhcp)		shift; dhcp=$1;;
+	-dhcp)	dhcp=0;;
+	+dhcp)	dhcp=1;;
+	--device)	shift; dn=$1;;
+	--ssid)		shift; ssid=$1;;
+	--list)	iwlist=1;;
+	--conn)		shift; mac_connect_to=$1;;
+	--)	shift; break;;
+	-*)	false;;
+	*)	break;;
+	esac
+	shift
+done
+
+linksys_host=$1
+shift
+
+if [ ."$pass" = ."%" ]; then
+	read -s -e -p "Router password: " pass
+	echo
+fi
+
+if [ -z "$linksys_host" ]; then
+	echo "$self: specify a host" >&2
+	exit 1
+elif [ -n "$npw" ]; then
+	set_admin
+	error $?
+elif [ -n "$ipw$gw$nm$ipl$dhcp$dn" ]; then
+	# if any variable set
+	set_ips
+elif [ $iwlist ]; then
+	get_page site_results.asp | awk '/<!-- SiteSurvay Table start/,/<!-- SiteSurvay Table End/' | perl -e '
+		if(<> =~ /^.*\s401\b/) {
+			exit 4;
+		}
+		while(<>) {
+			if($_ =~ /<input type="(hidden|radio)"/) {
+				$_ =~ /name="([^\d"]+)(\d+)?"\s*value="([^"]*)"/;
+				$var = $1;
+				$num = $2+0;
+				$val = $3;
+				$var =~ s/ap_//;
+				$aps[$num]{$var} = $val;
+				#printf "%8s[%1s] = %s\n", ($var,$num,$val);
+			} elsif($_ =~ />(\d{1,3})%</) {
+				$aps[$num]{signal} = $1;
+			}
+		}
+		$count = $aps[0]{cnt};
+		printf "Networks: %2d\n------------\n", ($count);
+		for (@aps) {
+			%ap = %$_;
+			printf "%s  ch:%2d  %32s %3d%%  ", ($ap{ap}, $ap{channel}, $ap{ssid}, $ap{signal});
+			print "[WEP]" if($ap{wep}); print "[WPA]" if($ap{wpa});
+			print "\n";
+		}
+		exit 0;'
+	error $?
+elif [ -n "$mac_connect_to" ]; then
+	set_ap_client
+	error $?
+else
+	get_ips
+	error $?
+fi
+
+

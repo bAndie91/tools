@@ -1,0 +1,356 @@
+#!/bin/bash
+################################################
+# SOHO router commandline configuration script #
+# tested on:                                   #
+#   3.6.1 Build 071010 Rel.33028n              #
+#   TL-WR543G v2 08140201                      #
+################################################
+
+tplink="TL-WR543G"
+dhcp_server=
+dhcp_lease_time=
+dhcp_gateway=
+dhcp_domain=
+self=${0##*/}
+wlanTypeStringArray=(" " "11Mbps (802.11b)" "54Mbps (802.11g)" "108Mbps (Static)" "108Mbps (Dynamic)")
+wanStatusStringArray=(" " "Disabled" "Timeout" "Link Down" "Link Up")
+wanTypeStringArray=(" " "DHCP" "Static IP" "PPPoE" "IEEE802.1X + DHCP" "IEEE802.1X + Static IP" "BigPond Cable" "L2TP" "PPTP")
+
+
+help() {
+  echo "$self: [command] [-u user] [--] [host]
+  Commands:
+     dhclients    list hosts that requested DHCP address
+     hosts        generate /etc/hosts file
+     survey       list of available access points
+     reserv       DHCP address reservation
+     log          system log
+     stat         trafic statistics
+     info         status information
+        info-lan
+        info-wan
+        info-wlan
+     version      version information about device
+     backup       save all configuration settings
+     restore      load back saved configuration
+     reboot       reboot device software
+     dhcp         show DHCP configuration
+     setup        set one or more parameters of these:
+        takes no additional argument:
+           --dhcp-on [*]   --dhcp-off [*]
+        takes IP address:
+           --dhcp-pool-first [*]   --dhcp-pool-last [*]
+           --dhcp-gateway
+           --dhcp-dns-1   --dhcp-dns-2
+        takes minute between 1 and 2880
+           --dhcp-lease-time
+        takes domain name:
+           --dhcp-domain [*]
+        No sanity check.
+        [*] The new config won't take effect until the Router reboots.
+  user       username for basic http authenticate
+  host       ip or dns address of $tplink device"
+  exit 1
+}
+
+while [ -n "$1" ]; do
+	case "$1" in
+		dhclients|hosts|survey|reserv|log|reboot|version|stat|backup|dhcp|setup)
+			mode="$1";;
+		restore)
+			mode="$1"
+			shift
+			restorefile="$1";;
+		info*)
+			mode=info
+			case "$1" in
+			info-lan)	subinfo=lan;;
+			info-wireless|info-wlan)	subinfo=wlan;;
+			info-wan)	subinfo=wan;;
+			*)	subinfo=all;;
+			esac;;
+		-h|--help)
+			help;;
+		-u)	shift
+			user="$1";;
+		--dhcp-on)
+			dhcp_server=on;;
+		--dhcp-off)
+			dhcp_server=off;;
+		--dhcp-pool-first)	shift
+			dhcp_ip_range[1]=$1;;
+		--dhcp-pool-last)	shift
+			dhcp_ip_range[2]=$1;;
+		--dhcp-lease-time)	shift
+			dhcp_lease_time=$1;;
+		--dhcp-gateway)	shift
+			dhcp_gateway=$1;;
+		--dhcp-domain)	shift
+			dhcp_domain=$1;;
+		--dhcp-dns-1)	shift
+			dhcp_dns[1]=$1;;
+		--dhcp-dns-2)	shift
+			dhcp_dns[2]=$1;;
+ 		--)	shift
+			break;;
+		-*)	false;;
+		*)	host=$1;;
+	esac
+	shift
+done
+
+[ -z "$mode" ] && help
+[ -z "$host" -a -n "$1" ] && host="$1"
+
+case $mode in
+### passive commands ###
+version)
+	curl -sS -u "$user" "http://$host/userRpm/StatusRpm.htm" | \
+	tr -d "\n\r" | \
+	perl -ne '$_ =~ /var statusPara = new Array\((("[^"]*"|[^;\)])*)\);/ and print $1' | \
+	sed 's/"\([^"]*\)"[, ]*/\1\n/gi' #| \
+	;;
+info)
+	curl -sS -u "$user" "http://$host/userRpm/StatusRpm.htm" | \
+	tr -d "\n\r" | \
+	sed -e 's/var/\n&/g' | sort | \
+	perl -ne '$_ =~ /^var ([wl]{1,2}an|status)Para = new Array\((("[^"]*"|[^;\)])*)\);/ and print $2."\n"' | \
+	perl -ne 'eval "\@list=($_)" and print join("\n",@list)."\n\"\n"' | {
+		i=0
+		while read lp[$i] && [ "${lp[$i]}" != "\"" ]; do i=$((i+1)); done
+		i=0
+		while read sp[$i] && [ "${sp[$i]}" != "\"" ]; do i=$((i+1)); done
+		i=0
+		while read wp[$i] && [ "${wp[$i]}" != "\"" ]; do i=$((i+1)); done
+		i=0
+		while read wlp[$i] && [ "${wlp[$i]}" != "\"" ]; do i=$((i+1)); done
+
+		if [ "$subinfo" = lan -o "$subinfo" = all ]; then
+			echo "[LAN]"
+			echo "MAC Address:     ${lp[0]}"
+			echo "IP Address:      ${lp[1]}"
+			echo "Subnet Mask:     ${lp[2]}"
+		fi
+		if [ "$subinfo" = wan -o "$subinfo" = all ]; then
+			for ((i=1; i<=sp[1]; i++)); do
+				row=$[ (i-1)*sp[2] ]
+			    if [ ${sp[1]} -eq 1 ]; then
+				echo "[WAN]"
+			    else
+				wsi=${wp[$row]}
+				echo "[WAN $i]"
+				echo "Status:          ${wanStatusStringArray[$wsi]}"
+			    fi
+				echo "MAC Address:     ${wp[row+1]}"
+				wti=${wp[row+3]}
+				echo "IP Address:      ${wp[row+2]}"
+				echo "IP Type:         ${wanTypeStringArray[$wti]}"
+				echo "Subnet Mask:     ${wp[row+4]}"
+				echo "Default Gateway: ${wp[row+7]}"
+				echo "DNS Server(s):   ${wp[row+11]}"
+			    if [ 0$wti -eq 6 -o 0$wti -eq 7 ]; then
+				echo "Online Time:     ${wp[row+12]}"
+			    fi
+			done
+		fi
+		if [ "$subinfo" = wlan -o "$subinfo" = all ]; then
+			echo "[Wireless]"
+			echo "Wireless Radio:  $([ 0${wlp[0]} -eq 0 ] && echo Disabled || echo Enabled)"
+			echo "Name (SSID):     ${wlp[1]}"
+			echo "Channel:         ${wlp[6]}"
+			echo "Mode:            ${wlanTypeStringArray[${wlp[3]}]}"
+			echo "MAC Address:     ${wlp[4]}"
+		fi
+	}
+	;;
+dhclients)
+	cols=4
+	curl -Ss -u "$user" "http://$host/userRpm/AssignedIpAddrListRpm.htm" | \
+	tr -d "\n\r" | \
+	perl -ne '$_ =~ /var DHCPDynList = new Array\((("[^"]*"|[^;\)])*)\);/ and print $1' | \
+	sed 's/"\([^"]*\)"[, ]*/\1\n/gi' | \
+	awk -v cols=$cols '{if(i%cols==cols-1){print $0}else{printf $0"\t"};i++}'
+	;;
+hosts)
+	echo "# Generated /etc/hosts file"
+	echo "# fetched from DHCP association database"
+	echo "# on $tplink router at $host"
+	cols=4
+	
+	curl -sS -u "$user" "http://$host/userRpm/AssignedIpAddrListRpm.htm" | \
+	tr -d "\n\r" | \
+	perl -ne '$_ =~ /var DHCPDynList = new Array\((("[^"]*"|[^;\)])*)\);/ and print $1' | \
+	sed 's/"\([^"]*\)"[, ]*/\1\n/gi' | \
+	awk -v cols=$cols '{if(i%cols==cols-1){printf "%-15s\t%s\n",a[2],a[0]; i=0; delete a}else{a[i++]=$0}}'
+	;;
+reserv)
+	cols=3
+	p=1
+	itemsPerPage=8
+	while [ ${items:-$itemsPerPage} -ge $itemsPerPage ]; do
+		curl -sS -u "$user" "http://$host/userRpm/FixMapCfgRpm.htm?Page=$p" | \
+		tr -d "\n\r" | \
+		perl -ne '$_ =~ /var dhcpList = new Array\((("[^"]*"|[^;\)])*)\);/ and print $1' | \
+		sed 's/"\([^"]*\)"[, ]*/\1\n/gi' | \
+		sed 's/[, ]\+/\n/gi' | \
+		awk -v cols=$cols '{if($1=="0"){null++}else{if((NR-1)%cols==cols-1){print $0}else{printf $0"\t"}}}END{exit (NR-null)/3}'
+		items=$?
+		let p++
+	done | \
+	sort -k 2 -n
+	;;
+survey)
+	cols=3
+	curl -sS -u "$user" "http://$host/userRpm/SiteSurveyRpm.htm" | \
+	tr -d "\n\r" | \
+	grep -Eio 'var siteList = new Array("[^"]*"|[^;])*;' | \
+	grep -Eio '"[^"]*"' | \
+	sed 's/"\([^"]*\)"/\1/gi' | \
+	awk -v cols=$cols '{if(i%cols==cols-1){print $0}else{printf $0"\t"};i++}' | \
+	sort -k $cols -nr
+        ;;
+log)
+	result=$(curl -s -D - -u "$user" "http://$host/userRpm/SystemLogRpm.htm")
+	http=($(echo "$result" | sed -ne '1s/[\n\r]*$//p'))
+	result=$(echo "$result" | tr -d "\n\r")
+	if [ "${http[1]}" = "200" ]
+	then
+		set $(echo "$result" | perl -ne '$_ =~ /var logInf = new Array\(("[^"]*"|[^\)]*)\);/; $_=$1; $_ =~ /"Time = ([0-9 :-]+) ([0-9]+)s"/; print "$1 $2\n"')		# '
+		epochNow="`date -d "$1 $2" +%s`"
+		uptime="$3"
+		epochBoot=$((10#$epochNow - 10#$uptime))
+		
+		echo "$result" | \
+		perl -ne '$_ =~ /var logList = new Array\(("[^"]*"|[^\)]*)\);/ and print $1' | \
+		sed 's/"\([^"]*\)"/\1\n/g' | \
+		sed 's/^, //; s/:/ /' | \
+		while read epochCur rest; do
+			echo "`date -d@$((10#$epochCur + 10#$epochBoot))`	$rest"
+		done
+	else
+		echo "$self: $host: Probably a wrong password. (${http[@]})" >&2
+	fi
+	;;
+stat)
+	printf "%-35s %-25s %-9s\n" "" Total Current >&2
+	printf "%-35s %-13s %-11s %-6s %-6s %-5s %-5s %-5s\n" "" packets bytes packs bytes ICMP UDP SYN >&2
+	#             packs byts  pack byts icmp udp  syn
+	cols=13
+	curl -s -u "$user" "http://$host/userRpm/SystemStatisticRpm.htm" | \
+	tr -d "\n\r" | \
+	perl -ne '$_ =~ /var statList = new Array\((("[^"]*"|[^;\)])*)\);/ and print $1' | \
+	sed 's/"\([^"]*\)"[, ]*/\1\n/gi' | \
+	sed 's/[, ]\+/\n/gi' | \
+	awk -v cols=$cols '{if(i%cols==cols-1){printf "%1i %-17s %-15s %13i %11i %6i %6i %2i/%02i %2i/%02i %2i/%02i\n",a[0],a[2],a[1],a[3],a[4],a[5],a[6],a[7],a[8],a[9],a[10],a[11],a[12]; i=0; delete a}else{a[i++]=$0}}'
+	#                                                  MAC   IP    pack.byt. pac.byt.icmp     udp      syn
+	;;
+backup)
+	backupfile="config.bin"
+	curl -sS -u "$user" "http://$host/userRpm/$backupfile" > "$backupfile"
+	;;
+restore)
+	if [ -r "$restorefile" ]
+	then
+		echo "$self: uploading... ($restorefile) DO NOT UNPLUG!" >&2
+		curl -sS -u "$user" "http://$host/incoming/Config.cfg" -F "filename=@${restorefile};type=application/x-macbinary" >/dev/null #| html2text
+		# FIXME: check if upload was succesful
+		echo "$self: restarting... You may lose the connection. Timeout set to 9 sec." >&2
+		curl -sS -D - --max-time 9 -u "$user" "http://$host/userRpm/ConfUpdateTemp.htm" | head -n1
+		#| grep -E "var\s+reboottime\s*=" | grep -Eo "[0-9]+" | sed 's/^.*$/You can ^C after & usec./'
+	else
+		echo "$self: $restorefile: not readable" >&2
+	fi
+	;;
+dhcp)
+	curl -sSi -u "$user" "http://$host/userRpm/LanDhcpServerRpm.html" | \
+	tr -d "\n\r" | \
+	perl -ne '$_ =~ /var DHCPPara = new Array\((("[^"]*"|[^;\)])*)\);/ and print $1' | \
+	sed 's/"//g' | \
+	awk -F, '{
+		dhcp_enable=$1
+		dhcp_pool_first=$2
+		dhcp_pool_last=$3
+		dhcp_lease=$4
+		dhcp_gw=$5
+		dhcp_dom=$6
+		dhcp_dns_1=$7
+		dhcp_dns_2=$8
+	}
+	END {
+		printf "DHCP server        %s\n",dhcp_enable==1?"enable":"disable"
+		printf "IP range           %s-%s\n",dhcp_pool_first,dhcp_pool_last
+		printf "Address lease time %s\n",dhcp_lease
+		printf "Default gateway    %s\n",dhcp_gw
+		printf "Default domain     %s\n",dhcp_dom
+		printf "Primary DNS        %s\n",dhcp_dns_1
+		printf "Secondary DNS      %s\n",dhcp_dns_2
+	}'
+	;;
+### active commands ###
+reboot)
+	curl -sSi -u "$user" "http://$host/userRpm/SysRebootRpm.htm?Reboot=Reboot" | \
+	awk '{if($2==200){print "Reboot..."}else{$1=""; print}; exit}'
+	;;
+setup)
+	mustreboot=0
+	# round 1
+	# setup dns server
+	if [ x"${dhcp_server}${dhcp_ip_range[*]}${dhcp_lease_time}${dhcp_gateway}${dhcp_domain}${dhcp_dns[*]}" != x ]; then
+		# examine current values
+		curl -sSi -u "$user" "http://$host/userRpm/LanDhcpServerRpm.html" | \
+		tr -d "\n\r" | \
+		perl -ne '$_ =~ /var DHCPPara = new Array\((("[^"]*"|[^;\)])*)\);/ and print $1' | \
+		sed 's/"//g' | \
+		{
+		IFS=, read dhcp_enable dhcp_pool_first dhcp_pool_last dhcp_lease dhcp_gw dhcp_dom dhcp_dns_1 dhcp_dns_2 rest
+		if [ x"$dhcp_server" = xon ]; then
+			dhcp_server=1
+			mustreboot=1
+		elif [ x"$dhcpserver" = xoff ]; then
+			dhcp_server=0
+			mustreboot=1
+		else
+			dhcp_server=$dhcp_enable
+		fi
+		if [ x"${dhcp_ip_range[1]}" = x ]; then
+			dhcp_ip_range[1]=$dhcp_pool_first
+		else
+			mustreboot=1
+		fi
+		if [ x"${dhcp_ip_range[2]}" = x ]; then
+			dhcp_ip_range[2]=$dhcp_pool_last
+		else
+			mustreboot=1
+		fi
+		if [ x"${dhcp_lease_time}" = x ]; then
+			dhcp_lease_time=$dhcp_lease
+		fi
+		if [ x"${dhcp_gateway}" = x ]; then
+			dhcp_gateway=$dhcp_gw
+		fi
+		if [ x"${dhcp_domain}" = x ]; then
+			dhcp_domain=$dhcp_dom
+		else
+			mustreboot=1
+		fi
+		if [ x"${dhcp_dns[1]}" = x ]; then
+			dhcp_dns[1]=$dhcp_dns_1
+		fi
+		if [ x"${dhcp_dns[2]}" = x ]; then
+			dhcp_dns[2]=$dhcp_dns_2
+		fi
+		
+		echo "Setup DNS server..." >&2
+		curl -s -u "$user" "http://$host/userRpm/LanDhcpServerRpm.htm?dhcpserver=${dhcp_server}&ip1=${dhcp_ip_range[1]}&ip2=${dhcp_ip_range[2]}&Lease=${dhcp_lease_time}&gateway=${dhcp_gateway}&domain=${dhcp_domain}&dnsserver=${dhcp_dns[1]}&dnsserver2=${dhcp_dns[2]}&Submit=Save" >/dev/null
+		if [ $mustreboot = 1 ]; then
+			echo "The new configure won't take effect until the Router reboot."
+		fi
+		}
+	fi
+	;;
+esac
+
+return=$?
+echo >&2
+exit $return
+

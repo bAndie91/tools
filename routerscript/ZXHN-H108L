@@ -1,0 +1,229 @@
+#!/bin/bash
+
+host=gateway.localhost
+user=
+pass=
+
+declare -A infoparam=([ip]="IP Address" [gw]="Default Gateway" [dns1]="Primary DNS" [dns2]="Secondary DNS")
+
+while [ -n "$1" ]
+do
+	case "$1" in
+	-h)
+		shift
+		host=$1
+		;;
+	-u)
+		shift
+		user=$1
+		;;
+	-P)
+		shift
+		pass=$1
+		;;
+	--)
+		shift
+		break
+		;;
+	-*)
+		echo Unknown option: $1 >&2
+		exit 1
+		;;
+	*)
+		break
+		;;
+	esac
+	shift
+done
+
+
+invalidparameters()
+{
+	echo "Invalid parameters." >&2
+	exit 1
+}
+dispatch()
+{
+	local path=$1
+	shift
+	curl -sS -u "$user:$pass" "$host$path" "$@"
+}
+
+case "$1" in
+reboot)
+	dispatch /Forms/tools_system_1 -d restoreFlag=0 -L |\
+	grep -o "The system is restarting. Please wait..."
+	;;
+log)
+	dispatch /status/syslog.log
+	;;
+pfwd)
+	fetch_pfwd()
+	{
+		dispatch /advanced/adv_nat_virsvr.htm |\
+		pup 'table table td.tabdata:not([width]) text{}'
+	}
+	
+	if [ -z "$2" ]
+	then
+		fetch_pfwd |\
+		{
+		x=1
+		y=0
+		while read num; read name; read proto; read port1; read port2; read dst;
+		do
+			nums+=("$num")
+			names+=("$name")
+			protos+=("$proto")
+			ports1+=("$port1")
+			ports2+=("$port2")
+			dsts+=("$dst")
+			[ ${#name} -gt $x ] && x=${#name}
+			[ "${port1}" != "${port2}" -a ${#port2} -gt $y ] && y=${#port2}
+		done
+		[ $y -gt 0 ] && let y++
+		for i in ${!ports1[@]}
+		do
+			if [ ${ports1[i]} != 0 ]
+			then
+				[ "${ports1[i]}" = "${ports2[i]}" ] && port2= || port2=-${ports2[i]}
+				printf "%2d %-${x}s %3s %5d%-${y}s => %s\\n" "${nums[i]}" "${names[i]}" "${protos[i]}" "${ports1[i]}" "$port2" "${dsts[i]}"
+			fi
+		done
+		}
+	elif [ "$2" = --remove ]
+	then
+		remove_id()
+		{
+			echo "Remove pfwd #$1 ..." >&2
+			dispatch /Forms/adv_nat_virsvr_1 \
+				-d VIRTUALSVR_index=$1 \
+				-d VIRTUALSVR_IndexFlag=2
+		}
+		shift
+		shift
+		case "$1" in
+		--id)
+			remove_id "$2"
+			;;
+		--name|--match-name|--port)
+			fetch_pfwd |\
+			while read num; read name; read proto; read port1; read port2; read dst;
+			do
+				case "$1" in
+				--name)	[ "$name" = "$2" ];;
+				--match-name) [[ "$name" =~ "$2" ]];;
+				--port) [ "$port1" = "$2" ];;
+				esac
+				if [ $? = 0 ]
+				then
+					remove_id "$num"
+				fi
+			done
+			;;
+		*)	invalidparameters;;
+		esac
+	else
+		shift
+		name=$1
+		[[ "$2" =~ ^[0-9]+(-[0-9]+)?$ ]] || invalidparameters
+		port1=${2%%-*}
+		port2=${2##*-}
+		[ -n "$3" ] || invalidparameters
+		dst=$3
+		proto=${4^^}
+		[ -z "$proto" -o "$proto" = TCP -o "$proto" = UDP ] || invalidparameters
+		
+		idx=$(
+			fetch_pfwd |\
+			while read num; read name; read proto; read port1; read port2; read dst;
+			do
+				if [ "$port1" = 0 ]
+				then
+					echo $num
+					break
+				fi
+			done
+		)
+		
+		if [ -z "$idx" ]
+		then
+			echo "No more slot." >&2
+			exit 2
+		fi
+		
+		echo "Add pfwd #$idx ..." >&2
+		dispatch /Forms/adv_nat_virsvr_1 \
+			-d VIRTUALSVR_index=$idx \
+			-d VIRTUALSVR_IndexFlag=0 \
+			-d VIRTUALSVR_Application="$name" \
+			-d VIRTUALSVR_App_idx=- \
+			-d VSProtocolIndex="${proto:-ALL}" \
+			-d VIRTUALSVR_startPort=$port1 \
+			-d VIRTUALSVR_endPort=$port2 \
+			-d VIRTUALSVR_localIP="$dst" \
+			-i |\
+		grep -Eq '^Location:.*error'
+		if [ ${PIPESTATUS[1]} = 0 ]
+		then
+			echo "Remote Error." >&2
+			exit 2
+		else
+			exit 0
+		fi
+	fi
+	;;
+info)
+	param=$2
+	dispatch /status/status_deviceinfo.htm |\
+	{
+	stage=
+	while read line
+	do
+		for str in WAN IPv6
+		do
+			if expr "$line" : ".*$str" >/dev/null
+			then
+				stage=$str
+				break
+			fi
+		done
+		if [ "$stage" != WAN ]
+		then
+			continue
+		fi
+		if [ -z "$param" ]
+		then
+			for str in "${infoparam[@]}"
+			do
+				if expr "$line" : ".*$str" >/dev/null
+				then
+					IFS='<' read data rest
+					echo "$str	$data"
+					break
+				fi
+			done
+		else
+			if expr "$line" : ".*${infoparam[$param]}" >/dev/null
+			then
+				IFS='<' read data rest
+				echo "$data"
+				break
+			fi
+		fi
+	done
+	}
+	;;
+*)
+	echo "Usage $0 [-h <host>] [-u <user>] [-P <pass>]
+Commands:
+  reboot
+  info
+  info [ip|gw|dns1|dns2]
+  log
+  pfwd
+  pfwd <app_name> <start_port>[-end_port] <dest_ip> [TCP|UDP|ALL]
+  pfwd --remove [--id num | --name app_name | --match-name pattern | --port start_port]" >&2
+	exit 1
+	;;
+esac

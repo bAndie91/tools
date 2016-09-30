@@ -1,0 +1,445 @@
+#!/bin/bash
+
+usage="Usage: $0 -I <router-ip> -U <username> -P <password> [command]"
+declare -A prm
+cachefile=
+goform=
+SessionID=
+endfilter=
+
+get_sessionid()
+{
+	cachefile="/var/cache/sessid_epc3925_${RouterUser}@${RouterIP}"
+	if [ -s "$cachefile" ]
+	then
+		SessionID=`cat "$cachefile"`
+	fi
+	if [ -z "$SessionID" ]
+	then
+		[ -t 2 ] && echo "Logging in $RouterUser@$RouterIP ..." >&2
+		SessionID=`curl -sSiL http://$RouterIP/goform/Docsis_system -d username_login="$RouterUser" -d password_login="$RouterPass" -d LanguageSelect=en -d Language_Submit=0 -d login="Log In" | grep -E "^Set-Cookie: SessionID=" | cut -d= -f2 | tr -dc "[a-zA-Z0-9]"`
+		if [ -z "$SessionID" ]
+		then
+			echo "Login error." >&2
+			exit 2
+		else
+			true >"$cachefile"
+			chmod 0600 "$cachefile" && \
+			echo -n "$SessionID" >"$cachefile"
+		fi
+	fi
+}
+invalid_sesscache()
+{
+	if [ -n "$cachefile" -a -s "$cachefile" ]
+	then
+		true >"$cachefile"
+	fi
+}
+dispatch_epc()
+{
+	get_sessionid
+	local query=$1
+	shift
+	local cnt=0
+	
+	while [ $cnt -lt 2 ]
+	do
+		local output=`curl -sS "$@" "http://$RouterIP/$query" -H "Cookie: SessionID=$SessionID; Lang=en"`
+		let cnt++
+		# Check if we got the login page (or whatever this is)
+		if echo "$output" | grep -q 'window.location.href = "Docsis_system.asp"'
+		then
+			invalid_sesscache
+		else
+			echo "$output"
+			return 0
+		fi
+	done
+	return 1
+}
+is_integer()
+{
+	[ "$1" -ge 0 ] 2>/dev/null
+}
+
+
+while [ -n "$1" ]; do
+case "$1" in
+-U)	shift
+	RouterUser=$1
+	;;
+-P)	shift
+	RouterPass=$1
+	;;
+-I)	shift
+	RouterIP=$1
+	;;
+-*)	echo "$usage" 1>&2
+	exit 1
+	;;
+--)	shift
+	break
+	;;
+*)	break
+	;;
+esac
+shift
+done
+
+
+if [ -z "$RouterIP" ]
+then
+	echo "$usage" 1>&2
+	exit 1
+fi
+
+
+
+
+case "${1,,}" in
+psk)
+	shift
+	[ -z "$1" ] && psk=`pwgen 9 1` || psk=$1
+	if [ ${#psk} -lt 8 -o ${#psk} -gt 63 ]; then
+		echo "PSK must be longer than 7 and shorter than 64 chars." 1>&2
+		exit 1
+	fi
+	echo "PSK=$psk"
+
+	# wpa_cli set_network 0 psk "\"$psk\""
+
+	#prm[UserId]=
+	#prm[Password]=
+	#prm[PasswordReEnter]=
+	#prm[setup_wifi_enable]=enable
+	#prm[h_setup_wifi_enable]=enable
+	#prm[ssid]="$essid"
+	
+	# wep psk psk2 psk2_mixed wpa_radius wpa2_radius enterprise_mixed disabled
+	#prm[security_mode]=psk2
+	prm[wifi0_security_mode]=psk2
+	prm[h_wifi0_security_mode]=psk2
+	
+	# aes tkip+aes
+	#prm[wpa_enc]=tkip+aes
+	prm[wifi0_wpa_Enc]=tkip+aes
+	prm[h_wifi0_wpa_Enc]=tkip+aes
+
+	#prm[wpa_psk_key]="$psk"
+	prm[wifi0_wpaPsk_key]="$psk"
+	#prm[UnhiddenPresharedKey]=0x01
+	prm[ws_UnhiddenPresharedKey]=0x01
+
+	prm[wifi0_radius_ip_1]=0
+	prm[wifi0_radius_ip_2]=0
+	prm[wifi0_radius_ip_3]=0
+	prm[wifi0_radius_ip_4]=0
+	prm[wifi0_wpa_lifetime]=3600
+	prm[wifi0_keysize]=64
+	prm[wifi0_tx_key]=1
+
+	prm[wl_wds_setting]=disable
+	prm[save]="Save Settings"
+	
+	goform=WSecurity
+	;;
+
+macfilter)
+	get_sessionid
+	eval `dispatch_epc WMACFilter.asp | perl -ne '/(wl_mac\d+).*?="([^"]+)/ and print "prm[$1]=$2\n";'`
+	
+	shift
+	cmd=${1,,}
+	shift
+	mac=${1^^}
+	
+	if [ "$cmd" = list ]; then
+		for mac in "${prm[@]}"; do
+			if [ "$mac" != 00:00:00:00:00:00 ]; then
+				echo "$mac"
+			fi
+		done
+		
+	elif [ "$cmd" = add ]; then
+		for pname in "${!prm[@]}"; do
+			if [ "${prm[$pname]}" = 00:00:00:00:00:00 ]; then
+				prm[$pname]=$mac
+				break
+			fi
+		done
+		goform=WMACFilter
+		
+	elif [ "$cmd" = del ]; then
+		for pname in "${!prm[@]}"; do
+			if [ "${prm[$pname]^^}" = "$mac" ]; then
+				prm[$pname]=00:00:00:00:00:00
+			fi
+		done
+		goform=WMACFilter
+	fi
+	
+	prm[wl0_macfilter]=enable
+	prm[wl0_macmode]=allow
+	prm[h_wl0_macfilter]=enable
+	prm[h_wl0_macmode]=allow
+	prm[save]="Save Settings"
+	;;
+
+dhcp)
+	shift
+	cmd=${1,,}
+	
+	if [ "$cmd" = list ]; then
+		get_sessionid
+		
+		{  dispatch_epc DHCPReservation.asp -i
+		   dispatch_epc FixedCPEIpAssignment.asp -i
+		} | \
+		perl -e '
+			$read1 = $read2 = 0;
+			while(<>) {
+				/vbdhcpdivcename/ and $read1 = 1;
+				/^<html/i and $read1 = 0;
+				if($read1) {
+					/^<TD>(.*)<\/TD>\s*$/ and push @DHCP, $1;
+				}
+				if($read2) {
+					for(/>(.*?)(?:<|\s*$)/g) {
+						/(\S+)\s+\S+\s+(\S+).*?(\S+)\s*$/;
+						%{$ARP{$2}} = (mac=>$1, state=>$3);
+					}
+					$read2 = 0;
+				}
+				/SELECT .*DhcpRsvList/i and $read2 = 1;
+			}
+
+			$cols = 4;
+			$col = 0;
+			@colhdr = qw/port mac ip state/;
+			%node = ();
+			for(@DHCP) {
+				$node{$colhdr[$col]} = $_;
+				$col++;
+				if($col == $cols) {
+					push @Node, {%node};
+					%node = ();
+					$col = 0
+				}
+			}
+			
+			for(keys %ARP) {
+				%n = %{$ARP{$_}};
+				push @Node, { mac=>$n{mac}, ip=>$_, state=>$n{state} };
+			}
+
+			$col = 0;
+			for my $hdr (@colhdr) {
+				for my $node (@Node) {
+					$len = length $node->{$hdr};
+					$clen{$hdr} = $len if $clen{$hdr} <= $len;
+				}
+			}
+
+			$fmt = join("\t", map {"%-".$clen{$_}."s"} @colhdr)."\n";
+			
+			for my $node (sort { $a->{ip} cmp $b->{ip} } @Node) {
+				printf $fmt, map { $node->{$_} } @colhdr;
+			}
+		'
+	fi
+	;;
+
+portforward)
+	_proc() {
+#    <INPUT type="text" class="num" maxlength="5" size="5" name="PortForwardPortGlobalStart11" title="Port Forwarding 11 External Start Port" value="8767" />&nbsp;
+#    <script language="javascript" type="text/javascript">dw(vs_to);</script>
+#</TD>
+#<TD headers="external ex_end_port">
+#    <INPUT type="text" class="num" maxlength="5" size="5" name="PortForwardPortGlobalEnd11" title="Port Forwarding 11 External End Port" value="8767" />
+#</TD>
+#<TD nowrap="nowrap" headers="internal in_ip_address">
+#    <input type=text name=PortForwardAddressLocal11IPX title="Port Forwarding 11 Internal IP Address" size=15 maxlength=15 value=192.168.32.11>
+#</TD>
+#<TD nowrap="nowrap" headers="internal in_start_port">
+#    <INPUT type="text" class="num" maxlength="5" size="5" name="PortForwardPortLocalStart11" title="Port Forwarding 11 Internal Start Port" value="8767" />&nbsp;
+#    <script language="javascript" type="text/javascript">dw(vs_to);</script>
+#</TD>
+#<TD headers="internal in_end_port">
+#    <INPUT type="text" class="num" maxlength="5" size="5" name="PortForwardPortLocalEnd11" title="Port Forwarding 11 Internal End Port" value="8767" />
+		perl -e '
+		($mode, $cmd, $gstart, $gend, $lstart, $lend, $dst, $proto_num) = split /\s+/, "'"$*"'";
+		%proto = qw/3 udp 4 tcp 254 any/;
+		while(<>)
+		{
+			s/\s*$//;
+			/PortForwardPort(Global|Local)(Start|End)(\d+)".*?(?:value)="(\d+)/	 and $pf{$3}->{$1}->{$2} = $4;
+			/PortForwardAddressLocal(\d+)IPX.*?(?:value)=([\d\.:]+)/	 and $pf{$1}->{"dst"} = $2;
+			/PortForwardEnable(\d+).*?(checked)/				 and $pf{$1}->{"enabled"} = 1;
+			($prev.$_) =~ /PortForwardProtocol(\d+).*?(=(3|4|254) selected)/ and do{ $pf{$1}->{"proto"} = $proto{$3}; $pf{$1}->{"proto_num"} = $3 };
+			$prev = $_;
+		}
+		%pf = map { $_=>$pf{$_}; } grep { $pf{$_}->{"dst"} ne "0.0.0.0" } keys %pf;
+		for(sort { $a<=>$b } keys %pf) {
+			$n = $_;
+			$_ = $pf{$_};
+			if($mode eq "bash") {
+				if($cmd eq "del" and
+				     $gstart eq $_->{"Global"}->{"Start"} and $gend eq $_->{"Global"}->{"End"} and 
+				     $lstart eq $_->{"Local"}->{"Start"} and $lend eq $_->{"Local"}->{"End"} and 
+				     $dst eq $_->{"dst"} and $proto_num eq $_->{"proto_num"}) {
+				     	printf "prm[PortForwardPortGlobalStart%d]=0\n", $n;
+					printf "prm[PortForwardPortGlobalEnd%d]=0\n", $n;
+					printf "prm[PortForwardPortLocalStart%d]=0\n", $n;
+					printf "prm[PortForwardPortLocalEnd%d]=0\n", $n;
+					printf "prm[PortForwardAddressLocal%dIPX]=0.0.0.0\n", $n;
+					printf "prm[PortForwardProtocol%d]=254\n", $n;
+				}
+				else {
+					printf "prm[PortForwardPortGlobalStart%d]=%s\n", $n, $_->{"Global"}->{"Start"};
+					printf "prm[PortForwardPortGlobalEnd%d]=%s\n", $n, $_->{"Global"}->{"End"};
+					printf "prm[PortForwardPortLocalStart%d]=%s\n", $n, $_->{"Local"}->{"Start"};
+					printf "prm[PortForwardPortLocalEnd%d]=%s\n", $n, $_->{"Local"}->{"End"};
+					printf "prm[PortForwardAddressLocal%dIPX]=%s\n", $n, $_->{"dst"};
+					printf "prm[PortForwardProtocol%d]=%s\n", $n, $_->{"proto_num"};
+					printf "prm[PortForwardEnable%d]=0x01\n", $n if $_->{"enabled"};
+				}
+			}
+			else {
+				$e = $_->{"enabled"} ? "" : "# ";
+				use Data::Dumper;
+				if($_->{"Global"}->{"Start"} == $_->{"Global"}->{"End"}) {
+					printf "%-6s  0.0.0.0:%-11s  %15s:%s\n", $e.$_->{"proto"}, $_->{"Global"}->{"Start"}, $_->{"dst"}, $_->{"Local"}->{"Start"};
+				}
+				else {
+					printf "%-6s  0.0.0.0:%-11s  %15s:%s\n", $e.$_->{"proto"}, $_->{"Global"}->{"Start"}."-".$_->{"Global"}->{"End"}, $_->{"dst"}, $_->{"Local"}->{"Start"}."-".$_->{"Local"}->{"End"};
+				}
+			}
+		}
+		if($mode eq "bash") {
+			for $n (1..30) {
+				if(!defined $pf{$n}) {
+					print "free=$n\n";
+					last;
+				}
+			}
+		}'
+	}
+	
+	
+	shift
+	cmd=$1
+
+	case "$cmd" in
+	list)
+		dispatch_epc AppGaming.asp | _proc list
+		;;
+	new|del)
+		shift
+		gstart=$1
+		shift
+		if is_integer "$1"; then
+			if [ $# -gt 3 ]; then
+				gend=$1
+				lstart=$2
+				lend=$3
+				shift 3
+			else
+				gend=$gstart
+				lstart=$1
+				lend=$1
+				shift
+			fi
+		else
+			gend=$gstart
+			lstart=$gstart
+			lend=$gstart
+		fi
+		dst=$1
+		[ -z "$2" ] && proto=any || proto=$2
+
+		if ! is_integer "$gstart" || ! is_integer "$gend" || ! is_integer "$lstart" || ! is_integer "$lend" || [ -z "$dst" ]; then
+			echo "Parameters:"
+			echo "    portforward new <port> <local ip> [<protocol>]" 1>&2
+			echo "    portforward new <global port> <local port> <local ip> [<protocol>]" 1>&2
+			echo "    portforward new <global portrange start> <global portrange end> <local portrange start> <local portrange end> <local ip> [<protocol>]" 1>&2
+			echo "    portforward del <port> <local ip> <protocol>" 1>&2
+			exit 1
+		fi
+		
+		declare -A proto_num
+		proto_num[udp]=3
+		proto_num[tcp]=4
+		proto_num[any]=254
+		
+		if [ -z "${proto_num[$proto]}" ]; then
+			echo "Protocols: udp, tcp, any"
+			exit 1
+		fi
+		
+		get_sessionid
+		eval `dispatch_epc AppGaming.asp | _proc bash "$cmd" "$gstart" "$gend" "$lstart" "$lend" "$dst" "${proto_num[$proto]}"`
+		
+		if [ "$cmd" = new ]; then
+			prm[PortForwardPortGlobalStart$free]=$gstart
+			prm[PortForwardPortGlobalEnd$free]=$gend
+			prm[PortForwardPortLocalStart$free]=$lstart
+			prm[PortForwardPortLocalEnd$free]=$lend
+			prm[PortForwardAddressLocal${free}IPX]=$dst
+			prm[PortForwardProtocol$free]=${proto_num[$proto]}
+			prm[PortForwardEnable$free]=0x01
+		fi
+
+		goform=AppGaming
+		;;
+	esac
+	;;
+
+reboot)
+	prm[mtenRestore]="Device Restart"
+	prm[devicerestart]=1
+	goform=Devicerestart
+	endfilter=http_status
+	;;
+
+next-gw)
+	dispatch_epc Status.asp | grep 'dw(vb_gateway)' | sed -e 's@^.*<b>\(.*\)</b>.*@\1@'
+	;;
+	
+*)
+	echo -n "Commands:
+  psk [<passphrase>]
+  macfilter [list | add <MAC> | del <MAC>]
+  dhcp [list]
+  portforward [list | new | del]
+  reboot
+  next-gw
+" 1>&2
+  	exit 1
+	;;
+esac
+
+
+
+if [ -n "$goform" ]; then
+	declare -a params
+	for pname in "${!prm[@]}"
+	do
+		pval=${prm[$pname]}
+		pval=${pval//+/%2B}
+		params+=(-d "$pname=$pval")
+		#echo "$pname=$pval" 1>&2
+	done
+	
+	dispatch_epc "goform/$goform" -i -H "Referer: http://$RouterIP/$goform.asp" "${params[@]}" | \
+	case "$endfilter" in
+	http_status)
+		read http_ver http_status
+		echo "$http_status"
+		;;
+	*)
+		cat
+		;;
+	esac
+fi
+

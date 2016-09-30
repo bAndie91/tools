@@ -1,0 +1,124 @@
+#!/bin/bash
+
+act=
+
+while [ -n "$1" ]
+do
+	case "$1" in
+	--help)
+		echo "Usage: ${0##*/} [-u user] [-p password] [-h host_address]
+  --list-ports
+  --enable-port <num>
+  --disable-port <num>
+  --MAC-table"
+		exit
+		;;
+	-u)	shift
+		user=$1
+		;;
+	-p)	shift
+		pass=$1
+		;;
+	-h)	shift
+		switch_host=$1
+		;;
+	--enable-port)
+		shift
+		act=port
+		port=$1
+		speed=5
+		;;
+	--disable-port)
+		shift
+		act=port
+		port=$1
+		speed=6
+		;;
+	--list-ports)
+		act=list
+		;;
+	--[Mm][Aa][Cc]-table)
+		act=mactable
+		;;
+	*)
+		echo "Unknown option: $1" >&2
+		exit 1
+		;;
+	esac
+	shift
+done
+
+set -u
+
+if [ "$act" = port ]
+then
+	if [ "$port" -gt 0 ]
+	then
+		port=$(printf %02d $[$port-1])
+	else
+		echo "Invalid port number: $port" >&2
+		exit 1
+	fi
+fi
+
+
+fetch()
+{
+	local fnc=$1
+	shift
+	curl -isS "http://$switch_host/iss/specific/$fnc.js?Gambit=$gambit" "$@"
+}
+
+
+gambit=`curl -isS http://$switch_host/ -d "Password=$pass&currlang=0&Login=$user&BrowsingPage=index_dlink.htm&changlang=0" | grep -iEom1 "Gambit=[a-z]+" | cut -d= -f2-`
+if [ -z "$gambit" ]
+then
+	echo "Could not acquire token." >&2
+	exit 1
+fi
+
+
+case "$act" in
+list)
+	fetch PortSetting | \
+	while read line
+	do
+		if [ "${line:0:1}" = "[" ]
+		then
+			set -- ${line//[]\',[]/ }
+			[ "$3" = 6 ] && adm_status="disabled" || adm_status="enabled"
+			[ "$2" = 8 ] && status="down" || status="up"
+			printf "Port %02d %8s %4s\n" $1 $adm_status $status
+		fi
+	done
+	;;
+mactable)
+	fetch DynamicForwarding | \
+	perl -ne '
+		use Data::Dumper;
+		if(/^var DynamicForwarding/)
+		{
+			s/\x27//g;
+			while(/\[([^[]+?)\]/)
+			{
+				push @T, [split /,/, $1];
+				$_ = $'\'';
+			}
+			for my $r (sort { $a->[1] <=> $b->[1]; } @T)
+			{
+				$str_port = $r->[1] == $prev_port ? "" : $r->[1];
+				$prev_port = $r->[1];
+				printf "%2s\t%s\n", $str_port, $r->[2];
+			}
+		}'
+	;;
+port)
+	if fetch PortSetting -d "FormName=portset&port_f=$port&port_t=$port&speed=$speed&mdi=0&flow=0&post_url=cgi_port.&Gambit=$gambit" | grep -q Page-Exit
+	then
+		echo Ok.
+	else
+		echo Error.
+	fi
+	;;
+esac
+

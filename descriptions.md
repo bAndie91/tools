@@ -23,9 +23,10 @@
 | [usr/bin/findoldestfile](usr/bin/findoldestfile) | same for oldest file
 | [usr/bin/Head](usr/bin/Head) | output only one screen from the beginning of input stream
 | [usr/bin/header.sed](usr/bin/header.sed) | output until the first double (CR)LF
+| [usr/bin/hidedir](usr/bin/hidedir) | hide directories' contents using separated mount namespace and run command in it
 | [usr/bin/inisort](usr/bin/inisort) | sort INI file's content according to another one
 | [usr/bin/lpset](usr/bin/lpset) | setup printers and their options interactively
-| [usr/bin/lsata](usr/bin/lsata) | list ata device numbers and corresponding block devices
+| [usr/bin/lsata](usr/bin/lsata) | list ATA device numbers and corresponding block devices
 | [usr/bin/lsenv](usr/bin/lsenv) | display a process' environment variables
 | [usr/bin/nginx_conftree.pl](usr/bin/nginx_conftree.pl) | 
 | [usr/bin/organizebydate](usr/bin/organizebydate) | copy/move/rename files based on atime/ctime/mtime, exif time, Date email header

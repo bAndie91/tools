@@ -8,7 +8,27 @@ declare -A types_k
 hidemount()
 {
 	echo hide $1 >&2
-	umount -i "$1" || mount -o bind /var/empty "$1" || exit 2
+	umount -i "$1"
+	if [ $? != 0 -a -d "$1" ]
+	then
+		local emptydir
+		if [ -d /var/run/empty ]
+		then
+			emptydir=/var/run/empty
+		elif [ -d /var/empty ]
+		then
+			emptydir=/var/empty
+		else
+			mkdir /var/run/empty
+			emptydir=/var/run/empty
+		fi
+		mount -o bind "$emptydir" "$1"
+		if [ $? != 0 ]
+		then
+			echo "Unable to hide \`$1'. Exiting." >&2
+			exit 2
+		fi
+	fi
 }
 
 getoptions()
@@ -90,9 +110,23 @@ do
 	then
 		dirs_k["$mntpnt"]=1
 	fi
-	if [ -n "$mntype" ] && [ "${types_k[$mntype]}" = 1 ]
+	if [ -n "$mntype" ]
 	then
-		dirs_k["$mntpnt"]=1
+		if [ "${types_k[$mntype]}" = 1 ]
+		then
+			dirs_k["$mntpnt"]=1
+		else
+			for typepatt in "${types[@]}"
+			do
+				typepatt=${typepatt//./\\.}
+				typepatt=${typepatt//\*/.*}
+				typepatt=${typepatt//\?/.}
+				if [[ "$mntype" =~ ^$typepatt$ ]]
+				then
+					dirs_k["$mntpnt"]=1
+				fi
+			done
+		fi
 	fi
 done </proc/mounts
 

@@ -1,0 +1,145 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  TagChanges:
+    Description: Update DNS on instance Tag changes? (requires CloudTrail)
+    Type: String
+    AllowedValues:
+      - yes
+      - no
+    Default: no
+    ConstraintDescription: yes or no
+
+Conditions:
+  TagChanges: !Equals [ !Ref TagChanges, yes ]
+
+Resources: 
+  StateEvent:
+    Type: "AWS::Events::Rule"
+    Properties: 
+      Name: ec2_state_lambda_ddns
+      Description: Invoke lambda DDNS handler on instance start/stop events
+      EventPattern:
+        source:
+          - "aws.ec2"
+        detail-type:
+          - "EC2 Instance State-change Notification"
+        detail:
+          state:
+            - "running"
+            - "stopped"
+            - "shutting-down"
+            - "terminated"
+      State: ENABLED
+      Targets:
+        - 
+          Arn:
+            Fn::GetAtt:
+              - "LambdaFunction"
+              - "Arn"
+          Id: ddns_lambda
+  
+  TagEvent:
+    Type: "AWS::Events::Rule"
+    Condition: TagChanges
+    Properties: 
+      Name: ec2_tag_lambda_ddns
+      Description: Invoke lambda DDNS handler on changing tags on instances (requires CloudTrail)
+      EventPattern:
+        detail-type:
+          - "AWS API Call via CloudTrail"
+        detail:
+          eventSource:
+            - "ec2.amazonaws.com"
+          eventName:
+            - "CreateTags"
+            - "DeleteTags"
+      State: ENABLED
+      Targets:
+        - 
+          Arn:
+            Fn::GetAtt:
+              - "LambdaFunction"
+              - "Arn"
+          Id: ddns_lambda
+  
+  PermInvokeLambdaStateEvent:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      FunctionName:
+        Ref: LambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn:
+        Fn::GetAtt:
+          - "StateEvent"
+          - "Arn"
+  
+  PermInvokeLambdaTagEvent:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      FunctionName:
+        Ref: LambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn:
+        Fn::GetAtt:
+          - "TagEvent"
+          - "Arn"
+  
+  LambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties: 
+      FunctionName: ddns_lambda
+      Handler: index.lambda_handler
+      MemorySize: 128
+      Role: 
+        Fn::GetAtt:
+          - "LambdaRole"
+          - "Arn"
+      Runtime: python2.7
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import bz2, base64
+          exec(bz2.decompress(base64.b64decode('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')))
+  
+  LambdaRole:
+    Type: "AWS::IAM::Role"
+    Properties: 
+      RoleName: ddns-lambda-role
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+  
+  LambdaPolicy:
+    Type: "AWS::IAM::Policy"
+    Properties:
+      PolicyName: ddns-lambda-policy2
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Action: "ec2:Describe*"
+            Resource: "*"
+          -
+            Effect: Allow
+            Action:
+              - "logs:CreateLogGroup"
+              - "logs:CreateLogStream"
+              - "logs:PutLogEvents"
+            Resource: "*"
+          -
+            Effect: Allow
+            Action: "route53:*"
+            Resource: "*"
+      Roles:
+        -
+          Ref: LambdaRole

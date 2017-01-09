@@ -27,7 +27,6 @@ Resources:
           state:
             - "running"
             - "stopped"
-            - "shutting-down"
             - "terminated"
       State: ENABLED
       Targets:

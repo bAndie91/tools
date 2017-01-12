@@ -1,3 +1,5 @@
+# inspired by https://aws.amazon.com/blogs/compute/building-a-dynamic-dns-for-route-53-using-cloudwatch-events-and-lambda/
+
 AWSTemplateFormatVersion: 2010-09-09
 Parameters:
   TagChanges:

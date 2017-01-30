@@ -4,6 +4,16 @@
 #include <string.h>
 #include <err.h>
 
+/*
+   This lib implements the "aborting" versions of
+    - malloc
+    - realloc
+    - strdup
+    - strndup
+   The program gets abort()ed if they can not allocate enough memory.
+   Thus the caller don't need to pay attention to returning NULL pointers.
+   See abort(3).
+ */
 
 void* mallocab(size_t size)
 {

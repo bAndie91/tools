@@ -1,0 +1,8 @@
+# Allow any command lines and interactive shell
+shell	--- **
+
+# Allow only sftp, no parameter
+sftp	/usr/lib/openssh/sftp-server
+
+# Allow a single parameter
+nogroup	/bin/echo *

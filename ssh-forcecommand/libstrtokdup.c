@@ -12,6 +12,7 @@
    Words are separated by whitespace
    Caller is responsible to free() the returning pointer.
  */
+
 char* strtokdup(const char* s, unsigned int nth)
 {
 	char* r;

@@ -20,7 +20,8 @@ typedef int boolean;
 #define TRUE !FALSE
 
 
-#define CONFFILE "/etc/ssh/ForceCommands"
+#define CONFFILE "/etc/ssh/AllowGroupCommands"
+#define SUPPRESS_MSG_DOTSSHRC 0
 
 
 
@@ -242,10 +243,15 @@ int main(int argc, char** argv, char** envp)
 		fclose(fh);
 	}
 	
+#if SUPPRESS_MSG_DOTSSHRC
 	if(argc > 2 && (sh_string = strtokdup(cmdline, 2)) != NULL && EQ(sh_string, ".ssh/rc"))
 		/* Don't report that ".ssh/rc" is denied to run. */{}
 	else
-		warnx("Not allowed to run requested command.");
+#endif
+		if(strlen(cmdline))
+			warnx("Not allowed to run requested command line: %s", cmdline);
+		else
+			warnx("Not allowed to run interactive shell.");
 	FREE(sh_string);
 	return 1;
 }

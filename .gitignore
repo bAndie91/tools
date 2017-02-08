@@ -1,0 +1,3 @@
+*.o
+ssh-forcecommand/*.so
+ssh-forcecommand/*.ssh

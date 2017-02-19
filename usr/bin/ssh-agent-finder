@@ -1,4 +1,6 @@
 #!/bin/bash
+# Usage: 
+# $ . ssh-agent-finder -Iva
 
 interactive=1
 havingkeys=1

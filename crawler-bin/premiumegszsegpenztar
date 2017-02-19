@@ -2,7 +2,7 @@
 
 if [ -z "$2" ]
 then
-	echo "Usage: $0 <Tagkod> <Jelszo>" >&2
+	echo "Usage: $0 <Email> <Jelszo>" >&2
 	exit 1
 fi
 

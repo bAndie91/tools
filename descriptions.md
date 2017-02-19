@@ -1,8 +1,9 @@
 |   |   |
 |---|---|
 | [crawler-bin/debuggex](crawler-bin/debuggex) | fetch a regex pattern's flowchart from debuggex.com
-| [crawler-bin/entropay](crawler-bin/entropay) | 
+| [crawler-bin/entropay](crawler-bin/entropay) | show your balance on entropay.com virtual credit cards
 | [crawler-bin/erzsebetplusz.js](crawler-bin/erzsebetplusz.js) | 
+| [crawler-bin/githubissues](crawler-bin/githubissues) | display issues on Github of the current git repo
 | [crawler-bin/helyesiras](crawler-bin/helyesiras) | query helyesírás.hu for spellcheking Hungarian words
 | [crawler-bin/huregcheck](crawler-bin/huregcheck) | query .HU domain zone validity and integrity online
 | [crawler-bin/otp-egyenleg](crawler-bin/otp-egyenleg) | query account balance at OTP
@@ -10,20 +11,21 @@
 | [usr/bin/bardf](usr/bin/bardf) | show disk usage (du) by ascii percetange bars
 | [usr/bin/chshebang](usr/bin/chshebang) | change script interpreter (shebang)
 | [usr/bin/corner_time](usr/bin/corner_time) | display a digital clock in terminal's upper-right side (run "corner_time &")
-| [usr/bin/cut.awk](usr/bin/cut.awk) | 
+| [usr/bin/cut.awk](usr/bin/cut.awk) | filter fields by awk
 | [usr/bin/digasn](usr/bin/digasn) | lookup ASN numbers/names via DNS
 | [usr/bin/digwiki](usr/bin/digwiki) | lookup Wikipedia article leads via DNS
 | [usr/bin/dlnew](usr/bin/dlnew) | download web content if local copy is expired according to caching and other HTTP headers
 | [usr/bin/dump_php_session.php](usr/bin/dump_php_session.php) | 
 | [usr/bin/errorlevel](usr/bin/errorlevel) | exit with status code teken from parameter
-| [usr/bin/error_reporting.php](usr/bin/error_reporting.php) | 
+| [usr/bin/error_reporting.php](usr/bin/error_reporting.php) | display which error levels are reported in the current php session
 | [usr/bin/ff](usr/bin/ff) | find files horizontally (you often found files faster this way)
 | [usr/bin/fgat](usr/bin/fgat) | foreground command scheduler
 | [usr/bin/findnewestfile](usr/bin/findnewestfile) | search for even newer files and always display the newest one
 | [usr/bin/findoldestfile](usr/bin/findoldestfile) | same for oldest file
+| [usr/bin/grepdatetime](usr/bin/grepdatetime) | filter lines from log files between the give dates
 | [usr/bin/Head](usr/bin/Head) | output only one screen from the beginning of input stream
 | [usr/bin/header.sed](usr/bin/header.sed) | output until the first double (CR)LF
-| [usr/bin/hidedir](usr/bin/hidedir) | hide directories' contents using separated mount namespace and run command in it
+| [usr/bin/hidedir](usr/bin/hidedir) | hide directories by umount or overmount them with an empty dir in a separated namespace
 | [usr/bin/inisort](usr/bin/inisort) | sort INI file's content according to another one
 | [usr/bin/lpset](usr/bin/lpset) | setup printers and their options interactively
 | [usr/bin/lsata](usr/bin/lsata) | list ATA device numbers and corresponding block devices
@@ -31,16 +33,16 @@
 | [usr/bin/nginx_conftree.pl](usr/bin/nginx_conftree.pl) | 
 | [usr/bin/organizebydate](usr/bin/organizebydate) | copy/move/rename files based on atime/ctime/mtime, exif time, Date email header
 | [usr/bin/pipekill](usr/bin/pipekill) | signal process piping to/from us
-| [usr/bin/PMdirindex](usr/bin/PMdirindex) | 
-| [usr/bin/PMhexdiff](usr/bin/PMhexdiff) | 
-| [usr/bin/PMpwgen](usr/bin/PMpwgen) | poorman's password generator
-| [usr/bin/PMrecdiff](usr/bin/PMrecdiff) | poorman's recursive directory comparator
+| [usr/bin/PMdirindex](usr/bin/PMdirindex) | poor man's directory index, html output
+| [usr/bin/PMhexdiff](usr/bin/PMhexdiff) | poor man's hex diff
+| [usr/bin/PMpwgen](usr/bin/PMpwgen) | poor man's password generator
+| [usr/bin/PMrecdiff](usr/bin/PMrecdiff) | poor man's recursive directory comparator
 | [usr/bin/renamemanual](usr/bin/renamemanual) | prompt user for filenames to rename files interactively
 | [usr/bin/repeat](usr/bin/repeat) | repeat running a command (optionally N times)
 | [usr/bin/rsacrypt](usr/bin/rsacrypt) | encrypt/decrypt streams with RSA keys
-| [usr/bin/rxvt-inband](usr/bin/rxvt-inband) | 
+| [usr/bin/rxvt-inband](usr/bin/rxvt-inband) | client program for Rxvt Inband Filetransfer plugin
 | [usr/bin/screenconsole](usr/bin/screenconsole) | open a commandline, send commands to running GNU/screen session
-| [usr/bin/slay](usr/bin/slay) | continously kill a process while it gets killed
+| [usr/bin/slay](usr/bin/slay) | continously kill a process unlit it lives
 | [usr/bin/slayall](usr/bin/slayall) | same but by process name
 | [usr/bin/ssh-agent-finder](usr/bin/ssh-agent-finder) | search and reuse already started and loaded ssh-agent
 | [usr/bin/sshwho](usr/bin/sshwho) | display logged-in ssh sessions like who

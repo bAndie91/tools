@@ -85,7 +85,7 @@ IFS=$'\n'
 	for line in `grep "$hash" -x -l -r "$prefix"`
 	do
 		line=${line:${#prefix}}
-		[ "$line" != "$branch" ] &&	branches=$branches$MAGENTA,$BMAGENTA$line
+		[ "$line" != "$branch" ] &&	branches=$branches${branches:+$MAGENTA,}$BMAGENTA$line
 	done
 	
 	for line in `test $isthereworktree && git status --porcelain`
@@ -162,20 +162,28 @@ fi
 hash=$MAGENTA${hash:0:7}
 specdir=${specdir:+ $BLACK$YELLOWBG$specdir$RESET}
 spec=${spec:+ $BWHITE$REDBG$spec$RESET}
+if [ -z "$branch" ]
+then
+	spec="$spec $BWHITE${MAGENTABG}HEAD$RESET"
+fi
 if [ -n "$branch$tags" ]
 then
-	branches=${branch:+ $MAGENTA$sign_branches $BMAGENTA$branch}${pushpull:+$BYELLOW$sign_pushpull}$branches
+	local branchesglue=
+	if [ -n "$branches" ]
+	then
+		branchesglue=$MAGENTA${branch:- $sign_desc }${branch:+,}
+	fi
+	branches=${branch:+ $MAGENTA$sign_branches $BMAGENTA$branch}${pushpull:+$BYELLOW$sign_pushpull}$branchesglue$branches
 	tags=${tags:+ $CYAN$sign_tags $tags}
 	pointer=$branches$tags
 else
 	if [ -n "$desctag" ]
 	then
-		pointer=" $CYAN$sign_desc $BCYAN$desctag"
+		pointer=" $BRED$sign_desc $BCYAN$desctag"
 	elif [ -n "$descbranch" ]
 	then
-		pointer=" $MAGENTA$sign_desc $BMAGENTA$descbranch"
+		pointer=" $BRED$sign_desc $BMAGENTA$descbranch"
 	fi
-	pointer="$pointer${pointer:+ }$YELLOW"`git show -s --format=%cr`
 fi
 ahead=${ahead:+$BBLUE$sign_ahead$RESET$ahead}
 behind=${behind:+$BBLACK$sign_behind$RESET$behind}
@@ -200,6 +208,11 @@ staged=${staged:+$BWHITE$sign_staged$staged}
 [ -n "$adds2$dels2" ] && delta2="${adds2:+$GREEN+$adds2}${dels2:+$RED-$dels2}$RESET" || delta2=
 delta1=${delta1:+$BBLACK[$delta1$BBLACK]}
 delta2=${delta2:+$BBLACK[$delta2$BBLACK]}
+
+if [ -z "$unstag$staged" ]
+then
+	pointer="$pointer${pointer:+ }$YELLOW"`git show -s --format=%cr`
+fi
 
 
 __git_prompt="$hash$specdir$spec$pointer${divergence:+  }$divergence${unstag:+  }$unstag${delta1:+ }$delta1${stash:+  }$stash${staged:+  }$staged${delta2:+ }$delta2"

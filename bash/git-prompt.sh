@@ -200,8 +200,8 @@ else
 	stash="$BBLUE$sign_stash$MAGENTA$stash"
 fi
 
-unstag=${AY:+ ${BGREEN}A$BWHITE$AY}${DY:+ ${BRED}D$BWHITE$DY}${MY:+ ${BYELLOW}M$BWHITE$MY}${CY:+ ${BGREEN}C$REST$C}${RY:+ ${BYELLOW}R$BWHITE$RY}${UY:+ ${BBLUE}U$BWHITE$UY}${QY:+ ${BRED}?$BWHITE$QY}
-staged=${AX:+ ${GREEN}A$RESET$AX}${DX:+ ${RED}D$RESET$DX}${MX:+ ${YELLOW}M$RESET$MX}${CX:+ ${GREEN}C$REST$C}${RX:+ ${YELLOW}R$RESET$RX}${UX:+ ${BLUE}U$RESET$UX}
+unstag=${AY:+ ${BGREEN}A$BWHITE$AY}${DY:+ ${BRED}D$BWHITE$DY}${MY:+ ${BYELLOW}M$BWHITE$MY}${TY:+ ${BBLUE}T$RESET$TY}${CY:+ ${BGREEN}C$RESET$CY}${RY:+ ${BYELLOW}R$BWHITE$RY}${UY:+ ${BBLUE}U$BWHITE$UY}${QY:+ ${BRED}?$BWHITE$QY}
+staged=${AX:+ ${GREEN}A$RESET$AX}${DX:+ ${RED}D$RESET$DX}${MX:+ ${YELLOW}M$RESET$MX}${TX:+ ${BLUE}T$RESET$TX}${CX:+ ${GREEN}C$RESET$CX}${RX:+ ${YELLOW}R$RESET$RX}${UX:+ ${BLUE}U$RESET$UX}
 unstag=${unstag:+$YELLOW$sign_unstag$unstag}
 staged=${staged:+$BWHITE$sign_staged$staged}
 

@@ -29,7 +29,8 @@ local sign_ahead=▲
 local sign_behind=▼
 local sign_unstag=✎
 local sign_staged=✈
-local sign_stash=⌂
+#local sign_stash=⌂
+local sign_stash=●
 local sign_pushpull=★
 
 
@@ -194,9 +195,9 @@ then
 	stash=
 elif [ $stash = 1 ]
 then
-	stash="$BMAGENTA$sign_stash"
+	stash="$BBLUE$sign_stash"
 else
-	stash="$BMAGENTA$sign_stash$MAGENTA$stash"
+	stash="$BBLUE$sign_stash$MAGENTA$stash"
 fi
 
 unstag=${AY:+ ${BGREEN}A$BWHITE$AY}${DY:+ ${BRED}D$BWHITE$DY}${MY:+ ${BYELLOW}M$BWHITE$MY}${CY:+ ${BGREEN}C$REST$C}${RY:+ ${BYELLOW}R$BWHITE$RY}${UY:+ ${BBLUE}U$BWHITE$UY}${QY:+ ${BRED}?$BWHITE$QY}
@@ -211,7 +212,7 @@ delta2=${delta2:+$BBLACK[$delta2$BBLACK]}
 
 if [ -z "$unstag$staged" ]
 then
-	pointer="$pointer${pointer:+ }$YELLOW"`git show -s --format=%cr`
+	pointer="$pointer${pointer:+ }$GREEN"`git show -s --format=%cr`
 fi
 
 

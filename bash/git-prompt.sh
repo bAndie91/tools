@@ -172,7 +172,8 @@ then
 	local branchesglue=
 	if [ -n "$branches" ]
 	then
-		branchesglue=$MAGENTA${branch:- $sign_desc }${branch:+,}
+		[ -n "$branch" ] && branchesglue=" $sign_desc " || branchesglue=,
+		branchesglue=$MAGENTA$branchesglue
 	fi
 	branches=${branch:+ $MAGENTA$sign_branches $BMAGENTA$branch}${pushpull:+$BYELLOW$sign_pushpull}$branchesglue$branches
 	tags=${tags:+ $CYAN$sign_tags $tags}

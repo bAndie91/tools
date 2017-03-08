@@ -67,11 +67,23 @@ IFS=$'\n'
 	branch=`git symbolic-ref --quiet --short HEAD`
 	if [ -n "$branch" ]
 	then
-		line=`git rev-list --count --left-right "$branch...origin/$branch" 2>/dev/null`
-		# Empty $line means branch is not remotely tracked.
-		if [ -z "$line" ] || [ ${line%	*} -gt 0 -o ${line#*	} -gt 0 ]
+		pushpull=yes
+		local upstreamremote=`git config "branch.$branch.remote"`
+		if [ -n "$upstreamremote" ]
 		then
-			pushpull=yes
+			local upstreambranch=`git config "branch.$branch.merge"`
+			# Strip "refs/heads/"
+			upstreambranch=${upstreambranch:11}
+			if [ -n "$upstreambranch" ]
+			then
+				line=`git rev-list --count --left-right "$branch...$upstreamremote/$upstreambranch" 2>/dev/null`
+				# Empty $line means remote branch is not tracked.
+				# "0\t0" means we are in sync.
+				if [ "${line%	*}" = 0 -a "${line#*	}" = 0 ]
+				then
+					pushpull=
+				fi
+			fi
 		fi
 	else
 		desctag=`git describe --contains --tags HEAD 2>/dev/null`

@@ -30,6 +30,7 @@ local sign_behind=▼
 local sign_unstag=✎
 local sign_staged=✈
 #local sign_stash=⌂
+#local sign_stash=❂
 local sign_stash=●
 local sign_pushpull=★
 
@@ -67,9 +68,10 @@ IFS=$'\n'
 	if [ -n "$branch" ]
 	then
 		line=`git rev-list --count --left-right "$branch...origin/$branch" 2>/dev/null`
-		if [ -n "$line" ] && [ ${line%	*} -gt 0 -o ${line#*	} -gt 0 ]
+		# Empty $line means branch is not remotely tracked.
+		if [ -z "$line" ] || [ ${line%	*} -gt 0 -o ${line#*	} -gt 0 ]
 		then
-			pushpull="${line%	*},${line#*	}"
+			pushpull=yes
 		fi
 	else
 		desctag=`git describe --contains --tags HEAD 2>/dev/null`

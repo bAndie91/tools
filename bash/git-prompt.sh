@@ -22,7 +22,7 @@ local add del rest
 local adds1= dels1= adds2= dels2=
 local delta1 delta2
 
-local sign_branches=❦
+local sign_branch=❦
 local sign_tags=➼
 local sign_desc=☛
 local sign_ahead=▲
@@ -33,6 +33,7 @@ local sign_staged=✈
 #local sign_stash=❂
 local sign_stash=●
 local sign_pushpull=★
+local sign_clean=✔
 
 
 gitdir=`git rev-parse --git-dir 2>/dev/null` || return
@@ -186,10 +187,9 @@ then
 	local branchesglue=
 	if [ -n "$branches" ]
 	then
-		[ -n "$branch" ] && branchesglue=" $sign_desc " || branchesglue=,
-		branchesglue=$MAGENTA$branchesglue
+		[ -n "$branch" ] && branchesglue="$MAGENTA," || branchesglue=" $BRED$sign_desc "
 	fi
-	branches=${branch:+ $MAGENTA$sign_branches $BMAGENTA$branch}${pushpull:+$BYELLOW$sign_pushpull}$branchesglue$branches
+	branches=${branch:+ $MAGENTA$sign_branch $BMAGENTA$branch}${pushpull:+$BYELLOW$sign_pushpull}$branchesglue$branches
 	tags=${tags:+ $CYAN$sign_tags $tags}
 	pointer=$branches$tags
 else
@@ -227,7 +227,8 @@ delta2=${delta2:+$BBLACK[$delta2$BBLACK]}
 
 if [ -z "$unstag$staged" ]
 then
-	pointer="$pointer${pointer:+ }$GREEN"`git show -s --format=%cr`
+	pointer="$pointer${pointer:+  }$GREEN$(git show -s --format=%cr)"
+	[ -z "$pushpull" ] && pointer="$pointer${pointer:+ }$BGREEN$sign_clean"
 fi
 
 

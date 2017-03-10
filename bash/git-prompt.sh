@@ -7,16 +7,17 @@ local color
 local line
 local RESET
 local gitdir prefix isthereworktree=
-local hash 
+local hash
 local branch= branches= tags= descbranch= desctag= pointer=
 local ahead= behind= divergence=
 local pushpull=
 
 local X Y
-local MX= AX= DX= RX= CX= UX= QX=
-local MY= AY= DY= RY= CY= UY= QY=
+local MX= AX= DX= RX= CX= UX= QX= EX=
+local MY= AY= DY= RY= CY= UY= QY= EY=
+local AA= DD= AU= DU= UA= UD= UU= U=
 local unstag staged
-local specdir= spec=
+local specdir= speclist=() spec=
 
 local add del rest
 local adds1= dels1= adds2= dels2=
@@ -48,6 +49,8 @@ do
 	let n++
 done
 RESET='[0m'
+
+
 
 if [ "$(git rev-parse --is-bare-repository)" = true ]
 then
@@ -104,13 +107,25 @@ IFS=$'\n'
 		[ "$line" != "$branch" ] &&	branches=$branches${branches:+$MAGENTA,}$BMAGENTA$line
 	done
 	
-	for line in `test $isthereworktree && git status --porcelain`
+	for line in `test $isthereworktree && git status --porcelain ${GIT_PS1_SHOW_IGNORED:+--ignored}`
 	do
 		line=${line//\?/Q}
+		line=${line//\!/E}
 		X=${line:0:1}
 		Y=${line:1:1}
-		[ "$X" != ' ' ] && let ${X}X++
-		[ "$Y" != ' ' ] && let ${Y}Y++
+		case "$X$Y"
+		in
+			AA|DD)
+				let $XY++
+				;;
+			[AD]U|U[ADU])
+				let U++
+				;;
+			*)
+				[ "$X" != ' ' ] && let ${X}X++
+				[ "$Y" != ' ' ] && let ${Y}Y++
+				;;
+		esac
 	done
 	
 	line=`git rev-list --count --left-right master...HEAD`
@@ -122,6 +137,7 @@ IFS=$'\n'
 		for line in `test $isthereworktree && git diff --numstat`
 		do
 			line=${line%	*}
+			line=${line//-/0}
 			let adds1+=${line%	*}
 			let dels1+=${line#*	}
 		done
@@ -129,6 +145,7 @@ IFS=$'\n'
 		for line in `git diff --numstat --staged`
 		do
 			line=${line%	*}
+			line=${line//-/0}
 			let adds2+=${line%	*}
 			let dels2+=${line#*	}
 		done
@@ -145,39 +162,35 @@ stash=$(git stash list -s --format=%H 2>/dev/null | wc -l)
 if [ -d "$gitdir/rebase-merge" ]
 then
 	branch=`cat "$gitdir/rebase-merge/head-name"`
-	spec=REBASE-M
+	speclist+=(REBASE-M)
 	if [ -f "$gitdir/rebase-merge/interactive" ]
 	then
-		spec=REBASE-I
-	fi
-else
-	if [ -d "$gitdir/rebase-apply" ]
-	then
-		if [ -f "$gitdir/rebase-apply/rebasing" ]
-		then
-			spec=REBASE
-		elif [ -f "$gitdir/rebase-apply/applying" ]
-		then
-			spec=AM
-		else
-			spec=AM/REBASE
-		fi
-	elif [ -f "$gitdir/MERGE_HEAD" ]
-	then
-		spec=MERGE
-	elif [ -f "$gitdir/CHERRY_PICK_HEAD" ]
-	then
-		spec=CHERRYPICK
-	elif [ -f "$gitdir/BISECT_LOG" ]
-	then
-		spec=BISECT
+		speclist+=(REBASE-I)
 	fi
 fi
+if [ -d "$gitdir/rebase-apply" ]
+then
+	if [ -f "$gitdir/rebase-apply/rebasing" ]
+	then
+		speclist+=(REBASE)
+	elif [ -f "$gitdir/rebase-apply/applying" ]
+	then
+		speclist+=(AM)
+	else
+		speclist+=(AM/REBASE)
+	fi
+fi
+[ -f "$gitdir/MERGE_HEAD" ] && speclist+=(MERGE)
+[ -f "$gitdir/CHERRY_PICK_HEAD" ] && speclist+=(CHERRYPICK)
+[ -f "$gitdir/BISECT_LOG" ] && speclist+=(BISECT)
 
 
 hash=$MAGENTA${hash:0:7}
 specdir=${specdir:+ $BLACK$YELLOWBG$specdir$RESET}
-spec=${spec:+ $BWHITE$REDBG$spec$RESET}
+for line in "${speclist[@]}"
+do
+	spec="$spec $BWHITE$REDBG$line$RESET"
+done
 if [ -z "$branch" ]
 then
 	spec="$spec $BWHITE${MAGENTABG}HEAD$RESET"
@@ -215,8 +228,8 @@ else
 	stash="$BBLUE$sign_stash$MAGENTA$stash"
 fi
 
-unstag=${AY:+ ${BGREEN}A$BWHITE$AY}${DY:+ ${BRED}D$BWHITE$DY}${MY:+ ${BYELLOW}M$BWHITE$MY}${TY:+ ${BBLUE}T$RESET$TY}${CY:+ ${BGREEN}C$RESET$CY}${RY:+ ${BYELLOW}R$BWHITE$RY}${UY:+ ${BBLUE}U$BWHITE$UY}${QY:+ ${BRED}?$BWHITE$QY}
-staged=${AX:+ ${GREEN}A$RESET$AX}${DX:+ ${RED}D$RESET$DX}${MX:+ ${YELLOW}M$RESET$MX}${TX:+ ${BLUE}T$RESET$TX}${CX:+ ${GREEN}C$RESET$CX}${RX:+ ${YELLOW}R$RESET$RX}${UX:+ ${BLUE}U$RESET$UX}
+unstag=${AY:+ ${BGREEN}A$BWHITE$AY}${DY:+ ${BRED}D$BWHITE$DY}${MY:+ ${BYELLOW}M$BWHITE$MY}${TY:+ ${BBLUE}T$RESET$TY}${CY:+ ${BGREEN}C$RESET$CY}${RY:+ ${BYELLOW}R$BWHITE$RY}${AA:+ ${BBLUE}A$BWHITE$AA}${DD:+ ${BBLUE}D$BWHITE$DD}${U:+ ${BBLUE}U$BWHITE$U}${QY:+ ${BRED}?$BWHITE$QY}
+staged=${AX:+ ${GREEN}A$RESET$AX}${DX:+ ${RED}D$RESET$DX}${MX:+ ${YELLOW}M$RESET$MX}${TX:+ ${BLUE}T$RESET$TX}${CX:+ ${GREEN}C$RESET$CX}${RX:+ ${YELLOW}R$RESET$RX}
 unstag=${unstag:+$YELLOW$sign_unstag$unstag}
 staged=${staged:+$BWHITE$sign_staged$staged}
 
@@ -232,7 +245,7 @@ then
 fi
 
 
-__git_prompt="$hash$specdir$spec$pointer${divergence:+  }$divergence${unstag:+  }$unstag${delta1:+ }$delta1${stash:+  }$stash${staged:+  }$staged${delta2:+ }$delta2"
+__git_prompt="$hash$specdir$spec$pointer${divergence:+  }$divergence${EY:+  ${BRED}!$BWHITE$EY}${unstag:+  }$unstag${delta1:+ }$delta1${stash:+  }$stash${staged:+  }$staged${delta2:+ }$delta2"
 echo -n "$__git_prompt$RESET
 "
 }

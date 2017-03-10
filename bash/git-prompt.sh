@@ -72,10 +72,10 @@ IFS=$'\n'
 	if [ -n "$branch" ]
 	then
 		pushpull=yes
-		local upstreamremote=`git config "branch.$branch.remote"`
+		local upstreamremote=`git config --get-all "branch.$branch.remote" | head -n1`
 		if [ -n "$upstreamremote" ]
 		then
-			local upstreambranch=`git config "branch.$branch.merge"`
+			local upstreambranch=`git config --get-all "branch.$branch.merge" | head -n1`
 			# Strip "refs/heads/"
 			upstreambranch=${upstreambranch:11}
 			if [ -n "$upstreambranch" ]

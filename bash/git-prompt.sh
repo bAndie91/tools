@@ -22,7 +22,7 @@ local add del rest
 local adds1= dels1= adds2= dels2=
 local delta1 delta2
 
-local sign_branches=❦
+local sign_br=❦
 local sign_tags=➼
 local sign_desc=☛
 local sign_ahead=▲

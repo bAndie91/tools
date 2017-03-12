@@ -36,6 +36,10 @@ local sign_stash=●
 local sign_pushpull=★
 local sign_clean=✔
 
+trueish()
+{
+	[ "${1,,}" = true -o "${1,,}" = yes -o "${1,,}" = y ] || [ "$1" -gt 0 ] 2>/dev/null
+}
 
 gitdir=`git rev-parse --git-dir 2>/dev/null` || return
 hash=`git show -s --format=%H`
@@ -107,7 +111,7 @@ IFS=$'\n'
 		[ "$line" != "$branch" ] &&	branches=$branches${branches:+$MAGENTA,}$BMAGENTA$line
 	done
 	
-	for line in `test $isthereworktree && git status --porcelain ${GIT_PS1_SHOW_IGNORED:+--ignored}`
+	for line in `test $isthereworktree && git status --porcelain ${GIT_PROMPT_SHOW_IGNORED:+--ignored}`
 	do
 		line=${line//\?/Q}
 		line=${line//\!/E}
@@ -132,9 +136,9 @@ IFS=$'\n'
 	behind=${line%	*}
 	ahead=${line#*	}
 	
-	if [ "${GIT_PS1_COUNT_LINES-1}" ]
+	if trueish "${GIT_PROMPT_COUNT_LINES-true}"
 	then
-		for line in `test $isthereworktree && git diff --numstat`
+		for line in `test $isthereworktree && git diff --numstat --find-copies=100`
 		do
 			line=${line%	*}
 			line=${line//-/0}
@@ -142,19 +146,19 @@ IFS=$'\n'
 			let dels1+=${line#*	}
 		done
 		
-		for line in `git diff --numstat --staged`
+		for line in `git diff --numstat --staged --find-copies=100`
 		do
 			line=${line%	*}
 			line=${line//-/0}
 			let adds2+=${line%	*}
 			let dels2+=${line#*	}
 		done
-		
-		for var in ahead behind adds1 dels1 adds2 dels2
-		do
-			[ "${!var}" = 0 ] && eval $var=
-		done
 	fi
+	
+	for var in ahead behind adds1 dels1 adds2 dels2
+	do
+		[ "${!var}" = 0 ] && eval $var=
+	done
 IFS=$IFS_
 stash=$(git stash list -s --format=%H 2>/dev/null | wc -l)
 
@@ -162,10 +166,11 @@ stash=$(git stash list -s --format=%H 2>/dev/null | wc -l)
 if [ -d "$gitdir/rebase-merge" ]
 then
 	branch=`cat "$gitdir/rebase-merge/head-name"`
-	speclist+=(REBASE-M)
 	if [ -f "$gitdir/rebase-merge/interactive" ]
 	then
 		speclist+=(REBASE-I)
+	else
+		speclist+=(REBASE-M)
 	fi
 fi
 if [ -d "$gitdir/rebase-apply" ]

@@ -104,11 +104,11 @@ IFS=$'\n'
 		tags=$tags${tags:+$CYAN,}$BCYAN$line
 	done
 	
-	prefix="$gitdir"/refs/heads/
-	for line in `grep "$hash" -x -l -r "$prefix"`
+	prefix="$hash refs/heads/"
+	for line in `git show-ref | grep "^$prefix"`
 	do
 		line=${line:${#prefix}}
-		[ "$line" != "$branch" ] &&	branches=$branches${branches:+$MAGENTA,}$BMAGENTA$line
+		[ "$line" != "$branch" ] && branches=$branches${branches:+$MAGENTA,}$BMAGENTA$line
 	done
 	
 	for line in `test $isthereworktree && git status --porcelain ${GIT_PROMPT_SHOW_IGNORED:+--ignored}`

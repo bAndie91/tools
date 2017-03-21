@@ -10,7 +10,7 @@ local gitdir prefix isthereworktree=
 local hash
 local branch= branches= tags= descbranch= desctag= pointer=
 local ahead= behind= divergence=
-local pushpull=
+local upstream= fallback= pushpull=
 
 local X Y
 local MX= AX= DX= RX= CX= UX= QX= EX=
@@ -40,6 +40,39 @@ local sign_clean=✔
 trueish()
 {
 	[ "${1,,}" = true -o "${1,,}" = yes -o "${1,,}" = y ] || [ "$1" -gt 0 ] 2>/dev/null
+}
+
+get_tracking_branch()
+{
+	# Arguments:
+	#  - local branch name; mandatory
+	#  - variable name to store remote tracking ref, or "origin/$1" if not found;
+	#    it is being echoed if this argument is omitted
+	#  - variable name to store "1" if branch is not remotely tracked, or "" otherwise
+	local branch=$1
+	local savetovar=$2
+	local fellback=$3
+	local remote=`git config --get-all "branch.$branch.remote" | head -n1`
+	local usbranch
+	if [ -n "$remote" ]
+	then
+		usbranch=`git config --get-all "branch.$branch.merge" | head -n1`
+		# Strip "refs/heads/"
+		usbranch=${usbranch:11}
+		[ -n "$fellback" ] && declare -g $fellback=
+	fi
+	if [ -z "$remote" -o -z "$usbranch" ]
+	then
+		remote=origin
+		usbranch=$branch
+		[ -n "$fellback" ] && declare -g $fellback=1
+	fi
+	if [ -n "$savetovar" ]
+	then
+		declare -g $savetovar="$remote/$usbranch"
+	else
+		echo "$remote/$usbranch"
+	fi
 }
 
 gitdir=`git rev-parse --git-dir 2>/dev/null` || return
@@ -76,23 +109,11 @@ IFS=$'\n'
 	branch=`git symbolic-ref --quiet --short HEAD`
 	if [ -n "$branch" ]
 	then
-		local upstreamremote upstreambranch
 		pushpull=$sign_pushpull
-		upstreamremote=`git config --get-all "branch.$branch.remote" | head -n1`
-		if [ -n "$upstreamremote" ]
-		then
-			upstreambranch=`git config --get-all "branch.$branch.merge" | head -n1`
-			# Strip "refs/heads/"
-			upstreambranch=${upstreambranch:11}
-		fi
-		if [ -z "$upstreamremote" -o -z "$upstreambranch" ]
-		then
-			pushpull=$sign_origin
-			upstreamremote=origin
-			upstreambranch=$branch
-		fi
+		get_tracking_branch "$branch" upstream fallback
+		[ "$fallback" ] && pushpull=$sign_origin
 		
-		line=`git rev-list --count --left-right "$branch...$upstreamremote/$upstreambranch" 2>/dev/null`
+		line=`git rev-list --count --left-right "$branch...$upstream" 2>/dev/null`
 		# Empty $line means remote branch is not tracked.
 		# "0\t0" means they are in sync.
 		if [ "${line%	*}" = 0 -a "${line#*	}" = 0 ]
@@ -138,7 +159,7 @@ IFS=$'\n'
 		esac
 	done
 	
-	line=`git rev-list --count --left-right master...HEAD`
+	line=`git rev-list --count --left-right "$(get_tracking_branch master)...HEAD"`
 	behind=${line%	*}
 	ahead=${line#*	}
 	

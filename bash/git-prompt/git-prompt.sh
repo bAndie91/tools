@@ -34,6 +34,7 @@ local sign_staged=✈
 #local sign_stash=❂
 local sign_stash=●
 local sign_pushpull=★
+local sign_origin=☆
 local sign_clean=✔
 
 trueish()
@@ -75,23 +76,28 @@ IFS=$'\n'
 	branch=`git symbolic-ref --quiet --short HEAD`
 	if [ -n "$branch" ]
 	then
-		pushpull=yes
-		local upstreamremote=`git config --get-all "branch.$branch.remote" | head -n1`
+		local upstreamremote upstreambranch
+		pushpull=$sign_pushpull
+		upstreamremote=`git config --get-all "branch.$branch.remote" | head -n1`
 		if [ -n "$upstreamremote" ]
 		then
-			local upstreambranch=`git config --get-all "branch.$branch.merge" | head -n1`
+			upstreambranch=`git config --get-all "branch.$branch.merge" | head -n1`
 			# Strip "refs/heads/"
 			upstreambranch=${upstreambranch:11}
-			if [ -n "$upstreambranch" ]
-			then
-				line=`git rev-list --count --left-right "$branch...$upstreamremote/$upstreambranch" 2>/dev/null`
-				# Empty $line means remote branch is not tracked.
-				# "0\t0" means we are in sync.
-				if [ "${line%	*}" = 0 -a "${line#*	}" = 0 ]
-				then
-					pushpull=
-				fi
-			fi
+		fi
+		if [ -z "$upstreamremote" -o -z "$upstreambranch" ]
+		then
+			pushpull=$sign_origin
+			upstreamremote=origin
+			upstreambranch=$branch
+		fi
+		
+		line=`git rev-list --count --left-right "$branch...$upstreamremote/$upstreambranch" 2>/dev/null`
+		# Empty $line means remote branch is not tracked.
+		# "0\t0" means they are in sync.
+		if [ "${line%	*}" = 0 -a "${line#*	}" = 0 ]
+		then
+			pushpull=
 		fi
 	else
 		desctag=`git describe --contains --tags HEAD 2>/dev/null`
@@ -207,7 +213,7 @@ then
 	then
 		[ -n "$branch" ] && branchesglue="$MAGENTA," || branchesglue=" $BRED$sign_desc "
 	fi
-	branches=${branch:+ $MAGENTA$sign_branch $BMAGENTA$branch}${pushpull:+$BYELLOW$sign_pushpull}$branchesglue$branches
+	branches=${branch:+ $MAGENTA$sign_branch $BMAGENTA$branch}${pushpull:+$BYELLOW$pushpull}$branchesglue$branches
 	tags=${tags:+ $CYAN$sign_tags $tags}
 	pointer=$branches$tags
 else

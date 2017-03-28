@@ -44,34 +44,47 @@ trueish()
 
 get_tracking_branch()
 {
+	# Options:
+	#  -H  fall back to "origin/HEAD" if it is tracked but current branch is not remotely tracked
 	# Arguments:
 	#  - local branch name; mandatory
 	#  - variable name to store remote tracking ref, or "origin/$1" if not found;
 	#    it is being echoed if this argument is omitted
 	#  - variable name to store "1" if branch is not remotely tracked, or "" otherwise
+	local okHEAD=
+	if [ "$1" = -H ]
+	then
+		okHEAD=1
+		shift
+	fi
 	local branch=$1
 	local savetovar=$2
 	local fellback=$3
 	local remote=`git config --get-all "branch.$branch.remote" | head -n1`
-	local usbranch
+	local rbranch
 	if [ -n "$remote" ]
 	then
-		usbranch=`git config --get-all "branch.$branch.merge" | head -n1`
+		rbranch=`git config --get-all "branch.$branch.merge" | head -n1`
 		# Strip "refs/heads/"
-		usbranch=${usbranch:11}
+		rbranch=${rbranch:11}
 		[ -n "$fellback" ] && declare -g $fellback=
 	fi
-	if [ -z "$remote" -o -z "$usbranch" ]
+	if [ -z "$remote" -o -z "$rbranch" ]
 	then
 		remote=origin
-		usbranch=$branch
+		if [ $okHEAD ] && [ -n "$(git branch --remotes --list $remote/HEAD)" ]
+		then
+			rbranch=HEAD
+		else
+			rbranch=$branch
+		fi
 		[ -n "$fellback" ] && declare -g $fellback=1
 	fi
 	if [ -n "$savetovar" ]
 	then
-		declare -g $savetovar="$remote/$usbranch"
+		declare -g $savetovar="$remote/$rbranch"
 	else
-		echo "$remote/$usbranch"
+		echo "$remote/$rbranch"
 	fi
 }
 
@@ -159,7 +172,7 @@ IFS=$'\n'
 		esac
 	done
 	
-	line=`git rev-list --count --left-right "$(get_tracking_branch master)...HEAD" 2>/dev/null`
+	line=`git rev-list --count --left-right "$(git show-ref --quiet --verify refs/remotes/origin/HEAD && echo origin/HEAD || get_tracking_branch master)...HEAD" 2>/dev/null`
 	behind=${line%	*}
 	ahead=${line#*	}
 	

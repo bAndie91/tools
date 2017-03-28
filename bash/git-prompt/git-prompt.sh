@@ -140,7 +140,7 @@ IFS=$'\n'
 	
 	for line in `test $isthereworktree && git status --porcelain ${GIT_PROMPT_SHOW_IGNORED:+--ignored}`
 	do
-		line=${line//\?/Q}
+		line=${line//\?/N}
 		line=${line//\!/E}
 		X=${line:0:1}
 		Y=${line:1:1}
@@ -159,7 +159,7 @@ IFS=$'\n'
 		esac
 	done
 	
-	line=`git rev-list --count --left-right "$(get_tracking_branch master)...HEAD"`
+	line=`git rev-list --count --left-right "$(get_tracking_branch master)...HEAD" 2>/dev/null`
 	behind=${line%	*}
 	ahead=${line#*	}
 	
@@ -260,7 +260,7 @@ else
 	stash="$BBLUE$sign_stash$MAGENTA$stash"
 fi
 
-unstag=${AY:+ ${BGREEN}A$BWHITE$AY}${DY:+ ${BRED}D$BWHITE$DY}${MY:+ ${BYELLOW}M$BWHITE$MY}${TY:+ ${BBLUE}T$RESET$TY}${CY:+ ${BGREEN}C$RESET$CY}${RY:+ ${BYELLOW}R$BWHITE$RY}${AA:+ ${BBLUE}A$BWHITE$AA}${DD:+ ${BBLUE}D$BWHITE$DD}${U:+ ${BBLUE}U$BWHITE$U}${QY:+ ${BRED}?$BWHITE$QY}
+unstag=${NY:+ ${BCYAN}N$BWHITE$NY}${AY:+ ${BGREEN}A$BWHITE$AY}${DY:+ ${BRED}D$BWHITE$DY}${MY:+ ${BYELLOW}M$BWHITE$MY}${TY:+ ${BBLUE}T$RESET$TY}${CY:+ ${BGREEN}C$RESET$CY}${RY:+ ${BYELLOW}R$BWHITE$RY}${AA:+ ${BBLUE}A$BWHITE$AA}${DD:+ ${BBLUE}D$BWHITE$DD}${U:+ ${BBLUE}U$BWHITE$U}
 staged=${AX:+ ${GREEN}A$RESET$AX}${DX:+ ${RED}D$RESET$DX}${MX:+ ${YELLOW}M$RESET$MX}${TX:+ ${BLUE}T$RESET$TX}${CX:+ ${GREEN}C$RESET$CX}${RX:+ ${YELLOW}R$RESET$RX}
 unstag=${unstag:+$YELLOW$sign_unstag$unstag}
 staged=${staged:+$BWHITE$sign_staged$staged}

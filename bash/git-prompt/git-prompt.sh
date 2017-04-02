@@ -286,7 +286,7 @@ delta2=${delta2:+$BBLACK[$delta2$BBLACK]}
 if [ -z "$unstag$staged" ]
 then
 	pointer="$pointer${pointer:+  }$GREEN$(git show -s --format=%cr)"
-	[ -z "$pushpull" ] && pointer="$pointer${pointer:+ }$BGREEN$sign_clean"
+	[ "$isthereworktree" = 1 -a -z "$pushpull" ] && pointer="$pointer${pointer:+ }$BGREEN$sign_clean"
 fi
 
 

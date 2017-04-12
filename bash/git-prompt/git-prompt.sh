@@ -89,7 +89,7 @@ get_tracking_branch()
 }
 
 gitdir=`git rev-parse --git-dir 2>/dev/null` || return
-hash=`git show -s --format=%H`
+hash=`git show -s --format=%H 2>/dev/null`
 
 for color in BLACK RED GREEN YELLOW BLUE MAGENTA CYAN WHITE
 do
@@ -103,6 +103,10 @@ RESET='[0m'
 
 
 
+if [ -z "$hash" ]
+then
+	speclist+=(INIT)
+fi
 if [ "$(git rev-parse --is-bare-repository)" = true ]
 then
 	specdir=BARE
@@ -139,17 +143,20 @@ IFS=$'\n'
 		descbranch=${descbranch#remotes/}
 	fi
 	
-	for line in `git tag --list --points-at "$hash"`
-	do
-		tags=$tags${tags:+$CYAN,}$BCYAN$line
-	done
-	
-	prefix="$hash refs/heads/"
-	for line in `git show-ref | grep "^$prefix"`
-	do
-		line=${line:${#prefix}}
-		[ "$line" != "$branch" ] && branches=$branches${branches:+$MAGENTA,}$BMAGENTA$line
-	done
+	if [ -n "$hash" ]
+	then
+		for line in `git tag --list --points-at "$hash"`
+		do
+			tags=$tags${tags:+$CYAN,}$BCYAN$line
+		done
+		
+		prefix="$hash refs/heads/"
+		for line in `git show-ref | grep "^$prefix"`
+		do
+			line=${line:${#prefix}}
+			[ "$line" != "$branch" ] && branches=$branches${branches:+$MAGENTA,}$BMAGENTA$line
+		done
+	fi
 	
 	for line in `test $isthereworktree && git status --porcelain ${GIT_PROMPT_SHOW_IGNORED:+--ignored}`
 	do
@@ -160,7 +167,7 @@ IFS=$'\n'
 		case "$X$Y"
 		in
 			AA|DD)
-				let $XY++
+				let $X$Y++
 				;;
 			[AD]U|U[ADU])
 				let U++
@@ -230,15 +237,15 @@ fi
 [ -f "$gitdir/BISECT_LOG" ] && speclist+=(BISECT)
 
 
-hash=$MAGENTA${hash:0:7}
-specdir=${specdir:+ $BLACK$YELLOWBG$specdir$RESET}
+ahash=$MAGENTA${hash:0:7}${hash:+ }
+specdir=${specdir:+$BLACK$YELLOWBG$specdir$RESET }
 for line in "${speclist[@]}"
 do
-	spec="$spec $BWHITE$REDBG$line$RESET"
+	spec="$spec${spec:+ }$BWHITE$REDBG$line$RESET"
 done
 if [ -z "$branch" ]
 then
-	spec="$spec $BWHITE${MAGENTABG}HEAD$RESET"
+	spec="$spec${spec:+ }$BWHITE${MAGENTABG}HEAD$RESET"
 fi
 if [ -n "$branch$tags" ]
 then
@@ -283,14 +290,14 @@ staged=${staged:+$BWHITE$sign_staged$staged}
 delta1=${delta1:+$BBLACK[$delta1$BBLACK]}
 delta2=${delta2:+$BBLACK[$delta2$BBLACK]}
 
-if [ -z "$unstag$staged" ]
+if [ -z "$unstag$staged" -a -n "$hash" ]
 then
-	pointer="$pointer${pointer:+  }$GREEN$(git show -s --format=%cr)"
+	pointer="$pointer  $GREEN$(git show -s --format=%cr)"
 	[ "$isthereworktree" = 1 -a -z "$pushpull" ] && pointer="$pointer${pointer:+ }$BGREEN$sign_clean"
 fi
 
 
-__git_prompt="$hash$specdir$spec$pointer${divergence:+  }$divergence${EY:+  ${BRED}!$BWHITE$EY}${unstag:+  }$unstag${delta1:+ }$delta1${stash:+  }$stash${staged:+  }$staged${delta2:+ }$delta2"
+__git_prompt="$ahash$specdir$spec$pointer${divergence:+  }$divergence${EY:+  ${BRED}!$BWHITE$EY}${unstag:+  }$unstag${delta1:+ }$delta1${stash:+  }$stash${staged:+  }$staged${delta2:+ }$delta2"
 echo -n "$__git_prompt$RESET
 "
 }

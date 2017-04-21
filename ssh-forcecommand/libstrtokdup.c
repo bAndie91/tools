@@ -5,6 +5,8 @@
 
 #include "libmallocab.h"
 
+#define DEBUG_LIBSTRTOKDUP 0
+
 /*
    Return a pointer to a copy of n-th word of a string.
    Return NULL if there are not enough words.
@@ -18,6 +20,9 @@ char* strtokdup(const char* s, unsigned int nth)
 	char* r;
 	unsigned int i, L;
 	
+	#if DEBUG_LIBSTRTOKDUP
+	fprintf(stderr, "strtokdup('%s', %d)\n", s, nth);
+	#endif
 	if(s == NULL)
 		return NULL;
 	
@@ -43,5 +48,8 @@ char* strtokdup(const char* s, unsigned int nth)
 	r = mallocab(L+1);
 	strncpy(r, s+i, L);
 	r[L] = '\0';
+	#if DEBUG_LIBSTRTOKDUP
+	fprintf(stderr, " -> '%s'\n", r);
+	#endif
 	return r;
 }

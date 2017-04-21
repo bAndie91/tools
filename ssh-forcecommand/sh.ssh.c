@@ -13,17 +13,26 @@
 #include "libmallocab.h"
 #include "libstrtokdup.h"
 
-#define EQ(a,b) (strcmp(a,b)==0)
 #define FREE(p) {if(p!=NULL){free(p);p=NULL;}}while(0)
 typedef int boolean;
 #define FALSE 0
 #define TRUE !FALSE
 
+#define MSG_NOSHELL "Not allowed to run interactive shell."
+#define MSG_NOCMDLN "Not allowed to run requested command line: %s"
+#define MSG_NOWHATE "Not allowed to run whatever you want."
+
 
 #define CONFFILE "/etc/ssh/AllowGroupCommands"
-#define SUPPRESS_MSG_DOTSSHRC 0
+#define DEBUG 0
 
 
+
+boolean EQ(char* a, char* b)
+{
+	if(a==NULL || b==NULL || strcmp(a,b) != 0) return FALSE;
+	return TRUE;
+}
 
 boolean gid_in_array(gid_t gid, gid_t* array, unsigned int size)
 {
@@ -56,7 +65,8 @@ int main(int argc, char** argv, char** envp)
 	char lnbuf[4096];
 	char* fc_string = NULL;
 	char* sh_string = NULL;
-	char* cmdline;
+	char* cmdline = NULL;
+	boolean report_dotsshrc = FALSE;
 	
 	
 	mallopt(M_CHECK_ACTION, 7);
@@ -109,6 +119,18 @@ int main(int argc, char** argv, char** envp)
 			fc_string = strtokdup(lnbuf, 1);
 			if(fc_string != NULL && fc_string[0] != '#')
 			{
+				if(EQ(fc_string, "!report-dotsshrc"))
+				{
+					FREE(fc_string);
+					fc_string = strtokdup(lnbuf, 2);
+					if(EQ(fc_string, "off"))
+						report_dotsshrc = FALSE;
+					else if(EQ(fc_string, "on"))
+						report_dotsshrc = TRUE;
+					FREE(fc_string);
+					continue;
+				}
+				
 				grent = getgrnam(fc_string);
 				FREE(fc_string);
 				if(grent != NULL && gid_in_array(grent->gr_gid, group_ids, n_groups))
@@ -232,7 +254,11 @@ int main(int argc, char** argv, char** envp)
 							real_comm = real_argv[0];
 						}
 						
-						// DEBUG // fprintf(stderr, "%s\n", real_comm); for(n=0; real_argv[n]!=NULL; n++) fprintf(stderr, "[%d]=%s\n", n, real_argv[n]);
+						#if DEBUG
+						fprintf(stderr, "%s\n", real_comm);
+						for(n=0; real_argv[n]!=NULL; n++)
+							fprintf(stderr, "[%d]=%s\n", n, real_argv[n]);
+						#endif
 						execvpe(real_comm, real_argv, envp);
 						warn("%s", real_argv[0]);
 						return 127;
@@ -243,15 +269,32 @@ int main(int argc, char** argv, char** envp)
 		fclose(fh);
 	}
 	
-#if SUPPRESS_MSG_DOTSSHRC
-	if(argc > 2 && (sh_string = strtokdup(cmdline, 2)) != NULL && EQ(sh_string, ".ssh/rc"))
-		/* Don't report that ".ssh/rc" is denied to run. */{}
+	if(report_dotsshrc==FALSE && argc > 2 && (sh_string = strtokdup(argv[2] /* assuming argv[1] is "-c" */, 2 /* assuming 1st token is "/bin/sh" */)) != NULL && EQ(sh_string, ".ssh/rc"))
+	{
+		/* Don't report that ".ssh/rc" is denied to run. */
+	}
 	else
-#endif
-		if(strlen(cmdline))
-			warnx("Not allowed to run requested command line: %s", cmdline);
+	{
+		if(cmdline == NULL)
+		{
+			if(argc > 2)
+			{
+				if(EQ(argv[1], "-c"))
+					warnx(MSG_NOCMDLN, argv[2]);
+				else
+					warnx(MSG_NOWHATE);
+			}
+			else
+				warnx(MSG_NOSHELL);
+		}
 		else
-			warnx("Not allowed to run interactive shell.");
+		{
+			if(strlen(cmdline))
+				warnx(MSG_NOCMDLN, cmdline);
+			else
+				warnx(MSG_NOSHELL);
+		}
+	}
 	FREE(sh_string);
 	return 1;
 }

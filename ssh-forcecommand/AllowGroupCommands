@@ -1,3 +1,7 @@
+# Show error message when ~/.ssh/rc is going to be run
+# Valid parameters: on, off
+!report-dotsshrc off
+
 # Allow any command lines and interactive shell
 shell	--- **
 

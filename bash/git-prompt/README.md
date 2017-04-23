@@ -68,3 +68,6 @@ There is 1 merge conflict denoted by `U1`.
 Current working directory is under `.git`.
 You are also in MERGE mode.
 ![gitdir-merge-divergent](demo/gitdir-merge-divergent.png)
+
+There are 3 merge conflicts and 2 staging type changes.
+![merge-conflict-stash-typechange](demo/merge-conflict-stash-typechange.png)

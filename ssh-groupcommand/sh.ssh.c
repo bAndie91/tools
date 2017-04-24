@@ -28,10 +28,24 @@ typedef int boolean;
 
 
 
+#if DEBUG
+#define PRINTDEBUG(...) {warnx(__VA_ARGS__);}while(0)
+#else
+#define PRINTDEBUG(...) {}
+#endif
+
 boolean EQ(char* a, char* b)
 {
 	if(a==NULL || b==NULL || strcmp(a,b) != 0) return FALSE;
 	return TRUE;
+}
+boolean trimtrail(char* s, char t)
+{
+	if(s[strlen(s)-1] == t) {
+		s[strlen(s)-1] = '\0';
+		return TRUE;
+	}
+	return FALSE;
 }
 
 boolean gid_in_array(gid_t gid, gid_t* array, unsigned int size)
@@ -51,6 +65,33 @@ boolean match(const char* str_a, const char* str_b)
 	return FALSE;
 }
 
+#define PARSE_OPT_BOOL(x,y,z) if(parse_option_bool(x,y,z)){continue;}
+boolean parse_option_bool(const char* configline, const char* option, boolean* variable)
+{
+	char* token1;
+	boolean found = FALSE;
+	token1 = strtokdup(configline, 1);
+	if(EQ(token1, option))
+	{
+		char* token2;
+		found = TRUE;
+		token2 = strtokdup(configline, 2);
+		if(EQ(token2, "off"))
+		{
+			PRINTDEBUG("unset option %s", option+1);
+			*variable = FALSE;
+		}
+		else if(EQ(token2, "on"))
+		{
+			*variable = TRUE;
+			PRINTDEBUG("set option %s", option+1);
+		}
+		FREE(token2);
+	}
+	FREE(token1);
+	return found;
+}
+
 
 int main(int argc, char** argv, char** envp)
 {
@@ -67,6 +108,7 @@ int main(int argc, char** argv, char** envp)
 	char* sh_string = NULL;
 	char* cmdline = NULL;
 	boolean report_dotsshrc = FALSE;
+	boolean strip_quotes = FALSE;
 	
 	
 	mallopt(M_CHECK_ACTION, 7);
@@ -99,6 +141,7 @@ int main(int argc, char** argv, char** envp)
 			}
 		}
 	}
+	PRINTDEBUG("Groups found: %d", n_groups-1);
 	endgrent();
 	
 	
@@ -114,22 +157,15 @@ int main(int argc, char** argv, char** envp)
 			/* Read a line */
 			fgets(lnbuf, sizeof(lnbuf), fh);
 			if(feof(fh)) break;
+			trimtrail(lnbuf, '\n');
+			trimtrail(lnbuf, '\r');
 			
 			/* Take the 1st word (ie. group name) */
 			fc_string = strtokdup(lnbuf, 1);
 			if(fc_string != NULL && fc_string[0] != '#')
 			{
-				if(EQ(fc_string, "!report-dotsshrc"))
-				{
-					FREE(fc_string);
-					fc_string = strtokdup(lnbuf, 2);
-					if(EQ(fc_string, "off"))
-						report_dotsshrc = FALSE;
-					else if(EQ(fc_string, "on"))
-						report_dotsshrc = TRUE;
-					FREE(fc_string);
-					continue;
-				}
+				PARSE_OPT_BOOL(lnbuf, "!report-dotsshrc", &report_dotsshrc);
+				PARSE_OPT_BOOL(lnbuf, "!strip-quotes", &strip_quotes);
 				
 				grent = getgrnam(fc_string);
 				FREE(fc_string);
@@ -139,6 +175,8 @@ int main(int argc, char** argv, char** envp)
 					boolean wildcarded = FALSE;
 					boolean invoke_shell;
 					int forced_opts_num = -1;
+					
+					PRINTDEBUG("Reading entry: %s", lnbuf);
 					
 					/* Current user is a member of this group. */
 					/* Check for forced shell options. (optional) */
@@ -158,7 +196,7 @@ int main(int argc, char** argv, char** envp)
 						invoke_shell = TRUE;
 					}
 					
-					/* Assuming argv[1] == "-c" */
+					/* Assuming argv[1] is "-c" */
 					if(argc > 2) {
 						cmdline = argv[2];
 					} else {
@@ -202,6 +240,8 @@ int main(int argc, char** argv, char** envp)
 						
 						if(invoke_shell)
 						{
+							PRINTDEBUG("Invoking shell.");
+							
 							/* Compose command name */
 							char* cp = strrchr(argv[0], '/');
 							if(cp == NULL)
@@ -246,19 +286,46 @@ int main(int argc, char** argv, char** envp)
 						}
 						else
 						{
+							PRINTDEBUG("Not invoking shell.");
+							
 							for(n = 0; (sh_string = strtokdup(cmdline, n+1)) != NULL; n++)
 							{
-								real_argv[n] = sh_string;
+								if(strip_quotes && strlen(sh_string)>1 && (sh_string[0]=='\'' && sh_string[strlen(sh_string)-1]=='\'') || (sh_string[0]=='"' && sh_string[strlen(sh_string)-1]=='"'))
+								{
+									/* Dummy quote-stripper. */
+									/* Strip single/douple quotes, but no real interpolation. */
+									/* Leave 0th char untouched and refer it as quoting char. */
+									unsigned int shift = 0;
+									unsigned int pos;
+									for(pos = 1; sh_string[pos+shift+1]!=NULL; pos++)
+									{
+										PRINTDEBUG("unquote [%s]", sh_string);
+										PRINTDEBUG("         %*s%s%*s%s", pos, "", shift==0?"↕":"↓", shift==0?0:shift-1, "", shift==0?"":"↑");
+										if(sh_string[pos+shift] == '\\' && (sh_string[pos+shift+1] == sh_string[0] || sh_string[pos+shift+1] == '\\'))
+										{
+											shift++;
+										}
+										sh_string[pos] = sh_string[pos+shift];
+										PRINTDEBUG("unquote [%s]", sh_string);
+									}
+									sh_string[pos] = '\0';
+									PRINTDEBUG("unquoted [%s]", sh_string+1);
+									/* Unquoted string starts at char pos 1 */
+									real_argv[n] = (char*)sh_string+1;
+								}
+								else
+								{
+									real_argv[n] = sh_string;
+								}
 							}
 							real_argv[n] = NULL;
 							real_comm = real_argv[0];
 						}
 						
-						#if DEBUG
-						fprintf(stderr, "%s\n", real_comm);
+						PRINTDEBUG("[-]=%s", real_comm);
 						for(n=0; real_argv[n]!=NULL; n++)
-							fprintf(stderr, "[%d]=%s\n", n, real_argv[n]);
-						#endif
+							PRINTDEBUG("[%d]=%s", n, real_argv[n]);
+						
 						execvpe(real_comm, real_argv, envp);
 						warn("%s", real_argv[0]);
 						return 127;

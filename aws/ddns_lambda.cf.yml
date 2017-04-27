@@ -107,7 +107,7 @@ Resources:
   LambdaRole:
     Type: "AWS::IAM::Role"
     Properties: 
-      RoleName: ddns-lambda-role
+      RoleName: lambda-ddns
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -122,7 +122,7 @@ Resources:
   LambdaPolicy:
     Type: "AWS::IAM::Policy"
     Properties:
-      PolicyName: ddns-lambda-policy2
+      PolicyName: lambda-ddns
       PolicyDocument:
         Version: 2012-10-17
         Statement:

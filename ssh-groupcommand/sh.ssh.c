@@ -39,6 +39,8 @@ boolean EQ(char* a, char* b)
 	if(a==NULL || b==NULL || strcmp(a,b) != 0) return FALSE;
 	return TRUE;
 }
+
+/* Trims the given string's last char if matches. */
 boolean trimtrail(char* s, char t)
 {
 	if(s[strlen(s)-1] == t) {
@@ -65,6 +67,7 @@ boolean match(const char* str_a, const char* str_b)
 	return FALSE;
 }
 
+/* This macro calls parse_option() and continues next iteration in the loop if succeeds. */
 #define PARSE_OPT_BOOL(x,y,z) if(parse_option_bool(x,y,z)){continue;}
 boolean parse_option_bool(const char* configline, const char* option, boolean* variable)
 {
@@ -125,14 +128,15 @@ int main(int argc, char** argv, char** envp)
 	
 	setgrent();
 	n_groups = 1;
-	/* Iterate through system groups */
+	/* Gather group IDs the current user is member of. */
+	/* Iterate through system groups. */
 	while((grent = getgrent()) != NULL)
 	{
-		/* Iterate through members of this group */
+		/* Iterate through members of this group. */
 		for(n = 0; grent->gr_mem[n] != NULL; n++)
 		{
 			pwent = getpwnam(grent->gr_mem[n]);
-			/* Check if current user is member of this group */
+			/* Check if current user is member of this group. */
 			if(pwent != NULL && pwent->pw_uid == myuid)
 			{
 				group_ids = reallocab(group_ids, (n_groups+1) * sizeof(gid_t*));
@@ -154,13 +158,13 @@ int main(int argc, char** argv, char** envp)
 	{
 		while(TRUE)
 		{
-			/* Read a line */
+			/* Read a line. */
 			fgets(lnbuf, sizeof(lnbuf), fh);
 			if(feof(fh)) break;
 			trimtrail(lnbuf, '\n');
 			trimtrail(lnbuf, '\r');
 			
-			/* Take the 1st word (ie. group name) */
+			/* Take the 1st word (ie. group name). */
 			fc_string = strtokdup(lnbuf, 1);
 			if(fc_string != NULL && fc_string[0] != '#')
 			{
@@ -196,7 +200,7 @@ int main(int argc, char** argv, char** envp)
 						invoke_shell = TRUE;
 					}
 					
-					/* Assuming argv[1] is "-c" */
+					/* Assuming argv[1] is "-c". */
 					if(argc > 2) {
 						cmdline = argv[2];
 					} else {
@@ -242,7 +246,7 @@ int main(int argc, char** argv, char** envp)
 						{
 							PRINTDEBUG("Invoking shell.");
 							
-							/* Compose command name */
+							/* Compose command name. */
 							char* cp = strrchr(argv[0], '/');
 							if(cp == NULL)
 							{
@@ -288,6 +292,7 @@ int main(int argc, char** argv, char** envp)
 						{
 							PRINTDEBUG("Not invoking shell.");
 							
+							/* Add each words in shell command line as separated arguments. */
 							for(n = 0; (sh_string = strtokdup(cmdline, n+1)) != NULL; n++)
 							{
 								if(strip_quotes && strlen(sh_string)>1 && (sh_string[0]=='\'' && sh_string[strlen(sh_string)-1]=='\'') || (sh_string[0]=='"' && sh_string[strlen(sh_string)-1]=='"'))
@@ -310,7 +315,7 @@ int main(int argc, char** argv, char** envp)
 									}
 									sh_string[pos] = '\0';
 									PRINTDEBUG("unquoted [%s]", sh_string+1);
-									/* Unquoted string starts at char pos 1 */
+									/* Unquoted string starts at char pos 1. */
 									real_argv[n] = (char*)sh_string+1;
 								}
 								else
@@ -326,6 +331,7 @@ int main(int argc, char** argv, char** envp)
 						for(n=0; real_argv[n]!=NULL; n++)
 							PRINTDEBUG("[%d]=%s", n, real_argv[n]);
 						
+						/* Finally call the desidered command. */
 						execvpe(real_comm, real_argv, envp);
 						warn("%s", real_argv[0]);
 						return 127;
@@ -342,6 +348,7 @@ int main(int argc, char** argv, char** envp)
 	}
 	else
 	{
+		/* Report that shell command is denied to run. */
 		if(cmdline == NULL)
 		{
 			if(argc > 2)

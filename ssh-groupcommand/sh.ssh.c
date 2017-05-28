@@ -9,6 +9,7 @@
 #include <pwd.h>
 #include <grp.h>
 #include <stdio.h>
+#include <linux/limits.h>
 
 #include "libmallocab.h"
 #include "libstrtokdup.h"
@@ -24,6 +25,7 @@ typedef int boolean;
 
 
 #define CONFFILE "/etc/ssh/AllowGroupCommands"
+#define PARENTSFILE "/etc/ssh/AllowGroupStrictParents"
 #define DEBUG 0
 
 
@@ -95,6 +97,40 @@ boolean parse_option_bool(const char* configline, const char* option, boolean* v
 	return found;
 }
 
+char* get_real_comm(const char* argv0, char** real_argv0)
+{
+	char* cp;
+	char* real_comm;
+	
+	cp = strrchr(argv0, '/');
+	if(cp == NULL)
+	{
+		/* Take our basename. */
+		*real_argv0 = argv0;
+	}
+	else
+	{
+		/* Point to our basename. */
+		*real_argv0 = cp+1;
+	}
+	/* Strip everything after the last dot, if there is one. */
+	cp = *real_argv0;
+	if(strrchr(cp, '.') != NULL)
+	{
+		*real_argv0 = strndupab(cp, strrchr(cp, '.') - cp);
+	}
+	/* If our name starts with a dash, let the command do not. */
+	if((*real_argv0)[0] == '-')
+	{
+		real_comm = (*real_argv0)+1;
+	}
+	else
+	{
+		real_comm = *real_argv0;
+	}
+	return real_comm;
+}
+
 
 int main(int argc, char** argv, char** envp)
 {
@@ -106,15 +142,76 @@ int main(int argc, char** argv, char** envp)
 	uid_t myuid;
 	int n_groups, n;
 	FILE* fh;
-	char lnbuf[4096];
+	#define LNBUFLEN 4096
+	char lnbuf[LNBUFLEN];
 	char* fc_string = NULL;
 	char* sh_string = NULL;
 	char* cmdline = NULL;
 	boolean report_dotsshrc = FALSE;
 	boolean strip_quotes = FALSE;
+	pid_t parentpid;
+	char pathbuf[PATH_MAX];
+	char parentpath[PATH_MAX];
+	ssize_t pathlen;
+	char* cmd;
 	
-	
+	/* Set how glibc responds when various kinds of programming errors are detected. */
+	/* bit 0: print error message */
+	/* bit 1: call abort(3) */
+	/* bit 2: error message be short */
 	mallopt(M_CHECK_ACTION, 7);
+	
+	
+	/* Check parent process. */
+	parentpid = getppid();
+	PRINTDEBUG("Parent PID: %d", parentpid);
+	// TODO check ppid owner
+	sprintf(pathbuf, "/proc/%d/exe", parentpid);
+	pathlen = readlink(pathbuf, parentpath, PATH_MAX-1);
+	if(pathlen <= -1)
+	{
+		/* Can not access parent process. */
+		PRINTDEBUG("Can not read parent exe path.");
+	}
+	else
+	{
+		/* readlink() does not append a null byte to buf. */
+		parentpath[pathlen] = '\0';
+		fh = fopen(PARENTSFILE, "r");
+		if(fh == NULL)
+		{
+			cmd = strrchr(parentpath, '/');
+			if(cmd == NULL)
+			{
+				/* Can not find parent command's basename. */
+			}
+			else
+			{
+				cmd++;
+				PRINTDEBUG("Parent command: %s", cmd);
+				if(EQ(cmd, "sshd") || EQ(cmd, "dropbear"))
+				{
+					/* We are called by SSHd. */
+				}
+				else
+				{
+					/* We are not called by SSHd. Bypass access control. */
+					PRINTDEBUG("Permissive mode.");
+					real_comm = get_real_comm(argv[0], &argv[0]);
+					execvpe(real_comm, argv, envp);
+					warn("%s", argv[0]);
+					return 127;
+				}
+			}
+		}
+		else
+		{
+			/* Read the list of basename/path of possible parent processes. */
+			// TODO
+		}
+	}
+	PRINTDEBUG("Controlled mode.");
+	
 	
 	
 	group_ids = mallocab(sizeof(gid_t*));
@@ -159,7 +256,7 @@ int main(int argc, char** argv, char** envp)
 		while(TRUE)
 		{
 			/* Read a line. */
-			fgets(lnbuf, sizeof(lnbuf), fh);
+			fgets(lnbuf, LNBUFLEN, fh);
 			if(feof(fh)) break;
 			trimtrail(lnbuf, '\n');
 			trimtrail(lnbuf, '\r');
@@ -246,33 +343,8 @@ int main(int argc, char** argv, char** envp)
 						{
 							PRINTDEBUG("Invoking shell.");
 							
-							/* Compose command name. */
-							char* cp = strrchr(argv[0], '/');
-							if(cp == NULL)
-							{
-								/* Take our basename. */
-								real_argv[0] = argv[0];
-							}
-							else
-							{
-								/* Point to our basename. */
-								real_argv[0] = cp+1;
-							}
-							/* Strip everything after the last dot, if there is one. */
-							cp = real_argv[0];
-							if(strrchr(cp, '.') != NULL)
-							{
-								real_argv[0] = strndupab(cp, strrchr(cp, '.') - cp);
-							}
-							/* If our name starts with a dash, let command do not. */
-							if(real_argv[0][0] == '-')
-							{
-								real_comm = &real_argv[0][1];
-							}
-							else
-							{
-								real_comm = real_argv[0];
-							}
+							/* Compute command name and 0th argument. */
+							real_comm = get_real_comm(argv[0], &real_argv[0]);
 							
 							/* Append forced options to shell command. */
 							for(n = 1; n <= forced_opts_num; n++)
@@ -286,7 +358,11 @@ int main(int argc, char** argv, char** envp)
 								real_argv[n+1] = cmdline;
 								real_argv[n+2] = NULL;
 							}
-							else real_argv[n] = NULL;
+							else
+							{
+								real_argv[n] = NULL;
+							}
+							/* Forget arguments after: bash -c "..." */
 						}
 						else
 						{

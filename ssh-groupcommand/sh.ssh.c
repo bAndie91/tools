@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <string.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <pwd.h>
 #include <grp.h>
 #include <stdio.h>
@@ -26,11 +27,10 @@ typedef int boolean;
 
 #define CONFFILE "/etc/ssh/AllowGroupCommands"
 #define PARENTSFILE "/etc/ssh/AllowGroupStrictParents"
-#define DEBUG 0
 
 
 
-#if DEBUG
+#ifdef DEBUG
 #define PRINTDEBUG(...) {warnx(__VA_ARGS__);}while(0)
 #else
 #define PRINTDEBUG(...) {}
@@ -154,6 +154,7 @@ int main(int argc, char** argv, char** envp)
 	char parentpath[PATH_MAX];
 	ssize_t pathlen;
 	char* cmd;
+	struct stat stat_buf;
 	
 	/* Set how glibc responds when various kinds of programming errors are detected. */
 	/* bit 0: print error message */
@@ -162,10 +163,25 @@ int main(int argc, char** argv, char** envp)
 	mallopt(M_CHECK_ACTION, 7);
 	
 	
-	/* Check parent process. */
+	/* Check parent process owner. */
+	myuid = getuid();
 	parentpid = getppid();
 	PRINTDEBUG("Parent PID: %d", parentpid);
-	// TODO check ppid owner
+	sprintf(pathbuf, "/proc/%d", parentpid);
+	if(stat(pathbuf, &stat_buf)==0)
+	{
+		PRINTDEBUG("Parent UID: %u", stat_buf.st_uid);
+		if(stat_buf.st_uid != myuid)
+		{
+			goto controlled_mode;
+		}
+	}
+	else
+	{
+		goto controlled_mode;
+	}
+	
+	/* Check parent process command name. */
 	sprintf(pathbuf, "/proc/%d/exe", parentpid);
 	pathlen = readlink(pathbuf, parentpath, PATH_MAX-1);
 	if(pathlen <= -1)
@@ -210,12 +226,12 @@ int main(int argc, char** argv, char** envp)
 			// TODO
 		}
 	}
+	
+	controlled_mode:
 	PRINTDEBUG("Controlled mode.");
 	
 	
-	
 	group_ids = mallocab(sizeof(gid_t*));
-	myuid = getuid();
 	pwent = getpwuid(myuid);
 	if(pwent == NULL)
 	{
@@ -374,11 +390,11 @@ int main(int argc, char** argv, char** envp)
 								if(strip_quotes && strlen(sh_string)>1 && (sh_string[0]=='\'' && sh_string[strlen(sh_string)-1]=='\'') || (sh_string[0]=='"' && sh_string[strlen(sh_string)-1]=='"'))
 								{
 									/* Dummy quote-stripper. */
-									/* Strip single/douple quotes, but no real interpolation. */
+									/* Strip single/double quotes, but no real interpolation. */
 									/* Leave 0th char untouched and refer it as quoting char. */
 									unsigned int shift = 0;
 									unsigned int pos;
-									for(pos = 1; sh_string[pos+shift+1]!=NULL; pos++)
+									for(pos = 1; sh_string[pos+shift+1] != '\0'; pos++)
 									{
 										PRINTDEBUG("unquote [%s]", sh_string);
 										PRINTDEBUG("         %*s%s%*s%s", pos, "", shift==0?"↕":"↓", shift==0?0:shift-1, "", shift==0?"":"↑");

@@ -1,15 +1,19 @@
 
 sh.ssh: libmallocab.so libstrtokdup.so
-	gcc -o $@ sh.ssh.c $+
+	gcc $(DEBUG) -o $@ sh.ssh.c $+
+
+debug: DEBUG = -DDEBUG
+
+debug: sh.ssh
 
 libmallocab.so:
-	gcc -o $@ -shared libmallocab.c
+	gcc $(DEBUG) -o $@ -shared libmallocab.c
 
 libstrtokdup.so:
-	gcc -o $@ -shared libstrtokdup.c
+	gcc $(DEBUG) -o $@ -shared libstrtokdup.c
 
 t_strtokdup: libmallocab.so libstrtokdup.so
-	gcc -o $@ t_strtokdup.c $+
+	gcc $(DEBUG) -o $@ t_strtokdup.c $+
 
 install: sh.ssh
 	install sh.ssh -m 0755 /usr/bin/sh.ssh

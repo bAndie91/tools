@@ -1,12 +1,30 @@
-# Show error message when ~/.ssh/rc is going to be run
+# Show error message when ~/.ssh/rc is going to be run.
 # Valid parameters: on, off
 !report-dotsshrc off
 
-# Allow any command lines and interactive shell
+# Allow any command lines and interactive shell for shell group.
 shell	--- **
 
-# Allow only sftp, no parameter
+# Allow sftp only for sftp group, no parameter allowed.
 sftp	/usr/lib/openssh/sftp-server
 
-# Allow a single parameter
-nogroup	/bin/echo *
+# Allow a single parameter.
+nogroup	echo *
+
+# Allow any num of parameters.
+nogroup	date **
+
+# Strip single (') and double (") quotation marks from arguments
+# of the command line which matches to the following rules.
+!strip-quotes on
+
+# This is useful because ssh client thinks she is issuing a shell
+# command, therefore quoting arguments, but we are converting it
+# to a pure execve(2) command-arguments sequence.
+# N.B. This is NOT a real shell interpolation.
+# So e.g. bash -c "echo '$LANG'" will result in ["echo", "$LANG"] 
+# with literal string "$LANG".
+
+gitusers	git-upload-pack **
+gitusers	git-receive-pack **
+!strip-quotes off

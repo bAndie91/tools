@@ -1,13 +1,14 @@
 #!/bin/bash
 
-base_url=https://secure2.entropay.com
-curlopts=(-sSi -H "Cookie: ix_epcons_cookie=accept")
-showCardNumber=
-showExpirationDate=
-showCvvCode=
+base_url=https://api.entropay.com/api
+curlopts=(-sS -H "Content-Type: application/json")
+showCardNumber=''
+showExpirationDate=''
+showCvvCode=''
+machineParseable=''
 
 
-while getopts "hu:p:NXC" OPT
+while getopts "hu:p:NXCm" OPT
 do
 	case "$OPT" in
 	u)
@@ -25,12 +26,16 @@ do
 	C)
 		showCvvCode=1
 		;;
+	m)
+		machineParseable=1
+		;;
 	h)
-		echo "Usage: entropay -u USER -p PASS [-N] [-X] [-C]
+		echo "Usage: entropay -u USER -p PASS [-N] [-X] [-C] [-m]
 Options:
   -N   show card number
   -X   show expiration date
-  -C   show CVV code"
+  -C   show CVV code
+  -m   machine parseable"
 		exit 0
 		;;
 	esac
@@ -42,73 +47,79 @@ test -n "$user"
 test -n "$pass"
 
 
-# Get login page
-page1=$(
- curl "${curlopts[@]}" $base_url/unprot/login/login.html
-)
-
-JSESSIONID=$(
- echo "$page1" |\
- grep -Eo "^Set-Cookie: JSESSIONID=[^;]+" |\
- cut -f2 -d=
-)
-csrf_token=$(
- echo "$page1" |\
- grep -Eo "__csrf_token = \".+\"" |\
- cut -f2 -d\"
-)
-test -n "$JSESSIONID"
-test -n "$csrf_token"
-
-
-curlopts+=(-H "Cookie: JSESSIONID=$JSESSIONID" -d __csrf_token="$csrf_token")
-
-
 # Login
-curl "${curlopts[@]}" $base_url/unprot/login/login-fullscreen.html \
- -d userName="$user" \
- -d password="$pass" >/dev/null
+page1=$(
+ curl "${curlopts[@]}" $base_url/authentication/jwt \
+    -d "{\"username\":\"$user\",\"password\":\"$pass\",\"referrerId\":null}"
+)
+
+token=$(
+ echo "$page1" |\
+ jq -r .token
+)
+
+test -n "$token"
+curlopts+=(-H "Authorization: Bearer $token")
+
 
 # Get cards' data
 content=$(
- curl "${curlopts[@]}" $base_url/prot/card/manage/content.ajax \
-  -d listView= \
-  -d showDeletedCards= \
-  -d cur_page=1 \
-  -d maxResults=40
+ curl "${curlopts[@]}" "$base_url/cards/virtual/search?start=0&max=6&availableBalance=true" -d '{"deleted":false}'
 )
 
-
-domget()
+JQ()
 {
-  [ "$#" = 1 ] && set -- "$1" "text{}"
-  pup "$1" "$2" <<<"$content"
+	jq -r "$1" <<<"$content"
 }
 
 
 # Display details
 
-declare -a cards
-cards=(`domget "[id$=cardName]" "attr{id}" | sed -e 's/.\{8\}$//'`)
-
-for cid in "${cards[@]}"
+n_cards=`JQ '.entries | length'`
+n=0
+while [ $n -lt $n_cards ]
 do
-	name=`domget "[id=${cid}cardName] strong"`
-	balance1=`domget "strong[id=${cid}actualBalance]"`
-	balance2=`domget "strong[id=${cid}availableBalance]"`
-	[ $showCardNumber ] && number=`domget "[id=${cid}cardNumber]"` || number=
-	[ $showExpirationDate ] && expire=`domget "[id=${cid}endDate]"` || expire=
-	holder=`domget ":parent-of([id=${cid}cardNumber]) .cardUserName"`
-	[ $showCvvCode ] && { cvv=`domget "[id=${cid}CVV]"`; [ -n "$cvv" ] || cvv=n/a; } || cvv=
-	
-	if [ $showCardNumber$showExpirationDate$showCvvCode ]
+	cardName=`JQ ".entries[$n].displayName"`
+	balanceActual=`JQ ".entries[$n].actualBalance"`
+	balanceAvailable=`JQ ".entries[$n].availableBalance"`
+	[ $showCardNumber ] && cardNumber=`JQ ".entries[$n].cardNumber"` || cardNumber=''
+	holder=`JQ ".entries[$n].nameOnCard"`
+	[ $showExpirationDate ] && expire=`JQ ".entries[$n].expiryMonth"`/`JQ ".entries[$n].expiryYear"` || expire=''
+	if [ $showCvvCode ]
 	then
-		echo "$name
-  $balance1 ($balance2)
-  ${number:+$number  }${expire:+[$expire]  }${cvv:+CVV:$cvv}
+		cvv=`curl "${curlopts[@]}" "$base_url/cards/virtual/$(JQ ".entries[$n].id")/cvv" | jq -r .cvv`
+	else
+		cvv=''
+	fi
+	
+	if [ ! $machineParseable ]
+	then
+		balanceActual=${balanceActual/USD/$}
+		balanceAvailable=${balanceAvailable/USD/$}
+	fi
+	
+	if [ "$balanceActual" = "$balanceAvailable" ]
+	then
+		balance="$balanceActual"
+	else
+		balance="$balanceActual ($balanceAvailable)"
+	fi
+	
+	if [ $machineParseable ]
+	then
+		echo "$cardNumber;$balanceActual;$balanceAvailable;$expire;$cvv;$holder;$cardName"
+	else
+		if [ $showCardNumber$showExpirationDate$showCvvCode ]
+		then
+			echo "$cardName
+  $balance
+  ${cardNumber:+${cardNumber:0:4}-${cardNumber:4:4}-${cardNumber:8:4}-${cardNumber:12}  }${expire:+[$expire]  }${cvv:+CVV:$cvv}
   $holder"
-  	else
-  		echo "$name $balance1 ($balance2)"
-  	fi
+		else
+			echo "$cardName $balance"
+		fi
+	fi
+	
+	n=$[n+1]
 done
 

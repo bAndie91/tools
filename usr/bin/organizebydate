@@ -115,7 +115,8 @@ find "$@" ${minlevel:+-mindepth $minlevel} ${maxlevel:+-maxdepth $maxlevel} -typ
 		jpeg)
 			if type exif >/dev/null 2>&1
 			then
-				for tagid in 0x0132 0x9003 0x9004
+				# Date/Time Original, Create Date, Modify Date, Date
+				for tagid in 0x9003 0x9004 0x0132 0x0006
 				do
 					datetime=`exif -m -t $tagid "$file"`
 					if [ -n "$datetime" ]
@@ -124,7 +125,14 @@ find "$@" ${minlevel:+-mindepth $minlevel} ${maxlevel:+-maxdepth $maxlevel} -typ
 					fi
 				done
 			else
-				datetime=`exiftool -CreateDate -s3 "$file"`
+				for tag in DateTimeOriginal CreateDate ModifyDate Date
+				do
+					datetime=`exiftool -d "%Y-%m-%d %H:%M:%S" -$tag -s3 "$file"`
+					if [ -n "$datetime" ]
+					then
+						break
+					fi
+				done
 			fi
 			date=${datetime:0:10}
 			time=${datetime:10}

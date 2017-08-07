@@ -1,5 +1,5 @@
 #!/bin/bash
-# Usage: 
+# Usage Example:
 # $ . ssh-agent-finder -Iva
 
 interactive=1
@@ -13,7 +13,7 @@ sourced=
 parse_opts()
 {
 	local OPTIND=1
-	Usage="Usage: $0 [-Iav]
+	Usage="Usage: $0 [-IkKav]
  -I   No interactive, use first socket
  -k   Use socket having keys (default)
  -K   Use socket not necessary having keys

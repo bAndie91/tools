@@ -1,0 +1,161 @@
+#!/usr/bin/env perl
+
+use Tie::LevelDB;
+use Data::Dumper;
+use feature 'switch';
+
+
+if(scalar @ARGV == 0 or $ARGV[0] =~ /^-?-[h?]/i)
+{
+	print "LevelDB - Commandline Interface for Google's leveldb key-value storage,
+based on Tie::LeveDB(3pm)
+Usage: LevelDB <leveldb-directory> <command> [<key> [<value>]]
+Commands:
+  check             exit zero if <leveldb-directory> is a valid leveldb
+  open              try to open the database, exit non-zero if failed
+  
+  keys              enumerate all keys line-by-line
+  show              display all keys and values in KEY<TAB>VALUE<LF> format
+  get KEY           print the value of KEY
+  
+  set KEY VAL       set the value of KEY to VAL unless already equals to VAL
+  default KEY VAL   set the value of KEY unless KEY is already set
+  replace KEY VAL   set the value of KEY unless KEY does not exist
+  alter KEY VAL     same as 'set' but force writes
+  del KEY           remove KEY
+  
+  merge [FILE]      import all key-value pairs from FILE or STDIN in KEY<TAB>VALUE<LF> format
+  merge-default [FILE]  same as 'merge' but sets only unset keys
+  merge-replace [FILE]  same as 'merge' but sets only already existing keys
+";
+	exit 1;
+}
+
+
+if($ARGV[1] eq 'check')
+{
+	if(-f $ARGV[0]."/LOG" and -f $ARGV[0]."/CURRENT")
+	{
+		eval { new Tie::LevelDB::DB($ARGV[0]); 1; };
+		if($@)
+		{
+			if($@ =~ /^IO error: lock/)
+			{
+				exit 0;
+			}
+			die $@;
+		}
+		exit 0;
+	}
+	exit 1;
+}
+
+sub keyexists
+{
+	return !! grep {$_ eq $_[0]} keys %DB;
+}
+
+if($ARGV[1] =~ /^(keys|show|merge|merge-default|merge-replace|get|set|alter|replace|default|del|open)$/)
+{
+	tie %DB, 'Tie::LevelDB', $ARGV[0];
+	
+	given($ARGV[1])
+	{
+		when('keys')
+		{
+			print "$_\n" for sort {lc $a cmp lc $b} keys %DB;
+		}
+		when('show')
+		{
+			print "$_\t$DB{$_}\n" for sort {lc $a cmp lc $b} keys %DB;
+		}
+		when(/^merge/)
+		{
+			if($ARGV[2] ne '')
+			{
+				open $fh, '<', $ARGV[2] or die $!;
+			}
+			else
+			{
+				$fh = \*STDIN;
+			}
+			
+			while(<$fh>)
+			{
+				if(my ($key, $value) = /^(.+?)\t(.*)$/)
+				{
+					given($ARGV[1])
+					{
+						when('merge')
+						{
+							if(not keyexists($key) or $DB{$key} ne $value)
+							{
+								$DB{$key} = $value;
+							}
+						}
+						when('merge-default')
+						{
+							if(not keyexists($key))
+							{
+								$DB{$key} = $value;
+							}
+						}
+						when('merge-replace')
+						{
+							if(keyexists($key) and $DB{$key} ne $value)
+							{
+								$DB{$key} = $value;
+							}
+						}
+					}
+				}
+				else
+				{
+					warn "Invalid input: $_";
+				}
+			}
+		}
+		when('get')
+		{
+			print $DB{$ARGV[2]};
+		}
+		when('alter')
+		{
+			$DB{$ARGV[2]} = $ARGV[3];
+		}
+		when('set')
+		{
+			if(not keyexists($ARGV[2]) or $DB{$ARGV[2]} ne $ARGV[3])
+			{
+				$DB{$ARGV[2]} = $ARGV[3];
+			}
+		}
+		when('replace')
+		{
+			if(keyexists($ARGV[2]))
+			{
+				$DB{$ARGV[2]} = $ARGV[3];
+			}
+		}
+		when('default')
+		{
+			if(not keyexists($ARGV[2]))
+			{
+				$DB{$ARGV[2]} = $ARGV[3];
+			}
+		}
+		when('del')
+		{
+			delete $DB{$ARGV[2]};
+		}
+		when('open')
+		{
+			1;
+		}
+	}
+}
+else
+{
+	warn "Invalid command: $ARGV[1]\n";
+	exit 1;
+}

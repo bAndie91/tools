@@ -1,0 +1,227 @@
+#!/usr/bin/env perl
+
+# pam_exec.so [debug] [expose_authtok] [seteuid] [quiet] [log=file] command [...]
+# environment variables: PAM_RHOST, PAM_RUSER, PAM_SERVICE, PAM_TTY, PAM_USER, PAM_TYPE, PROGNAME
+# pure-ftpd auth required pam_exec_wrap.so expose_authtok /usr/local/libexec/pam_multipasswd
+
+use Digest::MD5;
+use MIME::Base64;
+use Crypt::PasswdMD5;
+use Authen::Simple::PAM;
+use Data::Dumper;
+use constant {
+	PAM_SUCCESS=>0,		# Successful function return
+	PAM_OPEN_ERR=>1,		# dlopen() failure when dynamically
+				# loading a service module
+	PAM_SYMBOL_ERR=>2,	# Symbol not found
+	PAM_SERVICE_ERR=>3,	# Error in service module
+	PAM_SYSTEM_ERR=>4,	# System error
+	PAM_BUF_ERR=>5,		# Memory buffer error
+	PAM_PERM_DENIED=>6,	# Permission denied
+	PAM_AUTH_ERR=>7,		# Authentication failure
+	PAM_CRED_INSUFFICIENT=>8,	# Can not access authentication data
+				# due to insufficient credentials
+	PAM_AUTHINFO_UNAVAIL=>9,	# Underlying authentication service
+				# can not retrieve authentication information
+	PAM_USER_UNKNOWN=>10,	# User not known to the underlying
+				# authenticaiton module
+	PAM_MAXTRIES=>11,		# An authentication service has
+				# maintained a retry count which has
+				# been reached.  No further retries
+				# should be attempted
+	PAM_NEW_AUTHTOK_REQD=>12,	# New authentication token required.
+				# This is normally returned if the
+				# machine security policies require
+				# that the password should be changed
+				# beccause the password is NULL or it
+				# has aged
+	PAM_ACCT_EXPIRED=>13,	# User account has expired
+	PAM_SESSION_ERR=>14,	# Can not make/remove an entry for
+				# the specified session
+	PAM_CRED_UNAVAIL=>15,	# Underlying authentication service
+				# can not retrieve user credentials unavailable
+	PAM_CRED_EXPIRED=>16,	# User credentials expired
+	PAM_CRED_ERR=>17,		# Failure setting user credentials
+	PAM_NO_MODULE_DATA=>18,	# No module specific data is present
+	PAM_CONV_ERR=>19,		# Conversation error
+	PAM_AUTHTOK_ERR=>20,	# Authentication token manipulation error
+	PAM_AUTHTOK_RECOVERY_ERR=>21, # Authentication information cannot be recovered
+	PAM_AUTHTOK_LOCK_BUSY=>22,   # Authentication token lock busy
+	PAM_AUTHTOK_DISABLE_AGING=>23, # Authentication token aging disabled
+	PAM_TRY_AGAIN=>24,	# Preliminary check by password service
+	PAM_IGNORE=>25,		# Ignore underlying account module
+				# regardless of whether the control
+				# flag is required, optional, or sufficient
+	PAM_ABORT=>26,            # Critical error (?module fail now request)
+	PAM_AUTHTOK_EXPIRED=>27, # user's authentication token has expired
+	PAM_MODULE_UNKNOWN=>28, # module is not known
+	PAM_BAD_ITEM=>29, # Bad item passed to pam_*_item()
+	PAM_CONV_AGAIN=>30, # conversation function is event driven and data is not available yet
+	PAM_INCOMPLETE=>31, # please call this function again to complete authentication stack.
+					# Before calling again, verify that conversation is completed
+};
+use Sys::Syslog qw/openlog syslog/;
+
+
+
+sub pam_return($)
+{
+	my $pam_result = shift;
+	openlog $ENV{'PROGNAME'}, '', Sys::Syslog::LOG_AUTH;
+	syslog Sys::Syslog::LOG_INFO, sprintf "pam_multipasswd(%s:%s): code %d, logname=%s uid=%d euid=%d tty=%s ruser=%s rhost=%s user=%s", 
+		$pam_service, $ENV{'PAM_TYPE'}, $pam_result, $ENV{'LOGNAME'}||(getpwuid$<)[0], $<, $>, $ENV{'PAM_TTY'}, $ENV{'PAM_RUSER'}, $ENV{'PAM_RHOST'}, $ENV{'PAM_USER'};
+	exit $pam_result;
+}
+
+sub check_password($$$)
+{
+	my $user = shift;
+	my $given = shift;
+	my $stored = shift;
+	my $cmpstr;
+	
+	if(substr($stored, 0, 1) eq '$')
+	{
+		my ($none, $hashtype, $salt, $hash) = split(/\$/, $stored, 4);
+		if(grep {$hashtype eq $_} qw/1 5 6/)
+		{
+			# md5, sha-256 and sha-512 formats respectively
+			$cmpstr = crypt($given, '$'.$hashtype.'$'.$salt);
+		}
+		elsif($stored_type == 'apr1')
+		{
+			$cmpstr = apache_md5_crypt($given, $salt);
+		}
+	}
+	elsif(substr($stored, 0, 1) eq '@')
+	{
+		my $pam_svc = substr($stored, 1);
+		my $pam = Authen::Simple::PAM->new( service => $pam_svc );
+		if($pam->authenticate($user, $given))
+		{
+			return PAM_SUCCESS;
+		}
+	}
+	elsif(substr($stored, 0, 1) eq '=')
+	{
+		$cmpstr = '=' . encode_base64($given, '');
+	}
+	elsif(length $stored == 13)
+	{
+		# crypt(3) format (password length max 8 char)
+		my $salt = substr($stored, 0, 2);
+		$cmpstr = crypt($given, $salt);
+	}
+	elsif($stored eq '*')
+	{
+		return PAM_SUCCESS;
+	}
+	else
+	{
+		# assuming $stored is a cleartext password
+		$cmpstr = $given;
+	}
+	
+	if(defined $cmpstr and $stored eq $cmpstr)
+	{
+		return PAM_SUCCESS;
+	}
+	return PAM_PERM_DENIED;
+}
+
+sub in_subnet_ip4($$)
+{
+	my ($cidr, $ip) = @_;
+	# if no netmask given then IP must equal to CIDR
+	return ($cidr eq $ip) unless $cidr =~ /^(.*)\/(.*)$/;
+	my ($subnet, $mask) = ($1, $2);
+	# the /0 mask matches to the whole world
+	return 1 if $mask == 0;
+	# mask IPv4 addresses
+	return (((unpack('N', pack('C4', split(/\./,$ip))) ^ unpack('N', pack('C4', split(/\./, $subnet)))) & (0xFFFFFFFF << (32-$mask))) == 0);
+}
+
+
+
+$configfile = "/etc/security/pam_multipasswd.conf";
+$pam_service = defined $ARGV[0] ? $ARGV[0] : $ENV{'PAM_SERVICE'};
+$pam_servicenick = $pam_service;
+
+pam_return(PAM_IGNORE) if $ENV{'PAM_TYPE'} ne 'auth';
+
+$givenpass = <STDIN>;
+$givenpass =~ s/[\r\n\x00]*$//;
+$pam_result = undef;
+$home = (getpwnam $ENV{'PAM_USER'})[7];
+pam_return(PAM_USER_UNKNOWN) if not defined $home;
+
+open my $fh, '<', $configfile;
+while(<$fh>)
+{
+	next if /^\s*#/;
+	if(/^\s*service\s*map\s*(\S+)\s+(\S+)\s*$/)
+	{
+		if($pam_service eq $1)
+		{
+			$pam_servicenick = $2;
+		}
+	}
+	else
+	{
+		print STDERR "unknown config in $configfile line $.\n";
+	}
+}
+close $fh;
+
+my $rhost = defined $ENV{'PAM_RHOST'} ? $ENV{'PAM_RHOST'} : "unknown";
+my $tty   = defined $ENV{'PAM_TTY'}   ? $ENV{'PAM_TTY'}   : "unknown";
+
+@precedence = (
+	"$pam_servicenick.d/rhost/$rhost",
+	"$pam_servicenick.d/tty/$tty",
+	"$pam_servicenick",
+	"other",
+);
+
+for my $pwdfile (map {"$home/.shadow.d/$_"} @precedence)
+{
+	if(-f $pwdfile)
+	{
+		if(open my $fh, '<', $pwdfile)
+		{
+			while(<$fh>)
+			{
+				next if /^\s*#/;
+				s/[\r\n\x00]*$//;
+				my ($uuser, $upass, $ucidr) = split /:/;
+				if($uuser eq '*' or $uuser eq $ENV{'PAM_USER'})
+				{
+					if(!defined $ucidr or in_subnet_ip4($ucidr, $rhost))
+					{
+						$pam_result = check_password($uuser, $givenpass, $upass);
+						if($pam_result == PAM_SUCCESS)
+						{
+							last;
+						}
+					}
+				}
+			}
+			close $fh;
+			if(defined $pam_result)
+			{
+				last;
+			}
+		}
+		else
+		{
+			print STDERR "$pwdfile: $!\n";
+			$pam_result = PAM_SYSTEM_ERR;
+			last;
+		}
+	}
+}
+
+
+$pam_result = PAM_AUTHINFO_UNAVAIL if not defined $pam_result;
+pam_return($pam_result);
+

@@ -1,0 +1,30 @@
+#!/bin/sh
+
+PAM_SUCCESS=0
+PAM_SYSTEM_ERR=4
+PAM_PERM_DENIED=6
+PAM_AUTH_ERR=7
+PAM_IGNORE=25
+
+#PAM_RHOST=
+#PAM_SERVICE=login
+#PAM_TTY=/dev/pts/9
+#PAM_SERVICE=sshd
+#PAM_TTY=ssh
+#PAM_TYPE=open_session
+#PAM_TYPE=close_session
+#PAM_USER=sysop
+
+
+lastreboot=`lastcsv -n 1 reboot | awk -F';' '$7=="reboot"{print $5}'`
+lastlogin=`lastcsv -n 1 "$PAM_USER" | awk -F';' '$1=="'"$PAM_USER"'"{print $5}'`
+
+if expr "$*" : '.*\<force\>' >/dev/null || [ -z "$lastlogin" -o "$lastlogin" -le "$lastreboot" ] 2>/dev/null
+then
+	tput bold >&2
+	tput setaf 3 >&2
+	echo "First login since last reboot: $(date -d @"$lastreboot")" >&2
+	tput sgr0 >&2
+fi
+
+exit $PAM_SUCCESS

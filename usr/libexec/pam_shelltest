@@ -1,0 +1,78 @@
+#!/bin/bash
+
+PAM_SUCCESS=0
+PAM_SYSTEM_ERR=4
+PAM_PERM_DENIED=6
+PAM_AUTH_ERR=7
+PAM_IGNORE=25
+declare -a myargv
+declare -a testargv
+
+
+IFS=: read username password uid pri_gid gecos home shell <<<"$(getent passwd "$PAM_USER")"
+shell_basename=`basename "$shell"`
+
+for arg in "$@"
+do
+	arg=${arg//%PAM_RHOST%/$PAM_RHOST}
+	arg=${arg//%PAM_RUSER%/$PAM_RUSER}
+	arg=${arg//%PAM_SERVICE%/$PAM_SERVICE}
+	arg=${arg//%PAM_TTY%/$PAM_TTY}
+	arg=${arg//%PAM_USER%/$PAM_USER}
+	arg=${arg//%PAM_TYPE%/$PAM_TYPE}
+	
+	arg=${arg//%UID%/$uid}
+	arg=${arg//%PRI_GID%/$pri_gid}
+	arg=${arg//%HOME%/$home}
+	arg=${arg//%SHELL%/$shell}
+	arg=${arg//%SHELL_BASENAME%/$shell_basename}
+
+	myargv+=("$arg")
+done
+
+
+set -- "${myargv[@]}"
+while [ -n "$1" ]
+do
+	case "$1" in
+	-[bcdefghLkpsSu])
+		testargv+=("$1" "$2")
+		shift
+		;;
+	'!'|-[ao])
+		testargv+=("$1")
+		;;
+	--on|--off)
+		[ ".$1" = .--on ] && patt="on|yes|true|1" || patt="off|no|false|0"
+		head -n 1 "$2" | grep -Eiqx '\s*'"$patt"'\s*'
+		if [ ${PIPESTATUS[1]} = 0 ]
+		then
+			testargv+=('1')
+		else
+			testargv+=('')
+		fi
+		shift
+		;;
+	*)
+		echo "pam_shelltest: Invalid parameter: $1" >&2
+		exit $PAM_SYSTEM_ERR
+		;;
+	esac
+	shift
+done
+
+if [ ${#testargv[@]} -gt 0 ]
+then
+	test "${testargv[@]}"
+	case $? in
+	0)	exit $PAM_SUCCESS
+		;;
+	1)	exit $PAM_PERM_DENIED
+		;;
+	*)	exit $PAM_SYSTEM_ERR
+		;;
+	esac
+else
+	exit $PAM_IGNORE
+fi
+

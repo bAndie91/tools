@@ -1,0 +1,252 @@
+#!/usr/bin/env perl
+
+use Data::Dumper;
+use User::Utmp qw/:constants/;
+use Fcntl qw/:flock/;
+use Sys::Syslog qw/openlog syslog/;
+use constant {
+	PAM_SUCCESS=>0,		# Successful function return
+	PAM_OPEN_ERR=>1,		# dlopen() failure when dynamically
+				# loading a service module
+	PAM_SYMBOL_ERR=>2,	# Symbol not found
+	PAM_SERVICE_ERR=>3,	# Error in service module
+	PAM_SYSTEM_ERR=>4,	# System error
+	PAM_BUF_ERR=>5,		# Memory buffer error
+	PAM_PERM_DENIED=>6,	# Permission denied
+	PAM_AUTH_ERR=>7,		# Authentication failure
+	PAM_CRED_INSUFFICIENT=>8,	# Can not access authentication data
+				# due to insufficient credentials
+	PAM_AUTHINFO_UNAVAIL=>9,	# Underlying authentication service
+				# can not retrieve authentication information
+	PAM_USER_UNKNOWN=>10,	# User not known to the underlying
+				# authenticaiton module
+	PAM_MAXTRIES=>11,		# An authentication service has
+				# maintained a retry count which has
+				# been reached.  No further retries
+				# should be attempted
+	PAM_NEW_AUTHTOK_REQD=>12,	# New authentication token required.
+				# This is normally returned if the
+				# machine security policies require
+				# that the password should be changed
+				# beccause the password is NULL or it
+				# has aged
+	PAM_ACCT_EXPIRED=>13,	# User account has expired
+	PAM_SESSION_ERR=>14,	# Can not make/remove an entry for
+				# the specified session
+	PAM_CRED_UNAVAIL=>15,	# Underlying authentication service
+				# can not retrieve user credentials unavailable
+	PAM_CRED_EXPIRED=>16,	# User credentials expired
+	PAM_CRED_ERR=>17,		# Failure setting user credentials
+	PAM_NO_MODULE_DATA=>18,	# No module specific data is present
+	PAM_CONV_ERR=>19,		# Conversation error
+	PAM_AUTHTOK_ERR=>20,	# Authentication token manipulation error
+	PAM_AUTHTOK_RECOVERY_ERR=>21, # Authentication information cannot be recovered
+	PAM_AUTHTOK_LOCK_BUSY=>22,   # Authentication token lock busy
+	PAM_AUTHTOK_DISABLE_AGING=>23, # Authentication token aging disabled
+	PAM_TRY_AGAIN=>24,	# Preliminary check by password service
+	PAM_IGNORE=>25,		# Ignore underlying account module
+				# regardless of whether the control
+				# flag is required, optional, or sufficient
+	PAM_ABORT=>26,            # Critical error (?module fail now request)
+	PAM_AUTHTOK_EXPIRED=>27, # user's authentication token has expired
+	PAM_MODULE_UNKNOWN=>28, # module is not known
+	PAM_BAD_ITEM=>29, # Bad item passed to pam_*_item()
+	PAM_CONV_AGAIN=>30, # conversation function is event driven and data is not available yet
+	PAM_INCOMPLETE=>31, # please call this function again to complete authentication stack.
+					# Before calling again, verify that conversation is completed
+};
+use constant {STAT_DEVNO=>0, STAT_INO=>1, STAT_MODE=>2, STAT_LINKS=>3, STAT_UID=>4, STAT_GID=>5, STAT_DEVIDENT=>6, STAT_SIZE=>7, STAT_ATIME=>8, STAT_MTIME=>9, STAT_CTIME=>10, STAT_PREFBLKSZ=>11, STAT_BLOCKS=>12};
+
+
+sub get_parent_pid
+{
+	my $pid = shift;
+	open my $fh, '<', "/proc/$pid/status";
+	local $/ = undef;
+	my ($ppid) = <$fh> =~ /PPid:\s*(\d+)/;
+	close $fh;
+	return $ppid;
+}
+
+sub hex_to_dotted_decimal
+{
+	my $_ = shift;
+	return join '.', reverse map {hex} /(..)/g;
+}
+
+@socket_state_name = qw/0 ESTABLISHED SYN_SENT SYN_RECV FIN_WAIT1 FIN_WAIT2 TIME_WAIT CLOSE CLOSE_WAIT LAST_ACK LISTEN CLOSING/;
+
+sub list_sockets_tcp4
+{
+	my @sockets;
+	open my $fh, '<', "/proc/net/tcp";
+	while(<$fh>)
+	{
+		if(/^\s*\d+:\s*(?'hex_local_ip'[[:xdigit:]]+):(?'hex_local_port'[[:xdigit:]]+)\s+(?'hex_remote_ip'[[:xdigit:]]+):(?'hex_remote_port'[[:xdigit:]]+)\s+(?'hex_status'[[:xdigit:]]+)\s+(?'tx_queue'[^:]+):(?'rx_queue'\S+)\s+(?'tr'[^:]+):(?'tm_when'\S+)\s+(?'retrnsmt'\S+)\s+(?'uid'\d+)\s+(?'timeout'\d+)\s+(?'inode'\d+)/)
+		{
+			push @sockets, {
+				'local_ip' => hex_to_dotted_decimal($+{'hex_local_ip'}),
+				'local_port' => hex $+{'hex_local_port'},
+				'remote_ip' => hex_to_dotted_decimal($+{'hex_remote_ip'}),
+				'remote_port' => hex $+{'hex_remote_port'},
+				'status' => $socket_state_name[ hex $+{'hex_status'} ],
+				'uid' => $+{'uid'},
+				'inode' => $+{'inode'},
+			};
+		}
+	}
+	close $fh;
+	return @sockets;
+}
+
+sub list_open_inodes_for_pid
+{
+	my $query_pid = shift;
+	my @response;
+	my $fd_dir = "/proc/$query_pid/fd";
+	opendir my $dh_fd, $fd_dir;
+	while(my $fd_file = readdir $dh_fd)
+	{
+		push @response, (stat "$fd_dir/$fd_file")[STAT_INO];
+	}
+	closedir $dh_fd;
+	return @response;
+}
+
+sub list_sockets_tcp4_with_pid
+{
+	my @sockets = list_sockets_tcp4();
+	
+	opendir my $dh_proc, '/proc';
+	while(my $_ = readdir $dh_proc)
+	{
+		if(/^(\d+)$/)
+		{
+			my $this_pid = $1;
+			my @inodes = list_open_inodes_for_pid($this_pid);
+			for my $socket (@sockets)
+			{
+				for my $inode (@inodes)
+				{
+					if($socket->{'inode'} == $inode)
+					{
+						$socket->{'pid'} = $this_pid;
+					}
+				}
+			}
+		}
+	}
+	closedir $dh_proc;
+	
+	return @sockets;
+}
+
+sub list_sockets_tcp4_for_pid
+{
+	my $query_pid = shift;
+	my @response;
+	my @sockets = list_sockets_tcp4();
+	my @inodes = list_open_inodes_for_pid($query_pid);
+	
+	for my $socket (@sockets)
+	{
+		for my $inode (@inodes)
+		{
+			if($socket->{'inode'} == $inode)
+			{
+				$socket->{'pid'} = $query_pid;
+				push @response, $socket;
+			}
+		}
+	}
+	
+	return @response;
+}
+
+
+
+my $utmp_file = $ARGV[0];
+
+if ($ENV{'PAM_TYPE'} =~ /^(open|close)_session$/)
+{
+	my $sshd_pid = get_parent_pid($$);
+	my $ssh_client_port;
+	
+	for my $socket (list_sockets_tcp4_for_pid($sshd_pid))  # TODO IPv6 support
+	{
+		if($socket->{'status'} eq 'ESTABLISHED')
+		{
+			$ssh_client_port = $socket->{'remote_port'};  # FIXME multiple open connections?
+			last;
+		}
+	}
+	
+	my $ut_line;
+	my $ut_line_guess;
+	if(defined $ssh_client_port)
+	{
+		$ut_line = "tcp/$ssh_client_port";
+	}
+	else
+	{
+		if($ENV{'PAM_TYPE'} eq 'open_session')
+		{
+			exit PAM_AUTHINFO_UNAVAIL;
+		}
+	}
+	
+	
+	open my $fh, '>>', $utmp_file;
+	flock $fh, LOCK_EX;
+	User::Utmp::utmpname($utmp_file);
+	
+	my $ut_id;
+	my $max_ut_id = 0;
+	for my $entry (User::Utmp::getut())
+	{
+		$max_ut_id = $entry->{'ut_id'} if $max_ut_id < $entry->{'ut_id'};
+		
+		if($entry->{'ut_type'} == USER_PROCESS and -d sprintf "/proc/%d", $entry->{'ut_pid'})
+		{
+			if(!defined $ut_line and $entry->{'ut_pid'} eq $sshd_pid)
+			{
+				$ut_line_guess = $entry->{'ut_line'};
+			}
+		}
+	}
+	if(not defined $ut_id)
+	{
+		$ut_id = $max_ut_id + 1;
+	}
+	if(!defined $ut_line and defined $ut_line_guess)
+	{
+		$ut_line = $ut_line_guess;
+	}
+	
+	$ut_ent = {
+		'ut_id' => $ut_id,
+		'ut_line' => $ut_line || '',
+		'ut_pid' => $sshd_pid,
+		'ut_time' => time,
+		'ut_host' => $ENV{'PAM_RHOST'},
+		'ut_addr' => pack('C4', split /\./, $ENV{'PAM_RHOST'}),
+	};
+	
+	if ($ENV{'PAM_TYPE'} eq 'open_session')
+	{
+		$ut_ent->{'ut_type'} = USER_PROCESS;
+		$ut_ent->{'ut_user'} = $ENV{'PAM_USER'};
+	}
+	elsif ($ENV{'PAM_TYPE'} eq 'close_session')
+	{
+		$ut_ent->{'ut_type'} = DEAD_PROCESS;
+		$ut_ent->{'ut_user'} = '';
+	}
+	
+	User::Utmp::pututline($ut_ent);
+	
+	close $fh;
+	exit PAM_SUCCESS;
+}
+
+exit PAM_IGNORE;

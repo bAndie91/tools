@@ -5,10 +5,11 @@ curlopts=(-sS -H "Content-Type: application/json")
 showCardNumber=''
 showExpirationDate=''
 showCvvCode=''
+showLog=''
 machineParseable=''
 
 
-while getopts "hu:p:NXCm" OPT
+while getopts "hu:p:NXClm" OPT
 do
 	case "$OPT" in
 	u)
@@ -29,12 +30,16 @@ do
 	m)
 		machineParseable=1
 		;;
+	l)
+		showLog=1
+		;;
 	h)
 		echo "Usage: entropay -u USER -p PASS [-N] [-X] [-C] [-m]
 Options:
   -N   show card number
   -X   show expiration date
   -C   show CVV code
+  -l   show transaction activity (log)
   -m   machine parseable"
 		exit 0
 		;;
@@ -61,65 +66,121 @@ token=$(
 test -n "$token"
 curlopts+=(-H "Authorization: Bearer $token")
 
-
-# Get cards' data
-content=$(
- curl "${curlopts[@]}" "$base_url/cards/virtual/search?start=0&max=6&availableBalance=true" -d '{"deleted":false}'
-)
-
 JQ()
 {
 	jq -r "$1" <<<"$content"
 }
 
+if [ $showLog ]
+then
+	tsEnd=`date +%s`
+	tsStart=`printf '%(%s)T' 0`
+	datetimeformat='%(%FT%T.000Z)T'
+	dayStart=`printf "$datetimeformat" $tsStart`
+	dayEnd=`printf "$datetimeformat" $tsEnd`
+	
+	curl "${curlopts[@]}" -X POST "$base_url/account/transaction_activity?start=0&max=99" -d "{\"dayStart\":\"$dayStart\",\"dayEnd\":\"$dayEnd\"}" |\
+	jq -r '.entries[] | (
+		"TRANSACTION",
+		"DATE " + .date,
+		"TYPE " + .transactionType,
+		"STATE " + .state, 
+		(.additionalInfo[] | select(.key=="MERCHANT_NAME" or .key=="CARD_FRIENDLY_NAME") | .key + " " + .value),
+		if .movements[0] then 
+			(.movements[] | ("PARTICIPANT " + .amount + " " + .participant.type + " " + .participant.name))
+		else 
+			("AMOUNT " + .amount + " " + .charge?)
+		end, 
+		"END"
+	)' |\
+	while read -r key data
+	do
+		set +u
+		declare $key="$data"
+		
+		case "$key" in
+		TRANSACTION)
+			declare -A move=()
+			;;
+		PARTICIPANT)
+			set -- $data
+			amount=$1
+			shift
+			move[$*]=$amount
+			;;
+		AMOUNT)
+			move[$CARD_FRIENDLY_NAME]=$data
+			;;
+		END)
+			echo "$TYPE $STATE  --  ${DATE:0:10} ${DATE:11:8}"
+			if [ -n "$MERCHANT_NAME" ]
+			then
+				echo "    Merchant: $MERCHANT_NAME"
+			fi
+			for ptcp in "${!move[@]}"
+			do
+				money=${move[$ptcp]}
+				amount=${money//[!0-9.-]/}
+				currency=${money//[0-9.-]/}
+				LANG=C printf "    %-4s %+10.2f	%s\n" "$currency" "$amount" "$ptcp"
+			done
+			echo
+			;;
+		esac
+	done
+else
+	# Get cards' data
+	content=$(
+		curl "${curlopts[@]}" "$base_url/cards/virtual/search?start=0&max=99&availableBalance=true" -d '{"deleted":false}'
+	)
 
-# Display details
-
-n_cards=`JQ '.entries | length'`
-n=0
-while [ $n -lt $n_cards ]
-do
-	cardName=`JQ ".entries[$n].displayName"`
-	balanceActual=`JQ ".entries[$n].actualBalance"`
-	balanceAvailable=`JQ ".entries[$n].availableBalance"`
-	[ $showCardNumber ] && cardNumber=`JQ ".entries[$n].cardNumber"` || cardNumber=''
-	holder=`JQ ".entries[$n].nameOnCard"`
-	[ $showExpirationDate ] && expire=`JQ ".entries[$n].expiryMonth"`/`JQ ".entries[$n].expiryYear"` || expire=''
-	if [ $showCvvCode ]
-	then
-		cvv=`curl "${curlopts[@]}" "$base_url/cards/virtual/$(JQ ".entries[$n].id")/cvv" | jq -r .cvv`
-	else
-		cvv=''
-	fi
-	
-	if [ ! $machineParseable ]
-	then
-		balanceActual=${balanceActual/USD/$}
-		balanceAvailable=${balanceAvailable/USD/$}
-	fi
-	
-	if [ "$balanceActual" = "$balanceAvailable" ]
-	then
-		balance="$balanceActual"
-	else
-		balance="$balanceActual ($balanceAvailable)"
-	fi
-	
-	if [ $machineParseable ]
-	then
-		echo "$cardNumber;$balanceActual;$balanceAvailable;$expire;$cvv;$holder;$cardName"
-	else
-		if [ $showCardNumber$showExpirationDate$showCvvCode ]
+	# Display details
+	n_cards=`JQ '.entries | length'`
+	n=0
+	while [ $n -lt $n_cards ]
+	do
+		cardName=`JQ ".entries[$n].displayName"`
+		balanceActual=`JQ ".entries[$n].actualBalance"`
+		balanceAvailable=`JQ ".entries[$n].availableBalance"`
+		[ $showCardNumber ] && cardNumber=`JQ ".entries[$n].cardNumber"` || cardNumber=''
+		holder=`JQ ".entries[$n].nameOnCard"`
+		[ $showExpirationDate ] && expire=`JQ ".entries[$n].expiryMonth"`/`JQ ".entries[$n].expiryYear"` || expire=''
+		if [ $showCvvCode ]
 		then
-			echo "$cardName
-  $balance
-  ${cardNumber:+${cardNumber:0:4}-${cardNumber:4:4}-${cardNumber:8:4}-${cardNumber:12}  }${expire:+[$expire]  }${cvv:+CVV:$cvv}
-  $holder"
+			cvv=`curl "${curlopts[@]}" "$base_url/cards/virtual/$(JQ ".entries[$n].id")/cvv" | jq -r .cvv`
 		else
-			echo "$cardName $balance"
+			cvv=''
 		fi
-	fi
-	
-	n=$[n+1]
-done
+		
+		if [ ! $machineParseable ]
+		then
+			balanceActual=${balanceActual/USD/$}
+			balanceAvailable=${balanceAvailable/USD/$}
+		fi
+		
+		if [ "$balanceActual" = "$balanceAvailable" ]
+		then
+			balance="$balanceActual"
+		else
+			balance="$balanceActual ($balanceAvailable)"
+		fi
+		
+		if [ $machineParseable ]
+		then
+			echo "$cardNumber;$balanceActual;$balanceAvailable;$expire;$cvv;$holder;$cardName"
+		else
+			if [ $showCardNumber$showExpirationDate$showCvvCode ]
+			then
+				echo "$cardName"
+				echo "  $balance"
+				echo "  ${cardNumber:+${cardNumber:0:4}-${cardNumber:4:4}-${cardNumber:8:4}-${cardNumber:12}  }${expire:+[$expire]  }${cvv:+CVV:$cvv}"
+				echo "  $holder"
+			else
+				echo "$cardName $balance"
+			fi
+		fi
+		
+		n=$[n+1]
+	done
+fi
 

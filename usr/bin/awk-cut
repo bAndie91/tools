@@ -1,0 +1,52 @@
+#!/bin/bash
+
+shopt -s extglob
+
+awk-cut()
+{
+	local expr
+	local narg=0
+	
+	for colspec
+	do
+		if [ $narg != 0 ]
+		then
+			expr=$expr"printf \"%s\", RS;"
+		fi
+		
+		local x=''
+		local y=''
+		
+		case "$colspec" in
+		+([0-9])-)
+			x=${colspec:0:-1}
+			y=NF
+			;;
+		-+([0-9]))
+			x=0
+			y=${colspec:1}
+			;;
+		+([0-9])-+([0-9]))
+			x=${colspec%%-*}
+			y=${colspec##*-}
+			;;
+		[0-9]*([0-9,]))
+			expr=$expr"N=0; split(\"${colspec//,/ }\", A, /,/); for(X in A){printf(\"%s%s\", N==0 ? \"\" : OFS, \$A[X]); N++};"
+			;;
+		*)
+			echo "Invalid column spec: $colspec" >&2
+			;;
+		esac
+		
+		if [ -n "$x" ]
+		then
+			expr=$expr"for(F=$x;F<=$y;F++) printf(\"%s%s\", F==$x ? \"\" : OFS, \$F);"
+		fi
+		
+		narg=$((narg + 1))
+	done
+	
+	awk "{ $expr printf \"%s\", RS; }"
+}
+
+awk-cut "$@"

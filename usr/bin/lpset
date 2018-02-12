@@ -1,9 +1,11 @@
 #!/bin/bash
 
 NL=$'\n'
-sel=0
+selitem=0
 declare -a printers
 declare -a optvals
+declare -a args
+declare -a jobs
 
 clear_input_buffer()
 {
@@ -15,13 +17,21 @@ clear_input_buffer()
 
 clear_screen()
 {
-	echo -n "[2J[H"
+	echo -n "[1J[H"
 }
 
 selected()
 {
-	[ $sel = $nopts ]
+	[ $selitem = $nitems ]
 }
+
+header="[1;44;30m[lpset]"
+for hotkey in Disable Enable Reject Accept LPRM Quit
+do
+  header="$header [1;44;33m${hotkey:0:1}[0;44;37m${hotkey:1} "
+done
+header="$header[0m"
+
 
 while true
 do
@@ -31,7 +41,11 @@ do
 	output=$output`lpoptions -l`
 
 	clear_screen
+	echo "$header"
+	
+	nitems=0
 	nopts=0
+	optname=''
 	while IFS=: read -r key vals
 	do
 		label=${key#*/}
@@ -72,13 +86,34 @@ do
 			let nval++
 		done
 		echo
+		let nitems++
 		let nopts++
 	done <<<"$output"
 	
+	nlpqline=0
+	jobs=()
 	if lpstat -o "$dflt_prn" | read
 	then
-		echo "==================================="
-		lpq | sed -e 1d
+		while read lpqline
+		do
+			if [ $nlpqline = 0 ]
+			then
+				echo "  [44;37m$lpqline[m"
+			else
+				re="[^ ]+ +[^ ]+ +([^ ]+)"
+				[[ "$lpqline" =~ $re ]]
+				jobs[$nitems]=${BASH_REMATCH[1]}
+				
+				if selected
+				then
+					echo "> [1m$lpqline[m"
+				else
+					echo "  $lpqline"
+				fi
+				let nitems++
+			fi
+			let nlpqline++
+		done < <(lpq | sed -e 1d)
 	fi
 	echo "==================================="
 	n=`LANG=C lpstat -l -p "$dflt_prn" | sed -ne '/^\s*After fault/='`
@@ -98,45 +133,48 @@ do
 			"[")
 				read -r -s -N 1 c3
 				case "$c3" in
-				A)	if [ $sel -gt 0 ]
+				A)	if [ $selitem -gt 0 ]
 					then
-						let sel--
+						let selitem--
 					else
-						sel=$[nopts-1]
+						selitem=$[nitems-1]
 					fi
 					break 1 ;;
-				B)	if [ $sel -lt $[nopts-1] ]
+				B)	if [ $selitem -lt $[nitems-1] ]
 					then
-						let sel++
+						let selitem++
 					else
-						sel=0
+						selitem=0
 					fi
 					break 1 ;;
 				C|D)
-					max=${#optvals[@]}
-					let max--
-					case "$c3" in
-					D)	if [ $optsetv -gt 0 ]
-						then
-							newvaln=$[optsetv-1]
-						else
-							newvaln=$max
-						fi ;;
-					C)	if [ $optsetv -lt $max ]
-						then
-							newvaln=$[optsetv+1]
-						else
-							newvaln=0
-						fi ;;
-					esac
-					newval=${optvals[$newvaln]}
-					if [ "$optname" = DefaultPrinter ]
+					if [ -n "$optname" ]
 					then
-						lpoptions -d "$newval" >/dev/null
-					else
-						lpoptions -o "$optname=$newval"
+						max=${#optvals[@]}
+						let max--
+						case "$c3" in
+						D)	if [ $optsetv -gt 0 ]
+							then
+								newvaln=$[optsetv-1]
+							else
+								newvaln=$max
+							fi ;;
+						C)	if [ $optsetv -lt $max ]
+							then
+								newvaln=$[optsetv+1]
+							else
+								newvaln=0
+							fi ;;
+						esac
+						newval=${optvals[$newvaln]}
+						if [ "$optname" = DefaultPrinter ]
+						then
+							lpoptions -d "$newval" >/dev/null
+						else
+							lpoptions -o "$optname=$newval"
+						fi
+						break 1 
 					fi
-					break 1 
 					;;
 				*)	clear_input_buffer
 					;;
@@ -146,14 +184,26 @@ do
 				;;
 			esac
 			;;
-		d|e|r|a)
+		d|e|r|a|l)
+			cmd=''
+			args=("$dflt_prn")
 			case "$c" in
 			d)	cmd=cupsdisable;;
 			e)	cmd=cupsenable;;
 			r)	cmd=cupsreject;;
 			a)	cmd=cupsaccept;;
+			l)	job=${jobs[$selitem]}
+				if [ -n "$job" ]
+				then
+					cmd=lprm
+					args=("$job")
+				fi
+				;;
 			esac
-			command $cmd "$dflt_prn"
+			if [ -n "$cmd" ]
+			then
+				command $cmd "${args[@]}"
+			fi
 			break 1
 			;;
 		q|Q)

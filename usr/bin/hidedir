@@ -106,9 +106,12 @@ done
 
 while read mntdev mntpnt mntype mntopt rest
 do
-	if [ $netdev = 1 ] && [[ "$mntdev" =~ ^// ]] || [[ "$mntdev" =~ : ]]
+	if [ $netdev = 1 ]
 	then
-		dirs_k["$mntpnt"]=1
+		if [[ "$mntdev" =~ ^// ]] || [[ "$mntdev" =~ : ]]
+		then
+			dirs_k["$mntpnt"]=1
+		fi
 	fi
 	if [ -n "$mntype" ]
 	then

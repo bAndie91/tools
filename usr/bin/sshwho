@@ -4,10 +4,47 @@ set -e
 OPTERR=1
 declare -a argv
 declare -A flag
+sshd_exe_path=/usr/sbin/sshd
+
+
+ps()
+{
+	command ps "$@" || true
+}
 
 psgetenv()
 {
 	grep -aPo "\x00$2=[^\x00]+" "/proc/$1/environ" | cut -f2- -d=
+}
+
+find_slave_sshd_pids()
+{
+	local pids=()
+	local current_master_sshd_pid=`cat /var/run/sshd.pid`
+	
+	for pid in `find /proc -mindepth 1 -maxdepth 1 -regex '/proc/[0-9]+' -printf "%f "`
+	do
+		if [ $pid = $current_master_sshd_pid ]
+		then
+			continue
+		fi
+		if [ "$(readlink /proc/$pid/exe)" = "$sshd_exe_path" ]
+		then
+			if [ "$(stat -c %u /proc/$pid)" = 0 ]
+			then
+				if grep -q -m1 -E "^PPid:\s*(1|$current_master_sshd_pid)" /proc/$pid/status
+				then
+					pids+=($pid)
+				fi
+			fi
+		fi
+	done
+	if [ ${#pids[@]} -gt 0 ]
+	then
+		echo "${pids[@]}"
+		return 0
+	fi
+	return 1
 }
 
 while getopts hntd opt
@@ -29,78 +66,93 @@ do
 	esac
 done
 
-master_ssh_pid=`cat /var/run/sshd.pid`
-test -n "$master_ssh_pid"
 
-{	echo "USER;TTY;FROM;LOGIN@;PID;WHAT"
 
-	for slave_sshd_pid in `ps o pid= --ppid "$master_ssh_pid"`
+{
+echo "USER;TTY;FROM;LOGIN@;PID;WHAT"
+
+for slave_sshd_pid in `find_slave_sshd_pids`
+do
+	user_sshd_pid=`ps o pid= --ppid $slave_sshd_pid`
+	user_sshd_pid=${user_sshd_pid//[!0-9]/}
+	if [ -z "$user_sshd_pid" ]
+	then
+		continue
+	fi
+	
+	username=`stat -c %U "/proc/$user_sshd_pid"`
+	start_time=`stat -c %Y "/proc/$user_sshd_pid"`
+	if [ "${flag[t]}" != 1 ]
+	then
+		start_time=`date -d@$start_time`
+	fi
+	
+	shells=0
+	for shell_pid in `ps o pid= --ppid "$user_sshd_pid"`
 	do
-		user_sshd_pid=`ps o pid= --ppid $slave_sshd_pid`
-		user_sshd_pid=${user_sshd_pid//[!0-9]/}
-		test -n "$user_sshd_pid"
+		shell_pid=${shell_pid//[!0-9]/}
+		test -n "$shell_pid" || continue
+		shells=$[shells+1]
 		
-		username=`stat -c %U "/proc/$user_sshd_pid"`
-		start_time=`stat -c %Y "/proc/$user_sshd_pid"`
-		if [ "${flag[t]}" != 1 ]
+		#tty=`readlink "/proc/$shell_pid/fd/0"`
+		tty=`psgetenv "$shell_pid" SSH_TTY`
+		tty=${tty#/dev/}
+		tty=${tty:--}
+		
+		if [ "${flag[d]}" = 1 -a $shells -gt 1 ]
 		then
-			start_time=`date -d@$start_time`
-		fi
-
-		shells=0
-		for shell_pid in `ps o pid= --ppid "$user_sshd_pid"`
-		do
-			shell_pid=${shell_pid//[!0-9]/}
-			test -n "$shell_pid" || continue
-			shells=$[shells+1]
-		
-			#tty=`readlink "/proc/$shell_pid/fd/0"`
-			tty=`psgetenv "$shell_pid" SSH_TTY`
-			tty=${tty#/dev/}
-			tty=${tty:--}
-
-			if [ "${flag[d]}" = 1 -a $shells -gt 1 ]
+			from=%
+		else
+			env_ssh_client=`psgetenv "$shell_pid" SSH_CLIENT`
+			hostip=`cut -f1 -d' ' <<<"$env_ssh_client"`
+			port=`cut -f2 -d' ' <<<"$env_ssh_client"`
+			if [ "${flag[n]}" != 1 ]
 			then
-				from=%
-			else
-				env_ssh_client=`psgetenv "$shell_pid" SSH_CLIENT`
-				hostip=`cut -f1 -d' ' <<<"$env_ssh_client"`
-				port=`cut -f2 -d' ' <<<"$env_ssh_client"`
-				if [ "${flag[n]}" != 1 ]
+				if type resolveip >/dev/null 2>&1
 				then
-					if type resolveip >/dev/null 2>&1
+					set +e
+					host=`resolveip -s "$hostip"`
+					if [ -z "$host" ]
 					then
-						set +e
-						host=`resolveip -s "$hostip"`
-						if [ -z "$host" ]
-						then
-							host=$hostip
-						fi
-						set -e
-					else
-						host=`dig +short -x "$hostip"`
+						host=$hostip
 					fi
+					set -e
 				else
-					host=$hostip
+					host=`dig +short -x "$hostip"`
 				fi
-				from=$host:$port
+			else
+				host=$hostip
 			fi
-			
-			exe=`readlink "/proc/$shell_pid/exe"`
-			comm=`cat "/proc/$shell_pid/comm"`
-			argv=(`tr "\0" "\n" <"/proc/$shell_pid/cmdline"`)
-			exe_if_spoofed=
-			[ "${argv[0]}" != "$exe" ] && exe_if_spoofed=" ($exe)"
-			
-			echo "$username;$tty;$from;$start_time;$shell_pid;${argv[@]}$exe_if_spoofed"
-			
-			if [ "${flag[d]}" = 1 -a $shells = 1 ]
-			then
-				username=%
-				start_time=%
-			fi
-		done
+			from=$host:$port
+		fi
+		
+		exe=`readlink "/proc/$shell_pid/exe"`
+		comm=`cat "/proc/$shell_pid/comm"`
+		argv=(`tr "\0" "\n" <"/proc/$shell_pid/cmdline"`)
+		exe_if_spoofed=''
+		if [ "${argv[0]}" != "$exe" ]
+		then
+			exe_if_spoofed=" ($exe)"
+		fi
+		
+		echo "$username;$tty;$from;$start_time;$shell_pid;${argv[@]}$exe_if_spoofed"
+		
+		if [ "${flag[d]}" = 1 -a $shells = 1 ]
+		then
+			username=%
+			start_time=%
+		fi
 	done
-}|\
-column -t -s';' -n
+	
+	if [ $shells = 0 ]
+	then
+		set -- `lastcsv -f /var/run/sshd/wtmp | awk -F';' '$9=="'$slave_sshd_pid'"{print $3, $2; exit}'`
+		host=$1
+		port=$2
+		port=${port//[!0-9]/}
+		from=$host:$port
+		echo "$username;-;$from;$start_time;$user_sshd_pid;-"
+	fi
+done
+} | column -t -s';' -n
 

@@ -1,0 +1,72 @@
+#!/bin/bash
+
+set -e
+set -u
+
+repourl=''
+dir=''
+depth=1
+remote=origin
+branch=''
+declare -a paths=()
+
+while [ -n "${1:-}" ]
+do
+	case "$1" in
+	-d)
+		shift
+		dir=$1
+		;;
+	-b)
+		shift
+		branch=$1
+		;;
+	-o)
+		shift
+		origin=$1
+		;;
+	-h|--help)
+		echo "${0##*/} GIT_REPO_URL [-d CLONE_DIRECTORY] [-o ORIGIN_NAME] [-b BRANCH] PATH [PATH [PATH ...]]"
+		exit 1
+		;;
+	-*)
+		echo "${0##*/}: invalid option: $1" >&2
+		exit 1
+		;;
+	*)
+		if [ "${repourl:-}" = "" ]
+		then
+			repourl=$1
+		else
+			paths+=("$1")
+		fi
+		;;
+	esac
+	shift
+done
+
+repourlnoslash=${repourl%%/}
+reponame=${repourlnoslash##*/}
+dir="${dir:-$reponame}"
+
+clean()
+{
+	rm -rv "$dir"
+}
+
+trap clean SIGINT SIGQUIT SIGTERM
+
+mkdir "$dir"
+(
+	cd "$dir"
+	git init
+	git config core.sparseCheckout true
+	git remote add "$remote" "$repourl"
+	git fetch --depth=$depth "$remote" "$branch:$branch"
+	for path in "${paths[@]}"
+	do
+		#[ "${path: -1}" = / ] && path="$path*"
+		echo "$path" >> .git/info/sparse-checkout
+	done
+	git checkout "$branch"
+)

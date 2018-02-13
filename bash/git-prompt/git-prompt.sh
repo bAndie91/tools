@@ -6,21 +6,21 @@ local n=0
 local color
 local line
 local RESET
-local gitdir prefix isthereworktree=
+local gitdir prefix isthereworktree=''
 local hash
-local branch= branches= tags= descbranch= desctag= pointer=
-local ahead= behind= divergence=
-local upstream= fallback= pushpull=
+local branch='' branches='' tags='' descbranch='' desctag='' pointer=''
+local ahead='' behind='' divergence=''
+local upstream='' fallback='' pushpull=''
 
 local X Y
-local MX= AX= DX= RX= CX= UX= QX= EX=
-local MY= AY= DY= RY= CY= UY= QY= EY=
-local AA= DD= AU= DU= UA= UD= UU= U=
+local MX='' AX='' DX='' RX='' CX='' UX='' QX='' EX=''
+local MY='' AY='' DY='' RY='' CY='' UY='' QY='' EY=''
+local AA='' DD='' AU='' DU='' UA='' UD='' UU='' U=''
 local unstag staged
-local specdir= speclist=() spec=
+local specdir='' speclist=() spec=''
 
 local add del rest
-local adds1= dels1= adds2= dels2=
+local adds1='' dels1='' adds2='' dels2=''
 local delta1 delta2
 
 local sign_branch=❦
@@ -30,11 +30,13 @@ local sign_ahead=▲
 local sign_behind=▼
 local sign_unstag=✎
 local sign_staged=✈
-#local sign_stash=⌂ ❂ ⚑ ⚒ ◳ ◪ ◕ ◍ ⌘ ∗
-local sign_stash=●
+#local sign_stash=⌂ ❂ ⚑ ⚒ ◳ ◪ ◕ ◍ ⌘ ∗ ● � ❖ 🍱
+local sign_stash=✪
 local sign_pushpull=★
 local sign_origin=☆
 local sign_clean=✔
+#local sign_notes=📝 � 📋 𝅊 𝅐
+local sign_notes=📎
 
 trueish()
 {
@@ -50,7 +52,7 @@ get_tracking_branch()
 	#  - variable name to store remote tracking ref, or "origin/$1" if not found;
 	#    it is being echoed if this argument is omitted
 	#  - variable name to store "1" if branch is not remotely tracked, or "" otherwise
-	local okHEAD=
+	local okHEAD=''
 	if [ "$1" = -H ]
 	then
 		okHEAD=1
@@ -66,7 +68,7 @@ get_tracking_branch()
 		rbranch=`git config --get-all "branch.$branch.merge" | head -n1`
 		# Strip "refs/heads/"
 		rbranch=${rbranch:11}
-		[ -n "$fellback" ] && declare -g $fellback=
+		[ -n "$fellback" ] && declare -g $fellback=''
 	fi
 	if [ -z "$remote" -o -z "$rbranch" ]
 	then
@@ -134,7 +136,7 @@ IFS=$'\n'
 		# "0\t0" means they are in sync.
 		if [ "${line%	*}" = 0 -a "${line#*	}" = 0 ]
 		then
-			pushpull=
+			pushpull=''
 		fi
 	else
 		desctag=`git describe --contains --tags HEAD 2>/dev/null`
@@ -203,10 +205,11 @@ IFS=$'\n'
 	
 	for var in ahead behind adds1 dels1 adds2 dels2
 	do
-		[ "${!var}" = 0 ] && eval $var=
+		[ "${!var}" = 0 ] && eval $var=''
 	done
 IFS=$IFS_
 stash=$(git stash list -s --format=%H 2>/dev/null | wc -l)
+notes=$(git notes | wc -l)
 
 
 if [ -d "$gitdir/rebase-merge" ]
@@ -248,7 +251,7 @@ then
 fi
 if [ -n "$branch$tags" ]
 then
-	local branchesglue=
+	local branchesglue=''
 	if [ -n "$branches" ]
 	then
 		[ -n "$branch" ] && branchesglue="$MAGENTA," || branchesglue=" $BRED$sign_desc "
@@ -271,12 +274,19 @@ divergence=$ahead$behind
 
 if [ $stash = 0 ]
 then
-	stash=
+	stash=''
 elif [ $stash = 1 ]
 then
-	stash="$BBLUE$sign_stash"
+	stash="$BMAGENTA$sign_stash"
 else
-	stash="$BBLUE$sign_stash$MAGENTA$stash"
+	stash="$BMAGENTA$sign_stash$MAGENTA$stash"
+fi
+
+if [ $notes = 0 ]
+then
+	notes=''
+else
+	notes=$BYELLOW$sign_notes
 fi
 
 unstag=${NY:+ ${BCYAN}N$BWHITE$NY}${AY:+ ${BGREEN}A$BWHITE$AY}${DY:+ ${BRED}D$BWHITE$DY}${MY:+ ${BYELLOW}M$BWHITE$MY}${TY:+ ${BBLUE}T$RESET$TY}${CY:+ ${BGREEN}C$RESET$CY}${RY:+ ${BYELLOW}R$BWHITE$RY}${AA:+ ${BBLUE}A$BWHITE$AA}${DD:+ ${BBLUE}D$BWHITE$DD}${U:+ ${BBLUE}U$BWHITE$U}
@@ -284,10 +294,11 @@ staged=${AX:+ ${GREEN}A$RESET$AX}${DX:+ ${RED}D$RESET$DX}${MX:+ ${YELLOW}M$RESET
 unstag=${unstag:+$YELLOW$sign_unstag$unstag}
 staged=${staged:+$BWHITE$sign_staged$staged}
 
-[ -n "$adds1$dels1" ] && delta1="${adds1:+$BGREEN+$adds1}${dels1:+$BRED-$dels1}$RESET" || delta1=
-[ -n "$adds2$dels2" ] && delta2="${adds2:+$GREEN+$adds2}${dels2:+$RED-$dels2}$RESET" || delta2=
+[ -n "$adds1$dels1" ] && delta1="${adds1:+$BGREEN+$adds1}${dels1:+$BRED-$dels1}$RESET" || delta1=''
+[ -n "$adds2$dels2" ] && delta2="${adds2:+$GREEN+$adds2}${dels2:+$RED-$dels2}$RESET" || delta2=''
 delta1=${delta1:+$BBLACK[$delta1$BBLACK]}
 delta2=${delta2:+$BBLACK[$delta2$BBLACK]}
+
 
 if [ -z "$unstag$staged" -a -n "$hash" ]
 then
@@ -296,7 +307,7 @@ then
 fi
 
 
-__git_prompt="$ahash$specdir$spec$pointer${divergence:+  }$divergence${EY:+  ${BRED}!$BWHITE$EY}${unstag:+  }$unstag${delta1:+ }$delta1${stash:+  }$stash${staged:+  }$staged${delta2:+ }$delta2"
+__git_prompt="$ahash$specdir$spec$pointer${divergence:+  }$divergence${EY:+  ${BRED}!$BWHITE$EY}${unstag:+  }$unstag${delta1:+ }$delta1${stash:+  }$stash${staged:+  }$staged${delta2:+ }$delta2${notes:+ }$notes"
 echo -n "$__git_prompt$RESET
 "
 }

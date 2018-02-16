@@ -29,6 +29,7 @@ local sign_desc=☛
 local sign_ahead=▲
 local sign_behind=▼
 local sign_unstag=✎
+#local sign_staged=🚢 📦
 local sign_staged=✈
 #local sign_stash=⌂ ❂ ⚑ ⚒ ◳ ◪ ◕ ◍ ⌘ ∗ ● � ❖ 🍱
 local sign_stash=✪

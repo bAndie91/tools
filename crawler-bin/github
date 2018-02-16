@@ -1,0 +1,87 @@
+#!/bin/bash
+
+cached=
+unset ghUser
+unset ghRepo
+unset cachekey
+unset apicall
+unset jq
+usagetext="Options:
+ -C   use cached data, no download
+Subcommands:
+ issues
+ stars
+ stargazers"
+
+while getopts Ch opt
+do
+	case $opt in
+	h) echo "$usagetext"
+	   exit 1;;
+	C) cached=1;;
+	*) exit 1;;
+	esac
+done
+
+shift $(($OPTIND - 1))
+
+case "$1" in
+issues)
+	apicall="issues?state=all"
+	cachekey=issues
+	jq='map([
+		.number,
+		"\n==========================",
+		([(.number|tostring)+":",.title]|join(" ")),
+		(["   "+.state,(.labels|.[].name)]|join(", ")),
+		(["   comments",.comments|tostring]|join(": ")),
+		"   --------------------------",
+		(.body | split("\n") | .[] | "   "+.)
+	]) |
+	sort | .[] | .[1:] | join("\n")'
+	;;
+stars)
+	apicall="stargazers"
+	cachekey=stargazers
+	jq='. | length'
+	;;
+stargazers)
+	apicall="stargazers"
+	cachekey=stargazers
+	jq='[.[].login] | sort | join("\n")'
+	;;
+*)
+	echo "$usagetext" >&2
+	exit 1
+	;;
+esac
+
+
+set -e
+set -u
+
+
+masterremote=`git config branch.master.remote`
+oIFS=$IFS
+IFS=$'\n'
+for info in `git remote -v | perl -ne 'm{^(\S+)\s+\S+github.com[/:](.+?)/([^/.\s]+)} and print "$1 $2 $3\n"'`
+do
+	IFS=$oIFS read remote ghUser ghRepo <<<"$info"
+	if [ "$remote" = "$masterremote" ]; then break; fi
+done
+IFS=$oIFS
+gitdir=`git rev-parse --git-dir`
+
+set +e
+set -o pipefail
+
+if [ ! "$cached" ] && curl -sS "https://api.github.com/repos/$ghUser/$ghRepo/$apicall" | tee "$gitdir/$cachekey.json~"
+then
+	mv "$gitdir/$cachekey.json~" "$gitdir/$cachekey.json"
+else
+	cat "$gitdir/$cachekey.json"
+	if [ ! "$cached" ]; then false; fi
+fi|\
+jq -r "$jq"
+
+exit ${PIPESTATUS[0]}

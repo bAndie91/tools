@@ -3,10 +3,11 @@
 use LWP::Simple;
 use Date::Parse;
 use Data::Dumper;
-eval q{ use Linux::UserXAttr qw/:all/; };
+eval q{ use Linux::UserXAttr ':all'; };
 $use_xattr = $@ ? 0 : 1;
 use Getopt::Long;
 use POSIX;
+use Errno ':POSIX';
 use constant {EC_DOWNLOADED=>0, EC_ERROR=>1, EC_CACHED=>2, EC_NOTOK=>3, EC_NOTMODIFIED=>4, EC_NOTUPDATED=>5,};
 use constant {XATTR_URL=>"user.xdg.origin.url", XATTR_CACHECONTROL=>"user.cache.control", XATTR_MAXAGE=>"user.cache.control.max_age", XATTR_EXPIRES=>"user.cache.expires",};
 
@@ -22,6 +23,15 @@ GetOptions(
 exit main($url, $file);
 
 
+
+sub delxattr
+{
+	if(not removexattr(@_))
+	{
+		return 0 unless $!{ENOTSUP} or $!{ENOATTR} or $!{ENODATA};
+	}
+	1;
+}
 
 sub file_mtime { return((stat $_[0])[9]); }
 sub file_atime { return((stat $_[0])[8]); }
@@ -70,40 +80,40 @@ sub process_response
 			$maxage = $2;
 		}
 		
-		open $GLOB{fh}, '>', $file or cb_return EC_ERROR, "$file: $!";
+		open $GLOB{'fh'}, '>', $file or cb_return EC_ERROR, "$file: $!";
 
 		if($use_xattr)
 		{
 			# https://www.freedesktop.org/wiki/CommonExtendedAttributes/
-			setxattr($GLOB{fh}, XATTR_URL, $rsp->request()->uri) or warn "setxattr: $!\n";
+			setxattr($GLOB{'fh'}, XATTR_URL, $rsp->request()->uri) or warn "setxattr: $!\n";
 			if(defined $cache_control)
 			{
-				setxattr($GLOB{fh}, XATTR_CACHECONTROL, $cache_control) or warn "setxattr: $!\n";
+				setxattr($GLOB{'fh'}, XATTR_CACHECONTROL, $cache_control) or warn "setxattr: $!\n";
 			}
 			else
 			{
-				delxattr($GLOB{fh}, XATTR_CACHECONTROL) or warn "delxattr: $!\n";
+				delxattr($GLOB{'fh'}, XATTR_CACHECONTROL) or warn "removexattr: $!\n";
 			}
 			if(defined $maxage)
 			{
-				setxattr($GLOB{fh}, XATTR_MAXAGE, $maxage) or warn "setxattr: $!\n";
+				setxattr($GLOB{'fh'}, XATTR_MAXAGE, $maxage) or warn "setxattr: $!\n";
 			}
 			else
 			{
-				delxattr($GLOB{fh}, XATTR_MAXAGE) or warn "delxattr: $!\n";
+				delxattr($GLOB{'fh'}, XATTR_MAXAGE) or warn "removexattr: $!\n";
 			}
 			if(defined $expires)
 			{
-				setxattr($GLOB{fh}, XATTR_EXPIRES, $expires) or warn "setxattr: $!\n";
+				setxattr($GLOB{'fh'}, XATTR_EXPIRES, $expires) or warn "setxattr: $!\n";
 			}
 			else
 			{
-				delxattr($GLOB{fh}, XATTR_EXPIRES) or warn "delxattr: $!\n";
+				delxattr($GLOB{'fh'}, XATTR_EXPIRES) or warn "removexattr: $!\n";
 			}
 		}
 	}
 	
-	print {$GLOB{fh}} $data or cb_return EC_ERROR, "$file: $!";
+	print {$GLOB{'fh'}} $data or cb_return EC_ERROR, "$file: $!";
 }
 
 sub time2rfc
@@ -160,7 +170,7 @@ sub main
 			warn "$msg\n" if $msg;
 			return $rc;
 		}
-		close $GLOB{fh};
+		close $GLOB{'fh'};
 		if(defined $GLOB{url_mtime})
 		{
 			utime file_atime($file), $GLOB{url_mtime}, $file or warn "$file: $!\n";

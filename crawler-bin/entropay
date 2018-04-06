@@ -1,6 +1,6 @@
 #!/bin/bash
 
-base_url=https://api.entropay.com/api
+base_url=https://api.entropay.com/api/v1
 curlopts=(-sS -H "Content-Type: application/json")
 showCardNumber=''
 showExpirationDate=''

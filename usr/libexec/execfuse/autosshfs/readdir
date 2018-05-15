@@ -1,0 +1,130 @@
+#!/bin/bash
+
+# Usage:
+# execfuse ./autosshfs ~/mnt/ssh -o fsname=autosshfs.$USER,allow_root
+
+#pwd>>/tmp/x
+#env|sort>>/tmp/x
+set -x
+
+shopt -s nullglob
+
+operation=${0##*/}
+#echo "$operation $@" >&2
+
+attr_parentdir="ino=1 mode=drwxr-xr-x nlink=2 uid=0 gid=0 rdev=0 size=0 blksize=512 blocks=2 atime=0 mtime=0 ctime=0"
+attr_rootdir="ino=1 mode=drwxr-xr-x nlink=2 uid=$UID gid=0 rdev=0 size=0 blksize=512 blocks=2 atime=0 mtime=0 ctime=0"
+attr_entry="ino=1 mode=drwx------ nlink=1 uid=$UID gid=0 rdev=0 size=0 blksize=512 blocks=2 atime=0 mtime=0 ctime=0"
+
+
+declare -A Conn
+read_connections()
+{
+	local file name
+	Conn=()
+	for file in ~/.ssh/ctrl/*.sock
+	do
+		name=${file##*/}
+		name=${name%.*}
+		Conn[$name]=1
+	done
+}
+
+lock_nb()
+{
+	_lock -n "$@"
+}
+
+lock()
+{
+	_lock '' "$@"
+}
+
+_lock()
+{
+	local dir="/tmp/autosshfs.$USER"
+	local flag=$1
+	shift
+	local conn=$1
+	shift
+	mkdir -p -m 0700 "$dir"
+	flock -x $flag "$dir/$conn" "$@"
+}
+
+
+if [ "$operation" = getattr ]
+then
+	if [ "$1" = / ]
+	then
+		printf "$attr_rootdir"
+		exit 0
+	else
+		read_connections
+		for conn in "${!Conn[@]}"
+		do
+			if [ "/$conn" = "$1" ]
+			then
+				printf "$attr_entry"
+				exit 0
+			fi
+		done
+		exit 1
+	fi
+
+elif [ "$operation" = readdir ]
+then
+	cat /proc/mounts |\
+	while read -r dev mp rest
+	do
+		if [[ $mp =~ ^(.+)/([^/]+)$ ]]
+		then
+			dir=${BASH_REMATCH[1]}
+			subdir=${BASH_REMATCH[2]}
+			if [ "$dir" = "$EXECFUSE_MOUNTPOINT" ]
+			then
+				if [ -z "${Conn[$subdir]}" ]
+				then
+					lock_nb "umount+$subdir" setsid fusermount -u -z "$mp" >/dev/null 2>&1 &
+				fi
+			fi
+		fi
+	done
+	
+	if [ "$1" = / ]
+	then
+		printf "$attr_rootdir .\0"
+		printf "$attr_parentdir ..\0"
+		
+		read_connections
+		for conn in "${!Conn[@]}"
+		do
+			printf "$attr_entry %s\0" "$conn"
+		done
+		
+		exit 0
+	
+	else
+		printf "$attr_entry .\0"
+		printf "$attr_rootdir ..\0"
+		
+		read_connections
+		for conn in "${!Conn[@]}"
+		do
+			if [ "/$conn" = "$1" ]
+			then
+				if [[ $conn =~ ^([^@]+)@([^\(]+)\([^\)]+\):([0-9]+) ]]
+				then
+					user=${BASH_REMATCH[1]}
+					host=${BASH_REMATCH[2]}
+					port=${BASH_REMATCH[3]}
+					
+					lock_nb "mount+$conn" setsid sshfs -o Port=$port,transform_symlinks,reconnect "$user@$host:/" "$EXECFUSE_MOUNTPOINT$1" >/dev/null 2>&1 &
+				fi
+				exit 0
+			fi
+		done
+		
+		exit 1
+	fi
+fi
+

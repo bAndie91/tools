@@ -20,6 +20,13 @@ attr_entry="ino=1 mode=drwx------ nlink=1 uid=$UID gid=0 rdev=0 size=0 blksize=5
 declare -A Conn
 read_connections()
 {
+	if [ ${#Conn[@]} = 0 ]
+	then
+		reread_connections
+	fi
+}
+reread_connections()
+{
 	local file name
 	Conn=()
 	for file in ~/.ssh/ctrl/*.sock
@@ -82,6 +89,7 @@ then
 			subdir=${BASH_REMATCH[2]}
 			if [ "$dir" = "$EXECFUSE_MOUNTPOINT" ]
 			then
+				read_connections
 				if [ -z "${Conn[$subdir]}" ]
 				then
 					lock_nb "umount+$subdir" setsid fusermount -u -z "$mp" >/dev/null 2>&1 &
@@ -119,6 +127,7 @@ then
 					port=${BASH_REMATCH[3]}
 					
 					lock_nb "mount+$conn" setsid sshfs -o Port=$port,transform_symlinks,reconnect "$user@$host:/" "$EXECFUSE_MOUNTPOINT$1" >/dev/null 2>&1 &
+					# -o sftp_server='sudo /usr/lib/openssh/sftp-server'
 				fi
 				exit 0
 			fi

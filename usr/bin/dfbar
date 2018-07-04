@@ -1,0 +1,96 @@
+#!/usr/bin/env perl
+
+use Data::Dumper;
+use Getopt::Long;
+
+# defaults
+$divider = 1024;
+$useNBH = 1;
+@suff = split/,/,"b,K,M,G,T,P";
+%mult = map { $_ => $n++ } @suff;
+%patt = ( used=>"=", free=>"·", );
+$show_total_size = 0;
+
+# commandline parameters
+GetOptions(
+	"relative" => \$mode{"relative"},
+	"br|barrelative" => sub { $mode{"barrelative"} = $mode{"relative"} = 1 },
+	"used=s" => \$patt{"used"},
+	"free=s" => \$patt{"free"},
+	"divider=i" => \$divider,
+	"si" => sub { $divider = 1000; },
+	"h|human!" => \$useNBH,
+	"t|show-total-size" => \$show_total_size,
+	"help" => sub { print "$0 [--relative | --barrelative | --show-total-size | --used=* | --free=. | --divider=1024 | --si | --human]\n"; exit; },
+);
+
+
+*hsize = ($useNBH and eval "use Number::Bytes::Human 'format_bytes'; 1") ? 
+sub {
+	return format_bytes($_[0] * $divider ** $mult{$_[1]}, bs=>$divider);
+} :
+sub {
+	$x=$_[0];
+	$suffi = $mult{$_[1]};
+	while($x >= $divider and $suffi < $#suff) { 
+		$x/=$divider;
+		$suffi++;
+	}
+	return sprintf "%0.2f%s", $x, $suff[$suffi];
+};
+
+$COLUMNS = $ENV{"COLUMNS"} || join "", grep {/\d/} (split //, `tput cols`);
+if(-t 0) {
+	@lines = split /[\n\r]+/, `df -kPT`;
+}
+else {
+	print STDERR "Input 'df -kPT' lines.\n";
+	@lines = <>;
+}
+shift @lines;	# skip header
+
+
+# rootfs         rootfs      976762584 845002520 128488984      87% /
+use constant {DFCOL_FS => 0, DFCOL_MP => 6, DFCOL_TOTAL => 2, DFCOL_FREE => 4, DFCOL_PERCENT => 5,};
+# fs | mountpoint | total size human-readable | free space human-readable | used% | total size in K
+use constant {COL_FS => 0, COL_MP => 1, COL_SIZE => 2, COL_PERCENT => 3, COL_TOTAL => 4,};
+
+for(@lines) {
+	@_ = split /\s+/; 
+	my $used_percent = ($_[DFCOL_PERCENT] =~ /^(\d+)/)[0];
+	#my $free_percent = sprintf "%d", $_[DFCOL_FREE] * 100 / $_[DFCOL_TOTAL];
+	push @table, [$_[DFCOL_FS], $_[DFCOL_MP], $show_total_size ? hsize($_[DFCOL_TOTAL],"K") : hsize($_[DFCOL_FREE],"K"), $used_percent, $_[DFCOL_TOTAL]];
+}
+
+# calculate width of table cells
+for my $i (COL_FS..COL_SIZE) {
+	$maxfield[$i] = length((sort {length $$b[$i] <=> length $$a[$i]} @table)[0][$i]);
+}
+# reminder space for percetange bars
+$barfull = ($COLUMNS-($maxfield[COL_FS]+1+$maxfield[COL_MP]+1+3+$maxfield[COL_SIZE]+1));
+# largest disk
+$maxdisk = (sort {$$b[COL_TOTAL] <=> $$a[COL_TOTAL]} @table)[0][COL_TOTAL];
+
+
+
+for(@table) {
+	@row = @$_;
+	$ratio = $barratio = 1;
+	$freepatt = $patt{"free"};
+	$usedpatt = $patt{"used"};
+	if($mode{"relative"}) {
+		$ratio = sprintf "%0.4f", $row[COL_TOTAL]/$maxdisk;
+		if($mode{"barrelative"}) {
+			$barratio = $ratio;
+		}
+		# do not show free space if it isnt relative to other bars in relative mode
+		else { $freepatt = " " }
+	}
+	$used = int($barfull * $ratio * $row[COL_PERCENT] * 0.01);
+	$free = int($barfull * $barratio) - $used;
+	$pad = $barfull - int($barfull * $barratio);
+
+	$format = sprintf "%%-%ds %%-%ds [%%s%%s]%%%ds %%%ds\n", $maxfield[0], $maxfield[1], $pad, $maxfield[2];
+	printf $format, $row[COL_FS], $row[COL_MP], $usedpatt x $used, $freepatt x $free, "", $row[COL_SIZE];
+}
+

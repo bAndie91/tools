@@ -4,12 +4,14 @@ use Data::Dumper;
 use Getopt::Long;
 
 # defaults
-$divider = 1024;
+$divisor = 1024;
 $useNBH = 1;
 @suff = split/,/,"b,K,M,G,T,P";
 %mult = map { $_ => $n++ } @suff;
 %patt = ( used=>"=", free=>"·", );
 $show_total_size = 0;
+$Help = "$0 [--relative|-r | --barrelative|-br | --show-total-size|-t | --used=* | --free=. | --divisor=1024 | --si | --human|-h]\n";
+
 
 # commandline parameters
 GetOptions(
@@ -17,23 +19,23 @@ GetOptions(
 	"br|barrelative" => sub { $mode{"barrelative"} = $mode{"relative"} = 1 },
 	"used=s" => \$patt{"used"},
 	"free=s" => \$patt{"free"},
-	"divider=i" => \$divider,
-	"si" => sub { $divider = 1000; },
+	"divisor=i" => \$divisor,
+	"si" => sub { $divisor = 1000; },
 	"h|human!" => \$useNBH,
 	"t|show-total-size" => \$show_total_size,
-	"help" => sub { print "$0 [--relative | --barrelative | --show-total-size | --used=* | --free=. | --divider=1024 | --si | --human]\n"; exit; },
-);
+	"help" => sub { print $Help; exit; },
+) or die $Help;
 
 
 *hsize = ($useNBH and eval "use Number::Bytes::Human 'format_bytes'; 1") ? 
 sub {
-	return format_bytes($_[0] * $divider ** $mult{$_[1]}, bs=>$divider);
+	return format_bytes($_[0] * $divisor ** $mult{$_[1]}, bs=>$divisor);
 } :
 sub {
 	$x=$_[0];
 	$suffi = $mult{$_[1]};
-	while($x >= $divider and $suffi < $#suff) { 
-		$x/=$divider;
+	while($x >= $divisor and $suffi < $#suff) { 
+		$x/=$divisor;
 		$suffi++;
 	}
 	return sprintf "%0.2f%s", $x, $suff[$suffi];

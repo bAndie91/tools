@@ -11,21 +11,46 @@ fi
 pattern=$1
 shift
 
-declare -a progress
-progress=()
-[ -t 1 -a -t 2 ] && progress=(-o \( -type d -fprintf /dev/stderr "\r[K%p ..." \))
-
 
 while [ -z "$maxdepth" -o "$depth" -le "${maxdepth:-0}" ]
 do
-	echo -e "\r[KDepth $depth" >&2
-	find "${@:-.}" -mindepth "$depth" -maxdepth "$depth" -xdev \( -iname "*$pattern*" -fprintf /dev/stderr "\r[K" -printf "%p\n" \) "${progress[@]}"
+	#echo -e "\r[KDepth $depth" >&2
+	find "${@:-.}" -mindepth "$depth" -maxdepth "$depth" -xdev \
+		\( -iname "*$pattern*" -printf "1 %p\n" \) -o \
+		\( -type d -fprintf /dev/fd/3 "3 %p\n" \) 2>/dev/null
 	cont=`find "${@:-.}" -mindepth "$depth" -maxdepth "$depth" -xdev -printf 1 -quit 2>/dev/null`
 	[ -z "$cont" ] && break
 	let depth++
+done 3> >(
+c=`tput cols`
+curpath=''
+while read -r fd path
+do
+	if [ $fd = 3 ]
+	then
+		curpath=$path
+	elif [ $fd = 1 ]
+	then
+		echo -ne "\r[K" >&2
+		echo "$path"
+		t=0
+	fi
+	
+	if [ $SECONDS -gt ${t:-0} ]
+	then
+		x=$curpath
+		if [ ${#x} -gt $[c-3] ]
+		then
+			x=…${x: -$[c-4]}/…
+		else
+			x=$x/…
+		fi
+		echo -ne "\r[K$x" >&2
+		t=$SECONDS
+	fi
 done
+) 1>&3
 
-[ -t 1 -a -t 2 ] && printf "\r[K"
 
 
 true <<EOF

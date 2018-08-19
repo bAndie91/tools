@@ -1,7 +1,8 @@
 #!/bin/bash
 
-base_url=https://api.entropay.com/api/v1
-curlopts=(-sS -H "Content-Type: application/json")
+base_url=https://api.entropay.com/api/v2
+curlopts=(-sS -H "Content-Type: application/json" -H "Accept-Encoding: gzip, deflate" --compressed -H "User-Agent: Mozilla/5.0 (X11; Linux i686) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.114 Safari/537.36 Vivaldi/1.9.818.50")
+
 showCardNumber=''
 showExpirationDate=''
 showCvvCode=''
@@ -55,7 +56,7 @@ test -n "$pass"
 # Login
 page1=$(
  curl "${curlopts[@]}" $base_url/authentication/jwt \
-    -d "{\"username\":\"$user\",\"password\":\"$pass\",\"referrerId\":null}"
+    -d "{\"username\":\"$user\",\"password\":\"$pass\",\"referrerId\":null,\"referrerType\":null}"
 )
 
 token=$(

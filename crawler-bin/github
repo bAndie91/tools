@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cached=
+cached=''
 unset ghUser
 unset ghRepo
 unset cachekey
@@ -9,9 +9,15 @@ unset jq
 usagetext="Options:
  -C   use cached data, no download
 Subcommands:
+ repos [USERNAME]
  issues
  stars
  stargazers"
+
+errorlevel()
+{
+	return $1
+}
 
 while getopts Ch opt
 do
@@ -26,6 +32,25 @@ done
 shift $(($OPTIND - 1))
 
 case "$1" in
+repos)
+	(
+		echo "name	is a fork	created	pushed	updated"
+		next_url="https://api.github.com/users/${2?USERNAME is missing.}/repos"
+		while [ -n "$next_url" ]
+		do
+			resp=`curl -sSi "$next_url"`
+			
+			next_url=`echo "$resp" |\
+				sed -ne '/^Link:/ s/.*\?<\(.\+\)>\s*;\s*rel=.next.*/\1/ p; /^\r*$/q' |\
+				head -n 1`
+			
+			echo "$resp" |\
+			sed -e '1,/^\r*$/d' |\
+			jq -r '.[] | [.name, (.fork|tostring), .created_at, .pushed_at, .updated_at] | join("\t")'
+		done
+	)|\
+	column -s $'\t' -n -t
+	;;
 issues)
 	apicall="issues?state=all"
 	cachekey=issues
@@ -72,16 +97,45 @@ done
 IFS=$oIFS
 gitdir=`git rev-parse --git-dir`
 
+
+static_fetch_api_and_save_cache()
+{
+	apiurl=https://api.github.com/repos/$ghUser/$ghRepo/$apicall
+	if [ ! "$cached" ] && curl -sS "$apiurl" | tee "$gitdir/$cachekey.json~"
+	then
+		if jq -r "$jq" < "$gitdir/$cachekey.json~" >/dev/null 2>&1
+		then
+			mv "$gitdir/$cachekey.json~" "$gitdir/$cachekey.json"
+		else
+			echo "Can not parse Githup API <$apiurl> response, using cache." 1>&2
+			cat "$gitdir/$cachekey.json"
+			errorlevel 2
+		fi
+	else
+		cat "$gitdir/$cachekey.json"
+		if [ ! "$cached" ]
+		then
+			errorlevel 3
+		fi
+	fi
+}
+
+static_parse_api_response()
+{
+	jq -r "$jq"
+}
+
 set +e
 set -o pipefail
 
-if [ ! "$cached" ] && curl -sS "https://api.github.com/repos/$ghUser/$ghRepo/$apicall" | tee "$gitdir/$cachekey.json~"
-then
-	mv "$gitdir/$cachekey.json~" "$gitdir/$cachekey.json"
-else
-	cat "$gitdir/$cachekey.json"
-	if [ ! "$cached" ]; then false; fi
-fi|\
-jq -r "$jq"
+static_fetch_api_and_save_cache | static_parse_api_response
 
-exit ${PIPESTATUS[0]}
+
+declare -A error=([fetch]=${PIPESTATUS[0]} [display]=${PIPESTATUS[1]})
+
+if [ ${error[fetch]} = 0 ]
+then
+	exit ${error[display]}
+else
+	exit ${error[fetch]}
+fi

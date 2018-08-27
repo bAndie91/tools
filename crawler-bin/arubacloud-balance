@@ -1,0 +1,50 @@
+#!/bin/bash
+# Depends: pup, jq, curl
+
+set -u
+Login=$1
+Password=$2
+
+
+login_url=https://ugyfel.arubacloud.hu/Login.aspx
+login_response=`curl -iSs "$login_url"`
+login_header=`echo "$login_response" | sed -e 's/\r//; /^\r\?$/q'`
+login_page=`echo "$login_response" | sed -e '1,/^\r\?$/d'`
+
+cookies=`echo "$login_header" | grep -Eo '^Set-Cookie:[^;]+' | cut -f2- -d: | tr "\n" ";"`
+
+declare -A fields
+IFS=$'\n'
+for field in `echo "$login_page" | pup "form#form1 input[type=hidden] json{}" | jq -r '.[] | [.name, .value] | join(" ")'`
+do
+	name=${field%% *}
+	value=${field#* }
+	fields[$name]=$value
+done
+IFS=$'\n\t\ '
+
+fields["ctl00_ContentPlaceHolder1_ctl00_tooltipUsername_ClientState"]=''
+fields["ctl00\$ContentPlaceHolder1\$ctl00\$txtUserName"]=$Login
+fields["ctl00\$ContentPlaceHolder1\$ctl00\$txtPassword"]=$Password
+fields["ctl00\$ContentPlaceHolder1\$ctl00\$btnLogIn"]="Bejelentkezés"
+
+post_data=''
+
+for name in "${!fields[@]}"
+do
+	value=${fields[$name]}
+	value=`echo -n "$value" | url_encode`
+	post_data="$post_data${post_data:+&}$name=$value"
+done
+set -u
+
+
+home_page=`curl -sS -L "$login_url" -H "Cookie: $cookies" -d "$post_data"`
+credit=`echo "$home_page" | pup '#ContentPlaceHolder1_ctl00_ucCredit_lblAmount text{}'`
+
+if [ -z "$credit" ]
+then
+	exit 1
+else
+	echo "$credit"
+fi

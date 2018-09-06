@@ -48,7 +48,7 @@
 	prev = checkout HEAD~1
 	next = ! "fn(){ git checkout $(git rev-list --all --children | grep ^$(git show -s --format=%H) | cut -f2 -d' ' -s); }; fn"
 	co = checkout
-	remote-track = ! "fn(){ git branch --set-upstream \"$1\" \"${2:-origin}/$1\"; }; fn"
+	remote-track = ! "fn(){ [ -n \"$1\" ] && b=$1 || b=$(git symbolic-ref --quiet --short HEAD); git branch --set-upstream \"$b\" \"${2:-origin}/$b\"; }; fn"
 	
 	search = ! "fn(){ git rev-list --all | GIT_PAGER='' xargs -L 32 git grep \"$@\" | less $LESS -F; }; fn"
 	search-commit = log -p --pickaxe-all -S

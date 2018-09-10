@@ -1,0 +1,85 @@
+#!/bin/bash
+
+# source up this script to setup new DISPLAY 
+# environent in the current session
+
+find_display()
+{
+	declare -A confirm_xdpy_pid
+	
+	local signal
+	for signal in INT QUIT TERM
+	do
+		trap "kill -SIG$signal -- \${!confirm_xdpy_pid[@]} 2>/dev/null" $signal
+	done
+	trap "kill -SIGINT -- \${!confirm_xdpy_pid[@]} 2>/dev/null" EXIT
+	
+	for dpy in `xdpys`
+	do
+		echo "Found Display - $dpy" >&2
+		DISPLAY=$dpy zenity --question --text="Is this the right Display?\n$dpy" </dev/null >/dev/null 2>&1 &
+		confirm_xdpy_pid[$!]=$dpy
+	done
+	unset dpy
+	
+	local check_pid
+	echo "Waiting for user to response ..." >&2
+	
+	while [ ${#confirm_xdpy_pid[@]} -gt 0 ]
+	do
+		for check_pid in "${!confirm_xdpy_pid[@]}" 
+		do
+			if ! kill -0 "$check_pid" 2>/dev/null
+			then
+				local dpy=${confirm_xdpy_pid[$check_pid]}
+				unset confirm_xdpy_pid[$check_pid]
+				
+				wait $check_pid
+				if [ $? = 0 ]
+				then
+					echo "$dpy"
+					break 2
+				fi
+			fi
+		done
+		# Ctrl-C is most likely got by sleep, if so, exit from the loop.
+		sleep 0.4 || break
+	done
+	unset check_pid
+	
+	kill -SIGINT -- ${!confirm_xdpy_pid[@]} 2>/dev/null
+	unset confirm_xdpy_pid
+}
+
+apply()
+{
+	if [ "$0" != "$BASH_SOURCE" ]
+	then
+		export $1=$2
+	else
+		echo export $1=$2
+	fi
+}
+
+
+dpy=`find_display`
+if [ -n "$dpy" ]
+then
+	echo "Setting DISPLAY to '$dpy'" >&2
+	apply DISPLAY "$dpy"
+	dbus=`DISPLAY="$dpy" xprop -root DBUS_SESSION_BUS_ADDRESS | cut -s -f2- -d= | cut -f2 -d'"'`
+	dbus=${dbus// /}
+	if [ -n "$dbus" ]
+	then
+		echo "Setting DBUS_SESSION_BUS_ADDRESS to '$dbus'" >&2
+		apply DBUS_SESSION_BUS_ADDRESS "$dbus"
+	fi
+	
+	if [ "$0" = "$BASH_SOURCE" -a -n "$1" ]
+	then
+		env DISPLAY="$dpy" ${dbus:+DBUS_SESSION_BUS_ADDRESS="$dbus"} "$@"
+	fi
+	
+	unset dbus
+fi
+unset dpy

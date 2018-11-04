@@ -1,0 +1,119 @@
+#!/usr/bin/env perl
+
+use utf8;
+use Getopt::Long;
+use Data::Dumper;
+use Encode qw/decode encode/;
+use constant { LOWER => 0, UPPER => 1, COMMON_SURROGATE => 0xd835, };
+binmode STDIN, ':utf8';
+binmode STDOUT, ':utf8';
+
+
+%Transformer = (
+	double => [0xdcf1, 0xdcf7],
+	script => [0xdc89, 0xdc8f],
+	code => [0xde29, 0xde2f],
+	fraktur => [0xdcbd, 0xdcc3],
+	bold => [0xdd8d, 0xdd93],
+	italic => [0xddc1, 0xddc7],
+	bold_italic => [0xddf5, 0xddfb],
+);
+
+%Appender = (
+	underline => ['̲', sub{ $_[0] !~ /[gjpqyQ,;_]/; }],
+	strikethrough => ['̶', sub{1;}] ,
+);
+
+
+sub surrogate_pair
+{
+	my $hi = shift;
+	my $lo = shift;
+	return 0x10000 + ($hi - 0xD800) * 0x400 + ($lo - 0xDC00);
+}
+
+sub is_applicable_transformer
+{
+	$_[0] =~ /[A-Za-z]/;
+}
+
+sub is_applicable
+{
+	$_[0] =~ /[[:print:]]/;
+}
+
+
+
+
+$trans_style = undef;
+@appenders = ();
+
+for my $style (@ARGV)
+{
+	if(exists $Transformer{$style})
+	{
+		if(defined $trans_style)
+		{
+			my $combined = join '_', sort split(/_/, $trans_style), $style;
+			
+			if(exists $Transformer{$combined})
+			{
+				$trans_style = $combined;
+			}
+			else
+			{
+				die "Combining styles $trans_style and $style is not supported.\n";
+			}
+		}
+		else
+		{
+			$trans_style = $style;
+		}
+	}
+	elsif(exists $Appender{$style})
+	{
+		push @appenders, $style;
+	}
+	else
+	{
+		die "Unknown style: $style\nStyles: ".(join ' ', grep {!/_/} keys %Transformer, keys %Appender)."\n";
+	}
+}
+
+
+
+
+while(<STDIN>)
+{
+	for my $char_in (split //)
+	{
+		my $char_out = $char_in;
+		
+		if(is_applicable($char_in))
+		{
+			if(defined $trans_style and is_applicable_transformer($char_in))
+			{
+				my $case = $char_in =~ /[a-z]/ ? LOWER : UPPER;
+				$char_out = chr surrogate_pair(COMMON_SURROGATE, $Transformer{$trans_style}->[$case] + ord $char_in);
+			}
+			for my $style (@appenders)
+			{
+				if($Appender{$style}->[1]->($char_in))
+				{
+					$char_out .= $Appender{$style}->[0];
+				}
+			}
+		}
+		
+		print $char_out;
+	}
+}
+
+
+
+
+# TODO
+# remove style
+# detach diacritics
+# numbers
+

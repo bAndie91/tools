@@ -1,0 +1,54 @@
+#!/bin/bash
+
+
+# compute width of each column
+
+column_width=()
+text=''
+while read -r line
+do
+	text=$text${text:+$'\n'}$line
+	IFS=$'\t'
+	cells=($line)
+	IFS=$'\n\t '
+
+	column=0
+	for cell in "${cells[@]}"
+	do
+		width=${#cell}
+		if [ -z "${column_width[$column]}" ] || [ $width -gt "${column_width[$column]}" ]
+		then
+			column_width[$column]=$width
+		fi
+		let column++
+	done
+done
+
+
+# compose the format string
+
+fmt=''
+segments=()
+for column in "${!column_width[@]}"
+do
+	fmt="$fmt|%${column_width[$column]}s"
+	segments+=('')
+done
+fmt="$fmt|"
+
+vborder=`printf -- "$fmt\n" "${segments[@]}" | tr "| " "+-"`
+
+
+
+# print the table
+
+while read -r line
+do
+	IFS=$'\t'
+	cells=($line)
+	IFS=$'\n\t '
+
+	echo "$vborder"
+	printf -- "$fmt\n" "${cells[@]}"
+done <<<"$text"
+echo "$vborder"

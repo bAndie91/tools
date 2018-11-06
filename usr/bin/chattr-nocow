@@ -1,0 +1,63 @@
+#!/bin/bash
+
+set -e
+set -u
+
+. /usr/lib/yazzy-utils/bash-utils
+
+
+is_cow()
+{
+	lsattr -d "$1" | cut -f1 -d' ' | grep -qv 'C'
+}
+
+set_cow()
+{
+	local onoff file tmpf expected_cow current_dir_cow
+	local sigs="ERR RETURN INT QUIT TERM"
+	
+	onoff=$1
+	file=$2
+	tmpf=$file.set-no-cow
+	dir=`dirname "$file"`
+	
+	[ $onoff = on ] && expected_cow=-C || expected_cow=+C
+	is_cow "$dir" && current_dir_cow=-C || current_dir_cow=+C
+	
+	chattr $expected_cow "$dir"
+	trap 'trap - $sigs; chattr $current_dir_cow "$dir"' $sigs
+	
+	cp -f --preserve=mode,ownership,timestamps,xattr --no-preserve=links "$file" "$tmpf"
+	mv -f "$tmpf" "$file"
+	return
+}
+
+is_in_use()
+{
+	lsof -Fp "$1" >/dev/null 2>&1
+}
+
+
+case "${0##*/}" in
+chattr-nocow)
+	cow=off
+	;;
+chattr-cow)
+	cow=on
+	;;
+*)
+	errx 38 "bad invocation"
+	;;
+esac
+
+for file in "$@"
+do
+	if is_in_use "$file"
+	then
+		errx 16 "$file: is in use"
+	else
+		set_cow $cow "$file"
+	fi
+done
+
+exit 0

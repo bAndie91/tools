@@ -24,8 +24,11 @@ set_cow()
 	[ $onoff = on ] && expected_cow=-C || expected_cow=+C
 	is_cow "$dir" && current_dir_cow=-C || current_dir_cow=+C
 	
-	chattr $expected_cow "$dir"
-	trap 'trap - $sigs; chattr $current_dir_cow "$dir"' $sigs
+	if [ $expected_cow != $current_dir_cow ]
+	then
+		chattr $expected_cow "$dir"
+		trap 'trap - $sigs; chattr $current_dir_cow "$dir"' $sigs
+	fi
 	
 	cp -f --preserve=mode,ownership,timestamps,xattr --no-preserve=links "$file" "$tmpf"
 	mv -f "$tmpf" "$file"
@@ -41,9 +44,11 @@ is_in_use()
 case "${0##*/}" in
 chattr-nocow)
 	cow=off
+	expected_cow=+C
 	;;
 chattr-cow)
 	cow=on
+	expected_cow=-C
 	;;
 *)
 	errx 38 "bad invocation"
@@ -52,11 +57,16 @@ esac
 
 for file in "$@"
 do
-	if is_in_use "$file"
+	if [ -d "$file" ]
 	then
-		errx 16 "$file: is in use"
+		chattr $expected_cow "$file"
 	else
-		set_cow $cow "$file"
+		if is_in_use "$file"
+		then
+			errx 16 "$file: is in use"
+		else
+			set_cow $cow "$file"
+		fi
 	fi
 done
 

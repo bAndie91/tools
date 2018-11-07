@@ -1,0 +1,15 @@
+#!/usr/bin/env perl
+
+use warnings;
+
+open $src, '<:raw', $ARGV[0] or die "$!\n";
+open $dst, '>>:raw', $ARGV[1] or die "$!\n";
+
+seek($src, tell $dst, 0) or die "$!\n";
+
+LOOP:
+$bytes = read $src, $buf, 4096;
+defined $bytes or die "$!\n";
+print {$dst} $buf or die "$!\n";
+$bytes > 0 or exit 0;
+goto LOOP;

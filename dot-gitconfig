@@ -33,7 +33,7 @@
 
 [alias]
 	graph = log --graph --format=format:'%C(magenta)%h%C(reset) %C(bold yellow)%an%C(reset) %C(bold green)%ar%C(reset)%C(red)%d%C(reset) <%ae> %C(cyan)%ai%C(reset)%n%w(0,8,8)%s%n' --all
-	graph-branches = log --simplify-by-decoration --graph --format=format:'%C(magenta)%h%C(reset)%C(red)%d%n%C(reset)%C(bold yellow)%an%C(reset) <%ae>%C(reset) %C(bold green)%ar %C(reset)%C(cyan)%ai%n' --all
+	graph-refs = log --simplify-by-decoration --graph --format=format:'%C(magenta)%h%C(reset)%C(red)%d%n%C(reset)%C(bold yellow)%an%C(reset) <%ae>%C(reset) %C(bold green)%ar %C(reset)%C(cyan)%ai%n' --all
 	
 	hash = show -s --format=%H
 	r = remote -v
@@ -53,7 +53,7 @@
 	search = ! "fn(){ git rev-list --all | GIT_PAGER='' xargs -L 32 git grep \"$@\" | less $LESS -F; }; fn"
 	search-commit = log -p --pickaxe-all -S
 	grep-commit = log -p --pickaxe-all -G
-	history = log --follow --patch --
+	history = ! "cd \"$GIT_PREFIX\" && bash -c 'opts=(); while [ \"${1:0:1}\" = - ]; do opts+=(\"$1\"); shift; done; git log --follow --patch \"${opts[@]}\" -- \"$@\"' --"
 	
 	ls = ls-files --cached
 	last-modified = log -1 --format=%ad --
@@ -91,8 +91,9 @@
 	discard-all = checkout HEAD -- '/*'
 	patch = cherry-pick --no-commit --edit -x
 	
-	save = stash save --no-keep-index --include-untracked
-	stash-as = stash save --no-keep-index --include-untracked
+	preserve = stash save --no-keep-index --include-untracked
+	save = stash save --no-keep-index
+	save-as = stash save --no-keep-index
 	stash-get = ! "fn(){ ref=$(git stash list | grep -m1 \"$*\" | cut -f1 -d:); if [ -n \"$ref\" ]; then git stash show -p \"$ref\"; git stash apply \"$ref\"; else echo \"Can not find such a stashed commit with substring '$*'.\" >&2; git stash list >&2; fi; }; fn"
 	stash-list = stash list
 	slist = stash list

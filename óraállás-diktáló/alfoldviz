@@ -1,0 +1,50 @@
+#!/bin/bash
+
+set -e
+
+trap 'help; exit 255' ERR
+
+help()
+{
+	echo "Használat: $0 [felhasználási_hely_azonosító] [mérőóra_gyári_száma] [email] [óraállás]"
+}
+
+test $# = 4
+
+fogyhely=$1
+merogysz=$2
+email=$3
+meroallas=$4
+
+url=https://www.alfoldviz.hu/ugyfelszolgalat/meroallas-bejelentes
+
+cookies=`curl -sS "$url" -c /dev/fd/3 3>&1 1>/dev/null`
+
+curlargs=("$url" \
+	-d fogyhely="$fogyhely" \
+	-d merogysz="$merogysz" \
+	-d email="$email" \
+	-d meroallas="$meroallas" \
+	-d meterread_submit="Adatok mentése")
+
+response=`curl -sS -i -b /dev/fd/3 3<<<"$cookies" -L "${curlargs[@]}"`
+
+if echo "$response" | grep -o "Az adatok feldolgozását megkezdtük."
+then
+	exit 0
+else
+	echo "Az Alföldvíz nem nyugtázta a bejelentést." >&2
+	tmp=`tempfile -s .txt`
+	{
+		echo == Cookies
+		echo "$cookies"
+		echo
+		echo == Curl args
+		echo "${curlargs[@]}"
+		echo
+		echo == Response
+		echo "$response"
+	}>"$tmp"
+	echo "Diagnosztika mentve ebbe a fájlba: $tmp" >&2
+	exit 1
+fi

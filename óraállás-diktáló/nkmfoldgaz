@@ -1,0 +1,3 @@
+#!/bin/bash
+
+exec phantomjs --ssl-protocol=any --ignore-ssl-errors=true --web-security=false "$(readlink -f "$(dirname "$0")")/nkmfoldgaz.js" "$@"

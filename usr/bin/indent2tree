@@ -1,0 +1,81 @@
+#!/usr/bin/env perl
+
+use Data::Dumper;
+
+
+$spaces_prev = 0;
+$level = 0;
+%level_spaces = (0=>0);
+$Tree = { subtree=>[], };
+$ForkPoint = $Tree;
+
+
+while(<STDIN>)
+{
+	s/^(\s*)//;
+	$spaces = length $1;
+	s/\r?\n//;
+	$data = $_;
+	while(/\\$/)
+	{
+		$data =~ s/\\$/\n/;
+		$_ = <STDIN>;
+		s/^\s{$spaces}//;
+		s/\r?\n//;
+		$data .= $_;
+	}
+	
+	if($spaces > $spaces_prev)
+	{
+		$level++;
+		$level_spaces{$level} = $spaces;
+		$ForkPoint = $ForkPoint->{subtree}->[$#{$ForkPoint->{subtree}}];
+	}
+	elsif($spaces < $spaces_prev)
+	{
+		while($spaces < $level_spaces{$level})
+		{
+			$level--;
+			$ForkPoint = $ForkPoint->{parent};
+		}
+	}
+	
+	push $ForkPoint->{subtree}, {data=>$data, parent=>$ForkPoint, subtree=>[]};
+	#print Dumper $Tree;
+	
+	$spaces_prev = $spaces;
+}
+
+#print Dumper $Tree; exit;
+
+
+sub print_subtree
+{
+	my $subtree = shift;
+	my $level = shift;
+	my $sidebranches = shift;
+	my $pos = 0;
+	
+	for my $node (@$subtree)
+	{
+		my $last = $pos == $#$subtree;
+		my $linenumber = 0;
+		
+		for my $line (split /\n/, $node->{data})
+		{
+			printf "%s%s%s %s\n", 
+				$sidebranches,
+				$linenumber == 0 
+					? ($last ? '└' : '├').'──' 
+					: ($last ? ' ' : '│').'  ',
+				$line;
+			$linenumber++;
+		}
+		
+		print_subtree($node->{subtree}, $level+1, $sidebranches . ($last ? '    ' : '│   '));
+		$pos++;
+	}
+}
+
+print_subtree($Tree->{subtree}, 0, '');
+

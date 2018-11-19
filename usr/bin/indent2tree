@@ -59,20 +59,31 @@ sub print_subtree
 	for my $node (@$subtree)
 	{
 		my $last = $pos == $#$subtree;
-		my $linenumber = 0;
 		
-		for my $line (split /\n/, $node->{data})
+		if($level == 0)
 		{
-			printf "%s%s%s %s\n", 
-				$sidebranches,
-				$linenumber == 0 
-					? ($last ? '└' : '├').'──' 
-					: ($last ? ' ' : '│').'  ',
-				$line;
-			$linenumber++;
+			printf "%s\n", $node->{data};
+			
+			print_subtree($node->{subtree}, $level+1, '');
+		}
+		else
+		{
+			my $linenumber = 0;
+			
+			for my $line (split /\n/, $node->{data})
+			{
+				printf "%s%s %s\n",
+					$sidebranches,
+					$linenumber == 0
+						? ($last ? '└' : '├').'──'
+						: ($last ? ' ' : '│').'  ',
+					$line;
+				$linenumber++;
+			}
+			
+			print_subtree($node->{subtree}, $level+1, $sidebranches . ($last ? '    ' : '│   '));
 		}
 		
-		print_subtree($node->{subtree}, $level+1, $sidebranches . ($last ? '    ' : '│   '));
 		$pos++;
 	}
 }

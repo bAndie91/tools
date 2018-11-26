@@ -19,12 +19,14 @@ PAM_IGNORE=25
 lastreboot=`lastcsv -n 1 reboot | awk -F';' '$7=="reboot"{print $5}'`
 lastlogin=`lastcsv -n 1 "$PAM_USER" | awk -F';' '$1=="'"$PAM_USER"'"{print $5}'`
 
-if expr "$*" : '.*\<force\>' >/dev/null || [ -z "$lastlogin" -o "$lastlogin" -le "$lastreboot" ] 2>/dev/null
+if expr "$*" : '.*\<force\>' >/dev/null || [ -z "$lastlogin" ] || [ "$lastlogin" -le "$lastreboot" ] 2>/dev/null
 then
-	tput bold >&2
-	tput setaf 3 >&2
-	echo "First login since last reboot: $(date -d @"$lastreboot")" >&2
-	tput sgr0 >&2
+	(
+		tput bold
+		tput setaf 3
+		echo "First login since last reboot: $(date -d @"$lastreboot")"
+		tput sgr0
+	) 2>/dev/null
 fi
 
 exit $PAM_SUCCESS

@@ -13,7 +13,18 @@ set -u
 
 cardnum10=$1
 telecode=$2
-portalId=
+portalId=''
+
+if [ ${#cardnum10} != 10 ]
+then
+	echo "A 10-jegyű bankkátya szám kell." >&2
+	exit 1
+fi
+if [ ${#telecode} != 3 ]
+then
+	echo "A 3-jegyű telekód szám kell (ami kezdetben a számlaszám utolsó 3 számjegye)." >&2
+	exit 1
+fi
 
 curl https://www.otpbankdirekt.hu/homebank/do/bankkartyaEgyenlegLekerdezes \
  -sS \

@@ -188,6 +188,7 @@ page.open(url_form, function(status)
 			}
 		];
 
+		timeout = 500;
 		worker = function()
 		{
 			if(!loadInProgress)
@@ -240,8 +241,8 @@ page.open(url_form, function(status)
 				}
 			}
 			
-			setTimeout(worker, 200);
+			setTimeout(worker, timeout);
 		}		
-		setTimeout(worker, 200);
+		setTimeout(worker, timeout);
 	}
 });

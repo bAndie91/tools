@@ -1,3 +1,58 @@
 #!/bin/bash
 
-exec phantomjs --ssl-protocol=any --ignore-ssl-errors=true --web-security=false "$(readlink -f "$(dirname "$0")")/nkmfoldgaz.js" "$@"
+errx()
+{
+	echo "nkmfoldgaz: Parameter error: $*" >&2
+	exit 1
+}
+datum()
+{
+	date +%Y.%m.%d
+}
+
+
+declare -a opts
+declare -a prms
+
+while [ -n "$1" ]
+do
+	if [ "${1:0:1}" = - ]
+	then
+		opts+=("$1")
+	else
+		prms+=("$1")
+	fi
+	shift
+done
+
+set -- "${prms[@]}"
+
+if [ $# -lt 3 ]
+then
+	errx "Paraméterek: <felhasználó-azonosító> <mérőóra-gyári-szám> <mérőállás> [<email>] [<dátum>]"
+fi
+
+for p in 1 2 3
+do
+	[ "${!p}" -ge 0 ] 2>/dev/null || errx egész számot adjon meg $p. paraméternek
+done
+
+[ ${#1} = 10 ] || errx a felhasználó azonosító 10 jegyű
+[ ${#2} = 14 ] || errx a mérőóra gyári száma 14 jegyű
+[ ${#3} -le 4 ] || errx az óraállás szokatlanul magas, több mint 10 ezer m³: $3
+if [ -z "$4" ]
+then
+	set -- "$1" "$2" "$3" ugyfel@nkmfoldgaz.hu `datum`
+else
+	if [ -z "$5" ]
+	then
+		set -- "$1" "$2" "$3" "$4" `datum`
+	else
+		if ! expr "$5" : '[0-9][0-9][0-9][0-9]\.[0-9][0-9]\.[0-9][0-9]' >/dev/null
+		then
+			errx a dátum formátuma YYYY.mm.dd legyen
+		fi
+	fi
+fi
+
+exec phantomjs --ssl-protocol=any --ignore-ssl-errors=true --web-security=false "$(readlink -f "$(dirname "$0")")/nkmfoldgaz.js" "${opts[@]}" "$@"

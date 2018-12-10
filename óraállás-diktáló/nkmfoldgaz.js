@@ -1,4 +1,4 @@
-#!/usr/bin/env phantomjs --ssl-protocol=any --ignore-ssl-errors=true --web-security=false
+#!/usr/bin/env phantomjs2 --ssl-protocol=any --ignore-ssl-errors=true --web-security=false
 
 /*
 	EXIT CODE

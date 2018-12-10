@@ -55,4 +55,4 @@ else
 	fi
 fi
 
-exec phantomjs --ssl-protocol=any --ignore-ssl-errors=true --web-security=false "$(readlink -f "$(dirname "$0")")/nkmfoldgaz.js" "${opts[@]}" "$@"
+exec phantomjs2 --ssl-protocol=any --ignore-ssl-errors=true --web-security=false "$(readlink -f "$(dirname "$0")")/nkmfoldgaz.js" "${opts[@]}" "$@"

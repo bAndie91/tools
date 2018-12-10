@@ -52,6 +52,7 @@ var loadInProgress = false;
 var stepindex = 0;
 var page = new WebPage();
 page.settings.userAgent = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/59.0.3071.90 Safari/537.36 Vivaldi/1.91.867.38";
+var was_inject_performance = false;
 
 function log(level, msg)
 {
@@ -64,6 +65,19 @@ function log(level, msg)
 	}
 }
 
+function inject_performance()
+{
+	console.log("inject performance");
+	window.performance = {
+		timing: {
+			navigationStart: Date.now(),
+			requestStart: Date.now(),
+			responseEnd: Date.now(),
+		},
+	};
+	//performance = window.performance;
+}
+
 page.onConsoleMessage = function(msg)
 {
 	log(llMsg, ">>> " + msg);
@@ -73,6 +87,8 @@ page.onLoadStarted = function()
 {
 	loadInProgress = true;
 	log(llStatus, "load started [" + page.url + "]");
+	
+	page.evaluate(inject_performance);
 };
 
 page.onLoadFinished = function()
@@ -99,7 +115,20 @@ page.onResourceRequested = function(requestData, networkRequest)
 	}
 	log(llDebug, JSON.stringify(requestData));
 	*/
+	
+	if(requestData.url == "https://www.google-analytics.com/analytics.js")
+	{
+		networkRequest.abort();
+		return;
+	}
+
+	if((!was_inject_performance) || requestData.url.match(/fgmwebdiszpp.nkmfoldgaz.hu/))
+	{
+		page.evaluate(inject_performance);
+		was_inject_performance = true;
+	}
 };
+
 
 
 page.open(url_form, function(status)
@@ -111,14 +140,26 @@ page.open(url_form, function(status)
 	}
 	else
 	{
+		page.evaluate(function(){console.log(window.performance);});
+		
 		var steps = [
 			function(param)
 			{
 				/* Waiting iframe to load */
-				if(!document.getElementById('WD2E'))
+				/* Search for the 'Rögzít' button */
+				var button_span;
+				var spans = document.getElementsByTagName('span');
+				for(var x = 0; x < spans.length; x++)
+				{
+					if(spans[x].innerText.match(/^Rögzít/))
+					{
+						button_span = spans[x];
+					}
+				}
+				if(typeof button_span == 'undefined')
 				{
 					//console.log(document.querySelectorAll('html')[0].outerHTML);
-					console.log("Waiting for #WD2E element...");
+					console.log("Waiting for submit button...");
 					return 0;
 				}
 				return 1;
@@ -147,30 +188,58 @@ page.open(url_form, function(status)
 					field.value = str;
 				}
 				
-				typein(document.getElementById('WD17'), param.felhazon);
-				typein(document.getElementById('WD1C'), param.gyariszam);
-				typein(document.getElementById('WD21'), param.meroallas);
-				typein(document.getElementById('WD26'), param.email);
-				typein(document.getElementById('WD2B'), param.datum);
+				var starting_field_id;
+				/* Find first input field's Id */
+				var inputs = document.getElementsByTagName('input');
+				for(var x = 0; x < inputs.length; x++)
+				{
+					if(inputs[x].getAttribute('title') == "Felhasználó azonosító")
+					{
+						starting_field_id = inputs[x].getAttribute('id');
+					}
+				}
+				if(typeof starting_field_id == 'undefined')
+				{
+					console.log("input filed ID is not found");
+					return false;
+				}
+				var starting_field_num = eval("0x" + starting_field_id.substr(2,2));
+				function mkWDid(n)
+				{
+					var x = n.toString(16).toUpperCase();
+					if(x.length == 1) x = '' + '0' + x;
+					return 'WD' + x;
+				}
 				
-				return 1;
+				typein(document.getElementById(mkWDid(starting_field_num +  0)), param.felhazon);
+				typein(document.getElementById(mkWDid(starting_field_num +  5)), param.gyariszam);
+				typein(document.getElementById(mkWDid(starting_field_num + 10)), param.meroallas);
+				typein(document.getElementById(mkWDid(starting_field_num + 15)), param.email);
+				typein(document.getElementById(mkWDid(starting_field_num + 20)), param.datum);
+				
+				param['submit_button_id'] = mkWDid(starting_field_num + 23);
+				param['result_element_id'] = mkWDid(starting_field_num + 30);
+				return JSON.stringify({
+					jump: 1,
+					result: param,
+				});
 			},
 			function(param)
 			{
 				/* Submit form by simulating user clicking on button */
 				
-				var WD2E = document.getElementById('WD2E');
+				var submit_button = document.getElementById(param['submit_button_id']);
 				var ev = document.createEvent("MouseEvent");
 				ev.initMouseEvent("click", true /* bubble */, true /* cancelable */, window, null, 0, 0, 0, 0, /* coordinates */ false, false, false, false, /* modifier keys */ 0 /*left*/, null);
-				WD2E.dispatchEvent(ev);
+				submit_button.dispatchEvent(ev);
 				return 1;
 			},
 			function(param)
 			{
 				/* Wait response page to load */
-				if(!document.getElementById('WD35'))
+				if(!document.getElementById(param['result_element_id']))
 				{
-					console.log("Waiting for #WD35 element...");
+					console.log("Waiting for results...");
 					return 0;
 				}
 				return 1;
@@ -178,9 +247,9 @@ page.open(url_form, function(status)
 			function(param)
 			{
 				/* Echo response from server */
-				var WD35 = document.getElementById('WD35');
-				console.log(WD35.outerHTML);
-				param.result = WD35.getAttribute('lsdata') + "\n" + WD35.innerHTML + "\n";
+				var result_elem = document.getElementById(param['result_element_id']);
+				console.log(result_elem.outerHTML);
+				param.result = result_elem.getAttribute('lsdata') + "\n" + result_elem.innerHTML + "\n";
 				return JSON.stringify({
 					jump: 1,
 					result: param,
@@ -200,6 +269,16 @@ page.open(url_form, function(status)
 				/* Execute next step in navigator's context */
 				log(llDebug, "step " + stepindex);
 				var ret = page.evaluate(steps[stepindex], Glob);
+				
+				if(ret === false)
+				{
+					phantom.exit(1);
+				}
+				else if(ret === undefined || ret === null)
+				{
+					phantom.exit(4);
+				}
+				
 				if(typeof ret != "number")
 				{
 					ret = JSON.parse(ret);
@@ -214,16 +293,8 @@ page.open(url_form, function(status)
 					//stderr.write(JSON.stringify(Glob));
 					ret = ret.jump;
 				}
-				log(llDebug, "step " + stepindex + " returned: " + ret);
 				
-				if(ret === false)
-				{
-					phantom.exit(1);
-				}
-				else if(ret === undefined || ret === null)
-				{
-					phantom.exit(4);
-				}
+				log(llDebug, "step " + stepindex + " jump " + ret);
 				stepindex += ret;
 				
 				if(stepindex >= steps.length)

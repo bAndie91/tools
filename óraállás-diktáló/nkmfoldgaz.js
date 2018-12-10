@@ -67,7 +67,10 @@ function log(level, msg)
 
 page.onConsoleMessage = function(msg)
 {
-	log(llMsg, ">>> " + msg);
+	if(msg.match(/^\[DEBUG\]/))
+		log(llDebug, msg);
+	else
+		log(llMsg, ">>> " + msg);
 };
 
 page.onLoadStarted = function()
@@ -140,7 +143,7 @@ page.open(url_form, function(status)
 				
 				function typein(field_id, str)
 				{
-					console.log("Typing in '" + str + "' in field '#" + field_id + "'...");
+					console.log("[DEBUG] Typing in '" + str + "' in field '#" + field_id + "'...");
 					var field = document.getElementById(field_id);
 					field.focus();
 					for(var pos = 0; pos < str.length; pos++)
@@ -221,6 +224,7 @@ page.open(url_form, function(status)
 				var result_elem = document.getElementById(param['result_element_id']);
 				param.result_elem_html_outer = result_elem.outerHTML;
 				param.result_elem_html_inner = result_elem.innerHTML;
+				param.result_elem_text_inner = result_elem.innerText;
 				param.result = result_elem.getAttribute('lsdata');
 				return JSON.stringify({
 					jump: 1,
@@ -274,14 +278,15 @@ page.open(url_form, function(status)
 					log(llDebug, "complete");
 					if(Glob.result && Glob.result.match(/POSITIVE/))
 					{
-						stderr.write("OK Transaction passed.\n");
+						stderr.write("[OK] Transaction passed.\n");
 						stdout.write(Glob.result);
 						phantom.exit(0);
 					}
 					else
 					{
-						stderr.write("ERROR Transaction failed.\n");
+						stderr.write("[ERROR] Transaction failed.\n");
 						stderr.write(Glob.result_elem_html_outer + "\n");
+						stderr.write(Glob.result_elem_text_inner + "\n");
 						stderr.write(Glob.result + "\n");
 						phantom.exit(5);
 					}

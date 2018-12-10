@@ -138,9 +138,10 @@ page.open(url_form, function(status)
 			{
 				/* Filling in form fields by simulating typing on keyboard */
 				
-				function typein(field, str)
+				function typein(field_id, str)
 				{
-					console.log("Typing in '" + str + "'...");
+					console.log("Typing in '" + str + "' in field '#" + field_id + "'...");
+					var field = document.getElementById(field_id);
 					field.focus();
 					for(var pos = 0; pos < str.length; pos++)
 					{
@@ -181,11 +182,11 @@ page.open(url_form, function(status)
 					return 'WD' + x;
 				}
 				
-				typein(document.getElementById(mkWDid(starting_field_num +  0)), param.felhazon);
-				typein(document.getElementById(mkWDid(starting_field_num +  5)), param.gyariszam);
-				typein(document.getElementById(mkWDid(starting_field_num + 10)), param.meroallas);
-				typein(document.getElementById(mkWDid(starting_field_num + 15)), param.email);
-				typein(document.getElementById(mkWDid(starting_field_num + 20)), param.datum);
+				typein(mkWDid(starting_field_num +  0), param.felhazon);
+				typein(mkWDid(starting_field_num +  5), param.gyariszam);
+				typein(mkWDid(starting_field_num + 10), param.meroallas);
+				typein(mkWDid(starting_field_num + 15), param.email);
+				typein(mkWDid(starting_field_num + 20), param.datum);
 				
 				param['submit_button_id'] = mkWDid(starting_field_num + 23);
 				param['result_element_id'] = mkWDid(starting_field_num + 30);

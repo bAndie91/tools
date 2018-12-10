@@ -38,7 +38,7 @@ do
 done
 
 [ ${#1} = 10 ] || errx a felhasználó azonosító 10 jegyű
-[ ${#2} = 14 ] || errx a mérőóra gyári száma 14 jegyű
+[ ${#2} = 14 -o ${#2} = 4 ] || errx 14 jegyű mérőóra gyári szám kell, vagy annak az utolsó 4 jegye
 [ ${#3} -le 4 ] || errx az óraállás szokatlanul magas, több mint 10 ezer m³: $3
 if [ -z "$4" ]
 then

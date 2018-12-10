@@ -219,8 +219,9 @@ page.open(url_form, function(status)
 			{
 				/* Echo response from server */
 				var result_elem = document.getElementById(param['result_element_id']);
-				console.log(result_elem.outerHTML);
-				param.result = result_elem.getAttribute('lsdata') + "\n" + result_elem.innerHTML + "\n";
+				param.result_elem_html_outer = result_elem.outerHTML;
+				param.result_elem_html_inner = result_elem.innerHTML;
+				param.result = result_elem.getAttribute('lsdata');
 				return JSON.stringify({
 					jump: 1,
 					result: param,
@@ -271,13 +272,17 @@ page.open(url_form, function(status)
 				if(stepindex >= steps.length)
 				{
 					log(llDebug, "complete");
-					stdout.write(Glob.result);
-					if(Glob.result.match(/POSITIVE/))
+					if(Glob.result && Glob.result.match(/POSITIVE/))
 					{
+						stderr.write("OK Transaction passed.\n");
+						stdout.write(Glob.result);
 						phantom.exit(0);
 					}
 					else
 					{
+						stderr.write("ERROR Transaction failed.\n");
+						stderr.write(Glob.result_elem_html_outer + "\n");
+						stderr.write(Glob.result + "\n");
 						phantom.exit(5);
 					}
 				}

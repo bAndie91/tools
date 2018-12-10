@@ -15,26 +15,27 @@ var vlDebug = false;
 var vlStatus = false;
 var vlError = true;
 var vlMsg = true;
-var stderr = require("system").stderr;
-var stdout = require("system").stdout;
+var system = require('system');
+var stderr = system.stderr;
+var stdout = system.stdout;
 var Glob = {};
 
-for(var i=0; i<phantom.args.length; i++)
+for(var i=1; i<system.args.length; i++)
 {
-	if(phantom.args[i] == '--debug') vlDebug = true;
-	else if(phantom.args[i] == '--verbose') vlStatus = true;
-	else if(phantom.args[i].match(/^-/))
+	if(system.args[i] == '--debug') vlDebug = true;
+	else if(system.args[i] == '--verbose') vlStatus = true;
+	else if(system.args[i].match(/^-/))
 	{
-		stderr.write("Unknown option: "+phantom.args[i]+"\n");
+		stderr.write("Unknown option: "+system.args[i]+"\n");
 		phantom.exit(2);
 	}
 	else
 	{
-		Glob.felhazon = phantom.args[i];
-		Glob.gyariszam = phantom.args[i+1];
-		Glob.meroallas = phantom.args[i+2];
-		Glob.email = phantom.args[i+3];
-		Glob.datum = phantom.args[i+4];
+		Glob.felhazon = system.args[i];
+		Glob.gyariszam = system.args[i+1];
+		Glob.meroallas = system.args[i+2];
+		Glob.email = system.args[i+3];
+		Glob.datum = system.args[i+4];
 		i += 4;
 	}
 }

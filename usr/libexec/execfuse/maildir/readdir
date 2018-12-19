@@ -1,0 +1,61 @@
+#!/bin/bash
+
+list_root_dir()
+{
+	uid=`stat -c %u "$basedir"`
+	gid=`stat -c %g "$basedir"`
+	atime=`stat -c %X "$basedir"`
+	mtime=`stat -c %Y "$basedir"`
+	ctime=`stat -c %Z "$basedir"`
+	echo -ne "ino=1 mode=0700 nlink=2 uid=$uid gid=$gid rdev=0 size=0 blksize=512 blocks=0 atime=$atime mtime=$mtime ctime=$ctime by-subject\000"
+	echo -ne "ino=2 mode=0700 nlink=2 uid=$uid gid=$gid rdev=0 size=0 blksize=512 blocks=0 atime=$atime mtime=$mtime ctime=$ctime by-sender\000"
+}
+
+
+
+find "$2$1" -mindepth 1 -maxdepth 1 \
+	-printf 'ino=%i mode=%M nlink=%n uid=%U gid=%G rdev=0 size=%s blksize=512 blocks=%b atime=%A@ mtime=%T@ ctime=%C@ %f\0' |\
+basedir=$2 cwd=$1 perl -e '
+use Encode;
+$/ = chr 0;
+while(<>)
+{
+	s/\x00$//;
+	@attr = split / /;
+	$fname = $attr[12];
+	if($ENV{cwd} !~ m{/.getmail/})
+	{
+		$path = $ENV{basedir}.$ENV{cwd}."/".$fname;
+		if(-f $path)
+		{
+			if(open $fh, "<", $path)
+			{
+				my %hdr;
+				local $/ = "\n";
+				while(<$fh>)
+				{
+					s/[\r\n]//g;
+					last if /^$/;
+					if(($hname) = /^(From|Subject):\s*/i)
+					{
+						$hdr{$hname} = $'\'';
+						$pos = tell $fh;
+						$hdr{$hname} .= $_ while <$fh> and s/^(\s+.+)/$1/;
+						seek $fh, $pos, 0;
+					}
+					last if scalar keys %hdr == 2;
+				}
+				close $fh;
+				$name = join " █ ", 
+					map {s/^"(.+?)"/$1/; $_} 
+					map {s{/}{∕}g; $_}
+					map {s{\x00}{}g; $_}
+					map {encode "utf8", decode "MIME-Header", $_} 
+					grep {defined} $hdr{From}, $hdr{Subject};
+				$attr[12] = "$name [$fname]" if $name;
+			}
+		}
+	}
+	print join(" ", @attr) . "\0";
+}
+'

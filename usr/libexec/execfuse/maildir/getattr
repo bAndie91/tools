@@ -5,4 +5,5 @@
 fname=`virt2phy_filepath "$1"`
 
 exec find "$2$fname" -maxdepth 0 \
-	-printf 'ino=%i mode=%M nlink=%n uid=%U gid=%G rdev=0 size=%s blksize=512 blocks=%b atime=%A@ mtime=%T@ ctime=%C@ %f\n'
+	-printf 'ino=%i mode=%M nlink=%n uid=%U gid=%G rdev=0 size=%s blksize=512 blocks=%b atime=%A@ mtime=%T@ ctime=%C@' \
+	-quit

@@ -2,6 +2,7 @@
 
 list_root_dir()
 {
+	# DEADCODE
 	uid=`stat -c %u "$basedir"`
 	gid=`stat -c %g "$basedir"`
 	atime=`stat -c %X "$basedir"`
@@ -52,7 +53,7 @@ while(<>)
 					map {s{\x00}{}g; $_}
 					map {encode "utf8", decode "MIME-Header", $_} 
 					grep {defined} $hdr{From}, $hdr{Subject};
-				$attr[12] = "$name [$fname]" if $name;
+				$attr[12] = "$name [$fname].eml" if $name;
 			}
 		}
 	}

@@ -1,0 +1,28 @@
+#!/bin/bash
+
+errx()
+{
+	echo "nkmaram: Parameter error: $*" >&2
+	exit 1
+}
+
+declare -a opts
+declare -a prms
+
+while [ -n "$1" ]
+do
+	if [ "${1:0:1}" = - ]
+	then
+		opts+=("$1")
+	else
+		prms+=("$1")
+	fi
+	shift
+done
+
+if [ ${#prms[@]} -lt 3 ]
+then
+	errx "Paraméterek: <felhasználó-azonosító> <jelszó> <mérőállás-1> [<mérőállás-2> ...]"
+fi
+
+exec phantomjs2 --ssl-protocol=any --ignore-ssl-errors=true --web-security=false "$(readlink -f "$(dirname "$0")")/nkmaram.js" "${opts[@]}" "${prms[@]}"

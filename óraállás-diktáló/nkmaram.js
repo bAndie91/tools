@@ -11,9 +11,9 @@
 */
 
 //TODO factor out
-var llDebug = 1, llStatus = 2, llError = 3, llMsg = 4;
+var llDebug = 1, llVerbose = 2, llError = 3, llMsg = 4;
 var vlDebug = false;
-var vlStatus = false;
+var vlVerbose = false;
 var vlError = true;
 var vlMsg = true;
 var system = require('system');
@@ -24,7 +24,7 @@ var Glob = {};
 for(var i=1; i<system.args.length; i++)
 {
 	if(system.args[i] == '--debug') vlDebug = true;
-	else if(system.args[i] == '--verbose') vlStatus = true;
+	else if(system.args[i] == '--verbose') vlVerbose = true;
 	else if(system.args[i].match(/^-/))
 	{
 		stderr.write("Unknown option: "+system.args[i]+"\n");
@@ -32,23 +32,39 @@ for(var i=1; i<system.args.length; i++)
 	}
 	else
 	{
-		Glob.felhasznalo = system.args[i];
-		Glob.jelszo = system.args[i+1];
-		i += 2;
+		if(!Glob.felhasznalo)
+		{
+			Glob.felhasznalo = system.args[i];
+		}
+		else if(!Glob.jelszo)
+		{
+			Glob.jelszo = system.args[i];
+		}
+		else
+		{
+			if(system.args[i].match(/^[0-9]+$/))
+			{
+				if(typeof Glob.oraallas == "undefined") Glob.oraallas = [];
+				Glob.oraallas.push(system.args[i]);
+			}
+			else
+			{
+				stderr.write("Invalid óraállás: "+system.args[i]+"\n");
+				phantom.exit(2);
+			}
+		}
 	}
 }
 
-//TODO paramater handling
-//if(Glob.datum == undefined)
-//{
-//	stderr.write("Usage: nkmfoldgaz.js [--debug] [--verbose] <felhasználó-azonosító> <mérőóra-gyári-szám> <mérőállás> <email> <dátum>\n");
-//	phantom.exit(2);
-//}
+if(!Glob.oraallas)
+{
+	stderr.write("Usage: nkmaram.js [--debug] [--verbose] <felhasználó-azonosító> <jelszó> <mérőállás-1> [<mérőállás-2> ...]\n");
+	phantom.exit(2);
+}
 
 
 
-//var url_form = "https://www.nkmaram.hu/pages/wrapper.jsp?id=740&ebillCmd=login";
-var url_form = "https://www.nkmaram.hu/pages/wrapper.jsp?ebillCmd=login";
+var url_form = "https://www.nkmaram.hu/pages/wrapper.jsp?ebillCmd=login" /* ?id=740&ebillCmd=login */;
 Glob.url_history = "https://www.nkmaram.hu/pages/online/korabbiMeroAllOnlineUsz.jsf?id=1300460";
 Glob.url_report = "https://www.nkmaram.hu/meroallas/?id=1300461";
 var loadInProgress = false;
@@ -59,7 +75,7 @@ page.settings.userAgent = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.
 function log(level, msg)
 {
 	if(level == llDebug && vlDebug || 
-	   level == llStatus && vlStatus ||
+	   level == llVerbose && vlVerbose ||
 	   level == llError && vlError ||
 	   level == llMsg && vlMsg)
 	{
@@ -71,6 +87,8 @@ page.onConsoleMessage = function(msg)
 {
 	if(msg.match(/^\[DEBUG\]/))
 		log(llDebug, msg);
+	else if(msg.match(/^\[ERROR\]/))
+		log(llError, msg);
 	else
 		log(llMsg, ">>> " + msg);
 };
@@ -78,13 +96,13 @@ page.onConsoleMessage = function(msg)
 page.onLoadStarted = function()
 {
 	loadInProgress = true;
-	log(llStatus, "load started [" + page.url + "]");
+	log(llVerbose, "load started [" + page.url + "]");
 };
 
 page.onLoadFinished = function()
 {
 	loadInProgress = false;
-	log(llStatus, "load finished <" + page.evaluate(function(){return document.title;}) + "> [" + page.url + "]");
+	log(llVerbose, "load finished <" + page.evaluate(function(){return document.title;}) + "> [" + page.url + "]");
 };
 
 page.onError = function(msg, stack)
@@ -106,6 +124,15 @@ page.onResourceRequested = function(requestData, networkRequest)
 	log(llDebug, JSON.stringify(requestData));
 	*/
 };
+
+
+/* Define common functions used in webpage */
+Glob.clickFunc = '(function(elem)'+
+'{'+
+'	var ev = document.createEvent("MouseEvent");'+
+'	ev.initMouseEvent("click", true /* bubble */, true /* cancelable */, window, null, 0, 0, 0, 0, /* coordinates */ false, false, false, false, /* modifier keys */ 0 /*left*/, null);'+
+'	elem.dispatchEvent(ev);'+
+'})';
 
 
 page.open(url_form, function(status)
@@ -190,21 +217,103 @@ page.open(url_form, function(status)
 			function(param)
 			{
 				/* Wait for page to load */
-				var form = document.querySelector('form#meroTajForm');
-				if(!form)
+				var buttons = document.querySelectorAll('form#meroTajForm input.button');
+				if(!buttons)
 				{
 					console.log("Waiting for page "+location.href+" ...");
 					return 0;
 				}
+				for(var i = 0; i<buttons.length; i++)
+				{
+					console.log("[DEBUG] button \""+buttons[i].value+"\"");
+					if(buttons[i].value.match(/bejelent/))
+					{
+						/* Submit form to proceed (1) */
+						eval(param.clickFunc)(buttons[i]);
+						return 1;
+					}
+				}
+				return 0;
+			},
+			function(param)
+			{
+				/* Exit if we got an error page */
+				if(location.pathname.match(/meroHibalap/))
+				{
+					console.log(document.querySelector('form#meroHibalapForm').innerText);
+					return false;
+				}
+				/* Wait for page to load */
+				var buttons = document.querySelectorAll('form#meroTajRegForm input.button');
+				if(!buttons)
+				{
+					console.log("Waiting for page "+location.href+" ...");
+					return 0;
+				}
+				for(var i = 0; i<buttons.length; i++)
+				{
+					console.log("[DEBUG] button \""+buttons[i].value+"\"");
+					if(buttons[i].value.match(/folytat/))
+					{
+						/* Submit form to proceed (2) */
+						eval(param.clickFunc)(buttons[i]);
+						return 1;
+					}
+				}
+				return 0;
+			},
+			function(param)
+			{
+				var submit_btn = document.querySelector('form#meroallasBejelentes input.button');
+				if(!submit_btn)
+				{
+					console.log("Waiting for page "+location.href+" ...");
+					return 0;
+				}
+				
+				var inputs = document.querySelectorAll('form#meroallasBejelentes input.numberFormat');
+				for(var i = 0; i < inputs.length; i++)
+				{
+					console.log("Enter '"+param.oraallas[i]+"'");
+					inputs[i].value = param.oraallas[i];
+				}
+				
+				/* Sumbit Utility Usage Report */
+				eval(param.clickFunc)(submit_btn);
+				
 				return 1;
 			},
 			function(param)
 			{
-				// TODO submit form to proceed
-				return false;
+				var summary = document.querySelector('form#szamlaForm');
+				if(!summary)
+				{
+					console.log("Waiting for page "+location.href+" ...");
+					return 0;
+				}
+				console.log(summary.innerText);
+				
+				/* Accept Utility Bill */
+				var accept_btn = document.querySelector('input[name="szamlaForm:bOK"]');
+				eval(param.clickFunc)(accept_btn);
+				
+				return 1;
+			},
+			function(param)
+			{
+				/* Wait for page to load */
+				var readyForm = document.querySelector('form#readyForm');
+				if(!readyForm)
+				{
+					console.log("Waiting for page "+location.href+" ...");
+					return 0;
+				}
+				/* Display Service Provider's message*/
+				console.log(readyForm.innerText);
+				return 1;
 			}
 		];
-
+		
 		timeout = 500;
 		worker = function()
 		{
@@ -243,21 +352,8 @@ page.open(url_form, function(status)
 				
 				if(stepindex >= steps.length)
 				{
-					log(llDebug, "complete");
-					if(Glob.result && Glob.result.match(/POSITIVE/))
-					{
-						stderr.write("[OK] Transaction passed.\n");
-						stdout.write(Glob.result);
-						phantom.exit(0);
-					}
-					else
-					{
-						stderr.write("[ERROR] Transaction failed.\n");
-						stderr.write(Glob.result_elem_html_outer + "\n");
-						stderr.write(Glob.result_elem_text_inner + "\n");
-						stderr.write(Glob.result + "\n");
-						phantom.exit(5);
-					}
+					log(llDebug, "completed");
+					phantom.exit(0);
 				}
 			}
 			

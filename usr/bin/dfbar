@@ -26,6 +26,8 @@ GetOptions(
 	"help" => sub { print $Help; exit; },
 ) or die $Help;
 
+$dfdirs = join ' ', @ARGV;
+
 
 *hsize = ($useNBH and eval "use Number::Bytes::Human 'format_bytes'; 1") ? 
 sub {
@@ -43,10 +45,10 @@ sub {
 
 $COLUMNS = $ENV{"COLUMNS"} || join "", grep {/\d/} (split //, `tput cols`);
 if(-t 0) {
-	@lines = split /[\n\r]+/, `df -kPT`;
+	@lines = split /[\n\r]+/, `df -kPT $dfdirs`;
 }
 else {
-	print STDERR "Input 'df -kPT' lines.\n";
+	print STDERR "Enter 'df -kPT' lines...\n";
 	@lines = <>;
 }
 shift @lines;	# skip header

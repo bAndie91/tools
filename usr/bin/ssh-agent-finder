@@ -3,10 +3,10 @@
 # $ . ssh-agent-finder -Iva
 
 interactive=1
-havingkeys=1
-list_all=
-verbose=
-sourced=
+must_have_keys=1
+list_all_sockets=''
+verbose=''
+sourced=''
 
 . /usr/lib/yazzy-utils/bash-utils
 
@@ -29,10 +29,10 @@ parse_opts()
 		case "$opt" in
 		h)		echo "$Usage" >&2
 				return 1;;
-		I)		interactive=;;
-		k)		havingkeys=1;;
-		K)		havingkeys=;;
-		a)		list_all=1;;
+		I)		interactive='';;
+		k)		must_have_keys=1;;
+		K)		must_have_keys='';;
+		a)		list_all_sockets=1;;
 		v)		verbose=1;;
 		'?')	return 1;;
 		esac
@@ -40,6 +40,12 @@ parse_opts()
 	return 0
 }
 
+if [ $must_have_keys ]
+then
+	might_have_keys_or_not=''
+else
+	might_have_keys_or_not=1
+fi		
 
 
 
@@ -53,7 +59,7 @@ parse_opts "$@"
 code=$?
 if [ $code != 0 ]
 then
-	if [ "$sourced" ]
+	if [ $sourced ]
 	then
 		return $code
 	else
@@ -68,21 +74,29 @@ do
 	then
 		SSH_AUTH_SOCK=$file capture2 ssh-add -l
 		code=$?
-		if [ "$code" = 0 ]
+		if [ $code = 0 ]
 		then
+			live_socket=1
 			has_keys=1
 			use=1
-		else
-			has_keys=
-			if [ "$havingkeys" ]
+		elif [ $code = 1 ]
+		then
+			live_socket=1
+			has_keys=''
+			if [ $must_have_keys ]
 			then
-				use=
+				use=''
 			else
 				use=1
 			fi
+		else
+			# code == 2: non-functioning socket
+			live_socket=0
+			has_keys=''
+			use=''
 		fi
 		
-		if [ \( \( "$havingkeys" = "" -o "$has_keys" \) -a \( "$interactive" -o "$verbose" \) \) -o "$list_all" ]
+		if [[ ( ( $might_have_keys_or_not || $has_keys ) && ( $interactive || $verbose ) ) || $list_all_sockets ]]
 		then
 			echo =============
 			if [ "$SSH_AUTH_SOCK" = "$file" ]
@@ -94,25 +108,21 @@ do
 			[ -n "$capture2_stderr" ] && echo "$capture2_stderr" >&2
 		fi
 		
-		if [ \( "$havingkeys" = "" -o "$has_keys" \) -o "$list_all" ]
+		if [[ $live_socket && ( ( $might_have_keys_or_not || $has_keys ) || $list_all_sockets ) ]]
 		then
-			if [ "$interactive" ]
+			if [ $interactive ]
 			then
-				use=
-				[ "$havingkeys" = "" -o "$has_keys" ] && default=Y || default=N
+				use=''
+				[[ $might_have_keys_or_not || $has_keys ]] && default=Y || default=N
 				read -e -p "Use this socket? [$default] "
-				if [ -z "$REPLY" ]
-				then
-					[ "$code" = 0 ] && use=1
-				else
-					REPLY=${REPLY^^}
-					REPLY=${REPLY:0:1}
-					[ "$REPLY" = Y ] && use=1
-				fi
+				[ -n "$REPLY" ] || REPLY=$default
+				REPLY=${REPLY^^}
+				REPLY=${REPLY:0:1}
+				[ "$REPLY" = Y ] && use=1
 			fi
-			if [ "$use" ]
+			if [ $use ]
 			then
-				if [ "$sourced" ]
+				if [ $sourced ]
 				then
 					export SSH_AUTH_SOCK=$file
 					return 0

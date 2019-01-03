@@ -2,7 +2,20 @@
 
 pipe()
 {
-	local pid1 pid2 myin myout lnk0 lnk1 wtr rdr
+	# SYNOPSIS
+	#   mimic pipe(2) syscall
+	# INVOCATION
+	#   pipe <variable_name> <variable_name>
+	# EXAMPLE
+	#   pipe read_fd write_fd
+	# DESCRIPTION
+	#   create anonymous pipe
+	#   reader end file descriptor stored in $read_fd
+	#   writer end file descriptor stored in $write_fd
+	
+	local pid1 pid2 myin myout lnk0 lnk1
+	[ "$1" = rdr ] || local rdr
+	[ "$2" = wtr ] || local wtr
 	
 	myin=`readlink /proc/self/fd/0`
 	myout=`readlink /proc/self/fd/1`
@@ -32,15 +45,43 @@ pipe()
 
 close()
 {
+	# SYNOPSIS
+	#   mimic close(2) syscall
+	# INVOCATION
+	#   close <fd> [fd_2 [fd_3 [...]]]
+	# EXAMPLE
+	#   close 10
+	# DESCRIPTION
+	#   closes file descriptors given in arguments
+	
 	local fd
 	for fd in "$@"
 	do
-		eval "exec $fd>&-"
+		#eval "exec $fd>&-"
+		exec {fd}>&-
 	done
 }
 
 capture2()
 {
+	# SYNOPSIS
+	#   store a command's stdout and stderr in separated variables
+	#   without running it twice
+	# INVOCATION
+	#   capture2 <command> [arguments]
+	# EXAMPLE
+	#   capture2 ls -lRA /etc
+	# DESCRIPTION
+	#   use standard bash process substitution to get stdout,
+	#   save it to $capture2_stdout
+	#   use pipe() to get stderr, save it to $capture2_stderr
+	# RETURN VALUE
+	#   command's exit status
+	# VARIABLES
+	#   using the following shell global variables
+	#   - capture2_stdout
+	#   - capture2_stderr
+	
 	local x r w
 	pipe r w
 	capture2_stdout=$("$@" 2>&$w)
@@ -61,13 +102,22 @@ is_integer()
 	[ "$1" -ge 0 -o "$1" -lt 0 ] 2>/dev/null
 }
 
+is_alpha()
+{
+	expr "$1" : '[a-zA-Z]\+$' >/dev/null 2>&1
+}
+
 warnx()
 {
+	# SYNOPSIS
+	#   mimic warnx(3)
 	echo "$0: $*" >&2
 }
 
 errx()
 {
+	# SYNOPSIS
+	#   mimic errx(3)
 	errno=$1
 	shift
 	warnx "$@"
@@ -79,6 +129,11 @@ bash_isset()
 	local sets=${2:-$-}
 	sets=${sets//[!$1]/}
 	echo ${sets:-_}
+}
+
+bash_defined()
+{
+	[ "${!1+x}" = x ]
 }
 
 bash_trapbody()
@@ -131,4 +186,36 @@ untry()
 	[ "${trydata:1:1}" = _ ] && set +o errtrace || set -o errtrace
 	trap "${trydata:2}" ERR
 	return 0
+}
+
+template()
+{
+	cat "$@" |\
+	{
+		local line tvar var replace sedexpr
+		while read line
+		do
+			sedexpr=""
+			grep -Eo '%[a-zA-Z0-9\./_-]+%' <<<"$line" |\
+			sort -u |\
+			{
+				while read tvar
+				do
+					# strip percent marks
+					var=${tvar:1:$[${#tvar}-2]}
+					# resolve bash variable
+					replace=${!var}
+					# compose sed expression like: s@%user\.name%@joe@g;s@%user\.email%@joe\@local@g;
+					sedexpr="${sedexpr}s@${tvar//\./\\.}@${replace//@/\@}@g;"
+				done
+				# action
+				sed -e "$sedexpr" <<<"$line"
+			}
+		done
+	}
+}
+
+errorlevel()
+{
+	return $1
 }

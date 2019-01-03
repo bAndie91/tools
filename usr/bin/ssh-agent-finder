@@ -2,13 +2,33 @@
 # Usage Example:
 # $ . ssh-agent-finder -Iva
 
-interactive=1
-havingkeys=1
-list_all=
-verbose=
-sourced=
+interactive=Y
+havingkeys=Y
+list_all=N
+verbose=N
+sourced=N
 
 . /usr/lib/yazzy-utils/bash-utils
+
+«()
+{
+	declare -a args
+	for arg in "$@"
+	do
+		if is_alpha "${arg:0:1}" && bash_defined "$arg"; then arg=${!arg}; fi
+		if [ "$arg" = N ]; then arg=''; fi
+		
+		if [ "$arg" = » ]; then continue
+		elif [ "$arg" = [ ]; then arg='('
+		elif [ "$arg" = ] ]; then arg=')'
+		elif [ "$arg" = AND ]; then arg='-a'
+		elif [ "$arg" = OR ]; then arg='-o'
+		fi
+		
+		args+=("$arg")
+	done
+	[ "${args[@]}" ]
+}
 
 parse_opts()
 {
@@ -19,7 +39,7 @@ parse_opts()
  -K   Use socket not necessary having keys
  -a   List all sockets
  -v   Verbose"
- 	if [ ."$1" = .--help ]
+ 	if [ "$1" = --help ]
  	then
  		echo "$Usage" >&2
  		return 1
@@ -29,11 +49,11 @@ parse_opts()
 		case "$opt" in
 		h)		echo "$Usage" >&2
 				return 1;;
-		I)		interactive=;;
-		k)		havingkeys=1;;
-		K)		havingkeys=;;
-		a)		list_all=1;;
-		v)		verbose=1;;
+		I)		interactive=N;;
+		k)		havingkeys=Y;;
+		K)		havingkeys=N;;
+		a)		list_all=Y;;
+		v)		verbose=Y;;
 		'?')	return 1;;
 		esac
 	done
@@ -45,7 +65,7 @@ parse_opts()
 
 if [ "$0" != "$BASH_SOURCE" ]
 then
-	sourced=1
+	sourced=Y
 fi
 
 
@@ -53,7 +73,7 @@ parse_opts "$@"
 code=$?
 if [ $code != 0 ]
 then
-	if [ "$sourced" ]
+	if « sourced »
 	then
 		return $code
 	else
@@ -68,21 +88,26 @@ do
 	then
 		SSH_AUTH_SOCK=$file capture2 ssh-add -l
 		code=$?
-		if [ "$code" = 0 ]
+		if [ $code = 0 ]
 		then
-			has_keys=1
-			use=1
-		else
-			has_keys=
-			if [ "$havingkeys" ]
+			has_keys=Y
+			use=Y
+		elif [ $code = 1 ]
+		then
+			has_keys=N
+			if « havingkeys »
 			then
-				use=
+				use=N
 			else
-				use=1
+				use=Y
 			fi
+		else
+			# code == 2: non-functioning socket
+			has_keys=N
+			use=N
 		fi
 		
-		if [ \( \( "$havingkeys" = "" -o "$has_keys" \) -a \( "$interactive" -o "$verbose" \) \) -o "$list_all" ]
+		if « [ [ ! havingkeys OR has_keys ] AND [ interactive OR verbose ] ] OR list_all »
 		then
 			echo =============
 			if [ "$SSH_AUTH_SOCK" = "$file" ]
@@ -94,25 +119,25 @@ do
 			[ -n "$capture2_stderr" ] && echo "$capture2_stderr" >&2
 		fi
 		
-		if [ \( "$havingkeys" = "" -o "$has_keys" \) -o "$list_all" ]
+		if « [ ! havingkeys OR has_keys ] OR list_all »
 		then
-			if [ "$interactive" ]
+			if « interactive »
 			then
-				use=
-				[ "$havingkeys" = "" -o "$has_keys" ] && default=Y || default=N
+				use=N
+				« ! havingkeys OR has_keys » && default=Y || default=N
 				read -e -p "Use this socket? [$default] "
 				if [ -z "$REPLY" ]
 				then
-					[ "$code" = 0 ] && use=1
+					[ $code = 0 ] && use=Y
 				else
 					REPLY=${REPLY^^}
 					REPLY=${REPLY:0:1}
-					[ "$REPLY" = Y ] && use=1
+					[ "$REPLY" = Y ] && use=Y
 				fi
 			fi
-			if [ "$use" ]
+			if « use »
 			then
-				if [ "$sourced" ]
+				if « sourced »
 				then
 					export SSH_AUTH_SOCK=$file
 					return 0

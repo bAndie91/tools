@@ -158,7 +158,7 @@ pam_return(PAM_USER_UNKNOWN) if not defined $home;
 open my $fh, '<', $configfile;
 while(<$fh>)
 {
-	next if /^\s*#/;
+	next if /^\s*(#|$)/;
 	if(/^\s*service\s*map\s*(\S+)\s+(\S+)\s*$/)
 	{
 		if($pam_service eq $1)

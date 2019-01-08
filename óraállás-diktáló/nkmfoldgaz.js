@@ -213,7 +213,7 @@ page.open(url_form, function(status)
 				/* Wait response page to load */
 				if(!document.getElementById(param['result_element_id']))
 				{
-					console.log("Waiting for results...");
+					console.log("Waiting for results..."+param['result_element_id']);
 					return 0;
 				}
 				return 1;
@@ -221,7 +221,11 @@ page.open(url_form, function(status)
 			function(param)
 			{
 				/* Echo response from server */
-				var result_elem = document.getElementById(param['result_element_id']);
+				var result_elem = document.getElementById(param['result_element_id'])
+				/* the WD element (usually #WD37 or #WD38) we calculated is not always the element which holds lsdata,
+				   so we look for the first element actually having lsdata with result_element_id */
+				if(!result_elem.getAttribute('lsdata'))
+					result_elem = document.querySelector('#'+param['result_element_id']+' [lsdata]');
 				param.result_elem_html_outer = result_elem.outerHTML;
 				param.result_elem_html_inner = result_elem.innerHTML;
 				param.result_elem_text_inner = result_elem.innerText;
@@ -279,7 +283,7 @@ page.open(url_form, function(status)
 					if(Glob.result && Glob.result.match(/POSITIVE/))
 					{
 						stderr.write("[OK] Transaction passed.\n");
-						stdout.write(Glob.result);
+						stdout.write(Glob.result + "\n");
 						phantom.exit(0);
 					}
 					else

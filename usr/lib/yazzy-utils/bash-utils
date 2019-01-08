@@ -71,6 +71,8 @@ capture2()
 	#   capture2 <command> [arguments]
 	# EXAMPLE
 	#   capture2 ls -lRA /etc
+	#   echo output was "'$capture2_stdout'"
+	#   echo error was "'$capture2_stderr'"
 	# DESCRIPTION
 	#   use standard bash process substitution to get stdout,
 	#   save it to $capture2_stdout
@@ -81,6 +83,8 @@ capture2()
 	#   using the following shell global variables
 	#   - capture2_stdout
 	#   - capture2_stderr
+	# CAVEAT
+	#   maybe does not work on large output, depend on fifo buffer size
 	
 	local x r w
 	pipe r w

@@ -35,11 +35,11 @@ set -- "${myargv[@]}"
 while [ -n "$1" ]
 do
 	case "$1" in
-	-[bcdefghLkpsSu])
+	-[bcdefghLkpsSuzn])
 		testargv+=("$1" "$2")
 		shift
 		;;
-	'!'|-[ao])
+	'!'|-[ao]|=|'!'=)
 		testargv+=("$1")
 		;;
 	--on|--off)
@@ -53,9 +53,12 @@ do
 		fi
 		shift
 		;;
-	*)
+	-*)
 		echo "pam_shelltest: Invalid parameter: $1" >&2
 		exit $PAM_SYSTEM_ERR
+		;;
+	*)
+		testargv+=("$1")
 		;;
 	esac
 	shift

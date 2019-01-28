@@ -40,8 +40,8 @@ is_writable()
 {
 	if [ "$activewritetest" = yes ]
 	then
-		local testfile=
-		local werr=
+		local testfile=''
+		local werr=''
 		while [ -z "$testfile" -o -e "$testfile" ]
 		do
 			testfile=$1/takeown-writetest.$RANDOM
@@ -72,6 +72,10 @@ strict()
 
 no_strict()
 {
+	if [ $silent_strictness_check != yes ]
+	then
+		warnx "Can not clone file's $1: $2"
+	fi
 	[ "${strict[$1]}" != yes ]
 }
 
@@ -129,11 +133,11 @@ cpy_attr()
 {
 	if [ "$dochgrp" = yes ]
 	then
-		run verbose chgrp --quiet --reference="$1" --no-dereference "$2" || no_strict group
+		run verbose chgrp --quiet --reference="$1" --no-dereference "$2" || no_strict group "$1"
 	fi
-	run verbose chmod --quiet --reference="$1" "$2" || no_strict mode
-	getfacl --skip-base "$1" | subs_file_cmnt "$2" | run setfacl --restore=- || no_strict acl
-	getfattr --no-dereference --physical --dump "$1" | subs_file_cmnt "$2" | run setfattr --restore=- || no_strict xattr
+	run verbose chmod --quiet --reference="$1" "$2" || no_strict mode "$1"
+	getfacl --skip-base "$1" | subs_file_cmnt "$2" | run setfacl --restore=- || no_strict acl "$1"
+	getfattr --no-dereference --physical --dump "$1" | subs_file_cmnt "$2" | run setfattr --restore=- || no_strict xattr "$1"
 }
 
 takeown()
@@ -205,7 +209,7 @@ takeown_file()
 {
 	try --except "cleanup file"
 		run touch --reference="$file" "$copy"
-		cpy_attr "$file" "$copy"
+		silent_strictness_check=yes cpy_attr "$file" "$copy"
 		run verbose cp --no-dereference --preserve=all --force "$file" "$copy"
 		cpy_attr "$file" "$copy"
 		run verbose mv --force "$copy" "$file"
@@ -249,15 +253,16 @@ shopt -s dotglob
 shopt -s nullglob
 
 PROGNAME=takeown
-verbose=
-debug=
-dryrun=
-recursive=
+verbose=''
+debug=''
+dryrun=''
+recursive=''
 declare -A strict
-strict=([mode]= [group]= [acl]= [xattr]=)
+strict=([mode]='' [group]='' [acl]='' [xattr]='')
 dochgrp=yes
-ignoreerrors=
-activewritetest=
+ignoreerrors=''
+activewritetest=''
+silent_strictness_check=no
 
 
 while [ -n "$1" ]

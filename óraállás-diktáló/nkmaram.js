@@ -19,12 +19,15 @@ var vlMsg = true;
 var system = require('system');
 var stderr = system.stderr;
 var stdout = system.stdout;
-var Glob = {};
+var Glob = {
+	'show_history_only': false,
+};
 
 for(var i=1; i<system.args.length; i++)
 {
 	if(system.args[i] == '--debug') vlDebug = true;
 	else if(system.args[i] == '--verbose') vlVerbose = true;
+	else if(system.args[i] == '--history') Glob.show_history_only = true;
 	else if(system.args[i].match(/^-/))
 	{
 		stderr.write("Unknown option: "+system.args[i]+"\n");
@@ -56,9 +59,9 @@ for(var i=1; i<system.args.length; i++)
 	}
 }
 
-if(!Glob.oraallas)
+if(!Glob.oraallas && !Glob.show_history_only)
 {
-	stderr.write("Usage: nkmaram.js [--debug] [--verbose] <felhasználó-azonosító> <jelszó> <mérőállás-1> [<mérőállás-2> ...]\n");
+	stderr.write("Usage: nkmaram.js [--debug] [--verbose] <felhasználó-azonosító> <jelszó> [--history | <mérőállás-1> [<mérőállás-2> ...]]\n");
 	phantom.exit(2);
 }
 
@@ -206,6 +209,7 @@ page.open(url_form, function(status)
 					return 0;
 				}
 				console.log(table.innerText);
+				if(param.show_history_only) return param.total_steps + 1;
 				return 1;
 			},
 			function(param)
@@ -313,6 +317,8 @@ page.open(url_form, function(status)
 				return 1;
 			}
 		];
+		
+		Glob.total_steps = steps.length;
 		
 		timeout = 500;
 		worker = function()

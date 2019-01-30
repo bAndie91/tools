@@ -1,0 +1,43 @@
+#!/bin/bash
+
+if [ -z "$2" ]
+then
+	echo "Usage: $0 <Card8> <TeleCode>
+ Card8    Bankkartya szam utolso 8 szamjegye
+ TeleCode  Telekod, ami kezdetben a kartyaszam utolso 3 szamjegye" >&2
+	exit 1
+fi
+
+set -e
+set -u
+
+cardnum8=$1
+telecode=$2
+
+if [ ${#cardnum8} != 8 ]
+then
+	echo "A 8-jegyű bankkátya szám kell." >&2
+	exit 1
+fi
+if [ ${#telecode} != 3 ]
+then
+	echo "A 3-jegyű telekód szám kell (ami kezdetben a kártyaszám utolsó 3 számjegye)." >&2
+	exit 1
+fi
+
+url=https://magan.szepkartya.otpportalok.hu/egyenleglekerdezes/
+
+cookies=`curl -sS "$url" -c /dev/fd/3 3>&1 1>/dev/null`
+
+ajaxtoken=`curl -sS "$url" -b /dev/fd/3 3<<<"$cookies" |\
+	grep -Eo 'var\s+ajax_token\s*=\s*.[a-fA-Z0-9]+' | cut -f2 -d"'"`
+
+curl -sS https://magan.szepkartya.otpportalok.hu/ajax/egyenleglekerdezes/ \
+	-b /dev/fd/3 3<<<"$cookies" \
+	-H 'Origin: https://magan.szepkartya.otpportalok.hu' \
+	-H 'X-Requested-With: XMLHttpRequest' \
+	-d "s_azonosito_k=$cardnum8" \
+	-d "s_telekod_k=$telecode" \
+	-d "ajax_token=$ajaxtoken" |\
+jq .
+

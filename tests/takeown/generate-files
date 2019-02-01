@@ -1,0 +1,16 @@
+#!/bin/bash
+
+set -u
+set -e
+
+dir1=$1
+mkdir $dir1
+
+mkdir $dir1/nonwritable
+mkdir -m 0775 $dir1/writable
+
+echo x >$dir1/nonwritable/x
+echo x >$dir1/writable/x
+
+mkdir $dir1/nonwritableEmpty
+mkdir -m 0775 $dir1/writableEmpty

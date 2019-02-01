@@ -1,0 +1,71 @@
+#!/bin/bash
+
+set -u
+set -e
+
+[ -n "$foreignuser" ]
+
+
+
+testcase()
+{
+	TESTCASE=$*
+	echo "[*] $* ..."
+}
+end_testcase()
+{
+	local code=$?
+	local result
+	
+	[ $code = 0 ] && result=PASSED || result=FAILED
+	TESTCASES[$TESTCASE]=$result
+	echo "[*] $TESTCASE ... $result"
+}
+
+
+declare TESTCASE
+declare -A TESTCASES
+workdir=`mktemp -d _tests.XXXXXX`
+
+
+trap 'end_testcase' ERR
+
+
+
+testcase takeown recursive
+
+pwd=$PWD
+mkdir -p $workdir
+setfacl -m u:$foreignuser:rwx $workdir
+dir1=takeownTestDir
+(
+	cd $workdir && \
+	sudo -u $foreignuser $pwd/generate-files $dir1
+)
+setfacl -b -k $workdir
+#sudo -k
+../../usr/bin/takeown -v -R $workdir/$dir1
+
+if find $workdir/$dir1 -printf '%u %p\n' | grep -vE -m1 "^$USER "
+then
+	echo file found not owned by $USER >&2
+	false
+fi
+
+end_testcase
+
+
+
+echo
+echo
+echo == SUMMARY ==
+maxlen=0
+for case in "${!TESTCASES[@]}"
+do
+	[ ${#case} -le $maxlen ] || maxlen=${#case}
+done
+for case in "${!TESTCASES[@]}"
+do
+	sp=$[maxlen - ${#case}]
+	printf "%s%${sp}s ... %s\n" "$case" "" "${TESTCASES[$case]}"
+done

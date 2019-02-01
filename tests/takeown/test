@@ -3,7 +3,7 @@
 set -u
 set -e
 
-[ -n "$foreignuser" ]
+[ -n "${foreignuser?Please set \$foreignuser to a local unix user name who is not you. Test files will be created in the name of him with sudo.}" ]
 
 
 
@@ -21,6 +21,27 @@ end_testcase()
 	TESTCASES[$TESTCASE]=$result
 	echo "[*] $TESTCASE ... $result"
 }
+fail()
+{
+	echo "$*" >&2
+	false
+}
+summary()
+{
+	echo
+	echo
+	echo == SUMMARY ==
+	maxlen=0
+	for case in "${!TESTCASES[@]}"
+	do
+		[ ${#case} -le $maxlen ] || maxlen=${#case}
+	done
+	for case in "${!TESTCASES[@]}"
+	do
+		sp=$[maxlen - ${#case}]
+		printf "%s%${sp}s ... %s\n" "$case" "" "${TESTCASES[$case]}"
+	done
+}
 
 
 declare TESTCASE
@@ -28,7 +49,8 @@ declare -A TESTCASES
 workdir=`mktemp -d _tests.XXXXXX`
 
 
-trap 'end_testcase' ERR
+set -E
+trap 'end_testcase; summary' ERR
 
 
 
@@ -44,28 +66,15 @@ dir1=takeownTestDir
 )
 setfacl -b -k $workdir
 #sudo -k
+
+generated_files_count=`find $workdir/$dir1 | wc -l`
+
 ../../usr/bin/takeown -v -R $workdir/$dir1
 
-if find $workdir/$dir1 -printf '%u %p\n' | grep -vE -m1 "^$USER "
-then
-	echo file found not owned by $USER >&2
-	false
-fi
+! find $workdir/$dir1 -printf '%u %p\n' | grep -vE -m1 "^$USER " || fail file found not owned by $USER
+[ $generated_files_count = `find $workdir/$dir1 | wc -l` ] || fail wrong number of files
 
 end_testcase
 
 
-
-echo
-echo
-echo == SUMMARY ==
-maxlen=0
-for case in "${!TESTCASES[@]}"
-do
-	[ ${#case} -le $maxlen ] || maxlen=${#case}
-done
-for case in "${!TESTCASES[@]}"
-do
-	sp=$[maxlen - ${#case}]
-	printf "%s%${sp}s ... %s\n" "$case" "" "${TESTCASES[$case]}"
-done
+summary

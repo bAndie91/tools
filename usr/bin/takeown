@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# TODO support ext2 attributes
+
 . /usr/lib/yazzy-utils/bash-utils || exit 1
 
 verbose()
@@ -22,7 +24,7 @@ run()
 
 debug()
 {
-	[ "$debug" = yes ] && warnx "$@"
+	[ "$debug" != yes ] || warnx "$@"
 }
 
 warnx()
@@ -30,14 +32,26 @@ warnx()
 	echo "$PROGNAME: $*" >&2
 }
 
+yesno()
+{
+	"$@" && echo yes || echo no
+}
+
 is_empty_directory()
 {
 	local a=`find "$1" -mindepth 1 -print -quit`
-	[ -z "$a" ]
+	if [ -z "$a" ]
+	then
+		return 0
+	else
+		return 1
+	fi
 }
 
-is_writable()
+is_writable_dir()
 {
+	# TODO test sticky bit?
+	
 	if [ "$activewritetest" = yes ]
 	then
 		local testfile=''
@@ -46,28 +60,32 @@ is_writable()
 		do
 			testfile=$1/takeown-writetest.$RANDOM
 		done
-		touch "$testfile"
-		werr=$?
-		[ -e "$testfile" ] && rm "$testfile"
+		werr=`touch "$testfile"; echo $?`
+		[ ! -e "$testfile" ] || rm "$testfile" || true
 		return $werr
 	else
-		[ -w "$1" ]
+		return `[ -w "$1" ]; echo $?`
 	fi
+}
+
+is_recursive()
+{
+	return `[ "$recursive" = yes ]; echo $?`
 }
 
 strip_trailing_slashes()
 {
-	local var=$1
-	while [ "${!var: -1}" = / ]
+	local str=$1
+	while [ "${str: -1}" = / ]
 	do
-		local value=${!var%/}
-		eval $var=\$value
+		str=${str%/}
 	done
+	echo "$str"
 }
 
 strict()
 {
-	[ "${strict[$1]}" = yes ]
+	return `[ "${strict[$1]}" = yes ]; echo $?`
 }
 
 no_strict()
@@ -76,7 +94,7 @@ no_strict()
 	then
 		warnx "Can not clone file's $1: $2"
 	fi
-	[ "${strict[$1]}" != yes ]
+	return `[ "${strict[$1]}" != yes ]; echo $?`
 }
 
 main()
@@ -84,41 +102,35 @@ main()
 	local file
 	local owner
 	
+	# TODO
+	# sort arguments in length-wise descending order - if not recursive
+	# in order to avoid such a situation when a directory and a file below
+	# this directory are both asked to take own and the file will not be found
+	# when it turns (since its directory moved away previously)
+	
 	for file in "$@"
 	do
-		strip_trailing_slashes file
+		file=`strip_trailing_slashes "$file"`
 		
-		if [ -e "$file" ]
+		owner=`stat -c %u "$file"`
+			
+		if [ -L "$file" ]
 		then
-			owner=`stat -c %u "$file"`
-			
-			if [ -L "$file" ]
+			if [ "$owner" != "$UID" ]
 			then
-				if [ "$owner" != "$UID" ]
-				then
-					takeown symlink "$file"
-				fi
-			
-			elif [ -d "$file" ]
-			then
-				if [ "$owner" != "$UID" ]
-				then
-					takeown directory "$file"
-				fi
-			
-				if [ "$recursive" = yes ]
-				then
-					# Recurse into subdirectory.
-					main "$file"/*
-				fi
-				
-			elif [ "$owner" != "$UID" ]
-			then
-				takeown file "$file"
+				takeown symlink "$file"
 			fi
 		
-		else
-			errx 1 "$file: not exists"
+		elif [ -d "$file" ]
+		then
+			if [ "$owner" != "$UID" ]
+			then
+				takeown directory "$file"
+			fi
+			
+		elif [ "$owner" != "$UID" ]
+		then
+			takeown file "$file"
 		fi
 	done
 }
@@ -129,7 +141,7 @@ subs_file_cmnt()
 	sed -e "s@^# file:.*@# file: ${1//@/\@}@"
 }
 
-cpy_attr()
+copy_attributes()
 {
 	if [ "$dochgrp" = yes ]
 	then
@@ -142,9 +154,12 @@ cpy_attr()
 
 takeown()
 {
-	local file=$2
-	local copy=$2.takeown
-	local back=$2.tookown
+	#  the file/directory to be taken own
+	local TAKEOWN_FILE=$2
+	#  the file/directory to be a clone of TAKEOWN_FILE (and supersede thereafter)
+	local TAKEOWN_COPY=$2.takeown
+	#  the file/directory TAKEOWN_FILE will be renamed to
+	local TAKEOWN_BACK=$2.tookown
 	
 	debug "${FUNCNAME[0]}-$1 $2"
 	
@@ -175,21 +190,24 @@ takeown()
 
 cleanup()
 {
+	warnx "Error happened. Reverting changes..."
+	
 	case "$1" in
 	symlink)
-		run verbose rm --force "$copy"
+		run verbose rm --force "$TAKEOWN_COPY"
 		;;
 	file)
-		run verbose rm --force "$copy"
+		run verbose rm --force "$TAKEOWN_COPY"
 		;;
 	directory)
-		run verbose rmdir "$copy"
+		run verbose rmdir "$TAKEOWN_COPY"
+		# TODO there can be $TAKEOWN_BACK file(s)
 		;;
 	directory-recursive)
-		run verbose rm -r "$copy"
-		if [ -e "$back" ]
+		run verbose rm -r "$TAKEOWN_COPY"
+		if [ -e "$TAKEOWN_BACK" ]
 		then
-			run verbose mv --force --no-target-directory "$back" "$file"
+			run verbose mv --force --no-target-directory "$TAKEOWN_BACK" "$TAKEOWN_FILE"
 		fi
 		;;
 	esac
@@ -198,53 +216,146 @@ cleanup()
 takeown_symlink()
 {
 	try --except "cleanup symlink"
-		local target=`readlink "$file"`
-		run verbose ln --symbolic --no-target-directory --force "$target" "$copy"
-		run touch --no-dereference --reference="$file" "$copy"
-		run verbose mv --force --no-target-directory "$copy" "$file"
+		local target=`readlink "$TAKEOWN_FILE"`
+		run verbose ln --symbolic --no-target-directory --force "$target" "$TAKEOWN_COPY"
+		run touch --no-dereference --reference="$TAKEOWN_FILE" "$TAKEOWN_COPY"
+		run verbose mv --force --no-target-directory "$TAKEOWN_COPY" "$TAKEOWN_FILE"
 	untry
 }
 
 takeown_file()
 {
 	try --except "cleanup file"
-		run touch --reference="$file" "$copy"
-		silent_strictness_check=yes cpy_attr "$file" "$copy"
-		run verbose cp --no-dereference --preserve=all --force "$file" "$copy"
-		cpy_attr "$file" "$copy"
-		run verbose mv --force "$copy" "$file"
+		run touch --reference="$TAKEOWN_FILE" "$TAKEOWN_COPY"
+		chmod 0600 "$TAKEOWN_COPY"
+		run verbose cp --no-dereference --preserve=all --force --no-target-directory "$TAKEOWN_FILE" "$TAKEOWN_COPY"
+		copy_attributes "$TAKEOWN_FILE" "$TAKEOWN_COPY"
+		run verbose mv --force "$TAKEOWN_COPY" "$TAKEOWN_FILE"
 	untry
+}
+
+copy_out()
+{
+	local type=$1
+	shift
+	
+	case "$type" in
+	symlink)
+		copy_out_symlink "$@"
+		;;
+	file)
+		copy_out_file "$@"
+		;;
+	*)
+		warnx internal error: copy_out $type
+		exit 1
+		;;
+	esac
+	
+	files_copied_out_src+=("$1")
+	files_copied_out_trg+=("$2")
+}
+
+copy_out_file()
+{
+	local src=$1
+	local trg=$2
+	
+	run touch --reference="$src" "$trg"
+	chmod 0600 "$trg"
+	run verbose cp --no-dereference --preserve=all --force --no-target-directory "$src" "$trg"
+	copy_attributes "$src" "$trg"
+}
+
+copy_out_symlink()
+{
+	local src=$1
+	local trg=$2
+	
+	local symlink_target=`readlink "$src"`
+	run verbose ln --symbolic --no-target-directory --force "$symlink_target" "$trg"
+	run touch --no-dereference --reference="$src" "$trg"
+	# symlinks does not seem to capable to carry ACLs on my sysetm.
+	# I get EPERM on lsetxattr on symlinks too.
+}
+
+takeown_a_directory()
+{
+	local src=$1
+	local trg=$2
+	local src_back=$3
+	local do_supersede=$4
+	local subfile
+	local owner
+	local is_writable_src
+	
+	run verbose install -m 0700 -d "$trg"
+	# delay cloning attibutes to prevent unlucky cases
+	# such as "u-w" permissions on the directory
+	
+	if is_recursive
+	then
+		for subfile in "$src"/*
+		do
+			subfile=${subfile##*/}
+			owner=`stat -c %u "$src/$subfile"`
+			is_writable_src=`yesno is_writable_dir "$src"`
+			
+			if [ -L "$src/$subfile" ]
+			then
+				if [ "$owner" = "$UID" -a $is_writable_src = yes ]
+				then
+					run verbose mv --force --no-target-directory "$src/$subfile" "$trg/$subfile"
+				else
+					copy_out symlink "$src/$subfile" "$trg/$subfile"
+				fi
+				
+			elif [ -d "$src/$subfile" ]
+			then
+				# directories must be writable in order to be moved 
+				# into an other parent directory
+				if [ "$owner" = "$UID" -a $is_writable_src = yes ]
+				then
+					# temporary allow the current user to write her own directory
+					local modes=`stat -c %a "$src/$subfile"`
+					chmod u+w "$trg/$subfile" || [ -w "$src/$subfile" ]
+					run verbose mv --force --no-target-directory "$src/$subfile" "$trg/$subfile"
+					# restore permission modes
+					chmod 0$modes "$src/$subfile"
+				else
+					takeown_a_directory "$src/$subfile" "$trg/$subfile" "" no
+				fi
+			
+			elif [ "$owner" = "$UID" -a $is_writable_src = yes ]
+			then
+				run verbose mv --force --no-target-directory "$src/$subfile" "$trg/$subfile"
+			else
+				copy_out file "$src/$subfile" "$trg/$subfile"
+			fi
+		done
+	fi
+	
+	copy_attributes "$src" "$trg"
+	
+	if [ "$do_supersede" = yes ]
+	then
+		if [ -n "$src_back" ]
+		then
+			if ! is_empty_directory "$src"
+			then
+				run verbose mv --force --no-target-directory "$src" "$src_back"
+			fi
+		fi
+		
+		run verbose mv --force --no-target-directory "$trg" "$src"
+	fi
 }
 
 takeown_directory()
 {
-	local group
-	local modes
-	group=`stat -c %G "$file"`
-	modes=`stat -c %a "$file"`
+	local do_supersede=yes
 	
-	if is_writable "$file"
-	then
-		try --except "cleanup directory"
-			run verbose install -m 0700 -d "$copy"
-			if ! is_empty_directory "$file"
-			then
-				run verbose mv --force "$file"/* "$copy"
-			fi
-			cpy_attr "$file" "$copy"
-		untry
-		run verbose mv --force --no-target-directory "$copy" "$file"
-	else
-		try --except "cleanup directory-recursive"
-			run verbose cp --recursive --no-dereference --preserve=all --no-preserve=ownership --no-target-directory --force "$file" "$copy"
-			cpy_attr "$file" "$copy"
-			if ! is_empty_directory "$file"
-			then
-				run verbose mv --force --no-target-directory "$file" "$back"
-			fi
-			run verbose mv --force --no-target-directory "$copy" "$file"
-		untry
-	fi
+	takeown_a_directory "$TAKEOWN_FILE" "$TAKEOWN_COPY" "$TAKEOWN_BACK" $do_supersede
 }
 
 
@@ -263,6 +374,7 @@ dochgrp=yes
 ignoreerrors=''
 activewritetest=''
 silent_strictness_check=no
+erase_after=no
 
 
 while [ -n "$1" ]
@@ -274,15 +386,16 @@ Options:
  -D, --debug               debug
  -v, --verbose             verbose
  -n, --dry-run             dry run
- -i, --ignore              ignore errors
+ -i, --ignore              ignore failures on files given in command arguments
  -R, --recursive           recurse into directories
  -t, --strict              strict chmod, chgrp, setfacl, setfattr
- -M, --no-strict-chmod     no strict chmod
- -G, --no-strict-chgrp     no strict chgrp
- -A, --no-strict-setfacl   no strict setfacl
- -X, --no-strict-setfattr  no strict setfattr
- -g, --no-chgrp            no chgrp at all
+ -M, --no-strict-chmod     different mode does not matter
+ -G, --no-strict-chgrp     different group does not matter
+ -A, --no-strict-setfacl   different ACL does not matter
+ -X, --no-strict-setfattr  different extended attributes do not matter
+ -g, --no-chgrp            do not chgrp at all
  -w, --active-write-test   active write test (instead of access(2))
+ --erase-after             unlink files and directories successfully taken (keep '.tookown' extension otherwise)
 Exit code:
  0    all operations succeeded
  1+   error happended during progress, even it was ignored"
@@ -296,6 +409,10 @@ Exit code:
 		;;
 	-n|--dry-run)
 		dryrun=yes
+		;;
+	--erase-after)
+		erase_after=yes
+		# TODO implement
 		;;
 	-R|--recursive)
 		recursive=yes
@@ -342,6 +459,9 @@ Exit code:
 done
 
 declare -g Error=0
+declare -a files_copied_out_src
+declare -a files_copied_out_trg
+
 main "$@"
 exit $Error
 

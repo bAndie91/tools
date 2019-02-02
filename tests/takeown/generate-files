@@ -3,14 +3,19 @@
 set -u
 set -e
 
-dir1=$1
+. ./env
+
+echo x >$file1
+
 mkdir $dir1
+echo x >$dir1/x
 
-mkdir $dir1/nonwritable
-mkdir -m 0775 $dir1/writable
+mkdir $dir2
+mkdir $dir2/nonwritable
+mkdir -m 0775 $dir2/writable
 
-echo x >$dir1/nonwritable/x
-echo x >$dir1/writable/x
+echo x >$dir2/nonwritable/x
+echo x >$dir2/writable/x
 
-mkdir $dir1/nonwritableEmpty
-mkdir -m 0775 $dir1/writableEmpty
+mkdir $dir2/nonwritableEmpty
+mkdir -m 0775 $dir2/writableEmpty

@@ -18,8 +18,27 @@ end_testcase()
 	local result
 	
 	[ $code = 0 ] && result=PASSED || result=FAILED
-	TESTCASES[$TESTCASE]=$result
+	TESTCASENAME+=("$TESTCASE")
+	TESTCASERESULT+=("$result")
 	echo "[*] $TESTCASE ... $result"
+}
+count()
+{
+	find "$1" | wc -l
+}
+verify()
+{
+	local count=$1
+	local dir=$2
+	
+	if [ $count != `count $dir` ]
+	then
+		fail wrong number of files
+	fi
+	if find $2 -printf '%u %p\n' | grep -vE -m1 "^$USER "
+	then
+		fail file found not owned by $USER
+	fi
 }
 fail()
 {
@@ -32,48 +51,64 @@ summary()
 	echo
 	echo == SUMMARY ==
 	maxlen=0
-	for case in "${!TESTCASES[@]}"
+	for ((i=0; i<${#TESTCASENAME[@]}; i++))
 	do
-		[ ${#case} -le $maxlen ] || maxlen=${#case}
+		[ ${#TESTCASENAME[i]} -le $maxlen ] || maxlen=${#TESTCASENAME[i]}
 	done
-	for case in "${!TESTCASES[@]}"
+	for ((i=0; i<${#TESTCASENAME[@]}; i++))
 	do
-		sp=$[maxlen - ${#case}]
-		printf "%s%${sp}s ... %s\n" "$case" "" "${TESTCASES[$case]}"
+		sp=$[maxlen - ${#TESTCASENAME[i]}]
+		printf "%s%${sp}s ... %s\n" "${TESTCASENAME[i]}" "" "${TESTCASERESULT[i]}"
 	done
 }
 
 
 declare TESTCASE
-declare -A TESTCASES
+declare -a TESTCASENAME
+declare -a TESTCASERESULT
 workdir=`mktemp -d _tests.XXXXXX`
+takeown_command=../../usr/bin/takeown
+pwd=$PWD
 
 
 set -E
 trap 'end_testcase; summary' ERR
 
 
-
-testcase takeown recursive
-
-pwd=$PWD
+testcase generate test files
 mkdir -p $workdir
 setfacl -m u:$foreignuser:rwx $workdir
-dir1=takeownTestDir
+echo "
+	file1=takeownTestFile
+	dir1=takeownTestDir
+	dir2=takeownTestDirRec
+" >$workdir/env
 (
 	cd $workdir && \
-	sudo -u $foreignuser $pwd/generate-files $dir1
+	sudo -u $foreignuser $pwd/generate-files
 )
 setfacl -b -k $workdir
-#sudo -k
+end_testcase
 
-generated_files_count=`find $workdir/$dir1 | wc -l`
 
-../../usr/bin/takeown -v -R $workdir/$dir1
+. $workdir/env
 
-! find $workdir/$dir1 -printf '%u %p\n' | grep -vE -m1 "^$USER " || fail file found not owned by $USER
-[ $generated_files_count = `find $workdir/$dir1 | wc -l` ] || fail wrong number of files
+testcase takeown 1 file
+$takeown_command $workdir/$file1
+verify 1 $workdir/$file1
+end_testcase
 
+
+testcase takeown 1 dir
+$takeown_command $workdir/$dir1
+verify 1 $workdir/$dir1
+end_testcase
+
+
+testcase takeown recursive
+generated_files_count=`count $workdir/$dir1`
+$takeown_command -R $workdir/$dir1
+verify $generated_files_count $workdir/$dir1
 end_testcase
 
 

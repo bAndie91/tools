@@ -192,6 +192,8 @@ cleanup()
 {
 	warnx "Error happened. Reverting changes..."
 	
+	# TODO turn off errfail ?
+	
 	case "$1" in
 	symlink)
 		run verbose rm --force "$TAKEOWN_COPY"
@@ -200,15 +202,51 @@ cleanup()
 		run verbose rm --force "$TAKEOWN_COPY"
 		;;
 	directory)
-		run verbose rmdir "$TAKEOWN_COPY"
-		# TODO there can be $TAKEOWN_BACK file(s)
-		;;
-	directory-recursive)
-		run verbose rm -r "$TAKEOWN_COPY"
+		local idx
+		
+		if [ $erase_on_fail = yes ]
+		then
+			warnx "Removing copies..."
+			idx=$[ ${#files_copied_out_trg[@]} - 1 ]
+			for ((; idx>=0; idx--))
+			do
+				run verbose rm --force "${files_copied_out_trg[idx]}"
+			done
+			
+			warnx "Moving back moved files..."
+			idx=$[ ${#files_moved_out_trg[@]} - 1 ]
+			for ((; idx>=0; idx--))
+			do
+				run verbose mv --force --no-target-directory "${files_moved_out_trg[idx]}" "${files_moved_out_src[idx]}"
+			done
+			
+			warnx "Removing created directories..."
+			idx=$[ ${#dirs_created[@]} - 1 ]
+			for ((; idx>=0; idx--))
+			do
+				run verbose rmdir "${dirs_created[idx]}"
+			done
+		fi
+		
+		# the last step of taking own a directory is to replace TAKEOWN_FILE with TAKEOWN_COPY.
+		# until this step we're working on and in TAKEOWN_COPY, 
+		# so it's save to remove it.
+		if [ -e "$TAKEOWN_COPY" ]
+		then
+			run verbose rmdir "$TAKEOWN_COPY"
+		fi
+		
 		if [ -e "$TAKEOWN_BACK" ]
 		then
 			run verbose mv --force --no-target-directory "$TAKEOWN_BACK" "$TAKEOWN_FILE"
 		fi
+		
+		# clear arrays for the processing of the next cli argument
+		files_copied_out_src=()
+		files_copied_out_trg=()
+		files_moved_out_src=()
+		files_moved_out_trg=()
+		dirs_created=()
 		;;
 	esac
 }
@@ -216,9 +254,7 @@ cleanup()
 takeown_symlink()
 {
 	try --except "cleanup symlink"
-		local target=`readlink "$TAKEOWN_FILE"`
-		run verbose ln --symbolic --no-target-directory --force "$target" "$TAKEOWN_COPY"
-		run touch --no-dereference --reference="$TAKEOWN_FILE" "$TAKEOWN_COPY"
+		copy_out_symlink "$TAKEOWN_FILE" "$TAKEOWN_COPY"
 		run verbose mv --force --no-target-directory "$TAKEOWN_COPY" "$TAKEOWN_FILE"
 	untry
 }
@@ -226,20 +262,28 @@ takeown_symlink()
 takeown_file()
 {
 	try --except "cleanup file"
-		run touch --reference="$TAKEOWN_FILE" "$TAKEOWN_COPY"
-		chmod 0600 "$TAKEOWN_COPY"
-		run verbose cp --no-dereference --preserve=all --force --no-target-directory "$TAKEOWN_FILE" "$TAKEOWN_COPY"
-		copy_attributes "$TAKEOWN_FILE" "$TAKEOWN_COPY"
+		copy_out_file "$TAKEOWN_FILE" "$TAKEOWN_COPY"
 		run verbose mv --force "$TAKEOWN_COPY" "$TAKEOWN_FILE"
 	untry
 }
 
+register_moved_file()
+{
+	files_moved_out_src+=("$1")
+	files_moved_out_trg+=("$2")
+}
+
+register_created_dir()
+{
+	dirs_created+=("$1")
+}
+
 copy_out()
 {
-	local type=$1
+	local filetype=$1
 	shift
 	
-	case "$type" in
+	case "$filetype" in
 	symlink)
 		copy_out_symlink "$@"
 		;;
@@ -247,7 +291,7 @@ copy_out()
 		copy_out_file "$@"
 		;;
 	*)
-		warnx internal error: copy_out $type
+		warnx internal error: copy_out $filetype
 		exit 1
 		;;
 	esac
@@ -262,6 +306,7 @@ copy_out_file()
 	local trg=$2
 	
 	run touch --reference="$src" "$trg"
+	# setup a mode just enough to able to write. clone all attributes later.
 	chmod 0600 "$trg"
 	run verbose cp --no-dereference --preserve=all --force --no-target-directory "$src" "$trg"
 	copy_attributes "$src" "$trg"
@@ -276,7 +321,7 @@ copy_out_symlink()
 	run verbose ln --symbolic --no-target-directory --force "$symlink_target" "$trg"
 	run touch --no-dereference --reference="$src" "$trg"
 	# symlinks does not seem to capable to carry ACLs on my sysetm.
-	# I get EPERM on lsetxattr on symlinks too.
+	# I get EPERM on lsetxattr(2) on symlinks too.
 }
 
 takeown_a_directory()
@@ -293,6 +338,8 @@ takeown_a_directory()
 	# delay cloning attibutes to prevent unlucky cases
 	# such as "u-w" permissions on the directory
 	
+	register_created_dir "$trg"
+	
 	if is_recursive
 	then
 		for subfile in "$src"/*
@@ -306,6 +353,7 @@ takeown_a_directory()
 				if [ "$owner" = "$UID" -a $is_writable_src = yes ]
 				then
 					run verbose mv --force --no-target-directory "$src/$subfile" "$trg/$subfile"
+					register_moved_file "$src/$subfile" "$trg/$subfile"
 				else
 					copy_out symlink "$src/$subfile" "$trg/$subfile"
 				fi
@@ -317,11 +365,22 @@ takeown_a_directory()
 				if [ "$owner" = "$UID" -a $is_writable_src = yes ]
 				then
 					# temporary allow the current user to write her own directory
+					# to able to move to other parent directory
 					local modes=`stat -c %a "$src/$subfile"`
-					chmod u+w "$trg/$subfile" || [ -w "$src/$subfile" ]
-					run verbose mv --force --no-target-directory "$src/$subfile" "$trg/$subfile"
-					# restore permission modes
-					chmod 0$modes "$src/$subfile"
+					chmod u+w "$src/$subfile" || [ -w "$src/$subfile" ]
+					local moved
+					if run verbose mv --force --no-target-directory "$src/$subfile" "$trg/$subfile"
+					then
+						moved=yes
+						# restore permission modes on $subfile (now it's in $trg directory)
+						chmod 0$modes "$trg/$subfile"
+						register_moved_file "$src/$subfile" "$trg/$subfile"
+					else
+						moved=no
+						# restore permission modes on $subfile (stayd in $src directory)
+						chmod 0$modes "$src/$subfile"
+					fi
+					test $moved = yes
 				else
 					takeown_a_directory "$src/$subfile" "$trg/$subfile" "" no
 				fi
@@ -329,6 +388,7 @@ takeown_a_directory()
 			elif [ "$owner" = "$UID" -a $is_writable_src = yes ]
 			then
 				run verbose mv --force --no-target-directory "$src/$subfile" "$trg/$subfile"
+				register_moved_file "$src/$subfile" "$trg/$subfile"
 			else
 				copy_out file "$src/$subfile" "$trg/$subfile"
 			fi
@@ -355,7 +415,9 @@ takeown_directory()
 {
 	local do_supersede=yes
 	
-	takeown_a_directory "$TAKEOWN_FILE" "$TAKEOWN_COPY" "$TAKEOWN_BACK" $do_supersede
+	try --except "cleanup directory"
+		takeown_a_directory "$TAKEOWN_FILE" "$TAKEOWN_COPY" "$TAKEOWN_BACK" $do_supersede
+	untry
 }
 
 
@@ -374,7 +436,8 @@ dochgrp=yes
 ignoreerrors=''
 activewritetest=''
 silent_strictness_check=no
-erase_after=no
+erase_on_fail=no
+besteffort=no
 
 
 while [ -n "$1" ]
@@ -387,6 +450,7 @@ Options:
  -v, --verbose             verbose
  -n, --dry-run             dry run
  -i, --ignore              ignore failures on files given in command arguments
+ -b, --best-effort         do what can be done, ignore failures (imply -i)
  -R, --recursive           recurse into directories
  -t, --strict              strict chmod, chgrp, setfacl, setfattr
  -M, --no-strict-chmod     different mode does not matter
@@ -410,8 +474,11 @@ Exit code:
 	-n|--dry-run)
 		dryrun=yes
 		;;
-	--erase-after)
-		erase_after=yes
+	--erase-on-fail|--erase-on-failure)
+		erase_on_fail=yes
+		;;
+	-b|--best-effort)
+		besteffort=yes
 		# TODO implement
 		;;
 	-R|--recursive)
@@ -461,6 +528,9 @@ done
 declare -g Error=0
 declare -a files_copied_out_src
 declare -a files_copied_out_trg
+declare -a files_moved_out_src
+declare -a files_moved_out_trg
+declare -a dirs_created
 
 main "$@"
 exit $Error
@@ -473,7 +543,7 @@ true <<EOF
 
 =head1 NAME
 
-takeown - Take ownership on files, also for unprivileged users
+takeown - Take ownership on files, even for unprivileged users
 
 =head1 SYNOPSIS
 
@@ -482,8 +552,8 @@ takeown [I<options>] <I<files> and I<directories>>
 =head1 DESCRIPTION
 
 chown(2) is permitted only for root (and processes with CAP_CHOWN), but normal users can emulate this behavior.
-You can copy others´ file for your own in a directory writable by you, and then replace the original file with your copy.
-It is quite tricky and expensive sometimes, but gives solution for some cases.
+You can copy other users´ file for your own in a directory writable by you, and then replace the original file with your copy.
+It is quite tricky and expensive sometimes, but gives you an option.
 Say, when somebody forgot to use the right user account when saving files directly to your folders.
 
 =cut

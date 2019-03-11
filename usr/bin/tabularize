@@ -1,5 +1,29 @@
 #!/bin/bash
 
+TAB=$'\t'
+IFS=''
+
+explode()
+{
+	local separator=$1
+	local string=$2
+	local new_string
+	EXPLODE_ARRAY=()
+	
+	while [ -n "$string" ]
+	do
+		EXPLODE_ARRAY+=("${string%%$separator*}")
+		new_string=${string#*$separator}
+		if [ "$string" = "$new_string" ]
+		then
+			break
+		fi
+		string=$new_string
+	done
+	
+	# return $EXPLODE_ARRAY
+}
+
 
 # compute width of each column
 
@@ -7,13 +31,11 @@ column_width=()
 text=''
 while read -r line
 do
-	text=$text${text:+$'\n'}$line
-	IFS=$'\t'
-	cells=($line)
-	IFS=$'\n\t '
-
+	text="$text${text:+$'\n'}$line"
+	explode $'\t' "$line"
+	
 	column=0
-	for cell in "${cells[@]}"
+	for cell in "${EXPLODE_ARRAY[@]}"
 	do
 		width=${#cell}
 		if [ -z "${column_width[$column]}" ] || [ $width -gt "${column_width[$column]}" ]
@@ -44,11 +66,9 @@ vborder=`printf -- "$fmt\n" "${segments[@]}" | tr "| " "+-"`
 
 while read -r line
 do
-	IFS=$'\t'
-	cells=($line)
-	IFS=$'\n\t '
-
+	explode $'\t' "$line"
+	
 	echo "$vborder"
-	printf -- "$fmt\n" "${cells[@]}"
+	printf -- "$fmt\n" "${EXPLODE_ARRAY[@]}"
 done <<<"$text"
 echo "$vborder"

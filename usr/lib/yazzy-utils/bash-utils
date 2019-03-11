@@ -192,6 +192,11 @@ untry()
 	return 0
 }
 
+fixerrexit()
+{
+	( eval "expr '$-' : '.*e' >/dev/null && set -e; $*"; )
+}
+
 template()
 {
 	cat "$@" |\

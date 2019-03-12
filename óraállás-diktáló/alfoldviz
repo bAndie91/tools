@@ -17,17 +17,26 @@ email=$3
 meroallas=$4
 
 url=https://www.alfoldviz.hu/ugyfelszolgalat/meroallas-bejelentes
+curlargs=(-sS)
 
-cookies=`curl -sS "$url" -c /dev/fd/3 3>&1 1>/dev/null`
+# get session (and other) cookie
+cookies=`curl "${curlargs[@]}" "$url" -H "Cookie: acceptCookies=1" -c /dev/fd/3 3>&1 1>/dev/null | sed -e 's/^#HttpOnly_//'`
+# add 'acceptCookies' cookie to the cookie jar
+cookies="$cookies"$'\n'"$(tail -n1 <<<"$cookies" | awk '{print $1,$2,$3,$4,$5}') acceptCookies 1"
+# get CSRF token
+csrf_token=`curl "${curlargs[@]}" "$url" -b /dev/fd/3 3<<<"$cookies" | pup 'input[name=_token] attr{value}'`
 
-curlargs=("$url" \
-	-d fogyhely="$fogyhely" \
-	-d merogysz="$merogysz" \
-	-d email="$email" \
-	-d meroallas="$meroallas" \
-	-d meterread_submit="Adatok mentése")
+# fill form input fields
+curlargs+=( \
+	-d "ugyfelazonosito=$fogyhely" \
+	-d "email=$email" \
+	-d "meters[0][gyariszam]=$merogysz" \
+	-d "meters[0][meter]=$meroallas" \
+	-d "_token=$csrf_token" \
+)
 
-response=`curl -sS -i -b /dev/fd/3 3<<<"$cookies" -L "${curlargs[@]}"`
+# fire report
+response=`curl -i -L "${curlargs[@]}" "$url" -b /dev/fd/3 3<<<"$cookies" 2>&1`
 
 if echo "$response" | grep -o "Az adatok feldolgozását megkezdtük."
 then
@@ -40,7 +49,7 @@ else
 		echo "$cookies"
 		echo
 		echo == Curl args
-		echo "${curlargs[@]}"
+		echo "${curlargs[@]}" "$url"
 		echo
 		echo == Response
 		echo "$response"

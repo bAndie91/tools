@@ -48,7 +48,10 @@
 	prev = checkout HEAD~1
 	next = ! "fn(){ git checkout $(git rev-list --all --children | grep ^$(git show -s --format=%H) | cut -f2 -d' ' -s); }; fn"
 	co = checkout
-	remote-track = ! "fn(){ [ -n \"$1\" ] && b=$1 || b=$(git symbolic-ref --quiet --short HEAD); git branch --set-upstream \"$b\" \"${2:-origin}/$b\"; }; fn"
+	set-track = ! "fn(){ [ -n \"$1\" ] && b=$1 || b=$(git symbolic-ref --quiet --short HEAD); git branch --set-upstream \"$b\" \"${2:-origin}/$b\"; }; fn"
+	show-track = ! "fn(){ [ -n \"$1\" ] && b=$1 || b=$(git symbolic-ref --quiet --short HEAD); git config --get-all \"branch.$b.remote\"; git config --get-all \"branch.$b.merge\"; }; fn"
+	
+	delete-remote-branch = ! "fn(){ if [ -z \"$1\" ]; then echo \"Which branch?\" >&2; return 1; fi; remote=$(git config --get-all \"branch.$1.remote\" | head -n1); [ -n \"$remote\" ] || remote=origin; git push \"$remote\" --delete \"$1\"; }; fn"
 	
 	search = ! "fn(){ git rev-list --all | GIT_PAGER='' xargs -L 32 git grep \"$@\" | less $LESS -F; }; fn"
 	search-commit = log -p --pickaxe-all -S
@@ -72,15 +75,17 @@
 	diff-stage = diff --staged --ignore-all-space
 	diff-commit = ! "fn(){ if [ -n \"$1\" ]; then REV=$1; shift; else REV=HEAD; fi; git show \"$REV~1..$REV\" --irreversible-delete --ignore-all-space \"$@\"; }; fn"
 	# --word-diff=color 
+	diff-last = ! "fn(){ git log -g --format=%h | { read h2; read h1; git diff "$@" $h1...$h2; }; }; fn"
 	diff-head = diff --find-copies --find-renames HEAD
 	diff-remote = ! "fn(){ git diff --find-copies --find-renames origin/$(git symbolic-ref --quiet --short HEAD); }; fn"
 	diff-to-branch = ! "fn(){ git diff --find-copies --find-renames $(git merge-base HEAD \"$1\"); }; fn"
 	
 	update = ! "git add --update '/*' ; git st"
 	add-all = ! "git add '/*' ; git st"
-	commit-all = ! "fn(){ git commit -a -m \"$*\"; }; fn"
+	commit-tracked = ! "fn(){ git commit -a -m \"$*\"; }; fn"
+	ct = ! "git commit-tracked"
 	commit-stage = ! "fn(){ git commit -m \"$*\"; }; fn"
-	push-branch = ! "fn(){ branch=$(git symbolic-ref --quiet --short HEAD); if [ -z \"$branch\" ]; then echo \"not on a branch\" >&2; return 1; fi; git push \"${@:-origin}\" \"$branch\"; }; fn"
+	push-branch = ! "fn(){ branch=$(git symbolic-ref --quiet --short HEAD); if [ -z \"$branch\" ]; then echo \"not on a branch\" >&2; return 1; fi; remote=$(git config --get \"branch.$branch.remote\"); git push \"${remote:-origin}\" \"$branch\"; }; fn"
 	fixup = ! "hash=$(git show -s --format=%H); git commit -a -m \"fixup! $hash\"; EDITOR=true VISUAL=true git rebase --interactive --autosquash $hash^"
 	edit-commit = ! "fn(){ subs=''; for com in \"$@\"; do hash=$(git show -s --format=%h \"$1\"); subs=\"$subs${subs:+; }s/^pick \\($hash\\)/edit \\1/\"; done; GIT_SEQUENCE_EDITOR=\"sed -i -e '$subs'\" git rebase --interactive $hash^; }; fn"
 	rebase-commit = ! "fn(){ git commit -m \"$(cat .git/rebase-merge/message)\" \"$@\"; }; fn"
@@ -93,17 +98,18 @@
 	
 	preserve = stash save --no-keep-index --include-untracked
 	save = stash save --no-keep-index
-	save-as = stash save --no-keep-index
-	stash-get = ! "fn(){ ref=$(git stash list | grep -m1 \"$*\" | cut -f1 -d:); if [ -n \"$ref\" ]; then git stash show -p \"$ref\"; git stash apply \"$ref\"; else echo \"Can not find such a stashed commit with substring '$*'.\" >&2; git stash list >&2; fi; }; fn"
+	save-unstaged = stash save --keep-index
+	stash-get = ! "fn(){ ref=$(git stash list | grep -m1 \"$*\" | cut -f1 -d:); if [ -n \"$ref\" ]; then git stash show -p \"$ref\"; git stash apply \"$ref\"; else echo \"Can not find such a stashed commit with substring '$*'.\" >&2; git stash list >&2; return 1; fi; }; fn"
 	stash-list = stash list
 	slist = stash list
 	
-	change-commits = ! "fn(){ if [ $# -lt 3 ]; then echo \"Arguments: git-attribute old-value new-value\" >&2; return 1; fi; VAR=$1; OLD=$2; NEW=$3; shift 3; git filter-branch --env-filter \"if [ \\\"$`echo $VAR`\\\" = '$OLD' ]; then export $VAR='$NEW'; fi\" \"$@\"; }; fn"
+	change-commits = ! "fn(){ if [ $# -lt 3 ]; then echo \"Arguments: <git-attribute-name> <old-value> <new-value>\" >&2; return 1; fi; VAR=$1; OLD=$2; NEW=$3; shift 3; git filter-branch --env-filter \"if [ \\\"$`echo $VAR`\\\" = '$OLD' ]; then export $VAR='$NEW'; fi\" \"$@\"; }; fn"
 	# Example: git change-commits GIT_AUTHOR_EMAIL oldemail newemail HEAD~1..HEAD
 	#   git push origin +myBranch
 	
 	common-ancestor = ! "fn(){ b1=$1 b2=$2 bash -c 'diff --old-line-format=\"\" --new-line-format=\"\" <(git rev-list --first-parent \"$b1\") <(git rev-list --first-parent \"${b2:-HEAD}\")' | head -n1; }; fn"
 	diff-branch = ! "fn(){ b1=$1; shift; case \"$1\" in -*|'') b2='';; *) b2=$1; shift;; esac; git diff \"$@\" \"$(git common-ancestor \"$b1\" \"$b2\")\" \"$b1\"; }; fn"
+	branch-history = ! "fn(){ b1=$1; shift; case \"$1\" in -*|'') b2='';; *) b2=$1; shift;; esac; git log --patch --first-parent --no-merges \"$@\" \"$(git common-ancestor \"$b1\" \"$b2\")\"..\"$b1\"; }; fn"
 	which-branches-merged-this-branch = branch --list --contains
-	note = ! "fn(){ if [ -z \"$*\" ]; then git notes show; else git notes append -m \"$*\"; fi; }; fn"
+	note = ! "fn(){ if [ -z \"$*\" ]; then git notes show; else git notes append -m \"$@\"; fi; }; fn"
 	notes-list = log --format=format:'%C(yellow)commit %H%C(reset) %C(red)%d%C(reset)%nDate: %C(cyan)%ai%C(reset) (%ar)%nAuthor: %C(bold yellow)%an%C(reset) <%ae>%nNote: %N%n%n%s%n'

@@ -67,7 +67,7 @@ while(<>)
 				}
 				close $fh;
 				
-				$name = join " █ ", 
+				$name = join " ✉ ", 
 					map {s/^"(.+?)"/$1/; $_} 
 					map {s{/}{∕}g; $_}
 					map {s{\x00}{}g; $_}

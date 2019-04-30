@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# TODO support ext2 attributes
-
 . /usr/lib/yazzy-utils/bash-utils || exit 1
 
 verbose()
@@ -127,10 +125,7 @@ sort_by_length_desc()
 
 main()
 {
-	local file
-	local owner
 	local argv
-	
 	argv=("$@")
 	
 	if ! is_recursive
@@ -141,34 +136,29 @@ main()
 		argv=("${sort_by_length_desc_result[@]}")
 	fi
 	
+	local file
 	for file in "${argv[@]}"
 	do
 		file=`strip_trailing_slashes "$file"`
 		
-		owner=`stat -c %u "$file"`
+		local owner=`stat -c %u "$file"`
 			
-		if [ -L "$file" ]
+		if [ "$owner" != "$UID" ]
 		then
-			if [ "$owner" != "$UID" ]
+			if [ -L "$file" ]
 			then
 				takeown symlink "$file"
-			fi
-		
-		elif [ -d "$file" ]
-		then
-			if [ "$owner" != "$UID" ]
+			elif [ -d "$file" ]
 			then
 				takeown directory "$file"
+			else
+				takeown file "$file"
 			fi
-			
-		elif [ "$owner" != "$UID" ]
-		then
-			takeown file "$file"
 		fi
 	done
 }
 
-subs_file_cmnt()
+subs_file_comment()
 {
 	# Replace filename in lines like: `# file: ...´
 	sed -e "s@^# file:.*@# file: ${1//@/\@}@"
@@ -181,8 +171,9 @@ copy_attributes()
 		run verbose chgrp --quiet --reference="$1" --no-dereference "$2" || no_strict group "$1"
 	fi
 	run verbose chmod --quiet --reference="$1" "$2" || no_strict mode "$1"
-	getfacl --skip-base "$1" | subs_file_cmnt "$2" | run setfacl --restore=- || no_strict acl "$1"
-	getfattr --no-dereference --physical --dump "$1" | subs_file_cmnt "$2" | run setfattr --restore=- || no_strict xattr "$1"
+	getfacl --skip-base "$1" | subs_file_comment "$2" | run setfacl --restore=- || no_strict acl "$1"
+	getfattr --no-dereference --physical --dump "$1" | subs_file_comment "$2" | run setfattr --restore=- || no_strict xattr "$1"
+	# TODO support ext2 attributes
 }
 
 takeown()
@@ -191,11 +182,12 @@ takeown()
 	local TAKEOWN_FILE=$2
 	#  the file/directory to be a clone of TAKEOWN_FILE (and supersede thereafter)
 	local TAKEOWN_COPY=$2.takeown
-	#  the file/directory TAKEOWN_FILE will be renamed to
+	#  the file/directory TAKEOWN_FILE will be renamed to, can be used as backup
 	local TAKEOWN_BACK=$2.tookown
 	
 	debug "${FUNCNAME[0]}-$1 $2"
 	
+	# Run individual takeown procedures in subshell to avoid cascade exception.
 	(
 		case "$1" in
 		symlink)
@@ -225,8 +217,6 @@ cleanup()
 {
 	warnx "Error happened. Reverting changes..."
 	
-	# TODO turn off errfail ?
-	
 	case "$1" in
 	symlink)
 		run verbose rm --force "$TAKEOWN_COPY"
@@ -236,6 +226,8 @@ cleanup()
 		;;
 	directory)
 		local idx
+		
+		# TODO turn off errfail ?
 		
 		if [ $erase_on_fail = yes ]
 		then
@@ -296,7 +288,7 @@ takeown_file()
 {
 	try --except "cleanup file"
 		copy_out_file "$TAKEOWN_FILE" "$TAKEOWN_COPY"
-		run verbose mv --force "$TAKEOWN_COPY" "$TAKEOWN_FILE"
+		run verbose mv --force --no-target-directory "$TAKEOWN_COPY" "$TAKEOWN_FILE"
 	untry
 }
 
@@ -324,7 +316,7 @@ copy_out()
 		copy_out_file "$@"
 		;;
 	*)
-		warnx internal error: copy_out $filetype
+		warnx internal error: copy_out $filetype "$@"
 		exit 1
 		;;
 	esac
@@ -353,7 +345,7 @@ copy_out_symlink()
 	local symlink_target=`readlink "$src"`
 	run verbose ln --symbolic --no-target-directory --force "$symlink_target" "$trg"
 	run touch --no-dereference --reference="$src" "$trg"
-	# symlinks does not seem to capable to carry ACLs on my sysetm.
+	# symlinks does not seem to capable to carry ACLs on my system.
 	# I get EPERM on lsetxattr(2) on symlinks too.
 }
 
@@ -492,7 +484,7 @@ Options:
  -X, --no-strict-setfattr  different extended attributes do not matter
  -g, --no-chgrp            do not chgrp at all
  -w, --active-write-test   active write test (instead of access(2))
- --erase-after             unlink files and directories successfully taken (keep '.tookown' extension otherwise)
+ --erase-on-failure        remove copies when taking own a directory is failed
 Exit code:
  0    all operations succeeded
  1+   error happended during progress, even it was ignored"
@@ -592,3 +584,4 @@ Say, when somebody forgot to use the right user account when saving files direct
 =cut
 
 EOF
+

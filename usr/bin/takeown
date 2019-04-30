@@ -50,8 +50,6 @@ is_empty_directory()
 
 is_writable_dir()
 {
-	# TODO test sticky bit?
-	
 	if [ "$activewritetest" = yes ]
 	then
 		local testfile=''
@@ -97,18 +95,53 @@ no_strict()
 	return `[ "${strict[$1]}" != yes ]; echo $?`
 }
 
+sort_by_length_desc()
+{
+	local x
+	local y
+	local index
+	local shiftindex
+	declare -a -g sort_by_length_desc_result
+	sort_by_length_desc_result=()
+	
+	for x in "$@"
+	do
+		index=0
+		for y in "${sort_by_length_desc_result[@]}"
+		do
+			if [ ${#y} -le ${#x} ]
+			then
+				shiftindex=${#sort_by_length_desc_result[@]}
+				while [ $shiftindex -ge $index ]
+				do
+					sort_by_length_desc_result[$shiftindex]=${sort_by_length_desc_result[shiftindex - 1]}
+					shiftindex=$[shiftindex - 1]
+				done
+				break
+			fi
+			index=$[index + 1]
+		done
+		sort_by_length_desc_result[$index]=$x
+	done
+}
+
 main()
 {
 	local file
 	local owner
+	local argv
 	
-	# TODO
-	# sort arguments in length-wise descending order - if not recursive
-	# in order to avoid such a situation when a directory and a file below
-	# this directory are both asked to take own and the file will not be found
-	# when it turns (since its directory moved away previously)
+	argv=("$@")
 	
-	for file in "$@"
+	if ! is_recursive
+	then
+		# Sort CLI arguments to make "dir1/file1" files processed earlier than "dir1/".
+		sort_by_length_desc "${argv[@]}"
+		declare -a argv
+		argv=("${sort_by_length_desc_result[@]}")
+	fi
+	
+	for file in "${argv[@]}"
 	do
 		file=`strip_trailing_slashes "$file"`
 		

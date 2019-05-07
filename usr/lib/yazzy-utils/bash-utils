@@ -228,3 +228,10 @@ errorlevel()
 {
 	return $1
 }
+
+bash_join()
+{
+	local IFS=$1
+	shift
+	echo "$*"
+}

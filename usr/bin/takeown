@@ -14,7 +14,7 @@ run()
 	if [ "$dryrun" = yes ]
 	then
 		[ "$1" != verbose ] || shift
-		echo "$@"
+		echo "$@" >&2
 	else
 		"$@"
 	fi
@@ -67,6 +67,11 @@ is_writable_dir()
 is_recursive()
 {
 	return `[ "$recursive" = yes ]; echo $?`
+}
+
+besteffort_mode()
+{
+	return `[ "$besteffort" = yes]; echo $?`
 }
 
 strip_trailing_slashes()
@@ -142,7 +147,7 @@ main()
 		file=`strip_trailing_slashes "$file"`
 		
 		local owner=`stat -c %u "$file"`
-			
+		
 		if [ "$owner" != "$UID" ]
 		then
 			if [ -L "$file" ]
@@ -182,10 +187,17 @@ takeown()
 	local TAKEOWN_FILE=$2
 	#  the file/directory to be a clone of TAKEOWN_FILE (and supersede thereafter)
 	local TAKEOWN_COPY=$2.takeown
-	#  the file/directory TAKEOWN_FILE will be renamed to, can be used as backup
+	#  the file/directory TAKEOWN_FILE will be renamed to (can be used as backup)
 	local TAKEOWN_BACK=$2.tookown
 	
 	debug "${FUNCNAME[0]}-$1 $2"
+	
+	# clear tracking arrays
+	files_copied_out_src=()
+	files_copied_out_trg=()
+	files_moved_out_src=()
+	files_moved_out_trg=()
+	dirs_created=()
 	
 	# Run individual takeown procedures in subshell to avoid cascade exception.
 	(
@@ -227,8 +239,6 @@ cleanup()
 	directory)
 		local idx
 		
-		# TODO turn off errfail ?
-		
 		if [ $erase_on_fail = yes ]
 		then
 			warnx "Removing copies..."
@@ -265,13 +275,6 @@ cleanup()
 		then
 			run verbose mv --force --no-target-directory "$TAKEOWN_BACK" "$TAKEOWN_FILE"
 		fi
-		
-		# clear arrays for the processing of the next cli argument
-		files_copied_out_src=()
-		files_copied_out_trg=()
-		files_moved_out_src=()
-		files_moved_out_trg=()
-		dirs_created=()
 		;;
 	esac
 }
@@ -298,6 +301,12 @@ register_moved_file()
 	files_moved_out_trg+=("$2")
 }
 
+register_copied_file()
+{
+	files_copied_out_src+=("$1")
+	files_copied_out_trg+=("$2")
+}
+
 register_created_dir()
 {
 	dirs_created+=("$1")
@@ -321,8 +330,7 @@ copy_out()
 		;;
 	esac
 	
-	files_copied_out_src+=("$1")
-	files_copied_out_trg+=("$2")
+	register_copied_file "$1" "$2"
 }
 
 copy_out_file()
@@ -377,20 +385,33 @@ takeown_a_directory()
 			then
 				if [ "$owner" = "$UID" -a $is_writable_src = yes ]
 				then
-					run verbose mv --force --no-target-directory "$src/$subfile" "$trg/$subfile"
-					register_moved_file "$src/$subfile" "$trg/$subfile"
+					if run verbose mv --force --no-target-directory "$src/$subfile" "$trg/$subfile"
+					then
+						register_moved_file "$src/$subfile" "$trg/$subfile"
+					else
+						besteffort_mode
+					fi
 				else
 					copy_out symlink "$src/$subfile" "$trg/$subfile"
+					# + besteffort
 				fi
 				
 			elif [ -d "$src/$subfile" ]
 			then
-				# directories must be writable in order to be moved 
-				# into an other parent directory
+				# it's a directory ($subfile) within that directory
+				# which has to be taken own ($src).
+				
+				# now, it's either ours ($subfile) and parent ($src) is writable,
+				# then it can be moved almost directly;
+				# or else it has be taken own as well.
+				
 				if [ "$owner" = "$UID" -a $is_writable_src = yes ]
 				then
-					# temporary allow the current user to write her own directory
-					# to able to move to other parent directory
+					# directories must be writable in order to be moved 
+					# into an other parent directory.
+					# so temporary allow the current user to write her 
+					# own directory ($subfile) to able to move it.
+					
 					local modes=`stat -c %a "$src/$subfile"`
 					chmod u+w "$src/$subfile" || [ -w "$src/$subfile" ]
 					local moved
@@ -405,25 +426,41 @@ takeown_a_directory()
 						# restore permission modes on $subfile (stayd in $src directory)
 						chmod 0$modes "$src/$subfile"
 					fi
-					test $moved = yes
+					
+					# assert the move was successful
+					test $moved = yes -o $besteffort = yes
 				else
+					# this directory ($subfile) can not be moved,
+					# let's takeown.
 					takeown_a_directory "$src/$subfile" "$trg/$subfile" "" no
+					# + besteffort
 				fi
 			
 			elif [ "$owner" = "$UID" -a $is_writable_src = yes ]
 			then
-				run verbose mv --force --no-target-directory "$src/$subfile" "$trg/$subfile"
-				register_moved_file "$src/$subfile" "$trg/$subfile"
+				if run verbose mv --force --no-target-directory "$src/$subfile" "$trg/$subfile"
+				then
+					register_moved_file "$src/$subfile" "$trg/$subfile"
+				else
+					besteffort_mode
+				fi
 			else
 				copy_out file "$src/$subfile" "$trg/$subfile"
+				# + besteffort
 			fi
 		done
 	fi
 	
+	# clone attributes of the directory taken own just now
+	# as we finished writing into it.
 	copy_attributes "$src" "$trg"
+	# + besteffort
 	
+	# actually rename the owned directory 
+	# to the one which is wanted to be taken own.
 	if [ "$do_supersede" = yes ]
 	then
+		# make a backup
 		if [ -n "$src_back" ]
 		then
 			if ! is_empty_directory "$src"
@@ -432,6 +469,7 @@ takeown_a_directory()
 			fi
 		fi
 		
+		# final step to takeown
 		run verbose mv --force --no-target-directory "$trg" "$src"
 	fi
 }
@@ -475,7 +513,7 @@ Options:
  -v, --verbose             verbose
  -n, --dry-run             dry run
  -i, --ignore              ignore failures on files given in command arguments
- -b, --best-effort         do what can be done, ignore failures (imply -i)
+ -b, -I, --best-effort     ignore any failure while recursing (imply -i)
  -R, --recursive           recurse into directories
  -t, --strict              strict chmod, chgrp, setfacl, setfattr
  -M, --no-strict-chmod     different mode does not matter
@@ -502,10 +540,6 @@ Exit code:
 	--erase-on-fail|--erase-on-failure)
 		erase_on_fail=yes
 		;;
-	-b|--best-effort)
-		besteffort=yes
-		# TODO implement
-		;;
 	-R|--recursive)
 		recursive=yes
 		;;
@@ -514,6 +548,9 @@ Exit code:
 		;;
 	-i|--ignore)
 		ignoreerrors=yes
+		;;
+	-b|-I|--best-effort)
+		besteffort=yes
 		;;
 	-t|--strict)
 		for s in ${!strict[@]}
@@ -551,6 +588,7 @@ Exit code:
 done
 
 declare -g Error=0
+# these arrays keep track of recursive directory takeown process.
 declare -a files_copied_out_src
 declare -a files_copied_out_trg
 declare -a files_moved_out_src
@@ -566,6 +604,8 @@ true <<EOF
 
 =pod
 
+=encoding utf8
+
 =head1 NAME
 
 takeown - Take ownership on files, even for unprivileged users
@@ -576,12 +616,41 @@ takeown [I<options>] <I<files> and I<directories>>
 
 =head1 DESCRIPTION
 
-chown(2) is permitted only for root (and processes with CAP_CHOWN), but normal users can emulate this behavior.
+chown(2) is permitted only for root (and processes with CAP_CHOWN), but normal users can imitate this behavior.
 You can copy other users´ file for your own in a directory writable by you, and then replace the original file with your copy.
-It is quite tricky and expensive sometimes, but gives you an option.
+It is quite tricky and maybe expensive (copying huge files), but gives you an option.
 Say, when somebody forgot to use the right user account when saving files directly to your folders.
+
+=head1 TECH REFERENCE
+
+=head2 Call stack
+
+ script --> main --> takeown
+                     /  |  \
+                    /   |   \
+                   /    |    \
+           takeown   takeown  takeown
+           _file    _symlink  _directory
+             |         |           |
+ - - - - - - | - - - - | - - - - - | - - - - - - - - - - - - - -
+ error       |         |           |
+ handler     |         |           |    ,---------> copy_attributes *
+ function:   |         |           |   /
+ cleanup     |         |           |  /      +---> register_created_dir
+             |         |  ,--> takeown_      |
+             |         |  |    a_directory --+---> register_moved_file
+             |         |  |     |  |         |
+             |         |  `-----´  |         +---> register_copied_file
+             |         v           v               /
+             |      copy_out <-- copy_out --------´
+             |      _symlink     /
+             v                  /
+         copy_out <------------´
+           _file
+             |
+             v
+      copy_attributes *
 
 =cut
 
 EOF
-

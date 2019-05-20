@@ -48,7 +48,7 @@ is_empty_directory()
 
 is_writable_dir()
 {
-	if [ "$activewritetest" = yes ]
+	if [ "$dryrun" != yes -a "$activewritetest" = yes ]
 	then
 		local testfile=''
 		local werr=''
@@ -169,18 +169,6 @@ subs_file_comment()
 	sed -e "s@^# file:.*@# file: ${1//@/\@}@"
 }
 
-copy_attributes()
-{
-	if [ "$dochgrp" = yes ]
-	then
-		run verbose chgrp --quiet --reference="$1" --no-dereference "$2" || no_strict group "$1"
-	fi
-	run verbose chmod --quiet --reference="$1" "$2" || no_strict mode "$1"
-	getfacl --skip-base "$1" | subs_file_comment "$2" | run setfacl --restore=- || no_strict acl "$1"
-	getfattr --no-dereference --physical --dump "$1" | subs_file_comment "$2" | run setfattr --restore=- || no_strict xattr "$1"
-	# TODO support ext2 attributes
-}
-
 takeown()
 {
 	#  the file/directory to be taken own
@@ -239,7 +227,7 @@ cleanup()
 	directory)
 		local idx
 		
-		if [ $erase_on_fail = yes ]
+		if [ "$erase_on_fail" = yes ]
 		then
 			warnx "Removing copies..."
 			idx=$[ ${#files_copied_out_trg[@]} - 1 ]
@@ -312,25 +300,73 @@ register_created_dir()
 	dirs_created+=("$1")
 }
 
+copy_attributes()
+{
+	local errstatus
+	
+	try
+		set +e
+		(
+			set -e
+			if [ "$dochgrp" = yes ]
+			then
+				run verbose chgrp --quiet --reference="$1" --no-dereference "$2" || no_strict group "$1"
+			fi
+			run verbose chmod --quiet --reference="$1" "$2" || no_strict mode "$1"
+			getfacl --skip-base "$1" | subs_file_comment "$2" | run setfacl --restore=- || no_strict acl "$1"
+			getfattr --no-dereference --physical --dump "$1" | subs_file_comment "$2" | run setfattr --restore=- || no_strict xattr "$1"
+			# TODO support ext2 attributes
+		)
+		errstatus=$?
+	untry
+	
+	if [ $errstatus != 0 ]
+	then
+		# either copy-attributes operation should succeed or we should be in best-effort mode
+		besteffort_mode
+	fi
+	
+	# return success. errors handled earlier.
+	return 0
+}
+
 copy_out()
 {
 	local filetype=$1
+	local errstatus
 	shift
 	
-	case "$filetype" in
-	symlink)
-		copy_out_symlink "$@"
-		;;
-	file)
-		copy_out_file "$@"
-		;;
-	*)
-		warnx internal error: copy_out $filetype "$@"
-		exit 1
-		;;
-	esac
+	# run in subshell to able to check best-effort mode
+	try
+		set +e
+		(
+			set -e
+			case "$filetype" in
+			symlink)
+				copy_out_symlink "$@"
+				;;
+			file)
+				copy_out_file "$@"
+				;;
+			*)
+				warnx "internal error: copy_out $filetype $*"
+				exit 1
+				;;
+			esac
+		)
+		errstatus=$?
+	untry
 	
-	register_copied_file "$1" "$2"
+	if [ $errstatus = 0 ]
+	then
+		register_copied_file "$1" "$2"
+	else
+		# either copy-out operation should succeed or we should be in best-effort mode
+		besteffort_mode
+	fi
+	
+	# return success. errors handled earlier.
+	return 0
 }
 
 copy_out_file()
@@ -340,7 +376,7 @@ copy_out_file()
 	
 	run touch --reference="$src" "$trg"
 	# setup a mode just enough to able to write. clone all attributes later.
-	chmod 0600 "$trg"
+	run chmod 0600 "$trg"
 	run verbose cp --no-dereference --preserve=all --force --no-target-directory "$src" "$trg"
 	copy_attributes "$src" "$trg"
 }
@@ -357,7 +393,7 @@ copy_out_symlink()
 	# I get EPERM on lsetxattr(2) on symlinks too.
 }
 
-takeown_a_directory()
+takeown_directory_recursive()
 {
 	local src=$1
 	local trg=$2
@@ -389,11 +425,12 @@ takeown_a_directory()
 					then
 						register_moved_file "$src/$subfile" "$trg/$subfile"
 					else
+						# either 'mv' should succeed or we should be in best-effort mode
 						besteffort_mode
 					fi
 				else
 					copy_out symlink "$src/$subfile" "$trg/$subfile"
-					# + besteffort
+					# best-effort mode checked and exceptions handled within copy_out func
 				fi
 				
 			elif [ -d "$src/$subfile" ]
@@ -413,18 +450,18 @@ takeown_a_directory()
 					# own directory ($subfile) to able to move it.
 					
 					local modes=`stat -c %a "$src/$subfile"`
-					chmod u+w "$src/$subfile" || [ -w "$src/$subfile" ]
+					run chmod u+w "$src/$subfile" || [ -w "$src/$subfile" ]
 					local moved
 					if run verbose mv --force --no-target-directory "$src/$subfile" "$trg/$subfile"
 					then
 						moved=yes
 						# restore permission modes on $subfile (now it's in $trg directory)
-						chmod 0$modes "$trg/$subfile"
+						run chmod 0$modes "$trg/$subfile"
 						register_moved_file "$src/$subfile" "$trg/$subfile"
 					else
 						moved=no
 						# restore permission modes on $subfile (stayd in $src directory)
-						chmod 0$modes "$src/$subfile"
+						run chmod 0$modes "$src/$subfile"
 					fi
 					
 					# assert the move was successful
@@ -432,8 +469,8 @@ takeown_a_directory()
 				else
 					# this directory ($subfile) can not be moved,
 					# let's takeown.
-					takeown_a_directory "$src/$subfile" "$trg/$subfile" "" no
-					# + besteffort
+					takeown_directory_recursive "$src/$subfile" "$trg/$subfile" "" no
+					# best-effort mode is checked recursively
 				fi
 			
 			elif [ "$owner" = "$UID" -a $is_writable_src = yes ]
@@ -442,11 +479,12 @@ takeown_a_directory()
 				then
 					register_moved_file "$src/$subfile" "$trg/$subfile"
 				else
+					# either 'mv' should succeed or we should be in best-effort mode
 					besteffort_mode
 				fi
 			else
 				copy_out file "$src/$subfile" "$trg/$subfile"
-				# + besteffort
+				# best-effort mode checked and exceptions handled within copy_out func
 			fi
 		done
 	fi
@@ -454,7 +492,7 @@ takeown_a_directory()
 	# clone attributes of the directory taken own just now
 	# as we finished writing into it.
 	copy_attributes "$src" "$trg"
-	# + besteffort
+	# best-effort mode checked and exceptions handled within copy_attributes func
 	
 	# actually rename the owned directory
 	# to the one which is wanted to be taken own.
@@ -479,7 +517,7 @@ takeown_directory()
 	local do_supersede=yes
 	
 	try --except "cleanup directory"
-		takeown_a_directory "$TAKEOWN_FILE" "$TAKEOWN_COPY" "$TAKEOWN_BACK" $do_supersede
+		takeown_directory_recursive "$TAKEOWN_FILE" "$TAKEOWN_COPY" "$TAKEOWN_BACK" $do_supersede
 	untry
 }
 
@@ -634,12 +672,13 @@ Say, when somebody forgot to use the right user account when saving files direct
              |         |           |
  - - - - - - | - - - - | - - - - - | - - - - - - - - - - - - - -
  error       |         |           |
- handler     |         |           |         ,---> register_created_dir
- function:   |         |  ,--> takeown_      |
- cleanup     |         |  |    a_directory --+---> register_moved_file
-             |         |  |     |  |     \   |
-             |         |  `-----´  |      \  `---> register_
-             |         V           V       \   ,-> copied_file
+ handler     |         |           V         ,---> register_created_dir
+ function:   |         |  ,--> takeown       |
+ cleanup     |         |  |    _directory ---+---> register_moved_file
+             |         |  |    _recursive    |
+             |         |  |      | |     \   `---> register_
+             |         |  `------´ |      \    ,-> copied_file
+             |         V           V       \   |
              |      copy_out <-- copy_out --\--'
              |      _symlink     /           \
              V                  /            |

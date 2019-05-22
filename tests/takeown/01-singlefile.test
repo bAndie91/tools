@@ -1,0 +1,11 @@
+setting
+0644 root:root file1
+end
+
+takeown
+file1
+end
+
+expections
+file1 owner SELF
+end

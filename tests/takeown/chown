@@ -1,0 +1,7 @@
+#!/bin/sh
+
+# Please setup sudo to let you (you running the
+# tester process) run 'chown' on test files.
+
+echo SUDO CHOWN "$@" >&2
+exec sudo chown "$@"

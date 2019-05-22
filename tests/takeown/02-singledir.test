@@ -1,0 +1,12 @@
+setting
+0755 root:root dir1/
+end
+
+takeown
+dir1
+end
+
+expections
+dir1 owner SELF
+dir1 type d
+end

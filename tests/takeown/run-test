@@ -1,0 +1,117 @@
+#!/bin/bash
+
+if [ -z "$1" ]
+then
+	files=([0-9][0-9]-*.test)
+else
+	files=("$@")
+fi
+
+GROUP=`id -gn`
+
+
+subs_self()
+{
+	local s=$1
+	s=${s/SELF:/$USER:}
+	s=${s/:SELF/:$GROUP}
+	s=${s/SELF/$USER}
+	echo $s
+}
+
+
+for testfile in "${files[@]}"
+do
+	tcase=`basename "$testfile" .test`
+	echo "TEST CASE $tcase"
+	
+	(
+		set -e
+		set -o pipefail
+		
+		cat "$testfile" |\
+		sed -e '/^\s*(#|$)/d' |\
+		{
+			testdir=`mktemp -d "_tests.$tcase.XXXXXX"`
+			
+			(
+				cd "$testdir"
+				
+				while read -r section
+				do
+					case $section in
+					setting)
+						while read -r mode owner file
+						do
+							if [ $mode = end ]; then break; fi
+							
+							if [ "${file: -1}" = / ]
+							then
+								mkdir -p "$file"
+							else
+								mkdir -p "$(dirname "$file")"
+								touch "$file"
+							fi
+							
+							owner=`subs_self "$owner"`
+							
+							chmod $mode "$file"
+							../chown $owner "$file" </dev/null
+						done
+						;;
+					takeown)
+						args=()
+						while read -r arg
+						do
+							if [ $arg = end ]; then break; fi
+							args+=($arg)
+						done
+						
+						../../../usr/bin/takeown "${args[@]}"
+						;;
+					expections)
+						while read -r file propname desire
+						do
+							if [ $file = end ]; then break; fi
+							
+							case $propname in
+							owner)
+								fact=`stat -c %U "$file"`
+								desire=`subs_self $desire`
+								;;
+							group)
+								fact=`stat -c %G "$file"`
+								desire=`subs_self $desire`
+								;;
+							exists)
+								fact=`stat -c 1 "$file"`
+								desire=1
+								;;
+							type)
+								fact=`ls -ld "$file" | cut -c1`
+								fact=${fact/-/f}
+								;;
+							esac
+							
+							if test "$desire" != "$fact"
+							then
+								echo "Expection failed: $file $propname desired '$desire' is not '$fact'" >&2
+								false
+							fi
+						done
+						;;
+					esac
+				done
+			)
+			
+			rm -r "$testdir"
+		}
+	)
+	
+	if [ $? = 0 ]
+	then
+		echo "TEST CASE $tcase ... PASSED"
+	else
+		echo "TEST CASE $tcase ... FAILED"
+	fi
+done

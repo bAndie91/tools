@@ -157,6 +157,12 @@ do
 							fi
 						done
 						;;
+					*)
+						while read -r x y
+						do
+							if [ $x = end ]; then break; fi
+						done
+						;;
 					esac
 				done
 			)

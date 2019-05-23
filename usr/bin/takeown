@@ -558,18 +558,18 @@ Options:
  
  -i, --ignore              ignore failures on files given in command arguments
  -b, -I, --best-effort     ignore any failure while recursing (imply -i -T)
- --erase-on-failure        remove copies of files of a directory failed to take own
+ --erase-on-failure        remove copies of files of a directory failed to be taken own
  
- -t, --strict              strict chmod, chgrp, setfacl, setfattr
- -T, --no-strict           negates above (default)
- -M, --no-strict-chmod     different mode does not matter
- -G, --no-strict-chgrp     different group does not matter
- -A, --no-strict-setfacl   different ACL does not matter
- -X, --no-strict-setfattr  different extended attributes do not matter
- -m, --strict-chmod        
- --strict-chgrp
- -a, --strict-setfacl
- -x, --strict-setfattr
+ -t, --strict              fail if can not preserve file attributes
+ -T, --no-strict           attempt but do not requisite file attribute preservation (default)
+ -M, --no-strict-chmod     ignore unpreserved permission modes
+ -G, --no-strict-chgrp     ignore unpreserved group owner
+ -A, --no-strict-setfacl   ignore unpreserved ACL
+ -X, --no-strict-setfattr  ignore unpreserved extended attributes
+ -m, --strict-chmod        requisite preserved permission modes
+ --strict-chgrp            requisite preserved group owner
+ -a, --strict-setfacl      requisite preserved ACL
+ -x, --strict-setfattr     requisite preserved extended attributes
  -g, --no-chgrp            do not chgrp at all
 
 Exit code:
@@ -683,10 +683,17 @@ takeown [I<options>] <I<files> and I<directories>>
 
 =head1 DESCRIPTION
 
-chown(2) is permitted only for root (and processes with CAP_CHOWN), but normal users can imitate this behavior.
-You can copy other users´ file for your own in a directory writable by you, and then replace the original file with your copy.
+Command chown(1) or chown(2) is permitted only for root (and processes with CAP_CHOWN), 
+but normal users can imitate this behavior.
+You can copy other users´ file for your own in a directory writable by you, 
+and then replace the original file with your copy.
 It is quite tricky and maybe expensive (copying huge files), but gives you an option.
 Say, when somebody forgot to use the right user account when saving files directly to your folders.
+
+takeown(1) uses B<*.takeown> and B<*.tookown> filename extensions to create new files
+and to rename existing files to respectively.
+
+See C<takeown --help> for option list.
 
 =head1 TECH REFERENCE
 

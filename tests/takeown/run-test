@@ -96,19 +96,19 @@ do
 							../chown $owner "$file" </dev/null
 						done
 						;;
-					takeown)
+					action)
 						status_checked=no
 						exit_status=''
 						
-						args=()
+						cmd_args=()
 						while read -r arg
 						do
 							if [ ."$arg" = .end ]; then break; fi
-							args+=($arg)
+							cmd_args+=($arg)
 						done
 						
 						set +e
-						../../../usr/bin/takeown "${args[@]}"
+						"${cmd_args[@]}"
 						exit_status=$?
 						set -e
 						;;

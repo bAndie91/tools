@@ -2,8 +2,8 @@ setting
 0755 root:root dir1/
 end
 
-takeown
-dir1
+action
+../../../usr/bin/takeown dir1
 end
 
 expections

@@ -91,6 +91,10 @@ strict()
 
 no_strict()
 {
+	if [ $besteffort = yes ]
+	then
+		return 0
+	fi
 	if [ $silent_strictness_check != yes ]
 	then
 		warnx "Can not clone file's $1: $2"
@@ -302,32 +306,14 @@ register_created_dir()
 
 copy_attributes()
 {
-	local errstatus
-	
-	try
-		set +e
-		(
-			set -e
-			if [ "$dochgrp" = yes ]
-			then
-				run verbose chgrp --quiet --reference="$1" --no-dereference "$2" || no_strict group "$1"
-			fi
-			run verbose chmod --quiet --reference="$1" "$2" || no_strict mode "$1"
-			getfacl --skip-base "$1" | subs_file_comment "$2" | run setfacl --restore=- || no_strict acl "$1"
-			getfattr --no-dereference --physical --dump "$1" | subs_file_comment "$2" | run setfattr --restore=- || no_strict xattr "$1"
-			# TODO support ext2 attributes
-		)
-		errstatus=$?
-	untry
-	
-	if [ $errstatus != 0 ]
+	if [ "$dochgrp" = yes ]
 	then
-		# either copy-attributes operation should succeed or we should be in best-effort mode
-		besteffort_mode
+		run verbose chgrp --quiet --reference="$1" --no-dereference "$2" || no_strict group "$1"
 	fi
-	
-	# return success. errors handled earlier.
-	return 0
+	run verbose chmod --quiet --reference="$1" "$2" || no_strict mode "$1"
+	getfacl --skip-base "$1" | subs_file_comment "$2" | run setfacl --restore=- || no_strict acl "$1"
+	getfattr --no-dereference --physical --dump "$1" | subs_file_comment "$2" | run setfattr --restore=- || no_strict xattr "$1"
+	# TODO support ext2 attributes
 }
 
 copy_out()
@@ -335,8 +321,19 @@ copy_out()
 	local filetype=$1
 	local errstatus
 	shift
+	COPYOUT_SRC=$1
+	COPYOUT_TRG=$2
+	local target_preexists
 	
-	# run in subshell to able to check best-effort mode
+	if [ -e "$COPYOUT_TRG" ]
+	then
+		target_preexists=yes
+	else
+		target_preexists=no
+	fi
+	
+	# run in subshell to able to check best-effort mode.
+	# enclose in try/untry to clear "cleanup" ERR trap.
 	try
 		set +e
 		(
@@ -361,6 +358,12 @@ copy_out()
 	then
 		register_copied_file "$1" "$2"
 	else
+		# delete file failed to copy (at all or properly)
+		if [ $target_preexists = no -a -e "$COPYOUT_TRG" ]
+		then
+			run verbose rm --force "$COPYOUT_TRG"
+		fi
+		
 		# either copy-out operation should succeed or we should be in best-effort mode
 		besteffort_mode
 	fi
@@ -550,17 +553,25 @@ Options:
  -D, --debug               debug
  -v, --verbose             verbose
  -n, --dry-run             dry run
- -i, --ignore              ignore failures on files given in command arguments
- -b, -I, --best-effort     ignore any failure while recursing (imply -i)
  -R, --recursive           recurse into directories
+ -w, --active-write-test   active write test (instead of access(2))
+ 
+ -i, --ignore              ignore failures on files given in command arguments
+ -b, -I, --best-effort     ignore any failure while recursing (imply -i -T)
+ --erase-on-failure        remove copies of files of a directory failed to take own
+ 
  -t, --strict              strict chmod, chgrp, setfacl, setfattr
+ -T, --no-strict           negates above (default)
  -M, --no-strict-chmod     different mode does not matter
  -G, --no-strict-chgrp     different group does not matter
  -A, --no-strict-setfacl   different ACL does not matter
  -X, --no-strict-setfattr  different extended attributes do not matter
+ -m, --strict-chmod        
+ --strict-chgrp
+ -a, --strict-setfacl
+ -x, --strict-setfattr
  -g, --no-chgrp            do not chgrp at all
- -w, --active-write-test   active write test (instead of access(2))
- --erase-on-failure        remove copies when taking own a directory is failed
+
 Exit code:
  0    all operations succeeded
  1+   error happended during progress, even it was ignored"
@@ -596,6 +607,12 @@ Exit code:
 			[ -z "${strict[$s]}" ] && strict[$s]=yes
 		done
 		;;
+	-T|--no-strict)
+		for s in ${!strict[@]}
+		do
+			[ -z "${strict[$s]}" ] && strict[$s]=no
+		done
+		;;
 	-M|--no-strict-mode|--no-strict-modes|--no-strict-chmod)
 		strict[mode]=no
 		;;
@@ -607,6 +624,18 @@ Exit code:
 		;;
 	-X|--no-strict-xattr|--no-strict-setfattr)
 		strict[xattr]=no
+		;;
+	-M|--strict-mode|--strict-modes|--strict-chmod)
+		strict[mode]=yes
+		;;
+	--strict-group|--strict-chgrp)
+		strict[group]=yes
+		;;
+	-A|--strict-acl|--strict-setfacl)
+		strict[acl]=yes
+		;;
+	-X|--strict-xattr|--strict-setfattr)
+		strict[xattr]=yes
 		;;
 	-w|--active-write-test)
 		activewritetest=yes

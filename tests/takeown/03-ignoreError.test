@@ -1,0 +1,15 @@
+setting
+0755 root nonwritable/
+0644 root nonwritable/file1
+0644 root file2
+end
+
+action
+../../../usr/bin/takeown --ignore nonwritable/file1 file2
+end
+
+expections
+owner root nonwritable/file1
+owner SELF file2
+status 1
+end

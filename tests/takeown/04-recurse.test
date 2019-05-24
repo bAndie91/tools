@@ -1,0 +1,15 @@
+setting
+0755 root dir1/
+0755 root dir1/dir11/
+0644 root dir1/dir11/file
+end
+
+action
+../../../usr/bin/takeown -R dir1
+end
+
+expections
+owner SELF dir1
+owner SELF dir1/dir11/file
+exists yes dir1.tookown/dir11/file
+end

@@ -71,7 +71,7 @@ is_recursive()
 
 besteffort_mode()
 {
-	return `[ "$besteffort" = yes]; echo $?`
+	return `[ "$besteffort" = yes ]; echo $?`
 }
 
 strip_trailing_slashes()

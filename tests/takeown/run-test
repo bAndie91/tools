@@ -8,6 +8,8 @@ else
 fi
 
 GROUP=`id -gn`
+PASSED=0
+FAILED=0
 
 
 subs_self()
@@ -19,11 +21,25 @@ subs_self()
 	echo $s
 }
 
+sort_by_line_length()
+{
+	local line
+	while read -r line
+	do
+		echo "${#line} $line"
+	done |\
+	sort -nr |\
+	while read -r x line
+	do
+		echo "$line"
+	done
+}
+
 
 for testfile in "${files[@]}"
 do
 	tcase=`basename "$testfile" .test`
-	echo "TEST CASE $tcase"
+	echo "TEST CASE $tcase ... RUNNING"
 	
 	(
 		set -e
@@ -32,15 +48,21 @@ do
 		cat "$testfile" |\
 		sed -e '/^\s*(#|$)/d' |\
 		{
-			testdir=`mktemp -d "_tests.$tcase.XXXXXX"`
+			testdir=`mktemp -d "_test.$tcase.XXXXXX"`
 			
 			(
+				echo CHDIR "$testdir" >&2
 				cd "$testdir"
+				status_checked=no
+				exit_status=''
 				
 				while read -r section
 				do
 					case $section in
 					setting)
+						declare -A chmod=()
+						declare -A chown=()
+						
 						while read -r mode owner file
 						do
 							if [ $mode = end ]; then break; fi
@@ -50,52 +72,87 @@ do
 								mkdir -p "$file"
 							else
 								mkdir -p "$(dirname "$file")"
-								touch "$file"
+								echo -n x >"$file"
 							fi
 							
 							owner=`subs_self "$owner"`
-							
+							chown[$file]=$owner
+							chmod[$file]=$mode
+						done
+						
+						for file in "${!chmod[@]}"; do echo "$file"; done |\
+						sort_by_line_length |\
+						while read -r file
+						do
+							mode=${chmod[$file]}
 							chmod $mode "$file"
+						done
+						
+						for file in "${!chown[@]}"; do echo "$file"; done |\
+						sort_by_line_length |\
+						while read -r file
+						do
+							owner=${chown[$file]}
 							../chown $owner "$file" </dev/null
 						done
 						;;
 					takeown)
+						status_checked=no
+						exit_status=''
+						
 						args=()
 						while read -r arg
 						do
-							if [ $arg = end ]; then break; fi
+							if [ ."$arg" = .end ]; then break; fi
 							args+=($arg)
 						done
 						
+						set +e
 						../../../usr/bin/takeown "${args[@]}"
+						exit_status=$?
+						set -e
 						;;
 					expections)
-						while read -r file propname desire
+						while read -r propname desire file
 						do
-							if [ $file = end ]; then break; fi
+							if [ $propname = end ]
+							then
+								if [ $status_checked = no ]
+								then
+									if [ $exit_status != 0 ]
+									then
+										echo "Exit status: $exit_status" >&2
+										false
+									fi
+								fi
+								break
+							fi
 							
 							case $propname in
 							owner)
-								fact=`stat -c %U "$file"`
-								desire=`subs_self $desire`
+								fact=`stat -c %U "$file" 2>/dev/null`
+								desire=${desire/SELF/$USER}
 								;;
 							group)
-								fact=`stat -c %G "$file"`
-								desire=`subs_self $desire`
+								fact=`stat -c %G "$file" 2>/dev/null`
+								desire=${desire/SELF/$GROUP}
 								;;
 							exists)
-								fact=`stat -c 1 "$file"`
-								desire=1
+								fact=`stat -c yes "$file" 2>/dev/null || echo no`
 								;;
 							type)
 								fact=`ls -ld "$file" | cut -c1`
 								fact=${fact/-/f}
 								;;
+							status)
+								fact=$exit_status
+								status_checked=yes
+								;;
 							esac
 							
-							if test "$desire" != "$fact"
+							if [ "$desire" != "$fact" ]
 							then
-								echo "Expection failed: $file $propname desired '$desire' is not '$fact'" >&2
+								echo "Expection failed: $file $propname - desired '$desire', detected '$fact'" >&2
 								false
 							fi
 						done
@@ -104,14 +161,20 @@ do
 				done
 			)
 			
-			rm -r "$testdir"
+			# delete test base directory if we can
+			rm -r "$testdir" 2>/dev/null || true
 		}
 	)
 	
 	if [ $? = 0 ]
 	then
 		echo "TEST CASE $tcase ... PASSED"
+		PASSED=$((PASSED + 1))
 	else
 		echo "TEST CASE $tcase ... FAILED"
+		FAILED=$((FAILED + 1))
 	fi
 done
+
+echo "-------------
+PASSED $PASSED/$((PASSED + FAILED))" >&2

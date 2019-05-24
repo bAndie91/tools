@@ -7,6 +7,6 @@ dir1
 end
 
 expections
-dir1 owner SELF
-dir1 type d
+owner SELF dir1
+type d dir1
 end

@@ -1,5 +1,7 @@
 setting
-0644 root:root file1
+0644 root file1
+0755 root nonwritable/
+0644 root nonwritable/file2
 end
 
 takeown
@@ -7,5 +9,15 @@ file1
 end
 
 expections
-file1 owner SELF
+owner SELF file1
+exists no file1.tookown
+end
+
+takeown
+nonwritable/file2
+end
+
+expections
+owner root nonwritable/file2
+status 1
 end

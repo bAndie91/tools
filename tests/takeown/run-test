@@ -46,7 +46,7 @@ do
 		set -o pipefail
 		
 		cat "$testfile" |\
-		sed -e '/^\s*(#|$)/d' |\
+		sed -e '/^\s*\(#\|$\)/d' |\
 		{
 			testdir=`mktemp -d "_test.$tcase.XXXXXX"`
 			
@@ -67,17 +67,27 @@ do
 						do
 							if [ $mode = end ]; then break; fi
 							
-							if [ "${file: -1}" = / ]
+							if [[ $file =~ (.+)\ -\>\ (.+) ]]
 							then
-								mkdir -p "$file"
-							else
+								file=${BASH_REMATCH[1]}
+								target=${BASH_REMATCH[2]}
+								
 								mkdir -p "$(dirname "$file")"
-								echo -n x >"$file"
+								ln -sn "$target" "$file"
+							else
+								if [ "${file: -1}" = / ]
+								then
+									mkdir -p "$file"
+								else
+									mkdir -p "$(dirname "$file")"
+									echo -n x >"$file"
+								fi
+								
+								chmod[$file]=$mode
 							fi
 							
 							owner=`subs_self "$owner"`
 							chown[$file]=$owner
-							chmod[$file]=$mode
 						done
 						
 						for file in "${!chmod[@]}"; do echo "$file"; done |\
@@ -93,7 +103,7 @@ do
 						while read -r file
 						do
 							owner=${chown[$file]}
-							../chown $owner "$file" </dev/null
+							../chown --no-dereference $owner "$file" </dev/null
 						done
 						;;
 					action)
@@ -108,7 +118,7 @@ do
 						done
 						
 						set +e
-						"${cmd_args[@]}"
+						"${cmd_args[@]}" </dev/null
 						exit_status=$?
 						set -e
 						;;
@@ -158,6 +168,7 @@ do
 						done
 						;;
 					*)
+						echo "WARN: Unsupported section: $section" >&2
 						while read -r x y
 						do
 							if [ $x = end ]; then break; fi

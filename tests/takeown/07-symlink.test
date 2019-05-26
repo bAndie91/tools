@@ -1,0 +1,14 @@
+setting
+0644 root:root link1 -> file1
+0644 root:root file1
+end
+
+action
+../../../usr/bin/takeown link1
+end
+
+expections
+owner SELF link1
+owner root file1
+end
+

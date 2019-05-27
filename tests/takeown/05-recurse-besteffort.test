@@ -11,6 +11,7 @@ end
 expections
 owner SELF dir1
 owner SELF dir1/file1
-exists no  dir1/file2
+owner SELF dir1/file2
+size ==0 dir1/file2
 exists yes dir1.tookown/file2
 end

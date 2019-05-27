@@ -1,7 +1,7 @@
 setting
-0755 root dir1/
-0644 root dir1/file1
-0600 root dir1/file2
+0755 root:root dir1/
+0644 root:root dir1/file1
+0600 root:root dir1/file2
 end
 
 action
@@ -9,9 +9,11 @@ action
 end
 
 expections
-status fail
 owner root dir1
 owner root dir1/file1
 owner root dir1/file2
 exists no dir1.takeown
+exists no dir1/file1.takeown
+exists no dir1/file2.takeown
+status fail
 end

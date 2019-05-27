@@ -12,7 +12,7 @@ owner root file1
 group root file1
 exists no file1.takeown
 exists no file1.tookown
-status 1
+status fail
 end
 
 action
@@ -22,6 +22,6 @@ end
 expections
 owner SELF file2
 group SELF file2
-status 0
+status success
 end
 

@@ -11,5 +11,5 @@ end
 expections
 owner root nonwritable/file1
 owner SELF file2
-status 1
+status fail
 end

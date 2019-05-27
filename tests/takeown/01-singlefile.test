@@ -19,5 +19,5 @@ end
 
 expections
 owner root nonwritable/file2
-status 1
+status fail
 end

@@ -138,6 +138,8 @@ do
 								break
 							fi
 							
+							operator='=='
+							
 							case $propname in
 							owner)
 								fact=`stat -c %U "$file" 2>/dev/null || true`
@@ -147,6 +149,12 @@ do
 								fact=`stat -c %G "$file" 2>/dev/null || true`
 								desire=${desire/SELF/$GROUP}
 								;;
+							size)
+								fact=`stat -c %s "$file" 2>/dev/null || true`
+								operator=${desire//[0-9]/}
+								[ -n "$operator" ] || operator='=='
+								desire=${desire//[!0-9]/}
+								;;
 							exists)
 								fact=`stat -c yes "$file" 2>/dev/null || echo no`
 								;;
@@ -155,14 +163,35 @@ do
 								fact=${fact/-/f}
 								;;
 							status)
+								case "$desire" in
+								fail) desire='!=0';;
+								success) desire='==0';;
+								esac
+								
+								operator=${desire//[0-9]/}
+								[ -n "$operator" ] || operator='=='
+								desire=${desire//[!0-9]/}
+								
 								fact=$exit_status
 								status_checked=yes
 								;;
 							esac
 							
-							if [ "$desire" != "$fact" ]
+							case "$operator" in
+							'>=') testoper=-ge;;
+							'<=') testoper=-le;;
+							'>')  testoper=-gt;;
+							'<')  testoper=-lt;;
+							'==') testoper='==';;
+							'!=') testoper='!=';;
+							*)    false;;
+							esac
+							
+							if [ "$desire" $testoper "$fact" ]
 							then
-								echo "Expection failed: $file $propname - desired '$desire', detected '$fact'" >&2
+								true
+							else
+								echo "Expection failed: $file $propname - desired $operator '$desire', detected '$fact'" >&2
 								false
 							fi
 						done

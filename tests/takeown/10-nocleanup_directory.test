@@ -9,5 +9,5 @@ end
 expections
 owner root dir1
 exists yes dir1.takeown
-status 1
+status fail
 end

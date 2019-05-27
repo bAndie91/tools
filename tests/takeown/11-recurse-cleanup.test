@@ -1,0 +1,17 @@
+setting
+0755 root dir1/
+0644 root dir1/file1
+0600 root dir1/file2
+end
+
+action
+../../../usr/bin/takeown -R dir1
+end
+
+expections
+status 1
+owner root dir1
+owner root dir1/file1
+owner root dir1/file2
+exists no dir1.takeown
+end

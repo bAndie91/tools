@@ -140,11 +140,11 @@ do
 							
 							case $propname in
 							owner)
-								fact=`stat -c %U "$file" 2>/dev/null`
+								fact=`stat -c %U "$file" 2>/dev/null || true`
 								desire=${desire/SELF/$USER}
 								;;
 							group)
-								fact=`stat -c %G "$file" 2>/dev/null`
+								fact=`stat -c %G "$file" 2>/dev/null || true`
 								desire=${desire/SELF/$GROUP}
 								;;
 							exists)

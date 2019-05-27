@@ -1,7 +1,7 @@
 setting
 0755 root:root dir1/
 0644 root:root dir1/file1
-0640 root:root dir1/file2
+0600 root:root dir1/file2
 end
 
 action

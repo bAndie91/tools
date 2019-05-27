@@ -1,0 +1,13 @@
+setting
+0755 root:root dir1/
+end
+
+action
+../../../usr/bin/takeown --no-cleanup --strict-chgrp dir1
+end
+
+expections
+owner root dir1
+exists yes dir1.takeown
+status 1
+end

@@ -1,0 +1,13 @@
+setting
+0644 root:root file1
+end
+
+action
+../../../usr/bin/takeown --no-cleanup --strict-chgrp file1
+end
+
+expections
+owner root file1
+exists yes file1.takeown
+status 1
+end

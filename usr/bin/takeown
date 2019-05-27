@@ -35,10 +35,22 @@ yesno()
 	"$@" && echo yes || echo no
 }
 
+no_err_trap()
+{
+	trap - ERR
+	"$@"
+}
+
+echo_status()
+{
+	"$@"
+	echo $?
+}
+
 is_empty_directory()
 {
-	local a=`find "$1" -mindepth 1 -print -quit`
-	if [ -z "$a" ]
+	local content=`no_err_trap find "$1" -mindepth 1 -printf 1 -quit`
+	if [ -z "$content" ]
 	then
 		return 0
 	else
@@ -56,22 +68,22 @@ is_writable_dir()
 		do
 			testfile=$1/takeown-writetest.$RANDOM
 		done
-		werr=`touch "$testfile"; echo $?`
+		werr=`echo_status no_err_trap touch "$testfile"`
 		[ ! -e "$testfile" ] || rm "$testfile" || true
 		return $werr
 	else
-		return `[ -w "$1" ]; echo $?`
+		return `echo_status no_err_trap [ -w "$1" ]`
 	fi
 }
 
 is_recursive()
 {
-	return `[ "$recursive" = yes ]; echo $?`
+	return `echo_status no_err_trap [ "$recursive" = yes ]`
 }
 
 besteffort_mode()
 {
-	return `[ "$besteffort" = yes ]; echo $?`
+	return `echo_status no_err_trap [ "$besteffort" = yes ]`
 }
 
 strip_trailing_slashes()
@@ -86,7 +98,7 @@ strip_trailing_slashes()
 
 strict()
 {
-	return `[ "${strict[$1]}" = yes ]; echo $?`
+	return `echo_status no_err_trap [ "${strict[$1]}" = yes ]`
 }
 
 no_strict()
@@ -99,7 +111,7 @@ no_strict()
 	then
 		warnx "Can not clone file's $1: $2"
 	fi
-	return `[ "${strict[$1]}" != yes ]; echo $?`
+	return `echo_status no_err_trap [ "${strict[$1]}" != yes ]`
 }
 
 sort_by_length_desc()
@@ -148,9 +160,9 @@ main()
 	local file
 	for file in "${argv[@]}"
 	do
-		file=`strip_trailing_slashes "$file"`
+		file=`no_err_trap strip_trailing_slashes "$file"`
 		
-		local owner=`stat -c %u "$file"`
+		local owner=`no_err_trap stat -c %u "$file"`
 		
 		if [ "$owner" != "$UID" ]
 		then
@@ -181,6 +193,7 @@ takeown()
 	local TAKEOWN_COPY=$2.takeown
 	#  the file/directory TAKEOWN_FILE will be renamed to (can be used as backup)
 	local TAKEOWN_BACK=$2.tookown
+	local errstatus
 	
 	debug "${FUNCNAME[0]}-$1 $2"
 	
@@ -205,14 +218,14 @@ takeown()
 			;;
 		esac
 	)
-	local ec=$?
-	if [ $ec != 0 ]
+	errstatus=$?
+	if [ $errstatus != 0 ]
 	then
 		if [ "$ignoreerrors" = yes ]
 		then
-			Error=$ec
+			Error=$errstatus
 		else
-			exit $ec
+			exit $errstatus
 		fi
 	fi
 }
@@ -389,7 +402,7 @@ copy_out_symlink()
 	local src=$1
 	local trg=$2
 	
-	local symlink_target=`readlink "$src"`
+	local symlink_target=`no_err_trap readlink "$src"`
 	run verbose ln --symbolic --no-target-directory --force "$symlink_target" "$trg"
 	run touch --no-dereference --reference="$src" "$trg"
 	# symlinks does not seem to capable to carry ACLs on my system.
@@ -417,8 +430,8 @@ takeown_directory_recursive()
 		for subfile in "$src"/*
 		do
 			subfile=${subfile##*/}
-			owner=`stat -c %u "$src/$subfile"`
-			is_writable_src=`yesno is_writable_dir "$src"`
+			owner=`no_err_trap stat -c %u "$src/$subfile"`
+			is_writable_src=`no_err_trap yesno is_writable_dir "$src"`
 			
 			if [ -L "$src/$subfile" ]
 			then
@@ -452,7 +465,7 @@ takeown_directory_recursive()
 					# so temporary allow the current user to write her
 					# own directory ($subfile) to able to move it.
 					
-					local modes=`stat -c %a "$src/$subfile"`
+					local modes=`no_err_trap stat -c %a "$src/$subfile"`
 					run chmod u+w "$src/$subfile" || [ -w "$src/$subfile" ]
 					local moved
 					if run verbose mv --force --no-target-directory "$src/$subfile" "$trg/$subfile"

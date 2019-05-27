@@ -1,0 +1,27 @@
+setting
+0644 root:root file1
+0644 root:root file2
+end
+
+action
+../../../usr/bin/takeown --strict-chgrp file1
+end
+
+expections
+owner root file1
+group root file1
+exists no file1.takeown
+exists no file1.tookown
+status 1
+end
+
+action
+../../../usr/bin/takeown --strict-chgrp --no-chgrp file2
+end
+
+expections
+owner SELF file2
+group SELF file2
+status 0
+end
+

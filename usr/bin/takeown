@@ -339,14 +339,6 @@ copy_out()
 	shift
 	COPYOUT_SRC=$1
 	COPYOUT_TRG=$2
-	local target_preexists
-	
-	if [ -e "$COPYOUT_TRG" ]
-	then
-		target_preexists=yes
-	else
-		target_preexists=no
-	fi
 	
 	# run in subshell to able to check best-effort mode.
 	# enclose in try/untry to clear "cleanup" ERR trap.
@@ -374,14 +366,20 @@ copy_out()
 	then
 		register_copied_file "$1" "$2"
 	else
-		# delete file failed to copy (at all or properly)
-		if [ $target_preexists = no -a -e "$COPYOUT_TRG" ]
+		if besteffort_mode
 		then
-			run verbose rm --force "$COPYOUT_TRG"
+			true
+		else
+			if [ $do_cleanup = yes ]
+			then
+				# delete file failed to copy (at all or properly)
+				if [ -e "$COPYOUT_TRG" ]
+				then
+					run verbose rm --force "$COPYOUT_TRG"
+				fi
+			fi
+			false
 		fi
-		
-		# either copy-out operation should succeed or we should be in best-effort mode
-		besteffort_mode
 	fi
 	
 	# return success. errors handled earlier.
@@ -573,7 +571,7 @@ Options:
  -w, --active-write-test   active write test (instead of access(2))
  
  -i, --ignore              ignore failures on files given in command arguments
- -b, -I, --best-effort     ignore any failure while recursing (imply -i -T)
+ -b, -I, --best-effort     ignore any failure while recursing (force -i -T)
  -C, --no-cleanup          keep *.takeown files on failure
  
  -T, --no-strict           attempt but do not requisite file attribute preservation (default)

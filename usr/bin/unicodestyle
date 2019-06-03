@@ -8,6 +8,8 @@ use constant { LOWER => 0, UPPER => 1, COMMON_SURROGATE => 0xd835, };
 binmode STDIN, ':utf8';
 binmode STDOUT, ':utf8';
 
+$msg_not_support_combine = "Combining styles %s and %s is not supported.\n";
+
 
 %Transformer = (
 	double => [0xdcf1, 0xdcf7],
@@ -17,11 +19,41 @@ binmode STDOUT, ':utf8';
 	bold => [0xdd8d, 0xdd93],
 	italic => [0xddc1, 0xddc7],
 	bold_italic => [0xddf5, 0xddfb],
+	smallcaps => {
+		ignorecase => 1,
+		transtable => {qw/
+			B 0x299 G 0x262 H 0x29C I 0x26A L 0x29F N 0x274 R 0x280 Y 0x28F
+			0x276 0x276 0x153 0x276
+			A 0x1D00 C 0x1D04 D 0x1D05 E 0x1D07 J 0x1D0A K 0x1D0B M 0x1D0D O 0x1D0F P 0x1D18 T 0x1D1B U 0x1D1C V 0x1D20 W 0x1D21 Z 0x1D22
+			0xC6 0x1D01 0xE6 0x1D01
+			F 0xA730 S 0xA731
+			Q 0xA7AF
+		/},
+	},
+	circled => {
+		transrange => [
+			{input_start => 'A', input_end => 'Z', offset => 0x24B6},
+			{input_start => 'a', input_end => 'z', offset => 0x24D0},
+			{input_start => '1', input_end => '9', offset => 0x2460},
+			{input_start => '0', input_end => '0', offset => 0x24EA},
+		],
+	},
+	circled_negative => {
+		transrange => [
+			{input_start => 'A', input_end => 'Z', offset => 0x1F150},
+			{input_start => '1', input_end => '9', offset => 0x2776},
+			{input_start => '0', input_end => '0', offset => 0x24FF},
+		],
+	},
 );
+
+#	square =>
+#	square_negative =>
+#	parenthesis =>
 
 %Appender = (
 	underline => ['̲', sub{ $_[0] !~ /[gjpqyQ,;_]/; }],
-	strikethrough => ['̶', sub{1;}] ,
+	strikethrough => ['̶', sub{1;}],
 );
 
 
@@ -32,9 +64,36 @@ sub surrogate_pair
 	return 0x10000 + ($hi - 0xD800) * 0x400 + ($lo - 0xDC00);
 }
 
+sub hexord
+{
+	sprintf "0x%X", ord $_[0];
+}
+
 sub is_applicable_transformer
 {
-	$_[0] =~ /[A-Za-z]/;
+	my ($chr, $trnkey) = @_;
+	my $trn = $Transformer{$trnkey};
+	
+	if(ref $trn eq 'ARRAY')
+	{
+		return 1 if $chr =~ /[A-Za-z]/;
+		return '';
+	}
+	if(exists $trn->{transtable})
+	{
+		return 1 if hexord($chr) ~~ [keys $trn->{transtable}];
+		return 1 if $chr ~~ [keys $trn->{transtable}];
+		return 1 if $trn->{ignorecase} and uc $chr ~~ [keys $trn->{transtable}];
+	}
+	if(exists $trn->{transrange})
+	{
+		my $ord = ord $chr;
+		for my $r (@{$trn->{transrange}})
+		{
+			return 1 if $ord >= ord $r->{input_start} and $ord <= ord $r->{input_end}
+		}
+	}
+	return '';
 }
 
 sub is_applicable
@@ -48,38 +107,39 @@ sub is_applicable
 $trans_style = undef;
 @appenders = ();
 
+
 for my $style (@ARGV)
 {
-	if(exists $Transformer{$style})
+	if(exists $Appender{$style})
 	{
-		if(defined $trans_style)
+		push @appenders, $style;
+		next;
+	}
+	
+	if(defined $trans_style)
+	{
+		my $combined = join '_', sort split(/_/, $trans_style), $style;
+		
+		if(exists $Transformer{$combined})
 		{
-			my $combined = join '_', sort split(/_/, $trans_style), $style;
-			
-			if(exists $Transformer{$combined})
-			{
-				$trans_style = $combined;
-			}
-			else
-			{
-				die "Combining styles $trans_style and $style is not supported.\n";
-			}
+			$trans_style = $combined;
 		}
 		else
 		{
-			$trans_style = $style;
+			die sprintf $msg_not_support_combine, $trans_style, $style;
 		}
-	}
-	elsif(exists $Appender{$style})
-	{
-		push @appenders, $style;
 	}
 	else
 	{
-		die "Unknown style: $style\nStyles: ".(join ' ', grep {!/_/} keys %Transformer, keys %Appender)."\n";
+		$trans_style = $style;
 	}
 }
 
+if(not exists $Transformer{$trans_style})
+{
+	die "Unknown style or style can not be used alone: $trans_style\n".
+	    "Styles: ".(join ' ', grep {!/_/} sort keys %Transformer, keys %Appender)."\n";
+}
 
 
 
@@ -91,10 +151,44 @@ while(<STDIN>)
 		
 		if(is_applicable($char_in))
 		{
-			if(defined $trans_style and is_applicable_transformer($char_in))
+			if(defined $trans_style and is_applicable_transformer($char_in, $trans_style))
 			{
-				my $case = $char_in =~ /[a-z]/ ? LOWER : UPPER;
-				$char_out = chr surrogate_pair(COMMON_SURROGATE, $Transformer{$trans_style}->[$case] + ord $char_in);
+				if(ref $Transformer{$trans_style} eq 'ARRAY')
+				{
+					my $case = $char_in =~ /[a-z]/ ? LOWER : UPPER;
+					$char_out = chr surrogate_pair(COMMON_SURROGATE, $Transformer{$trans_style}->[$case] + ord $char_in);
+				}
+				else
+				{
+					if(exists $Transformer{$trans_style}->{transrange})
+					{
+						for my $range (@{$Transformer{$trans_style}->{transrange}})
+						{
+							my ($char_in_ord, $input_start_ord, $input_end_ord) = map {ord $_} $char_in, $range->{input_start}, $range->{input_end};
+							if($char_in_ord >= $input_start_ord and $char_in_ord <= $input_end_ord)
+							{
+								$char_out = chr($range->{offset} + ($char_in_ord - $input_start_ord));
+								goto translated;
+							}
+						}
+					}
+					if(exists $Transformer{$trans_style}->{transtable})
+					{
+						my @lookupchars = ($char_in, hexord($char_in));
+						push @lookupchars, uc $char_in, hexord(uc $char_in) if $Transformer{$trans_style}->{ignorecase};
+						for my $char_out_hex (map {$Transformer{$trans_style}->{transtable}->{$_}} @lookupchars)
+						{
+							if(defined $char_out_hex)
+							{
+								$char_out = chr hex $char_out_hex;
+								goto translated;
+							}
+						}
+					}
+					$char_out = $char_in;
+					translated:
+					1;
+				}
 			}
 			for my $style (@appenders)
 			{

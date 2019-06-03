@@ -55,9 +55,15 @@ $msg_not_support_combine = "Combining styles %s and %s is not supported.\n";
 			{input_start => 'A', input_end => 'Z', offset => 0x1F170},
 		],
 	},
+	parenthesized => {
+		transrange => [
+			{input_start => 'A', input_end => 'Z', offset => 0x1F110},
+			{input_start => 'a', input_end => 'z', offset => 0x249C},
+			{input_start => '1', input_end => '9', offset => 0x2474},
+		],
+	},
 );
 
-#	parenthesis =>
 
 %Appender = (
 	underline => ['̲', sub{ $_[0] !~ /[gjpqyQ,;_]/; }],

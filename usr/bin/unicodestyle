@@ -45,10 +45,18 @@ $msg_not_support_combine = "Combining styles %s and %s is not supported.\n";
 			{input_start => '0', input_end => '0', offset => 0x24FF},
 		],
 	},
+	squared => {
+		transrange => [
+			{input_start => 'A', input_end => 'Z', offset => 0x1F130},
+		],
+	},
+	negative_squared => {
+		transrange => [
+			{input_start => 'A', input_end => 'Z', offset => 0x1F170},
+		],
+	},
 );
 
-#	square =>
-#	square_negative =>
 #	parenthesis =>
 
 %Appender = (

@@ -31,12 +31,6 @@ cache-s3-ls()
 	then
 		stat -c %Y "$cachefile"
 		cat "$cachefile"
-		if [ -e "$cachedir/err" ]
-		then
-			return `cat "$cachedir/err"`
-		else
-			return 0
-		fi
 	else
 		echo 0
 		aws s3 ls "$s3uri" | tee "$cachefile"
@@ -44,8 +38,7 @@ cache-s3-ls()
 		ec=${ps[0]}
 		if [ $ec != 0 ]
 		then
-			# mv -f "$cachefile" "$cachedir/err=$ec"
-			# don't skip caching errorneous output
+			mv -f "$cachefile" "$cachedir/data.error"
 			echo -n $ec > "$cachedir/err"
 		fi
 		return $ec

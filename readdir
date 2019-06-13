@@ -219,13 +219,17 @@ read_file)
 ;; # read_file
 
 chmod)
-	if [ ".$2" = .00000 ]
-	then
-		cachekey=`mk_cache_key "s3:/$1"`
+	cachekey=`mk_cache_key "s3:/$1"`
+	case ".$2" in
+	.00000)
+		find "$cache_basedir/$cachekey" -type f -name "data" -delete
+		;;
+	.00001)
 		rm "$cache_basedir/$cachekey/data"
-		exit 0
-	fi
-	exit 1
+		;;
+	*)	exit 1;;
+	esac
+	exit 0
 ;; # chmod
 
 *)	exit 95;;

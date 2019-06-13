@@ -54,7 +54,7 @@ cache-s3-ls()
 
 print_base_dir_attr()
 {
-	echo -ne "ino=1 mode=$dmode nlink=2 uid=$UID gid=$GID rdev=0 size=0 blksize=512 blocks=0 atime=$cache_timestamp mtime=0 ctime=0${1:+ $1\0}"
+	echo -ne "ino=1 mode=$dmode nlink=2 uid=$UID gid=$GID rdev=0 size=0 blksize=512 blocks=0 atime=$cache_timestamp mtime=$mtime ctime=0${1:+ $1\0}"
 }
 
 fmode=-rw-r--r--
@@ -64,6 +64,7 @@ GID=0
 fuseop=${0##*/}
 cache_timestamp=0
 cache_basedir=~/.cache/execfuse-s3
+mtime=0
 
 case "$fuseop" in
 readdir)
@@ -143,6 +144,7 @@ case "$1" in
 			do
 				if [ "$this_bucket" = "$bucket" ]
 				then
+					mtime=`date +%s -d "$date $time"`
 					print_base_dir_attr
 					exit 0
 				fi
@@ -167,6 +169,7 @@ case "$1" in
 		else
 			key_dirname=''
 		fi
+		key_basename=${key##*/}
 		
 		{
 			cache-s3-ls s3://$bucket/$key_dirname |\
@@ -177,13 +180,16 @@ case "$1" in
 			read cache_timestamp
 			while read -r date time size fname
 			do
-				fname=${fname:0:-1}
-				key_basename=${key##*/}
+				if [ "$size" = PRE ]
+				then
+					fname=${fname:0:-1}
+				fi
 				if [ "$fname" = "$key_basename" ]
 				then
 					if [ "$size" = PRE ]
 					then
 						# it's a key prefix, show there is a dir
+						# TODO: get mtime from the listing of this current keyprefix
 						print_base_dir_attr
 					else
 						# it's an object key, show there is a file

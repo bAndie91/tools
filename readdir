@@ -102,7 +102,11 @@ case "$1" in
 			if [ "$size" = PRE ]
 			then
 				fname=${fname:0:-1}
-				print_base_dir_attr "$fname"
+				if [ -n "$fname" ]
+				then
+					# NOTE: mtime is 0 here
+					print_base_dir_attr "$fname"
+				fi
 			else
 				if [ -n "$fname" ]
 				then
@@ -189,7 +193,17 @@ case "$1" in
 					if [ "$size" = PRE ]
 					then
 						# it's a key prefix, show there is a dir
-						# TODO: get mtime from the listing of this current keyprefix
+						# get mtime from the listing of this current keyprefix, only if it's cached
+						cachekey=`mk_cache_key "s3://$bucket/$key/"`
+						cachefile=$cache_basedir/$cachekey/data
+						if [ -f "$cachefile" ]
+						then
+							datetime=`sed -ne '/^\S\+ \S\+\s\+0 $/{s/\s\+0 $//p;q}' "$cachefile"`
+							if [ -n "$datetime" ]
+							then
+								mtime=`date +%s -d "$datetime"`
+							fi
+						fi
 						print_base_dir_attr
 					else
 						# it's an object key, show there is a file

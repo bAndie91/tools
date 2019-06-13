@@ -1,0 +1,206 @@
+#!/bin/bash
+
+#exit 95
+#exec 2>/tmp/e ; set -x
+
+mk_cache_key()
+{
+	local x=$1
+	local cachekey=${x//%/%25}
+	cachekey=${cachekey//./%2E}
+	cachekey=${cachekey//\//%2F\/}
+	echo "$cachekey"
+}
+
+cache-s3-ls()
+{
+	local s3uri
+	local cachekey
+	local cachedir
+	local cachefile
+	declare -a ps
+	local ec
+	
+	s3uri=$1
+	cachekey=`mk_cache_key "$s3uri"`
+	cachedir=$cache_basedir/$cachekey
+	mkdir -p "$cachedir"
+	cachefile=$cachedir/data
+	
+	if [ -f "$cachefile" ]
+	then
+		stat -c %Y "$cachefile"
+		cat "$cachefile"
+		if [ -e "$cachedir/err" ]
+		then
+			return `cat "$cachedir/err"`
+		else
+			return 0
+		fi
+	else
+		echo 0
+		aws s3 ls "$s3uri" | tee "$cachefile"
+		ps=(${PIPESTATUS[@]})
+		ec=${ps[0]}
+		if [ $ec != 0 ]
+		then
+			# mv -f "$cachefile" "$cachedir/err=$ec"
+			# don't skip caching errorneous output
+			echo -n $ec > "$cachedir/err"
+		fi
+		return $ec
+	fi
+}
+
+print_base_dir_attr()
+{
+	echo -ne "ino=1 mode=$dmode nlink=2 uid=$UID gid=$GID rdev=0 size=0 blksize=512 blocks=0 atime=$cache_timestamp mtime=0 ctime=0${1:+ $1\0}"
+}
+
+fmode=-rw-r--r--
+dmode=drwxr-xr-x
+#GID=`id -g`
+GID=0
+fuseop=${0##*/}
+cache_timestamp=0
+cache_basedir=~/.cache/execfuse-s3
+
+case "$fuseop" in
+readdir)
+
+if [ "$1" = / ]
+then
+	print_base_dir_attr .
+	
+	cache-s3-ls s3:// |\
+	{
+		read cache_timestamp
+		while read -r date time bucket
+		do
+			mtime=`date +%s -d "$date $time"`
+			echo -ne "ino=1 mode=$dmode nlink=2 uid=$UID gid=$GID rdev=0 size=0 blksize=512 blocks=0 atime=$cache_timestamp mtime=$mtime ctime=0 $bucket\0"
+		done
+	}
+else
+	path=${1:1}
+	bucket=${path%%/*}
+	if [[ $path =~ / ]]
+	then
+		key=${path#*/}/
+	else
+		key=''
+	fi
+	
+	cache-s3-ls s3://$bucket/$key |\
+	sed -e 's/^\s\+PRE/0 0 PRE/' |\
+	{
+		read cache_timestamp
+		while read -r date time size fname
+		do
+			if [ "$size" = PRE ]
+			then
+				fname=${fname:0:-1}
+				print_base_dir_attr "$fname"
+			else
+				if [ -n "$fname" ]
+				then
+					mtime=`date +%s -d "$date $time"`
+					echo -ne "ino=1 mode=$fmode nlink=1 uid=$UID gid=$GID rdev=0 size=$size blksize=512 blocks=0 atime=$cache_timestamp mtime=$mtime ctime=0 $fname\0"
+				fi
+			fi
+		done
+	}
+fi
+;; # readdir
+
+getattr)
+case "$1" in
+/)
+	print_base_dir_attr
+	;;
+*)
+	path=${1:1}
+	bucket=${path%%/*}
+	if [[ $path =~ / ]]
+	then
+		key=${path#*/}
+	else
+		key=''
+	fi
+	
+	if [ -z "$key" ]
+	then
+		# viewing a bucket folder
+		
+		{
+			# ensure the bucket exists
+			cache-s3-ls s3://$bucket/ | head -n1
+			echo ${PIPESTATUS[0]}
+		}|\
+		{
+			read cache_timestamp
+			read error
+			if [ $error = 0 ]
+			then
+				print_base_dir_attr
+				exit 0
+			fi
+			exit 2
+		}
+		exit $?
+	else
+		# viewing an s3 object
+		
+		if [[ $key =~ / ]]
+		then
+			key_dirname=${key%/*}/
+		else
+			key_dirname=''
+		fi
+		
+		cache-s3-ls s3://$bucket/$key_dirname |\
+		sed -e 's/^\s\+PRE/0 0 PRE/' |\
+		{
+			read cache_timestamp
+			while read -r date time size fname
+			do
+				fname=${fname:0:-1}
+				key_basename=${key##*/}
+				if [ "$fname" = "$key_basename" ]
+				then
+					if [ "$size" = PRE ]
+					then
+						print_base_dir_attr
+					else
+						mtime=`date +%s -d "$date $time"`
+						echo -ne "ino=1 mode=$fmode nlink=1 uid=$UID gid=$GID rdev=0 size=$size blksize=512 blocks=0 atime=$cache_timestamp mtime=$mtime ctime=0"
+					fi
+					exit 0
+				fi
+			done
+			exit 2
+		}
+		exit $?
+	fi
+	
+	exit 2
+	;;
+esac
+;; # getattr
+
+read_file)
+	aws s3 cp s3:/$1 -
+;; # read_file
+
+chmod)
+	if [ ".$2" = .00000 ]
+	then
+		cachekey=`mk_cache_key "s3:/$1"`
+		rm "$cache_basedir/$cachekey/data"
+		exit 0
+	fi
+	exit 1
+;; # chmod
+
+*)	exit 95;;
+esac

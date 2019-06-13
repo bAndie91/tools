@@ -68,8 +68,8 @@ cache_basedir=~/.cache/execfuse-s3
 case "$fuseop" in
 readdir)
 
-if [ "$1" = / ]
-then
+case "$1" in
+/)
 	print_base_dir_attr .
 	
 	cache-s3-ls s3:// |\
@@ -81,7 +81,8 @@ then
 			echo -ne "ino=1 mode=$dmode nlink=2 uid=$UID gid=$GID rdev=0 size=0 blksize=512 blocks=0 atime=$cache_timestamp mtime=$mtime ctime=0 $bucket\0"
 		done
 	}
-else
+	;;
+*)
 	path=${1:1}
 	bucket=${path%%/*}
 	if [[ $path =~ / ]]
@@ -110,7 +111,8 @@ else
 			fi
 		done
 	}
-fi
+	;;
+esac
 ;; # readdir
 
 getattr)
@@ -131,25 +133,33 @@ case "$1" in
 	if [ -z "$key" ]
 	then
 		# viewing a bucket folder
+		# ensure the bucket exists based on the default bucket list
+		# TODO: support cross-account buckets
 		
-		{
-			# ensure the bucket exists
-			cache-s3-ls s3://$bucket/ | head -n1
-			echo ${PIPESTATUS[0]}
-		}|\
+		cache-s3-ls s3:// |\
 		{
 			read cache_timestamp
-			read error
-			if [ $error = 0 ]
-			then
-				print_base_dir_attr
-				exit 0
-			fi
+			while read -r date time this_bucket
+			do
+				if [ "$this_bucket" = "$bucket" ]
+				then
+					print_base_dir_attr
+					exit 0
+				fi
+			done
 			exit 2
 		}
-		exit $?
+		ps=(${PIPESTATUS[@]})
+		if [ ${ps[0]} != 0 ]
+		then
+			exit 1
+		else
+			exit ${ps[1]}
+		fi
 	else
 		# viewing an s3 object
+		# find its type: keyprefix (dir) or object key (file)
+		# lookup the parent dir
 		
 		if [[ $key =~ / ]]
 		then
@@ -158,8 +168,11 @@ case "$1" in
 			key_dirname=''
 		fi
 		
-		cache-s3-ls s3://$bucket/$key_dirname |\
-		sed -e 's/^\s\+PRE/0 0 PRE/' |\
+		{
+			cache-s3-ls s3://$bucket/$key_dirname |\
+			sed -e 's/^\s\+PRE/0 0 PRE/'
+			exit ${PIPESTATUS[0]}
+		}|\
 		{
 			read cache_timestamp
 			while read -r date time size fname
@@ -170,8 +183,10 @@ case "$1" in
 				then
 					if [ "$size" = PRE ]
 					then
+						# it's a key prefix, show there is a dir
 						print_base_dir_attr
 					else
+						# it's an object key, show there is a file
 						mtime=`date +%s -d "$date $time"`
 						echo -ne "ino=1 mode=$fmode nlink=1 uid=$UID gid=$GID rdev=0 size=$size blksize=512 blocks=0 atime=$cache_timestamp mtime=$mtime ctime=0"
 					fi
@@ -180,10 +195,15 @@ case "$1" in
 			done
 			exit 2
 		}
-		exit $?
+		ps=(${PIPESTATUS[@]})
+		if [ ${ps[0]} != 0 ]
+		then
+			exit 1
+		else
+			exit ${ps[1]}
+		fi
 	fi
-	
-	exit 2
+	# notreached
 	;;
 esac
 ;; # getattr

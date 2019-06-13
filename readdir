@@ -90,6 +90,7 @@ case "$1" in
 	sed -e 's/^\s\+PRE/0 0 PRE/' |\
 	{
 		read cache_timestamp
+		declare -A dirs=()
 		while read -r date time size fname
 		do
 			if [ "$size" = PRE ]
@@ -99,10 +100,17 @@ case "$1" in
 				then
 					# NOTE: mtime is 0 here
 					print_base_dir_attr "$fname"
+					dirs["$fname"]=1
 				fi
 			else
 				if [ -n "$fname" ]
 				then
+					if [ -n "${dirs[$fname]}" ]
+					then
+						# this is an object which is also a keyprefix
+						# suffix it with '#' sign which is unlikely in real object names
+						fname="$fname#"
+					fi
 					mtime=`date +%s -d "$date $time"`
 					echo -ne "ino=1 mode=$fmode nlink=1 uid=$UID gid=$GID rdev=0 size=$size blksize=512 blocks=0 atime=$cache_timestamp mtime=$mtime ctime=0 $fname\0"
 				fi
@@ -175,11 +183,22 @@ case "$1" in
 		}|\
 		{
 			read cache_timestamp
+			declare -A dirs=()
 			while read -r date time size fname
 			do
 				if [ "$size" = PRE ]
 				then
 					fname=${fname:0:-1}
+					if [ -n "$fname" ]
+					then
+						dirs["$fname"]=1
+					fi
+				else
+					if [ -n "${dirs[$fname]}" ]
+					then
+						# a keyprefix exists with this object basename, pretend it has a '#' suffix
+						fname="$fname#"
+					fi
 				fi
 				if [ "$fname" = "$key_basename" ]
 				then
@@ -222,7 +241,10 @@ esac
 ;; # getattr
 
 read_file)
-	aws s3 cp s3:/$1 -
+	bucket_and_key=$1
+	# trim trailing '#' sign which is there on object key which is also a keyprefix
+	bucket_and_key=${bucket_and_key%#}
+	aws s3 cp "s3:/$bucket_and_key" -
 ;; # read_file
 
 chmod)

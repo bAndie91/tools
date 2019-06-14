@@ -16,7 +16,7 @@ local X Y
 local MX='' AX='' DX='' RX='' CX='' UX='' QX='' EX=''
 local MY='' AY='' DY='' RY='' CY='' UY='' QY='' EY=''
 local AA='' DD='' AU='' DU='' UA='' UD='' UU='' U=''
-local unstag staged
+local unstag unstag_tracked staged
 local specdir='' speclist=() spec=''
 
 local add del rest
@@ -29,15 +29,14 @@ local sign_desc=☛
 local sign_ahead=▲
 local sign_behind=▼
 local sign_unstag=✎
-#local sign_staged=🚢 📦
 local sign_staged=✈
-#local sign_stash=⌂ ❂ ⚑ ⚒ ◳ ◪ ◕ ◍ ⌘ ∗ ● � ❖ 🍱
-local sign_stash=✪
+#local sign_stash=⌂ ❂ ⚑ ⚒ ◳ ◪ ◕ ◍ ⌘ ∗ ● � ❖ 🍱 ✪ ⦿
+local sign_stash=◕
 local sign_pushpull=★
 local sign_origin=☆
 local sign_clean=✔
-#local sign_notes=📝 � 📋 𝅊 𝅐
-local sign_notes=📎
+#local sign_notes=📝 � 📋 𝅊 𝅐 📎
+local sign_notes=✎
 
 trueish()
 {
@@ -210,7 +209,7 @@ IFS=$'\n'
 	done
 IFS=$IFS_
 stash=$(git stash list -s --format=%H 2>/dev/null | wc -l)
-notes=$(git notes | wc -l)
+notes=$(git notes list HEAD 2>/dev/null | wc -l)
 
 
 if [ -d "$gitdir/rebase-merge" ]
@@ -290,9 +289,10 @@ else
 	notes=$BYELLOW$sign_notes
 fi
 
-unstag=${NY:+ ${BCYAN}N$BWHITE$NY}${AY:+ ${BGREEN}A$BWHITE$AY}${DY:+ ${BRED}D$BWHITE$DY}${MY:+ ${BYELLOW}M$BWHITE$MY}${TY:+ ${BBLUE}T$RESET$TY}${CY:+ ${BGREEN}C$RESET$CY}${RY:+ ${BYELLOW}R$BWHITE$RY}${AA:+ ${BBLUE}A$BWHITE$AA}${DD:+ ${BBLUE}D$BWHITE$DD}${U:+ ${BBLUE}U$BWHITE$U}
+unstag=${NY:+ ${BCYAN}N$BWHITE$NY}${AY:+ ${BGREEN}A$BWHITE$AY}${DY:+ ${BRED}D$BWHITE$DY}${MY:+ ${BYELLOW}M$BWHITE$MY}${TY:+ ${BBLUE}T$RESET$TY}${CY:+ ${BGREEN}C$RESET$CY}${RY:+ ${BYELLOW}R$BWHITE$RY}${AA:+ ${BBLUE}A$BWHITE$AA}${DD:+ ${BBLUE}D$BWHITE$DD}${U:+ ${BYELLOW}${REDBG}U${RESET}$BWHITE$U}
 staged=${AX:+ ${GREEN}A$RESET$AX}${DX:+ ${RED}D$RESET$DX}${MX:+ ${YELLOW}M$RESET$MX}${TX:+ ${BLUE}T$RESET$TX}${CX:+ ${GREEN}C$RESET$CX}${RX:+ ${YELLOW}R$RESET$RX}
 unstag=${unstag:+$YELLOW$sign_unstag$unstag}
+unstag_tracked=$AY$DY$MY$TY$CY$RY$AA$DD$U
 staged=${staged:+$BWHITE$sign_staged$staged}
 
 [ -n "$adds1$dels1" ] && delta1="${adds1:+$BGREEN+$adds1}${dels1:+$BRED-$dels1}$RESET" || delta1=''
@@ -301,7 +301,7 @@ delta1=${delta1:+$BBLACK[$delta1$BBLACK]}
 delta2=${delta2:+$BBLACK[$delta2$BBLACK]}
 
 
-if [ -z "$unstag$staged" -a -n "$hash" ]
+if [ -z "$unstag_tracked$staged" -a -n "$hash" ]
 then
 	pointer="$pointer  $GREEN$(git show -s --format=%cr)"
 	[ "$isthereworktree" = 1 -a -z "$pushpull" ] && pointer="$pointer${pointer:+ }$BGREEN$sign_clean"

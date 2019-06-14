@@ -94,16 +94,17 @@
 	unstage = ! "fn(){ git reset -q HEAD -- \"$@\"; git st; }; fn"
 	restore = checkout HEAD --
 	discard-all = checkout HEAD -- '/*'
+	discard-unstaged = checkout -- '/*'
 	patch = cherry-pick --no-commit --edit -x
 	
 	preserve = stash save --no-keep-index --include-untracked
 	save = stash save --no-keep-index
 	save-unstaged = stash save --keep-index
-	stash-get = ! "fn(){ ref=$(git stash list | grep -m1 \"$*\" | cut -f1 -d:); if [ -n \"$ref\" ]; then git stash show -p \"$ref\"; git stash apply \"$ref\"; else echo \"Can not find such a stashed commit with substring '$*'.\" >&2; git stash list >&2; return 1; fi; }; fn"
+	refund = ! "fn(){ ref=$(git stash list | grep -m1 \"$*\" | cut -f1 -d:); if [ -n \"$ref\" ]; then git stash show -p \"$ref\"; git stash apply \"$ref\"; else echo \"Can not find such a stashed commit with substring '$*'.\" >&2; git stash list >&2; return 1; fi; }; fn"
 	stash-list = stash list
 	slist = stash list
 	
-	change-commits = ! "fn(){ if [ $# -lt 3 ]; then echo \"Arguments: <git-attribute-name> <old-value> <new-value>\" >&2; return 1; fi; VAR=$1; OLD=$2; NEW=$3; shift 3; git filter-branch --env-filter \"if [ \\\"$`echo $VAR`\\\" = '$OLD' ]; then export $VAR='$NEW'; fi\" \"$@\"; }; fn"
+	change-commits = ! "fn(){ if [ $# -lt 3 ]; then echo \"Arguments: <git-attribute-name> <old-value> <new-value> <ref..ref>\" >&2; return 1; fi; VAR=$1; OLD=$2; NEW=$3; shift 3; git filter-branch --env-filter \"if [ \\\"$`echo $VAR`\\\" = '$OLD' ]; then export $VAR='$NEW'; fi\" \"$@\"; }; fn"
 	# Example: git change-commits GIT_AUTHOR_EMAIL oldemail newemail HEAD~1..HEAD
 	#   git push origin +myBranch
 	

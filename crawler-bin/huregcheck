@@ -2,6 +2,6 @@
 
 set -u
 
-curl -sS "http://www.domain.hu/domain/regcheck/?dname=${1}&host=${2}" |\
+curl -sS "http://www.domain.hu/domain/regcheck/?dname=${1?domain in question}&host=${2?nameserver or empty}&dnssec=DNSSEC" |\
 perl -ne 'if(/^\.\.\.\./){if($o){exit}else{$o++}}elsif($o){s/<.*?>//g;if(!/^\s*$/){print}}'
 

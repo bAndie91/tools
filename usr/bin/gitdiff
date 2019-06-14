@@ -1,3 +1,12 @@
 #!/bin/bash
 
-git diff --no-index "$@"
+declare -a args
+for arg in "$@"
+do
+        if [ "${arg:0:1}" != - ]
+        then
+                arg=`readlink -nf "$arg"`
+        fi
+        args+=("$arg")
+done
+git diff --no-index "${args[@]}"

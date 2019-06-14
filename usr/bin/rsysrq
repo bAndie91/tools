@@ -1,0 +1,46 @@
+#!/bin/bash
+#
+# SysRq Help:
+#   loglevel(0-9)
+#   re(B)oot
+#   (C)rash
+#   t(E)rminate-all-tasks
+#   memory-(F)ull-oom-kill
+#   k(I)ll-all-tasks
+#   thaw-filesystems(J)
+#   secure-attention-(K)ey
+#   show-backtrace-a(L)l-active-cpus
+#   show-(M)emory-usage
+#   (N)ice-all-RT-tasks
+#   power(O)ff
+#   show-registers(P)
+#   show-all-timers(Q)
+#   un(R)aw
+#   (S)ync
+#   show-(T)ask-states
+#   (U)nmount
+#   force-fb(V)
+#   show-blocked-tasks(W)
+#   dump-ftrace-buffer(Z)
+#
+
+
+if [ $# != 3 ]; then
+	echo "Usage: $0 host[:port] sysrq-keys sysrq-password"
+	exit 1
+fi
+
+expr "$1" : '.*:' >/dev/null && hostport=$1 || hostport=$1:9
+keys=$2
+password=$3
+ipaddr=`gethostip -d ${hostport%:*}`
+
+
+seqno=`date +%s`
+salt=`dd bs=12 count=1 if=/dev/urandom 2>/dev/null | openssl enc -base64`
+data=$keys,$seqno,$salt
+data=$data,`echo -n "$data,$ipaddr,$password" | sha1sum | cut -c1-40`
+
+
+echo "$data" | socat stdin udp-sendto:$hostport
+

@@ -1,0 +1,98 @@
+#!/usr/bin/env perl
+
+use Data::Dumper;
+use POSIX qw/mktime/;
+use constant { STAT_MTIME => 9, };
+use Getopt::Long;
+
+$n = 1;
+for my $monthname (qw/Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec/)
+{
+	$month{$monthname} = $n;
+	$n++;
+}
+
+
+GetOptions(
+	"after=s" => \$datetime_after,
+	"before=s" => \$datetime_before,
+)
+or die "Usage: $0 [--after YYYY-mm-dd_HH:MM:SS] [--before YYYY-mm-dd_HH:MM:SS]\n";
+
+
+
+$infile = $ARGV[0] || "/var/log/asterisk/messages";
+$maxfiles = `ulimit -n` || 100;
+$mtime = (stat $infile)[STAT_MTIME];
+$year = 1900 + (localtime $mtime)[5];
+
+for my $var (qw/datetime_after datetime_before/)
+{
+	if(defined $$var)
+	{
+		if($$var =~ /^(\d{4})-(\d\d)-(\d\d)(?:[T_\s](\d\d):(\d\d)(?::(\d\d))?)?$/)
+		{
+		$$var = mktime($6 || 0, $5 || 0, $4 || 0, $3, $2 - 1, $1 - 1900);
+		}
+		elsif($$var !~ /^\d+$/)
+		{
+			die "Wrong datetime format: $$var\n";
+		}
+	}
+}
+
+
+open my $fh, '<', $infile;
+while(<$fh>)
+{
+	if(/^\[(\S+)\s+(\d+)\s+(\d+):(\d+):(\d+)\].*?\[(\d+)\]/)
+	{
+		my ($monthname, $day, $hour, $min, $sec, $pid) = ($1, $2, $3, $4, $5, $6);
+		my $timestamp = mktime($sec, $min, $hour, $day, $month{$monthname} - 1, $year - 1900);
+		if((!defined $datetime_before or $timestamp <= $datetime_before) and (!defined $datetime_after or $timestamp >= $datetime_after))
+		{
+			if(not exists $datetime{$pid})
+			{
+				$datetime{$pid} = $timestamp;
+			}
+	
+			if(not defined $outfiles{$pid})
+			{
+				if(scalar(keys %outfiles) > $maxfiles - 3)
+				{
+					for my $k (keys %outfiles)
+					{
+						if(not close $outfiles{$k})
+						{
+							die "$!\n";
+						}
+						delete $outfiles{$k};
+						last;
+					}
+				}
+	
+				my $fn = "$pid.astlog";
+				my $mode = $datetime{$pid} ? '>>' : '>';
+				if(not open $outfiles{$pid}, $mode, $fn)
+				{
+					die "$fn: $!\n";
+				}
+				print "$pid, ";
+			}
+			print {$outfiles{$pid}} $_ or warn "$!\n";
+		}
+	}
+}
+close $fh;
+
+for my $pid (keys %datetime)
+{
+	close $outfiles{$pid};
+	my $time = $datetime{$pid};
+	my $fn = "$pid.astlog";
+	utime $time, $time, $fn;
+}
+
+# delete small files:
+# find -type f -size -200c -delete
+

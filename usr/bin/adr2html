@@ -1,0 +1,239 @@
+#!/usr/bin/env perl
+# Opera Bookmark address file  -to->  HTML converter.
+# Tested with Opera Hotlist versions
+# 2.0
+# (C) Hrubak Andras <andreas@metaltux.tk>
+
+use Data::Dumper;
+use utf8;
+
+
+sub Parse {
+	my $RootFRef = {
+		'NAME'=>'Bookmarks',
+		'DELETABLE'=>'NO',
+		'EXPANDED'=>'YES',
+		'UNIQUEID'=>'1',
+	};
+	my $LastFRef = $RootFRef;
+	my ($FRef, $LastRef, $LastURef);
+
+	open INFILE, '<', $ARGV[0] || $ENV{'HOME'}."/.opera/bookmarks.adr";
+	while(<INFILE>) {
+		s/\s*$//;
+	
+		if(/^\x23FOLDER/) {
+			$FRef = {'isfolder'=>1};
+			push @{$LastFRef->{'children'}}, $FRef;
+			push @F, $LastFRef;
+			$LastFRef = $FRef;
+			$LastRef = $LastFRef;
+		}
+		elsif(/^\x23URL/) {
+			$LastURef = {};
+			push @{$LastFRef->{'children'}}, $LastURef;
+			$LastRef = $LastURef;
+		}
+		elsif(/^-/) {
+			$LastFRef = pop @F;
+			if(ref $LastFRef ne 'HASH') {
+				die "Malformed bookmark file.";
+			}
+		}
+		elsif(/^\s+([^=]+)=(.*)/) {
+			$LastRef->{$1} = $2;
+		}
+	}
+	# debug # print STDERR Dumper $RootFRef;
+	return $RootFRef;
+}
+
+sub htmlentities {
+	$_=$_[0];
+	s/</&lt;/g;
+	s/>/&gt;/g;
+	s/&/&amp;/g;
+	s/[""]/&quot;/g;
+	return $_;
+}
+sub urldecode {
+	$_=$_[0];
+	s/%([[:xdigit:]]{2})/chr hex $1/eg;
+	return $_;
+}
+
+sub PersonalBar {
+	return "<DIV CLASS='toolbar'>" . (
+	    join " | ",
+	    	map { sprintf "<A HREF='#b%s'>%s</A>", $_->{'UNIQUEID'}, $_->{'NAME'} }
+		    sort { $a->{'PERSONALBAR_POS'} <=> $b->{'PERSONALBAR_POS'} }
+		    	@{$_[0]}
+	    )."</DIV>\n";
+}
+
+sub Node {
+	my $H = $_[0];
+	my $Indent = $_[1] || 0;
+	my ($out, $parent, $ico, $liattr, $url, $spanattr, @liclass);
+
+
+	# Populate PersonalBar list
+	if(uc $H->{'ON PERSONALBAR'} eq 'YES') {
+		push @PB, $H;
+		# Anchor to item
+		$out .= "<A NAME='b" . $H->{'UNIQUEID'} . "'></A>";
+	}
+	
+	# Item attributes
+	map { $liattr .= sprintf q{ %s="%s"}, $_, $H->{$_} } grep {/^ID|CREATED|VISITED$/} keys %$H;
+	
+	# Is it a parent (folder) ?
+	if(ref $H->{'children'} eq 'ARRAY') {
+		push @liclass, "parent";
+		$spanattr .= " onClick=\"toggle('" . $H->{'UNIQUEID'} . "');\"";
+		$parent = 1;
+		push @liclass, (uc $H->{'EXPANDED'} eq 'YES' ? "expanded" : "collapsed");
+	} else {
+		if($H->{'isfolder'}) {
+			push @liclass, "childless";
+		}
+	}
+
+	# Favicon
+	if($H->{'ICONFILE'}) {
+		$ico = $H->{'ICONFILE'};
+	} else {
+		my ($host) = ( $H->{'URL'} =~ m{//([a-z0-9\._-]+)}i );
+		if( open my $idx, '<', $ENV{'HOME'}."/.opera/icons/$host.idx" ) {
+			<$idx>;
+			$ico = <$idx>;
+			$ico =~ s/\s*$//;
+			$ico = urldecode($ico);
+			close $idx;
+		}
+	}
+	if($ico) {
+		$liattr .= " STYLE=\"list-style: none;\"";
+		$out .= "<IMG CLASS=\"favicon\" SRC=\"$ico\" onError=\"icoNotFound(this, '".$H->{'ID'}."');\" />";
+	}
+	
+	$liattr .= " CLASS=\"".join(' ', @liclass)."\"";
+	$out .= "<LI$liattr>";
+	
+	# Hyperlink
+	if(defined $H->{'URL'}) {
+		$url = urldecode($H->{'URL'});
+		if($url =~ /[""]/) {
+			$replaceid++;
+			$out .= "<A HREF=\"#\" ID=\"replace$replaceid\">";
+			$replaces{$replaceid} = $url;
+		} else {
+			$out .= "<A HREF=\"$url\">";
+		}
+	}
+	$out .= "<SPAN$spanattr>" . htmlentities($H->{'NAME'}) . "</SPAN>";
+	if(defined $H->{'URL'}) {
+		$out .= "</A>";
+	}
+	
+	# Description
+	if(defined $H->{'DESCRIPTION'}) {
+		$out .= "<DIV CLASS=\"description\">" . htmlentities($H->{'DESCRIPTION'}) . "</DIV>";
+	}
+	
+	# Descendant items...
+	if($parent) {
+		$out .= "<UL ID=\"" . $H->{'UNIQUEID'} . "\">";
+		for my $child ( @{$H->{'children'}} ) {
+			$out .= "\n".' 'x$Indent;
+			$out .= Node( $child, $Indent+4 );
+		}
+		$out .= "\n".' 'x$Indent."</UL>";
+	}
+	
+	$out .= "</LI>";
+	return $out;
+}
+
+# Stylesheet
+print <<EOF
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8" />
+<STYLE>
+div.toolbar {
+	border: solid 1px black;
+	padding: 2px;
+}
+li {
+	list-style: disc;
+}
+li.parent > span {
+	font-weight: bold;
+	cursor: pointer;
+	cursor: hand;
+}
+li.parent.expanded { list-style-image: url('/static/img/icon/folder_opened.gif'); }
+li.parent.collapsed, li.childless { list-style-image: url('/static/img/icon/folder_closed.gif'); }
+li.parent.collapsed > ul {
+	display: none;
+}
+div.description, footer {
+	font-size: 10pt;
+	font-style: italic;
+}
+img.favicon {
+	width: 16px;
+	height: 16px;
+	position: relative;
+	left: -1.25em;
+	top: 1em;
+	margin-top: -1em;
+}
+</STYLE>
+EOF
+;
+
+
+
+@PB = ();
+$BMTree = Node( Parse() );
+
+# Toolbar
+print PersonalBar(\@PB);
+# The Bookmark Tree
+print "<UL>" . $BMTree . "</UL>";
+
+# Footer
+print "<HR><FOOTER>Made by <A HREF=\"http://metaltux.tk/\">adr2html</A>.</FOOTER>";
+
+# Script - Restore expanded/collapsed state of nodes
+print "<SCRIPT TYPE='text/javascript'>\n";
+print <<EOF
+function toggle(id, yesclass) {
+	var cl = document.getElementById(id).parentNode.classList;
+	if(typeof yesclass == 'undefined') yesclass = cl.contains('expanded') ? 'collapsed' : 'expanded';
+	var noclass = (yesclass == 'expanded') ? 'collapsed' : 'expanded';
+	document.cookie = 'FOLDER'+id+'='+yesclass;
+	cl.remove(noclass);
+	cl.add(yesclass);
+}
+var as = document.cookie.match(/FOLDER[^=]+=[^;]*/g);
+for(var ai=0; ai<as.length; ai++) {
+	bs = as[ai].match(/FOLDER([^=]+)=([^;]*)/);
+	toggle(bs[1], bs[2]);
+}
+function icoNotFound(img, li) {
+	document.getElementById(li).style.listStyle='disc';
+	img.parentNode.removeChild(img);
+}
+EOF
+;
+# Script - Fill up HREF attriutes where it couldn't be (due to html escaping)
+for my $replaceid (keys %replaces) {
+	my $url = $replaces{$replaceid};
+	$url =~ s/['']/\\$&/g;
+	print "document.getElementById('replace$replaceid').setAttribute('HREF', '$url');\n"
+}
+print "</SCRIPT>";
+
+__END__
+

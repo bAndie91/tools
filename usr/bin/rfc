@@ -1,0 +1,13 @@
+#!/bin/sh
+# dependencies: sh curl
+
+rfc="$1"
+
+#url="http://www.rfc-editor.org/rfc/rfc${rfc}.txt"
+url="http://www.ietf.org/rfc/rfc${rfc}.txt"
+
+if [ -t 1 ]; then
+	curl -s "$url" | less
+else
+	curl "$url" 
+fi

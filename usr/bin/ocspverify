@@ -1,0 +1,175 @@
+#!/bin/bash
+
+usagedie()
+{
+	echo "Usage: $0 [-v] server [port]" >&2
+	exit 1
+}
+
+capath=/etc/ssl/certs
+issuer=
+issuer_keyid=
+verbose=
+
+n=0
+ANSI_NONE=$'\033[0m'
+for color in black red green yellow blue magenta cyan white
+do
+	color=${color^^}
+	eval "ANSI_$color=\$'\033[0;3${n}m'"
+	eval "ANSI_BOLD_$color=\$'\033[1;3${n}m'"
+	eval "ANSI_BG_$color=\$'\033[4${n}m'"
+	let n++
+done
+
+
+set -e
+
+while [ -n "$1" ]
+do
+	case "$1" in
+	-v|--verbose) verbose=1;;
+	-h|--help)	usagedie;;
+	-*)	false;;
+	--)	shift; break;;
+	*)	break;;
+	esac
+	shift
+done
+
+if [ -z "$1" ]
+then
+	usagedie
+fi
+
+server=$1
+[ -n "$2" ] && port=$2 || port=https
+address=$server:$port
+
+
+
+cert=`tempfile`
+issuer_file=`tempfile`
+tmp=`tempfile`
+trap "rm '$cert' '$issuer_file' '$tmp'" EXIT
+
+echo "${ANSI_BOLD_YELLOW}${ANSI_BG_BLUE}Certificate${ANSI_NONE}"
+openssl s_client -CApath "$capath" -connect "$address" -servername "$server" -showcerts </dev/null \
+	2> >(perl -ne '
+		if(($a,$b,$c,$d) = /^(verify )(return:(\d+)|error:)(.*)$/s)
+		{
+			if($b =~ /^error/)
+			{
+				print "'"${ANSI_BOLD_RED}"'$a$b'"${ANSI_RED}"'";
+			}
+			elsif($c eq 1)
+			{
+				print "'"${ANSI_BOLD_GREEN}"'$a$b";
+			}
+			else
+			{
+				print "'"${ANSI_BOLD_YELLOW}"'$a$b";
+			}
+			print "$d'"${ANSI_NONE}"'";
+		}
+		else
+		{
+			print;
+		}
+	') \
+	1> >(sed -n '/-----BEGIN/,/-----END/p' >"$cert")
+if [ "$verbose" = 1 ]
+then
+	openssl x509 -noout -serial -issuer -fingerprint -sha1 -text -in "$cert"
+fi
+
+ocsp_url=`openssl x509 -noout -ocsp_uri -in "$cert"`
+startdate=`openssl x509 -noout -startdate -in "$cert"`
+enddate=`openssl x509 -noout -enddate -in "$cert"`
+fingerprint=`openssl x509 -noout -fingerprint -in "$cert"`
+san=`openssl x509 -noout -text -in "$cert" | grep "X509v3 Subject Alternative Name" -A1 | tail -n 1 | sed -e 's/\bDNS://g'`
+
+echo "${ANSI_BOLD_BLUE}${startdate%%=*}: ${ANSI_BOLD_CYAN}${startdate#*=}${ANSI_NONE}"
+echo "${ANSI_BOLD_BLUE}${enddate%%=*}: ${ANSI_BOLD_CYAN}${enddate#*=}${ANSI_NONE}"
+echo "${ANSI_BOLD_BLUE}${fingerprint%%=*}: ${ANSI_BOLD_CYAN}${fingerprint#*=}${ANSI_NONE}"
+echo "${ANSI_BOLD_BLUE}SAN:${ANSI_BOLD_CYAN}" $san "${ANSI_NONE}"
+
+
+if [ -n "$ocsp_url" ]
+then
+	echo "${ANSI_BOLD_BLUE}OCSP URL: ${ANSI_BOLD_CYAN}$ocsp_url${ANSI_NONE}"
+	
+	info=`openssl x509 -noout -text -in "$cert"`
+	issuer_cert_url=`echo "$info" | grep -m1 "CA Issuers - URI" | cut -d: -f2-`
+	if [ -n "$issuer_cert_url" ]
+	then
+		wget -q "$issuer_cert_url" -O "$issuer_file"
+		if [ "$(file -b "$issuer_file")" != "PEM certificate" ]
+		then
+			cat "$issuer_file" > "$tmp"
+			openssl x509 -inform der -in "$tmp" -out "$issuer_file"
+		fi
+		issuer=$issuer_file
+	else
+		issuer_keyid=`echo "$info" | grep -m1 -A1 "X509v3 Authority Key Identifier:" | grep "keyid:" | cut -d: -f2-`
+	fi
+	
+	
+	if [ -z "$issuer" ]
+	then
+		if [ -z "$issuer_keyid" ]
+		then
+			echo "${ANSI_BOLD_YELLOW}Authority Key Identifier not found.${ANSI_NONE}" >&2
+			exit 1
+		fi
+		
+		for file in "$capath"/*
+		do
+			keyid=`openssl x509 -noout -text -in "$file" | grep -A1 "X509v3 Subject Key Identifier:" | tail -n1 | tr -d " 	"`
+			if [ "$keyid" = "$issuer_keyid" ]
+			then
+				file=`readlink -m -n "$file"`
+				echo "${ANSI_BOLD_BLUE}Issuer file: ${ANSI_BOLD_CYAN}$file${ANSI_NONE}"
+				issuer=$file
+				break
+			fi
+		done
+	fi
+	
+	if [ -z "$issuer" ]
+	then
+		echo "${ANSI_BOLD_YELLOW}Authority certificate ${ANSI_YELLOW}($issuer_keyid)${ANSI_BOLD_YELLOW} not found.${ANSI_NONE}" >&2
+		exit 1
+	fi
+	
+	export cert
+	lnbuf=/usr/lib/yazzy-preload/lnbuf.so
+	[ -e "$lnbuf" ] || lnbuf=
+	LD_PRELOAD=$lnbuf openssl ocsp -issuer "$issuer" -cert "$cert" -url "$ocsp_url" ${verbose:+-text} 2>&1 |\
+		perl -ne '
+			$|++;
+			if(($a,$b) = /^(\Q$ENV{cert}\E:|Response verify) (.*)$/is)
+			{
+				if($b =~ /^(good|OK)/)
+				{
+					print "'"${ANSI_BOLD_GREEN}"'";
+				}
+				else
+				{
+					print "'"${ANSI_BOLD_RED}"'";
+				}
+				print "$_'"${ANSI_NONE}"'";
+			}
+			elsif(/:error:/)
+			{
+				print "'"${ANSI_RED}"'$_'"${ANSI_NONE}"'";
+			}
+			else
+			{
+				print;
+			}
+		'
+else
+	echo "${ANSI_BOLD_YELLOW}No OCSP URL found in certificate.${ANSI_NONE}" >&2
+	exit 1
+fi

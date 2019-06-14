@@ -1,0 +1,53 @@
+#!/bin/bash
+
+
+semi_chroot=$1
+set -- $SSH_ORIGINAL_COMMAND
+declare -a argv
+declare -a opts
+
+opts=(-logDtpre.is)
+
+
+while [ -n "$1" ]
+do
+        case "$1" in
+        -[!-' ']*)
+                pos=1
+                while [ $pos -lt ${#1} ]
+                do
+                        case "${1:$pos:1}" in
+                        R)      opts+=(--relative) ;;
+                        v)      opts+=(--verbose) ;;
+                        L)      opts+=(--copy-links) ;;
+                        u)      opts+=(--update) ;;
+                        z)      opts+=(--compress) ;;
+                        esac
+                        let pos++
+                done
+                ;;
+        --sender|--delete|--relative|--verbose|--copy-links|--update|--compress|--del|--delete*)
+                opts+=($1)
+                ;;
+        -*)
+                true
+                ;;
+        *)
+                argv+=($1)
+                ;;
+        esac
+        shift
+done
+
+
+cmd=${argv[0]}
+
+if [ "$cmd" = rsync ]
+then
+    echo Running semi-chroot rsync --server "${opts[@]}" . "$semi_chroot/${argv[2]}" >&2
+    exec /usr/bin/rsync --server "${opts[@]}" . "$semi_chroot/${argv[2]}"
+else
+	echo "Only rsync (server side) command is permitted. Sleeping." >&2
+    sleep infinity
+fi
+

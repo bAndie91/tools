@@ -1,0 +1,20 @@
+#!/usr/bin/env perl
+
+use MIME::Parser;
+use warnings;
+
+$|++;
+
+if(not $outputdir = shift @ARGV or $outputdir eq '--help') { die "Usage: $0 [directoy to save] [files...]\n"; }
+die "Directory is not writable: $outputdir\n" if ! -w $outputdir;
+
+$parser = new MIME::Parser;
+$parser->output_dir($outputdir);
+
+
+for my $filename (@ARGV)
+{
+	$entity = $parser->parse_open($filename);
+	$entity->dump_skeleton;
+}
+

@@ -1,0 +1,29 @@
+#!/usr/bin/env perl
+
+sub decode {
+	$_[0] =~ s/\%([A-Fa-f0-9]{2})/pack('C', hex($1))/seg;
+	return $_[0];
+}
+sub encode {
+	$_[0] =~ s/([^A-Za-z0-9])/sprintf("%%%02X", ord($1))/seg;
+	return $_[0];
+}
+
+
+if($0 =~ /decode/) {
+	$fgv = \&decode;
+}
+else {
+	$fgv = \&encode;
+}
+
+
+if(scalar @ARGV > 0) {
+	# parameters given
+	print $fgv->(join " ", @ARGV);
+}
+else {
+	# process stdin
+	print $fgv->($_) while(<STDIN>);
+}
+

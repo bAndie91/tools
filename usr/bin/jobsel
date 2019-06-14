@@ -1,0 +1,178 @@
+#!/usr/bin/env perl
+###################
+
+$me=$0;
+$0="jobsel";
+#sub helpy { $pos = tell DATA; print STDERR <DATA>; seek DATA,$pos,0 }
+sub helpy { system("pod2text", $me, "/dev/stderr") }
+exit helpy if $ARGV[0] eq '--help';
+use Term::ReadKey;
+ReadMode 4;
+sub bye { print STDOUT "export JOBSEL_DISPLAY_MODE=$dispmode"; exit ReadMode 0 }
+sub getkey { while(not defined ($k = ReadKey(-1))){} return $k }
+$SIG{INT}=$SIG{STOP}=$SIG{STOP}=$SIG{TSTP}=$SIG{QUIT}='bye';
+$dispmode = $ENV{JOBSEL_DISPLAY_MODE};
+$dispmode = "x" unless $dispmode ~~ ["c", "x", "l"];
+$dispmode = "l" unless $ARGV[1];
+
+while(1){
+	@o=@x=();
+	for(split/[\r\n]+/,$ARGV[0]){ 
+		($j,$p)=/(\d+)\]\S?\s+(\d+)/; 
+		if (  open(P,"/proc/$p/stat") and ($c,$s)=(<P>=~/\s\((.+?)\)\s+(\S+)/)  ) {
+			close P;
+			push @o,[$j,$c,$p,$s];	# job number, command, pid, state
+			
+			s/(\S+\s+){3}//;
+			push @x,sprintf "[%d] %5d  %s       %s",$j,$p,$s,$_;
+		}
+	}
+	bye unless @o;
+
+	$in=$#o if $in>$#o;
+	$pos = tell STDERR;
+	
+	print STDERR "\033[s";
+	if($dispmode =~ /[xc]/)
+	{
+		print STDERR "\033[1;1H";
+		if($dispmode eq "x") {
+			for(0..$#o) {
+				printf STDERR "%s%s\033[m\n",($_==$in?"\033[44;1;36m":"\033[1;36m"),$x[$_];
+			}
+		}
+		else {	
+			print STDERR "\033[1;36mjobs: ";
+			for(0..$#o) {
+				printf STDERR "%s[%%%s %s(%s) %s]\033[m ",($_==$in?"\033[44;1;36m":"\033[1;36m"),@{$o[$_]};
+			}
+		}
+	}
+	else {
+		print STDERR "\033[6n"; { local $/="R"; ($rn) = (<STDIN>=~/\[(\d+);/); }
+		printf STDERR "\033[%d;1H", $rn-1;
+		for(0..$#o) {
+			printf STDERR "%s[%%%s %s(%s) %s]\033[m ",($_==$in?"\033[1;36m":"\033[36m"),@{$o[$_]};
+		}
+	}
+	print STDERR "\033[u";
+
+	$k=getkey;
+	if($k eq chr(27)) {
+		$k=getkey;
+		if($k eq '[') {
+			$k=getkey;
+			if($k =~ /[DA]/) {	# arrow left/up
+				$in-- if $in > 0
+			}
+			elsif($k =~ /[CB]/) {	# arrow right/down
+				$in++ if $in < $#o
+			}
+			elsif($k =~ /[H5]/) {	# home/pg up
+				$in=0
+			}
+			elsif($k =~ /[F6]/) {	# end/pg down
+				$in=$#o
+			}
+			elsif($k eq chr(27)) { bye }
+		}
+		elsif($k eq chr(27)) { bye }
+	}
+	elsif($k =~ /[ts ]/i) {
+		kill ${$o[$in]}[3] eq 'T' ? 18 : 20, ${$o[$in]}[2];	# CONT,TSTP
+	}
+	elsif($k =~ /k/i) {
+		kill 9, ${$o[$in]}[2];	# KILL
+	}
+	elsif($k =~ /u/i) {
+		kill 1, ${$o[$in]}[2];	# HUP
+	}
+	elsif($k =~ /i/i) {
+		kill 2, ${$o[$in]}[2];	# INT
+	}
+	elsif($k =~ /d/i) {
+		undef$/;
+		print STDERR "Commandline:\t";
+		open A,"/proc/".${$o[$in]}[2]."/cmdline";
+		print STDERR join(" ",split/\x0/,<A>)."\n";
+		close A;
+		print STDERR "Directory:\t";
+		print STDERR readlink "/proc/".${$o[$in]}[2]."/cwd","\n";
+		$/="\n";
+		open A,"/proc/".${$o[$in]}[2]."/status";
+		/^(ppid|uid|gid):/i and print STDERR $_ while<A>;
+		close A;
+	}
+	elsif($k =~ /[xcl]/i) {
+		$dispmode=lc $k;
+	}
+	elsif($k =~ /[?h]/i) {
+		helpy;
+	}
+	elsif($k =~ /[\r\n]/) {
+		ReadMode 0;
+		print STDOUT "export JOBSEL_DISPLAY_MODE=$dispmode; fg ".$o[$in][0];
+		exit 0;
+	}
+	elsif($k =~ /q/i) { bye }
+	
+	# clear screen region
+	if($dispmode =~ /[xc]/) {
+		print STDERR "\033[s\033[1;1H";
+		if($dispmode eq "x") {
+			print STDERR " " x $ARGV[1], "\n" for @x
+		}
+		elsif($dispmode eq "c") {
+			print STDERR " " x (-$pos+tell STDERR)
+		}
+		print STDERR "\033[u";
+	}
+}
+
+__END__
+
+=pod
+
+=head1 NAME
+
+jobsel
+
+=head1 SYNOPSIS
+
+jobsel <B<joblist>> [B<COLUMNS>]
+
+=head1 DESCRIPTION
+
+Improved job control frontend for bash. B<joblist> is a C<jobs -l> output from which B<jobsel> builds a menu. 
+B<COLUMNS> is an optional parameter, if omitted B<jobsel> calls tput(1) to obtain number of columns on the terminal.
+
+=head1 KEYS
+
+ Left,Right  Select item
+ Enter       Switch to job in forground
+ U           Hangup selected process             SIGHUP
+ I           Interrupt process                   SIGINT
+ S,T,Space   Suspend, Resume job        SIGCONT,SIGTSTP
+ K           Kill process                       SIGKILL
+ D           Process details
+ X,C,L       Expanded, collapsed, in-line display mode
+ Q           Dismiss menu
+
+=head1 EXAMPLE
+
+eval $(jobsel "$(jobs -l)" $COLUMNS)
+
+=head1 HINTS
+
+=head2 Use as an alias
+
+ alias j='eval $(jobsel "$(jobs -l)" $COLUMNS)'
+
+=head2 Bind a function key for it
+
+ bind -x '"\204"':"eval \$(jobsel \"\$(jobs -l)\" \$COLUMNS)"
+ bind '"\ej"':"\"\204\"" # ESC-J
+
+ Where 204 is an arbitrary free keyscan code
+
+=cut

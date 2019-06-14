@@ -1,0 +1,129 @@
+#!/bin/bash -e
+
+declare -a archs
+archs=(amd64 armel armhf hurd-i386 i386 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc s390x sparc)
+mode=simple
+
+main()
+{
+	fakeroot_opt=
+	
+	for attrib in Package Version Architecture
+	do
+		value=$(grep -E ^$attrib: deb/DEBIAN/control | cut -f2- -d' ')
+		eval $attrib=\$value
+	done
+	
+	# Package modified since last build?
+	if [ -n "$(find deb -type f -newer deb/DEBIAN/control ! -path "deb/DEBIAN/*" -print -quit)" ]
+	then
+		Version_new=`echo "$Version" | perl -pe 's/^(.*?)(\d+)([^\d]*)$/$1.($2+1).$3/e;'`
+		echo "Increase version number $Version -> $Version_new" >&2
+		Version=$Version_new
+	fi
+	
+	size=`du -s deb/ | awk '{print $1}'`
+	sed -e "s/^Installed-Size:.*/Installed-Size: $size/" -i deb/DEBIAN/control
+	sed -e "s/^Version:.*/Version: $Version/" -i deb/DEBIAN/control
+	
+	find deb/ -type f -exec md5sum -b {} \; -or -path "deb/DEBIAN" -prune | sed -e 's@\*\?deb/@@' > deb/DEBIAN/md5sums
+	
+	if [ -f mkdeb-perms.txt ]
+	then
+		# Create fakeroot environment
+		devnum=`stat -c %D deb/`
+		while read -r mode owner group filepath
+		do
+			[ -z "$filepath" -o "${mode:0:1}" = '#' ] && continue
+			filepath="deb/$filepath"
+			inode=`stat -c %i "$filepath"`
+			nlink=`stat -c %h "$filepath"`
+			
+			fullmode=$(printf %06o 0x`stat -c %f "$filepath"`)
+			if [ "$mode" = - ]
+			then
+				mode=$fullmode
+			else
+				mode65=${fullmode:0:2}
+				[ "${#mode}" -lt 4 ] && mode4=0
+				mode=${mode65}${mode4}${mode}
+			fi
+			if [ "$owner" = - ]
+			then
+				uid=0
+			else
+				[ "$owner" -ge 0 ] 2>/dev/null && uid=$owner || uid=`id -u $owner`
+			fi
+			if [ "$group" = - ]
+			then
+				gid=0
+			else
+				[ "$group" -ge 0 ] 2>/dev/null && gid=$group || gid=`getent group $group | cut -d: -f3`
+			fi
+			
+			echo dev=$devnum,ino=$inode,mode=$mode,uid=$uid,gid=$gid,nlink=$nlink,rdev=0
+		done <mkdeb-perms.txt >mkdeb-fakeroot.txt
+		fakeroot_opt="-i mkdeb-fakeroot.txt"
+	fi
+	
+	# Create Package
+	pkgfile="${Package}_${Version}_${Architecture}.deb"
+	fakeroot $fakeroot_opt dpkg-deb -b deb/ "$pkgfile"
+}
+
+
+
+while [ -n "$1" ]
+do
+	case "$1" in
+	-h|--help)
+		echo "$0: Create debian package
+1. Simple mode, store contents of \`deb/' directory in a properly named file.
+ \$ $0
+2. Make as many packages as many directories it find with name of standard 
+architecture names (eg. amd64, i386). Files in special folder \`all' will be 
+included in all packages.
+ \$ $0 --multiarch"
+		exit
+		;;
+
+	-m|--multiarch)
+		mode=multiarch
+		;;
+	esac
+	shift
+done
+
+
+if [ "$mode" = multiarch ]
+then
+	if [ -d deb/ ]
+	then
+		echo "Subfolder \`deb/' already exists. Multiarch mode would work into it. Please remove." >&2
+		exit 1
+	fi
+	
+	for arch in "${archs[@]}"
+	do
+		if [ -d "$arch" ]
+		then
+			echo "Architecture: $arch" >&2
+			mkdir deb/
+			cp -aT all/ deb/
+			
+			reffile=deb/DEBIAN/control.ref
+			touch -r all/DEBIAN/control "$reffile"
+			
+			cp -aT "$arch/" deb/
+			sed -e "s/^Architecture:.*/Architecture: $arch/" -i deb/DEBIAN/control
+			
+			touch -r "$reffile" deb/DEBIAN/control
+			rm "$reffile"
+			
+			main
+			rm -r deb/
+		fi
+	done
+else
+	main
+fi

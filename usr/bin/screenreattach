@@ -1,0 +1,82 @@
+#!/bin/bash
+
+# Reattach screen and importing environment
+
+declare -a argv
+declare -a screen_names
+screen_name=
+new_screen=0
+
+
+if [ -z "$1" ]
+then
+	argv=(-dR)
+else
+	argv=("$@")
+fi
+
+
+if [ -z "$STY" ]
+then
+	while [ -n "$1" ]
+	do
+		case "${1,,}" in
+		*r|r)
+			shift
+			if [ ".${1:0:1}" != .- ]
+			then
+				screen_name=$1
+				break
+			fi
+			;;
+		esac
+		shift
+	done
+	
+	if [ -z "$screen_name" ]
+	then
+		screen_names=(`find "${SCREENDIR:-/var/run/screen/S-$USER}" -mindepth 1 -maxdepth 1 -printf "%f\n" 2>/dev/null`)
+		if [ ${#screen_names[@]} -gt 1 ]
+		then
+			new_screen_str=$'\t'"New Screen"
+			while [ -z "$screen_name" ]
+			do
+				IFS0=$IFS
+				IFS=$'\n'
+				select screen_desc in `screen -ls | sed -e '$d' | sed -n -e '/^\S/ w/dev/stderr' -e '/^\s/ p'` "$new_screen_str"
+				do
+					if [ "$screen_desc" = "$new_screen_str" ]
+					then
+						screen_name=${COLUMNS:-$(tput cols)}x${LINES:-$(tput lines)}
+						new_screen=1
+					elif [ -n "$screen_desc" ]
+					then
+						screen_name=`sed -e 's/\s*\(\S\+\).*/\1/' <<<"$screen_desc"`
+						argv+=(-r)
+					fi
+					break
+				done
+				IFS=$IFS0
+				unset screen_desc
+				argv+=("$screen_name")
+			done
+			unset new_screen_str
+		fi
+	fi
+	
+	if [ $new_screen != 1 -a ${#screen_names[@]} -gt 0 ]
+	then
+		set -e
+		for env in DISPLAY SSH_AUTH_SOCK DBUS_SESSION_BUS_ADDRESS
+		do
+			screen ${screen_name:+-S "$screen_name"} -X setenv "$env" "${!env}"
+		done
+		set +e
+		unset env
+	fi
+	unset new_screen
+	unset screen_name
+	unset screen_names
+fi
+
+exec screen "${argv[@]}"

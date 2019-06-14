@@ -60,6 +60,17 @@ cache-s3-ls()
 	fi
 }
 
+return_to_fuse()
+{
+	local ps=("$@")
+	if [ ${ps[0]} != 0 ]
+	then
+		exit $EIO
+	else
+		exit ${ps[1]}
+	fi
+}
+
 print_base_dir_attr()
 {
 	echo -ne "ino=1 mode=$dmode nlink=2 uid=$UID gid=$GID rdev=0 size=0 blksize=512 blocks=0 atime=$cache_timestamp mtime=$mtime ctime=0${1:+ $1\0}"
@@ -97,8 +108,11 @@ case "$1" in
 		key=''
 	fi
 	
-	cache-s3-ls "s3://$bucket/$key" |\
-	sed -e 's/^\s\+PRE/0 0 PRE/' |\
+	{
+		cache-s3-ls "s3://$bucket/$key" |\
+		sed -e 's/^\s\+PRE/0 0 PRE/'
+		exit ${PIPESTATUS[0]}
+	}|\
 	{
 		read cache_timestamp
 		declare -A dirs=()
@@ -128,6 +142,7 @@ case "$1" in
 			fi
 		done
 	}
+	return_to_fuse ${PIPESTATUS[@]}
 	;;
 esac
 ;; # readdir
@@ -167,13 +182,7 @@ case "$1" in
 			done
 			exit $ENOENT
 		}
-		ps=(${PIPESTATUS[@]})
-		if [ ${ps[0]} != 0 ]
-		then
-			exit $EIO
-		else
-			exit ${ps[1]}
-		fi
+		return_to_fuse ${PIPESTATUS[@]}
 	else
 		# viewing an s3 object
 		# find its type: keyprefix (dir) or object key (file)
@@ -238,13 +247,7 @@ case "$1" in
 			done
 			exit $ENOENT
 		}
-		ps=(${PIPESTATUS[@]})
-		if [ ${ps[0]} != 0 ]
-		then
-			exit $EIO
-		else
-			exit ${ps[1]}
-		fi
+		return_to_fuse ${PIPESTATUS[@]}
 	fi
 	# notreached
 	;;
@@ -256,6 +259,10 @@ read_file)
 	# trim trailing '#' sign which is there on object key which is also a keyprefix
 	bucket_and_key=${bucket_and_key%#}
 	aws s3 cp "s3:/$bucket_and_key" -
+	if [ $? != 0 ]
+	then
+		exit $EIO
+	fi
 ;; # read_file
 
 chmod)

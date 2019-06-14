@@ -259,7 +259,9 @@ read_file)
 ;; # read_file
 
 chmod)
-	cachekey=`mk_cache_key "s3:/$1/"`
+	bucket_and_key=$1
+	bucket_and_key=${1:1}
+	cachekey=`mk_cache_key "s3://$bucket_and_key${bucket_and_key:+/}"`
 	found=no
 	case ".$2" in
 	.00000)

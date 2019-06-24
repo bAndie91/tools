@@ -1,6 +1,21 @@
 #!/bin/bash
 
-#exit 95
+EPERM=1
+ENOENT=2
+EIO=5
+EACCESS=13
+EINVAL=22
+ENOSYS=38
+EOPNOTSUPP=95
+
+export PYTHONIOENCODING=utf8
+fmode=-rw-r--r--
+dmode=drwxr-xr-x
+#GID=`id -g`
+GID=0
+cache_basedir=~/.cache/execfuse-s3
+
+#exit $ENOSYS
 #exec 2>/tmp/e ; set -x
 
 mk_cache_key()
@@ -45,19 +60,26 @@ cache-s3-ls()
 	fi
 }
 
+return_to_fuse()
+{
+	local ps=("$@")
+	if [ ${ps[0]} != 0 ]
+	then
+		exit $EIO
+	else
+		exit ${ps[1]}
+	fi
+}
+
 print_base_dir_attr()
 {
 	echo -ne "ino=1 mode=$dmode nlink=2 uid=$UID gid=$GID rdev=0 size=0 blksize=512 blocks=0 atime=$cache_timestamp mtime=$mtime ctime=0${1:+ $1\0}"
 }
 
-fmode=-rw-r--r--
-dmode=drwxr-xr-x
-#GID=`id -g`
-GID=0
 fuseop=${0##*/}
 cache_timestamp=0
-cache_basedir=~/.cache/execfuse-s3
 mtime=0
+
 
 case "$fuseop" in
 readdir)
@@ -86,8 +108,11 @@ case "$1" in
 		key=''
 	fi
 	
-	cache-s3-ls s3://$bucket/$key |\
-	sed -e 's/^\s\+PRE/0 0 PRE/' |\
+	{
+		cache-s3-ls "s3://$bucket/$key" |\
+		sed -e 's/^\s\+PRE/0 0 PRE/'
+		exit ${PIPESTATUS[0]}
+	}|\
 	{
 		read cache_timestamp
 		declare -A dirs=()
@@ -117,6 +142,7 @@ case "$1" in
 			fi
 		done
 	}
+	return_to_fuse ${PIPESTATUS[@]}
 	;;
 esac
 ;; # readdir
@@ -154,15 +180,9 @@ case "$1" in
 					exit 0
 				fi
 			done
-			exit 2
+			exit $ENOENT
 		}
-		ps=(${PIPESTATUS[@]})
-		if [ ${ps[0]} != 0 ]
-		then
-			exit 1
-		else
-			exit ${ps[1]}
-		fi
+		return_to_fuse ${PIPESTATUS[@]}
 	else
 		# viewing an s3 object
 		# find its type: keyprefix (dir) or object key (file)
@@ -177,7 +197,7 @@ case "$1" in
 		key_basename=${key##*/}
 		
 		{
-			cache-s3-ls s3://$bucket/$key_dirname |\
+			cache-s3-ls "s3://$bucket/$key_dirname" |\
 			sed -e 's/^\s\+PRE/0 0 PRE/'
 			exit ${PIPESTATUS[0]}
 		}|\
@@ -225,15 +245,9 @@ case "$1" in
 					exit 0
 				fi
 			done
-			exit 2
+			exit $ENOENT
 		}
-		ps=(${PIPESTATUS[@]})
-		if [ ${ps[0]} != 0 ]
-		then
-			exit 1
-		else
-			exit ${ps[1]}
-		fi
+		return_to_fuse ${PIPESTATUS[@]}
 	fi
 	# notreached
 	;;
@@ -245,21 +259,55 @@ read_file)
 	# trim trailing '#' sign which is there on object key which is also a keyprefix
 	bucket_and_key=${bucket_and_key%#}
 	aws s3 cp "s3:/$bucket_and_key" -
+	if [ $? != 0 ]
+	then
+		exit $EIO
+	fi
 ;; # read_file
 
 chmod)
-	cachekey=`mk_cache_key "s3:/$1"`
+	bucket_and_key=$1
+	bucket_and_key=${1:1}
+	cachekey=`mk_cache_key "s3://$bucket_and_key${bucket_and_key:+/}"`
+	found=no
 	case ".$2" in
 	.00000)
-		find "$cache_basedir/$cachekey" -type f -name "data" -delete
+		# chmod 0 [<DIR>]
+		# clear cache recursively from within this directory.
+		
+		x=`find "$cache_basedir/$cachekey" -type f -name "data" -printf x -delete`
+		if [ -n "$x" ];
+		then
+			found=yes
+		fi
 		;;
 	.00001)
-		rm "$cache_basedir/$cachekey/data"
+		# chmod 1 [<DIR>]
+		# clear cache of this directory.
+		
+		cachefile="$cache_basedir/$cachekey/data"
+		if [ -e "$cachefile" ]
+		then
+			found=yes
+			rm "$cachefile"
+		fi
 		;;
-	*)	exit 1;;
+	*)	exit $EINVAL;;
 	esac
-	exit 0
+	
+	if [ $found = yes ]
+	then
+		exit 0
+	else
+		# it was either a single file (which does not have own cachefile)
+		# or the corresponding cache file (of a directory) was missing.
+		#
+		# the formal case is more likely (because userspace apps often calls 
+		# stat(2) before chmod, so the dir cache will populated anyway),
+		# so we indicate that we do not support clearig cache on files.
+		exit $EOPNOTSUPP
+	fi
 ;; # chmod
 
-*)	exit 95;;
+*)	exit $ENOSYS;;
 esac

@@ -1,5 +1,9 @@
 #!/bin/bash
 
+. "`dirname "$(readlink -f "$0")"`/common.sh"
+
+if [ -e "$2$1" ]
+then
 find "$2$1" -mindepth 1 -maxdepth 1 \
 	-printf 'ino=%i mode=%M nlink=%n uid=%U gid=%G rdev=0 size=%s blksize=512 blocks=%b atime=%A@ mtime=%T@ ctime=%C@ %f\0' |\
 basedir=$2 cwd=$1 perl -e '
@@ -94,3 +98,6 @@ while(<>)
 
 close $cache_fh;
 '
+else
+	exit $ENOENT
+fi

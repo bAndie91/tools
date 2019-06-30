@@ -1,0 +1,10 @@
+#!/bin/bash
+
+_comp_write()
+{
+        COMPREPLY=($(users))
+        return 0
+}
+
+complete -F _comp_write  msg write
+

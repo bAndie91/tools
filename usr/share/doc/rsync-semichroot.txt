@@ -1,0 +1,19 @@
+
+Setup rsync-semichroot ForceCommand in a user's ssh options to allow the user
+to run only rsync server side component on a dedicated machine, e.g. for backuping 
+purposes.
+
+User's authorized_keys file (usually ~/.ssh/authorized_keys) may look like:
+
+[code]
+command="/usr/local/bin/rsync-semichroot /var/backups/users/joe",no-agent-forwarding,no-port-forwarding,no-pty,no-user-rc,no-X11-forwarding ssh-rsa AAAAB3N...longPublicKey...2z4D joe@joe-pc
+[/code]
+
+First and only parameter of rsync-semichroot is a directory all rsync request 
+jailed in. This is not a real chroot(2), the script just prepends the given 
+directory name in front of the destination directory parameter of rsync.
+
+Do not use user's home directory or any parent directory as semichroot,
+so the user can overwrite authorized_keys file permitting himself other
+operations on target machine.
+

@@ -10,6 +10,10 @@ do_calc()
 		# multiplication operator
 		word=${word//×/*}
 		
+		# parenthesis
+		word=${word//[/(}
+		word=${word//]/)}
+		
 		# bitshift operators
 		word=${word//shr/>>}
 		word=${word//shl/<<}

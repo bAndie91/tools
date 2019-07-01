@@ -60,6 +60,15 @@ cache-s3-ls()
 	fi
 }
 
+cache-add-entry()
+{
+	local s3_pfx_uri=$1
+	local entry=$2
+	
+	local cachekey=`mk_cache_key "$s3_pfx_uri"`
+	echo "$entry" >> "$cache_basedir/$cachekey/data"
+}
+
 return_to_fuse()
 {
 	local ps=("$@")
@@ -75,6 +84,21 @@ print_base_dir_attr()
 {
 	echo -ne "ino=1 mode=$dmode nlink=2 uid=$UID gid=$GID rdev=0 size=0 blksize=512 blocks=0 atime=$cache_timestamp mtime=$mtime ctime=0${1:+ $1\0}"
 }
+
+set_Bucket_and_Key()
+{
+	local path=$1
+	path=${1:1}  # strip leading slash
+	Bucket=${path%%/*}
+	if [[ $path =~ / ]]
+	then
+		Key=${path#*/}
+	else
+		Key=''
+	fi
+}
+
+
 
 fuseop=${0##*/}
 cache_timestamp=0
@@ -99,17 +123,10 @@ case "$1" in
 	}
 	;;
 *)
-	path=${1:1}
-	bucket=${path%%/*}
-	if [[ $path =~ / ]]
-	then
-		key=${path#*/}/
-	else
-		key=''
-	fi
+	set_Bucket_and_Key "$1"
 	
 	{
-		cache-s3-ls "s3://$bucket/$key" |\
+		cache-s3-ls "s3://$Bucket/$Key${Key:+/}" |\
 		sed -e 's/^\s\+PRE/0 0 PRE/'
 		exit ${PIPESTATUS[0]}
 	}|\
@@ -153,16 +170,9 @@ case "$1" in
 	print_base_dir_attr
 	;;
 *)
-	path=${1:1}
-	bucket=${path%%/*}
-	if [[ $path =~ / ]]
-	then
-		key=${path#*/}
-	else
-		key=''
-	fi
+	set_Bucket_and_Key "$1"
 	
-	if [ -z "$key" ]
+	if [ -z "$Key" ]
 	then
 		# viewing a bucket folder
 		# ensure the bucket exists based on the default bucket list
@@ -173,7 +183,7 @@ case "$1" in
 			read cache_timestamp
 			while read -r date time this_bucket
 			do
-				if [ "$this_bucket" = "$bucket" ]
+				if [ "$this_bucket" = "$Bucket" ]
 				then
 					mtime=`date +%s -d "$date $time"`
 					print_base_dir_attr
@@ -188,16 +198,16 @@ case "$1" in
 		# find its type: keyprefix (dir) or object key (file)
 		# lookup the parent dir
 		
-		if [[ $key =~ / ]]
+		if [[ $Key =~ / ]]
 		then
-			key_dirname=${key%/*}/
+			key_dirname=${Key%/*}/
 		else
 			key_dirname=''
 		fi
-		key_basename=${key##*/}
+		key_basename=${Key##*/}
 		
 		{
-			cache-s3-ls "s3://$bucket/$key_dirname" |\
+			cache-s3-ls "s3://$Bucket/$key_dirname" |\
 			sed -e 's/^\s\+PRE/0 0 PRE/'
 			exit ${PIPESTATUS[0]}
 		}|\
@@ -226,7 +236,7 @@ case "$1" in
 					then
 						# it's a key prefix, show there is a dir
 						# get mtime from the listing of this current keyprefix, only if it's cached
-						cachekey=`mk_cache_key "s3://$bucket/$key/"`
+						cachekey=`mk_cache_key "s3://$Bucket/$Key/"`
 						cachefile=$cache_basedir/$cachekey/data
 						if [ -f "$cachefile" ]
 						then
@@ -308,6 +318,25 @@ chmod)
 		exit $EOPNOTSUPP
 	fi
 ;; # chmod
+
+mkdir)
+	set_Bucket_and_Key "$1"
+	if [ -n "$Key" ]
+	then
+		Key=$Key/
+		aws s3api put-object --bucket "$Bucket" --key "$Key"
+		if [ $? != 0 ]
+		then
+			exit $EIO
+		fi
+		
+		parent=`dirname "$Bucket/$Key"`
+		leaf=`basename "$Bucket/$Key"`
+		cache-add-entry "s3://$parent/" "0 0 PRE $leaf/"
+	else
+		exit $EOPNOTSUPP
+	fi
+;; # mkdir
 
 *)	exit $ENOSYS;;
 esac

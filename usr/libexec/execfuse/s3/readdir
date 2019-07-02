@@ -69,6 +69,15 @@ cache-add-entry()
 	echo "$entry" >> "$cache_basedir/$cachekey/data"
 }
 
+cache-del-entry()
+{
+	local s3_pfx_uri=$1
+	local entry=$2
+	
+	local cachekey=`mk_cache_key "$s3_pfx_uri"`
+	entry=$entry perl -i -ne 'if(/^(\s*|\S+\s+\S+\s+)PRE (.+)/ and $2 eq $ENV{entry}){}else{print}' "$cache_basedir/$cachekey/data" 
+}
+
 return_to_fuse()
 {
 	local ps=("$@")
@@ -337,6 +346,25 @@ mkdir)
 		exit $EOPNOTSUPP
 	fi
 ;; # mkdir
+
+rmdir)
+	set_Bucket_and_Key "$1"
+	if [ -n "$Key" ]
+	then
+		Key=$Key/
+		aws s3api delete-object --bucket "$Bucket" --key "$Key"
+		if [ $? != 0 ]
+		then
+			exit $EIO
+		fi
+		
+		parent=`dirname "$Bucket/$Key"`
+		leaf=`basename "$Bucket/$Key"`
+		cache-del-entry "s3://$parent/" "$leaf/"
+	else
+		exit $EOPNOTSUPP
+	fi
+;; # rmdir
 
 *)	exit $ENOSYS;;
 esac

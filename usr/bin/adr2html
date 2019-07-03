@@ -1,8 +1,7 @@
 #!/usr/bin/env perl
-# Opera Bookmark address file  -to->  HTML converter.
-# Tested with Opera Hotlist versions
-# 2.0
-# (C) Hrubak Andras <andreas@metaltux.tk>
+# Opera Bookmark address file -to->  HTML converter.
+# Tested with Opera Hotlist versions:
+#  - 2.0
 
 use Data::Dumper;
 use utf8;
@@ -203,7 +202,7 @@ print PersonalBar(\@PB);
 print "<UL>" . $BMTree . "</UL>";
 
 # Footer
-print "<HR><FOOTER>Made by <A HREF=\"http://metaltux.tk/\">adr2html</A>.</FOOTER>";
+print "<HR><FOOTER>Made by <A HREF=\"https://github.com/bAndie91/tools/blob/master/usr/bin/adr2html\">adr2html</A>.</FOOTER>";
 
 # Script - Restore expanded/collapsed state of nodes
 print "<SCRIPT TYPE='text/javascript'>\n";

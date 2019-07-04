@@ -37,7 +37,7 @@ pipe()
 	exec {wtr}>/proc/$pid1/fd/1 {rdr}</proc/$pid2/fd/0
 	
 	disown $pid2
-	kill $pid1 $pid2
+	kill -KILL $pid1 $pid2  # sometimes INT and TERM are blocked, but it's safe to kill such a no-op process
 	
 	eval $1=$rdr
 	eval $2=$wtr

@@ -316,6 +316,14 @@ read_file)
 	exit $?
 ;; # read_file
 
+write_file)
+	bucket_and_key=$1
+	# trim trailing '#' sign which is there on object key which is also a keyprefix
+	bucket_and_key=${bucket_and_key%#}
+	fixerrno-aws s3 cp - "s3:/$bucket_and_key"
+	exit $?
+;; # write_file
+
 chmod)
 	bucket_and_key=$1
 	bucket_and_key=${1:1}

@@ -3,9 +3,16 @@
 EPERM=1
 ENOENT=2
 EIO=5
+EAGAIN=11
 EACCESS=13
+EBUSY=16
+EEXIST=17
 EINVAL=22
+EFBIG=27
+ENOSPC=28
+ESPIPE=29
 ENOSYS=38
+ENOTEMPTY=39
 EOPNOTSUPP=95
 
 . /usr/lib/yazzy-utils/bash-utils || exit $EIO
@@ -53,9 +60,36 @@ fixerrno-aws()
 		# TODO gather more error messages/codes
 		;;
 	s3api)
-		if [[ $stderr =~ NoSuchKey ]]
+		if [[ $stderr =~ NoSuchKey|NoSuchBucket ]]
 		then
 			errno=$ENOENT
+		elif [[ $stderr =~ AccessDenied ]]
+		then
+			errno=$EACCESS
+		elif [[ $stderr =~ BucketAlreadyExists|BucketAlreadyOwnedByYou ]]
+		then
+			errno=$EEXIST
+		elif [[ $stderr =~ BucketNotEmpty ]]
+		then
+			errno=$ENOTEMPTY
+		elif [[ $stderr =~ InvalidArgument|InvalidBucketName ]]
+		then
+			errno=$EINVAL
+		elif [[ $stderr =~ InlineDataTooLarge|MaxMessageLengthExceeded|MaxPostPreDataLengthExceededError ]]
+		then
+			errno=$EFBIG
+		elif [[ $stderr =~ InvalidRange ]]
+		then
+			errno=$ESPIPE
+		elif [[ $stderr =~ MethodNotAllowed ]]
+		then
+			errno=$EPERM
+		elif [[ $stderr =~ ServiceUnavailable|SlowDown ]]
+		then
+			errno=$EBUSY
+		elif [[ $stderr =~ TooManyBuckets ]]
+		then
+			errno=$ENOSPC
 		fi
 		;;
 	esac

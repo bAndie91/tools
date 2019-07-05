@@ -3,10 +3,19 @@
 EPERM=1
 ENOENT=2
 EIO=5
+EAGAIN=11
 EACCESS=13
+EBUSY=16
+EEXIST=17
 EINVAL=22
+EFBIG=27
+ENOSPC=28
+ESPIPE=29
 ENOSYS=38
+ENOTEMPTY=39
 EOPNOTSUPP=95
+
+. /usr/lib/yazzy-utils/bash-utils || exit $EIO
 
 export PYTHONIOENCODING=utf8
 fmode=-rw-r--r--
@@ -15,8 +24,6 @@ dmode=drwxr-xr-x
 GID=0
 cache_basedir=~/.cache/execfuse-s3
 
-#exit $ENOSYS
-#exec 2>/tmp/e ; set -x
 
 mk_cache_key()
 {
@@ -25,6 +32,68 @@ mk_cache_key()
 	cachekey=${cachekey//./%2E}
 	cachekey=${cachekey//\//%2F\/}
 	echo "$cachekey"
+}
+
+fixerrno-aws()
+{
+	local errno
+	local stderr
+	local fd2r fd2w
+	
+	pipe fd2r fd2w
+	aws "$@" 2>&$fd2w
+	[ $? = 0 ] && errno=0 || errno=$EIO
+	# aws cli's exit code is not distinctive enough.
+	
+	close $fd2w
+	stderr=$(cat <&$fd2r)
+	close $fd2r
+	
+	echo "$stderr" >&2
+	
+	case "$1" in
+	s3)
+		if [[ $stderr =~ Not\ Found$ ]]
+		then
+			errno=$ENOENT
+		fi
+		# TODO gather more error messages/codes
+		;;
+	s3api)
+		if [[ $stderr =~ NoSuchKey|NoSuchBucket ]]
+		then
+			errno=$ENOENT
+		elif [[ $stderr =~ AccessDenied ]]
+		then
+			errno=$EACCESS
+		elif [[ $stderr =~ BucketAlreadyExists|BucketAlreadyOwnedByYou ]]
+		then
+			errno=$EEXIST
+		elif [[ $stderr =~ BucketNotEmpty ]]
+		then
+			errno=$ENOTEMPTY
+		elif [[ $stderr =~ InvalidArgument|InvalidBucketName ]]
+		then
+			errno=$EINVAL
+		elif [[ $stderr =~ InlineDataTooLarge|MaxMessageLengthExceeded|MaxPostPreDataLengthExceededError ]]
+		then
+			errno=$EFBIG
+		elif [[ $stderr =~ InvalidRange ]]
+		then
+			errno=$ESPIPE
+		elif [[ $stderr =~ MethodNotAllowed ]]
+		then
+			errno=$EPERM
+		elif [[ $stderr =~ ServiceUnavailable|SlowDown ]]
+		then
+			errno=$EBUSY
+		elif [[ $stderr =~ TooManyBuckets ]]
+		then
+			errno=$ENOSPC
+		fi
+		;;
+	esac
+	return $errno
 }
 
 cache-s3-ls()
@@ -48,7 +117,7 @@ cache-s3-ls()
 		cat "$cachefile"
 	else
 		echo 0
-		aws s3 ls "$s3uri" | tee "$cachefile"
+		fixerrno-aws s3 ls "$s3uri" | tee "$cachefile"
 		ps=(${PIPESTATUS[@]})
 		ec=${ps[0]}
 		if [ $ec != 0 ]
@@ -75,7 +144,7 @@ cache-del-entry()
 	local entry=$2
 	
 	local cachekey=`mk_cache_key "$s3_pfx_uri"`
-	entry=$entry perl -i -ne 'if(/^(\s*|\S+\s+\S+\s+)PRE (.+)/ and $2 eq $ENV{entry}){}else{print}' "$cache_basedir/$cachekey/data" 
+	entry=$entry perl -i -ne 'if(/^(\s*PRE|\S+\s+\S+\s+\S+) (.+)/ and $2 eq $ENV{entry}){}else{print}' "$cache_basedir/$cachekey/data" 
 }
 
 return_to_fuse()
@@ -83,7 +152,7 @@ return_to_fuse()
 	local ps=("$@")
 	if [ ${ps[0]} != 0 ]
 	then
-		exit $EIO
+		exit ${ps[0]}
 	else
 		exit ${ps[1]}
 	fi
@@ -277,12 +346,17 @@ read_file)
 	bucket_and_key=$1
 	# trim trailing '#' sign which is there on object key which is also a keyprefix
 	bucket_and_key=${bucket_and_key%#}
-	aws s3 cp "s3:/$bucket_and_key" -
-	if [ $? != 0 ]
-	then
-		exit $EIO
-	fi
+	fixerrno-aws s3 cp "s3:/$bucket_and_key" -
+	exit $?
 ;; # read_file
+
+write_file)
+	bucket_and_key=$1
+	# trim trailing '#' sign which is there on object key which is also a keyprefix
+	bucket_and_key=${bucket_and_key%#}
+	fixerrno-aws s3 cp - "s3:/$bucket_and_key"
+	exit $?
+;; # write_file
 
 chmod)
 	bucket_and_key=$1
@@ -333,38 +407,46 @@ mkdir)
 	if [ -n "$Key" ]
 	then
 		Key=$Key/
-		aws s3api put-object --bucket "$Bucket" --key "$Key"
-		if [ $? != 0 ]
+		fixerrno-aws s3api put-object --bucket "$Bucket" --key "$Key"
+		errno=$?
+		if [ $errno = 0 ]
 		then
-			exit $EIO
+			parent=`dirname "$Bucket/$Key"`
+			leaf=`basename "$Bucket/$Key"`
+			cache-add-entry "s3://$parent/" "0 0 PRE $leaf/"
 		fi
-		
-		parent=`dirname "$Bucket/$Key"`
-		leaf=`basename "$Bucket/$Key"`
-		cache-add-entry "s3://$parent/" "0 0 PRE $leaf/"
+		exit $errno
 	else
 		exit $EOPNOTSUPP
 	fi
 ;; # mkdir
 
-rmdir)
+rmdir|unlink)
 	set_Bucket_and_Key "$1"
 	if [ -n "$Key" ]
 	then
-		Key=$Key/
-		aws s3api delete-object --bucket "$Bucket" --key "$Key"
-		if [ $? != 0 ]
+		if [ "$fuseop" = rmdir ]
 		then
-			exit $EIO
+			Key=$Key/
 		fi
 		
-		parent=`dirname "$Bucket/$Key"`
-		leaf=`basename "$Bucket/$Key"`
-		cache-del-entry "s3://$parent/" "$leaf/"
+		fixerrno-aws s3api delete-object --bucket "$Bucket" --key "$Key"
+		errno=$?
+		if [ $errno = 0 ]
+		then
+			parent=`dirname "$Bucket/$Key"`
+			leaf=`basename "$Bucket/$Key"`
+			if [ "$fuseop" = rmdir ]
+			then
+				leaf=$leaf/
+			fi
+			cache-del-entry "s3://$parent/" "$leaf"
+		fi
+		exit $errno
 	else
 		exit $EOPNOTSUPP
 	fi
-;; # rmdir
+;; # rmdir unlink
 
 *)	exit $ENOSYS;;
 esac

@@ -240,3 +240,18 @@ bash_join()
 	shift
 	echo "$*"
 }
+
+in_list()
+{
+	local needle=$1
+	local hay
+	shift
+	for hay in "$@"
+	do
+		if [ ".$hay" = ".$needle" ]
+		then
+			return 0
+		fi
+	done
+	return 1
+}

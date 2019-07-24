@@ -1,0 +1,19 @@
+#!/usr/bin/env perl
+
+use warnings;
+use MIME::Base64 qw/encode_base64url decode_base64url/;
+
+if($ARGV[0] ~~ ['-d', '--decode'])
+{
+	undef $/;
+	print decode_base64url(<STDIN>);
+}
+elsif(not @ARGV)
+{
+	undef $/;
+	print encode_base64url(<STDIN>);
+}
+else
+{
+	die "Usage: $0 [-d | --decode]\n";
+}

@@ -1,0 +1,139 @@
+#!/bin/bash
+
+EPERM=1
+ENOENT=2
+EIO=5
+EAGAIN=11
+EACCESS=13
+EBUSY=16
+EEXIST=17
+EINVAL=22
+EFBIG=27
+ENOSPC=28
+ESPIPE=29
+ENOSYS=38
+ENOTEMPTY=39
+EOPNOTSUPP=95
+
+set -x
+exec 2>>/tmp/d
+
+fmode=-rw-r--r--
+dmode=drwxr-xr-x
+GID=0
+mtime=''
+
+if [ -z "$ZERONET_URL" ]
+then
+	ZERONET_URL="http://localhost:43110"
+fi
+
+
+print_entry_dir()
+{
+	mode=$dmode print_entry "$@"
+}
+
+print_entry_file()
+{
+	mode=$fmode print_entry "$@"
+}
+
+print_entry()
+{
+	echo -ne "ino=1 mode=$mode nlink=2 uid=$UID gid=$GID rdev=0 size=0 blksize=512 blocks=0 atime=0 mtime=${mtime:-0} ctime=0${1:+ $1\0}"
+}
+
+extract_zite()
+{
+	local zite
+	zite=$1
+	zite=${zite#/}
+	zite=${zite%%/*}
+	ZITE=$zite
+}
+
+extract_prefix()
+{
+	PREFIX=`echo "$1" | cut -f3- -d/`
+}
+
+get_zeronet_file()
+{
+	local nonce
+	nonce=`get_zeronet_file_direct "$1" | grep '^wrapper_nonce =' | cut -f2 -d'"'`
+	get_zeronet_file_direct "$1?wrapper_nonce=$nonce"
+}
+
+get_zeronet_file_direct()
+{
+	curl -sS "$ZERONET_URL/$1" -H Accept:text/html
+}
+
+
+fuse_operation=${0##*/}
+
+case "$fuse_operation" in
+readdir)
+case "$1" in
+/)
+	if [ -z "$ZERONET_DATA" ]
+	then
+		print_entry_dir .
+	else
+		jq -r 'keys[]' "$ZERONET_DATA/sites.json" |\
+		while read entry
+		do
+			mtime=`stat -c %Y "$ZERONET_DATA/$entry"`
+			print_entry_dir "$entry"
+		done
+	fi
+	;;
+*)
+	extract_zite "$1"
+	extract_prefix "$1"
+	if [ -n "$PREFIX" ]
+	then
+		PREFIX=$PREFIX/
+	fi
+	
+	get_zeronet_file_direct "$ZITE/content.json" |\
+	jq -r "(.files+.files_optional) | keys[] | select(.|startswith(\"${PREFIX//\"/\\\"}\"))" |\
+	{
+	declare -A dirs
+	# TODO: make it faster
+	while read -r path
+	do
+		relpath=${path:${#PREFIX}}
+		if [[ $relpath =~ ^([^/]+)/ ]]
+		then
+			dir=${BASH_REMATCH[1]}
+			if [ -z "${dirs[$dir]}" ]
+			then
+				dirs[$dir]=1
+				print_entry_dir "$dir"
+			fi
+		else
+			print_entry_file "$relpath"
+		fi
+	done
+	}
+	;;
+esac
+exit 0
+;; # readdir
+
+getattr)
+case "$1" in
+/*/*)
+	print_entry_dir  # FIXME: lookup if it's a dir or a file
+	;;
+*)
+	print_entry_dir
+	;;
+esac
+exit 0
+;; # getattr
+esac
+
+exit $ENOSYS

@@ -78,11 +78,13 @@ slice()
 
 list_site_domains()
 {
+	[ -n "$ZERONET_DATA" ] || return $EIO
 	jq -r 'to_entries | .[] | [.key, .value.domain // "-"] | join(" ")' "$ZERONET_DATA/sites.json"
 }
 
 list_site_titles()
 {
+	[ -n "$ZERONET_DATA" ] || return $EIO
 	jq -r '[.address, .title] | join(" ")' "$ZERONET_DATA/"*"/content.json"
 }
 

@@ -3,6 +3,7 @@
 EPERM=1
 ENOENT=2
 EIO=5
+EBADF=9
 EAGAIN=11
 EACCESS=13
 EBUSY=16
@@ -250,7 +251,23 @@ read_file)
 ;; # read_file
 
 readlink)
-
+case "$1" in
+/*/*/*)
+	# no-op
+	;;
+/name/*|/title/*)
+	ZITE=`find_out_zite_address "$1"`
+	
+	if [ -z "$ZITE" ]
+	then
+		exit $ENOENT
+	fi
+	
+	echo -n "../addr/$ZITE"
+	exit 0
+	;;
+esac
+exit $EBADF
 ;; # readlink
 esac
 

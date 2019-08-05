@@ -80,6 +80,50 @@ list_site_titles()
 	jq -r '[.address, .title] | join(" ")' "$ZERONET_DATA/"*"/content.json"
 }
 
+find_out_zite_address()
+{
+	local x=`slice / 2 "$1"`
+	local y=`slice / 3 "$1"`
+	
+	case "$x" in
+	addr)
+		echo "$y"
+		;;
+	name)
+		list_site_domains |\
+		while read addr name
+		do
+			if [ "$name" = "$y" ]
+			then
+				echo $addr
+				break
+			fi
+		done
+		;;
+	title)
+		y=${y//⁄/\/}
+		list_site_titles |\
+		while read addr title
+		do
+			if [ "$title" = "$y" ]
+			then
+				echo $addr
+				break
+			fi
+		done
+		;;
+	esac
+}
+
+list_zite_files()
+{
+	local zite=$1
+	local prefix=$2
+	get_zeronet_file_direct "$zite/content.json" |\
+	jq -r "(.files + .files_optional) | keys[] | select(.|startswith(\"${prefix//\"/\\\"}\"))"
+}
+
+
 
 fuse_operation=${0##*/}
 
@@ -120,53 +164,20 @@ case "$1" in
 	fi
 	;;
 /addr/*|/name/*|/title/*)
-	x=`slice / 2 "$1"`
-	y=`slice / 3 "$1"`
-	PREFIX=`slice / 4- "$1"`
-	
-	case "$x" in
-	addr)
-		ZITE=$y
-		;;
-	name)
-		ZITE=$(list_site_domains |\
-			while read addr name
-			do
-				if [ "$name" = "$y" ]
-				then
-					echo $addr
-					break
-				fi
-			done
-		)
-		;;
-	title)
-		y=${y//⁄/\/}
-		ZITE=$(list_site_titles |\
-			while read addr title
-			do
-				if [ "$title" = "$y" ]
-				then
-					echo $addr
-					break
-				fi
-			done
-		)
-		;;
-	esac
+	ZITE=`find_out_zite_address "$1"`
 	
 	if [ -z "$ZITE" ]
 	then
 		exit $ENOENT
 	fi
 	
+	PREFIX=`slice / 4- "$1"`
 	if [ -n "$PREFIX" ]
 	then
 		PREFIX=$PREFIX/
 	fi
 	
-	get_zeronet_file_direct "$ZITE/content.json" |\
-	jq -r "(.files + .files_optional) | keys[] | select(.|startswith(\"${PREFIX//\"/\\\"}\"))" |\
+	list_zite_files "$ZITE" "$PREFIX" |\
 	{
 	declare -A dirs
 	# TODO: make it faster
@@ -196,10 +207,35 @@ exit 0
 
 getattr)
 case "$1" in
-/addr,name,title/*/*)
-	print_entry_dir  # FIXME: lookup if it's a dir or a file
+/addr/*/*|/name/*/*|/title/*/*)
+	ZITE=`find_out_zite_address "$1"`
+	
+	if [ -z "$ZITE" ]
+	then
+		exit $ENOENT
+	fi
+	
+	lookup_path=`slice / 4- "$1"`
+	
+	list_zite_files "$ZITE" "$lookup_path" |\
+	{
+		read -r one_path
+		if [ -z "$one_path" ]
+		then
+			exit $ENOENT
+		else
+			if [ "$one_path" = "$lookup_path" ]
+			then
+				print_entry_file
+			else
+				print_entry_dir
+			fi
+			exit 0
+		fi
+	}
+	exit ${PIPESTATUS[1]}
 	;;
-*)
+/|/addr|/name|/title|/addr/*|/name/*|/title/*)
 	print_entry_dir
 	;;
 esac

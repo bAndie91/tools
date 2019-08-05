@@ -163,7 +163,7 @@ case "$1" in
 		done
 	fi
 	;;
-/addr/*|/name/*|/title/*)
+/addr/*)
 	ZITE=`find_out_zite_address "$1"`
 	
 	if [ -z "$ZITE" ]
@@ -235,12 +235,23 @@ case "$1" in
 	}
 	exit ${PIPESTATUS[1]}
 	;;
-/|/addr|/name|/title|/addr/*|/name/*|/title/*)
+/|/addr|/name|/title|/addr/*)
 	print_entry_dir
+	;;
+/name/*|/title/*)
+	print_entry_symlink
 	;;
 esac
 exit 0
 ;; # getattr
+
+read_file)
+
+;; # read_file
+
+readlink)
+
+;; # readlink
 esac
 
 exit $ENOSYS

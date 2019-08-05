@@ -16,7 +16,7 @@ ENOSYS=38
 ENOTEMPTY=39
 EOPNOTSUPP=95
 
-#set -x exec 2>>/tmp/d
+#set -x; exec 2>>/tmp/d
 
 fmode=-rw-r--r--
 dmode=drwxr-xr-x
@@ -52,9 +52,14 @@ print_entry()
 
 get_zeronet_file()
 {
-	local nonce
-	nonce=`get_zeronet_file_direct "$1" | grep '^wrapper_nonce =' | cut -f2 -d'"'`
-	get_zeronet_file_direct "$1?wrapper_nonce=$nonce"
+	if [ -n "$ZERONET_DATA" -a -e "$ZERONET_DATA/$1" ]
+	then
+		cat "$ZERONET_DATA/$1"
+	else
+		local nonce
+		nonce=`get_zeronet_file_direct "$1" | grep '^wrapper_nonce =' | cut -f2 -d'"'`
+		get_zeronet_file_direct "$1?wrapper_nonce=$nonce"
+	fi
 }
 
 get_zeronet_file_direct()
@@ -120,7 +125,7 @@ list_zite_files()
 {
 	local zite=$1
 	local prefix=$2
-	get_zeronet_file_direct "$zite/content.json" |\
+	get_zeronet_file "$zite/content.json" |\
 	jq -r "(.files + .files_optional) | keys[] | select(.|startswith(\"${prefix//\"/\\\"}\"))"
 }
 
@@ -218,23 +223,34 @@ case "$1" in
 	
 	lookup_path=`slice / 4- "$1"`
 	
-	list_zite_files "$ZITE" "$lookup_path" |\
-	{
-		read -r one_path
-		if [ -z "$one_path" ]
+	if [ -n "$ZERONET_DATA" -a -e "$ZERONET_DATA/$ZITE/$lookup_path" ]
+	then
+		if [ -d "$ZERONET_DATA/$ZITE/$lookup_path" ]
 		then
-			exit $ENOENT
+			print_entry_dir
 		else
+			print_entry_file
+		fi
+		exit 0
+	else
+		list_zite_files "$ZITE" "$lookup_path" |\
+		{
+		while read -r one_path
+		do
 			if [ "$one_path" = "$lookup_path" ]
 			then
 				print_entry_file
-			else
+				exit 0
+			elif [ "${one_path:0:${#lookup_path}+1}" = "$lookup_path/" ]
+			then
 				print_entry_dir
+				exit 0
 			fi
-			exit 0
-		fi
-	}
-	exit ${PIPESTATUS[1]}
+		done
+		exit $ENOENT
+		}
+		exit ${PIPESTATUS[1]}
+	fi
 	;;
 /|/addr|/name|/title|/addr/*)
 	print_entry_dir
@@ -247,7 +263,23 @@ exit 0
 ;; # getattr
 
 read_file)
-
+	ZITE=`find_out_zite_address "$1"`
+	
+	if [ -z "$ZITE" ]
+	then
+		exit $ENOENT
+	fi
+	
+	path=`slice / 4- "$1"`
+	local_file=$ZERONET_DATA/$ZITE/$path
+	
+	if [ -n "$ZERONET_DATA" -a -e "$local_file" ]
+	then
+		cat "$local_file" || exit $EIO
+	else
+		get_zeronet_file "/$ZITE/$path" || exit $EIO
+	fi
+	exit 0
 ;; # read_file
 
 readlink)

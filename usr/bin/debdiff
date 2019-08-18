@@ -4,7 +4,7 @@ view_deb()
 {
 	dpkg-deb -I "$1"
 	echo
-	dpkg-deb -c "$1"
+	dpkg-deb -c "$1" | sort -k6
 }
 
 declare -a opts

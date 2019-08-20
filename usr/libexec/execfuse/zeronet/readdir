@@ -264,26 +264,6 @@ esac
 exit 0
 ;; # getattr
 
-read_file)
-	ZITE=`find_out_zite_address "$1"`
-	
-	if [ -z "$ZITE" ]
-	then
-		exit $ENOENT
-	fi
-	
-	path=`slice / 4- "$1"`
-	local_file=$ZERONET_DATA/$ZITE/$path
-	
-	if [ -n "$ZERONET_DATA" -a -e "$local_file" ]
-	then
-		cat "$local_file" || exit $EIO
-	else
-		get_zeronet_file "/$ZITE/$path" || exit $EIO
-	fi
-	exit 0
-;; # read_file
-
 readlink)
 case "$1" in
 /*/*/*)
@@ -304,5 +284,18 @@ esac
 exit $EBADF
 ;; # readlink
 esac
+
+read_file)
+case "$1" in
+/addr/*/*)
+	zeronet_file=`slice / 3- "$1"`
+	get_zeronet_file "$zeronet_file" || exit $EIO
+	exit 0
+	;;
+*)
+	exit $EINVAL
+	;;
+esac
+;; # read_file
 
 exit $ENOSYS

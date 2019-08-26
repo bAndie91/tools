@@ -13,7 +13,7 @@ declare -a command=("$@")
 command_str=${command[*]}
 commandhash=`echo "$command_str" | sha256sum | cut -f1 -d' '`
 
-dir=~/.cache/reserve/$commandhash
+dir=~/.cache/partial/$commandhash
 mkdir -p "$dir"
 
 exec {lockfd}>>"$dir/lock"
@@ -33,11 +33,12 @@ then
 		
 		(
 			flock -u $lockfd
+			set +e
 			command "${command[@]}" > "$dir/stdout"
 			echo -n $? >"$dir/status"
 		) &
 		
-		echo "$0: command started."
+		echo "$0: command started, saving to $dir"
 		exit 115
 	fi
 else

@@ -1,0 +1,3 @@
+Recommended Usage
+
+ZERONET_DATA=/opt/zeronet/data execfuse ./execfuse/zeronet ~/mnt/zeronet -- -o attr_timeout=300 -o entry_timeout=300 -o kernel_cache -o auto_unmount -o fsname=zeronet

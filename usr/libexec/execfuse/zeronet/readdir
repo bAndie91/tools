@@ -1,0 +1,323 @@
+#!/bin/bash
+
+EPERM=1
+ENOENT=2
+EIO=5
+EBADF=9
+EAGAIN=11
+EACCESS=13
+EBUSY=16
+EEXIST=17
+ENOTDIR=20
+EISDIR=21
+EINVAL=22
+EFBIG=27
+ENOSPC=28
+ESPIPE=29
+ENOSYS=38
+ENOTEMPTY=39
+EOPNOTSUPP=95
+
+#set -x; exec 2>>/tmp/d
+
+zite_title_cache_file=~/.cache/fuse-zeronet/titles
+fmode=-rw-r--r--
+dmode=drwxr-xr-x
+lmode=lrwxrwxrwx
+GID=0
+mtime=''
+
+if [ -z "$ZERONET_URL" ]
+then
+	ZERONET_URL="http://localhost:43110"
+fi
+
+
+print_entry_dir()
+{
+	mode=$dmode print_entry "$@"
+}
+
+print_entry_file()
+{
+	mode=$fmode print_entry "$@"
+}
+
+print_entry_symlink()
+{
+	mode=$lmode print_entry "$@"
+}
+
+print_entry()
+{
+	echo -ne "ino=1 mode=$mode nlink=2 uid=$UID gid=$GID rdev=0 size=0 blksize=512 blocks=0 atime=0 mtime=${mtime:-0} ctime=0${1:+ $1\0}"
+}
+
+get_zeronet_file()
+{
+	if [ -n "$ZERONET_DATA" -a -e "$ZERONET_DATA/$1" ]
+	then
+		cat "$ZERONET_DATA/$1"
+	else
+		local nonce
+		nonce=`get_zeronet_file_direct "$1" | grep '^wrapper_nonce =' | cut -f2 -d'"'`
+		get_zeronet_file_direct "$1?wrapper_nonce=$nonce"
+	fi
+}
+
+get_zeronet_file_direct()
+{
+	curl -sS "$ZERONET_URL/$1" -H Accept:text/html
+}
+
+slice()
+{
+	local delim=$1
+	shift
+	local fields=$1
+	shift
+	cut -d "$delim" -f "$fields" <<<"$*"
+}
+
+list_site_titles()
+{
+	[ -n "$ZERONET_DATA" ] || return $EIO
+	local cache_mtime=`stat -c %Y "$zite_title_cache_file" || echo 0`
+	local mtime addr
+	
+	if [ ! -e  "$zite_title_cache_file" ]
+	then
+		mkdir -p "$(dirname "$zite_title_cache_file")"
+		touch "$zite_title_cache_file"
+	fi
+	
+	join -1 2 -2 1 -a 1 <(find "$ZERONET_DATA" -mindepth 2 -maxdepth 2 -name content.json -printf "%T@ %h\n" |\
+		sed -e 's@^\([^.]\+\)\.[^ ]\+ .*\?/\([^/]\+\)$@\1 \2@' |\
+		sort -k2) \
+		"$zite_title_cache_file" |\
+	{
+	declare -A titles
+	changed=no
+	while read -r addr mtime title
+	do
+		if [ $mtime -ge $cache_mtime ]
+		then
+			title=`jq -r '.title' "$ZERONET_DATA/$addr/content.json"`
+			changed=yes
+		fi
+		if [ -n "$title" ]
+		then
+			titles[$addr]=$title
+			echo "$addr $title"
+		fi
+	done
+	if [ $changed = yes ]
+	then
+		for addr in "${!titles[@]}"
+		do
+			echo "$addr ${titles[$addr]}"
+		done | sort > "$zite_title_cache_file.new"
+		mv -f "$zite_title_cache_file.new" "$zite_title_cache_file"
+		# TODO: account for LF char in title string
+	fi
+	}
+}
+
+find_out_zite_address()
+{
+	local idtype=`slice / 2 "$1"`
+	local idvalue=`slice / 3 "$1"`
+	
+	case "$idtype" in
+	name)
+		[ -n "$ZERONET_DATA" ] || return $EIO
+		jq -r "to_entries | .[] | select(.value.domain == \"$idvalue\") | .key" "$ZERONET_DATA/sites.json"
+		;;
+	title)
+		req_title=${idvalue//⁄/\/}
+		if [ -e "$zite_title_cache_file" ]
+		then
+			req_title_esc=${req_title//\\/\\\\}
+			grep -m1 -P "^\S+ \Q${req_title_esc}\E" "$zite_title_cache_file" | cut -f1 -d' '
+		else
+			list_site_titles |\
+			while read addr this_title
+			do
+				if [ "$this_title" = "$req_title" ]
+				then
+					echo $addr
+					break
+				fi
+			done
+		fi
+		;;
+	esac
+}
+
+list_zite_files()
+{
+	local zite=$1
+	local prefix=$2
+	get_zeronet_file "$zite/content.json" |\
+	jq -r "(.files + .files_optional) | keys[] | select(.|startswith(\"${prefix//\"/\\\"}\"))"
+}
+
+
+
+fuse_operation=${0##*/}
+
+case "$fuse_operation" in
+readdir)
+case "$1" in
+/)
+	print_entry_dir addr
+	print_entry_dir name
+	print_entry_dir title
+;;
+/addr)
+	if [ -n "$ZERONET_DATA" ]
+	then
+		jq -r 'to_entries | .[].key' "$ZERONET_DATA/sites.json" |\
+		while read addr
+		do
+			print_entry_dir "$addr"
+		done
+	fi
+	;;
+/name)
+	if [ -n "$ZERONET_DATA" ]
+	then
+		jq -r '.[] | select(.domain) | .domain' "$ZERONET_DATA/sites.json" |\
+		while read name
+		do
+			print_entry_symlink "$name"
+		done
+	fi
+	;;
+/title)
+	list_site_titles |\
+	while read -r addr title
+	do
+		title_safe=${title//\//⁄}
+		print_entry_symlink "$title_safe"
+	done
+	;;
+/addr/*)
+	ZITE=`slice / 3 "$1"`
+	PREFIX=`slice / 4- "$1"`
+	if [ -n "$PREFIX" ]
+	then
+		PREFIX=$PREFIX/
+	fi
+	
+	list_zite_files "$ZITE" "$PREFIX" |\
+	{
+	declare -A dirs
+	# TODO: make it faster
+	while read -r path
+	do
+		relpath=${path:${#PREFIX}}
+		if [[ $relpath =~ ^([^/]+)/ ]]
+		then
+			dir=${BASH_REMATCH[1]}
+			if [ -z "${dirs[$dir]}" ]
+			then
+				dirs[$dir]=1
+				print_entry_dir "$dir"
+			fi
+		else
+			print_entry_file "$relpath"
+		fi
+	done
+	}
+	;;
+/name/*|/title/*)
+	exit $ENOTDIR
+	;;
+*)
+	exit $ENOENT
+	;;
+esac
+exit 0
+;; # readdir
+
+getattr)
+case "$1" in
+/addr/*/*)
+	ZITE=`slice / 3 "$1"`
+	lookup_path=`slice / 4- "$1"`
+	
+	if [ -n "$ZERONET_DATA" -a -e "$ZERONET_DATA/$ZITE/$lookup_path" ]
+	then
+		if [ -d "$ZERONET_DATA/$ZITE/$lookup_path" ]
+		then
+			print_entry_dir
+		else
+			print_entry_file
+		fi
+		exit 0
+	else
+		list_zite_files "$ZITE" "$lookup_path" |\
+		{
+		while read -r one_path
+		do
+			if [ "$one_path" = "$lookup_path" ]
+			then
+				print_entry_file
+				exit 0
+			elif [ "${one_path:0:${#lookup_path}+1}" = "$lookup_path/" ]
+			then
+				print_entry_dir
+				exit 0
+			fi
+		done
+		exit $ENOENT
+		}
+		exit ${PIPESTATUS[1]}
+	fi
+	;;
+/|/addr|/name|/title|/addr/*)
+	print_entry_dir
+	;;
+/name/*|/title/*)
+	print_entry_symlink
+	;;
+esac
+exit 0
+;; # getattr
+
+readlink)
+case "$1" in
+/*/*/*)
+	# no-op
+	;;
+/name/*|/title/*)
+	ZITE=`find_out_zite_address "$1"`
+	
+	if [ -z "$ZITE" ]
+	then
+		exit $ENOENT
+	fi
+	
+	echo -n "../addr/$ZITE"
+	exit 0
+	;;
+esac
+exit $EBADF
+;; # readlink
+esac
+
+read_file)
+case "$1" in
+/addr/*/*)
+	zeronet_file=`slice / 3- "$1"`
+	get_zeronet_file "$zeronet_file" || exit $EIO
+	exit 0
+	;;
+*)
+	exit $EINVAL
+	;;
+esac
+;; # read_file
+
+exit $ENOSYS

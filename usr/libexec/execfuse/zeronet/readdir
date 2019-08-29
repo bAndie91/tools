@@ -8,6 +8,8 @@ EAGAIN=11
 EACCESS=13
 EBUSY=16
 EEXIST=17
+ENOTDIR=20
+EISDIR=21
 EINVAL=22
 EFBIG=27
 ENOSPC=28
@@ -18,6 +20,7 @@ EOPNOTSUPP=95
 
 #set -x; exec 2>>/tmp/d
 
+zite_title_cache_file=~/.cache/fuse-zeronet/titles
 fmode=-rw-r--r--
 dmode=drwxr-xr-x
 lmode=lrwxrwxrwx
@@ -76,27 +79,20 @@ slice()
 	cut -d "$delim" -f "$fields" <<<"$*"
 }
 
-list_site_domains()
-{
-	[ -n "$ZERONET_DATA" ] || return $EIO
-	jq -r 'to_entries | .[] | [.key, .value.domain // "-"] | join(" ")' "$ZERONET_DATA/sites.json"
-}
-
 list_site_titles()
 {
 	[ -n "$ZERONET_DATA" ] || return $EIO
-	local cache_file=~/.cache/fuse-zeronet/titles
-	local cache_mtime=`stat -c %Y "$cache_file" || echo 0`
+	local cache_mtime=`stat -c %Y "$zite_title_cache_file" || echo 0`
 	local mtime addr
 	
-	mkdir -p "$(dirname "$cache_file")"
+	mkdir -p "$(dirname "$zite_title_cache_file")"
 	
 	join -1 2 -2 1 -a 1 <(find "$ZERONET_DATA" -mindepth 2 -maxdepth 2 -name content.json -printf "%T@ %h\n" |\
 		sed -e 's@^\([^.]\+\)\.[^ ]\+ .*\?/\([^/]\+\)$@\1 \2@' |\
 		sort -k2) \
-		"$cache_file" |\
+		"$zite_title_cache_file" |\
 	{
-	changed=no
+	changed=no  # TODO
 	while read -r addr mtime title
 	do
 		if [ $mtime -ge $cache_mtime ]
@@ -108,8 +104,8 @@ list_site_titles()
 		fi
 	done
 	}
-	tee "$cache_file.new" && \
-	mv -f "$cache_file.new" "$cache_file"
+	tee "$zite_title_cache_file.new" && \
+	mv -f "$zite_title_cache_file.new" "$zite_title_cache_file"
 }
 
 find_out_zite_address()
@@ -119,27 +115,26 @@ find_out_zite_address()
 	
 	case "$idtype" in
 	name)
-		list_site_domains |\
-		while read addr name
-		do
-			if [ "$name" = "$idvalue" ]
-			then
-				echo $addr
-				break
-			fi
-		done
+		[ -n "$ZERONET_DATA" ] || return $EIO
+		jq -r "to_entries | .[] | select(.value.domain == \"$idvalue\") | .key" "$ZERONET_DATA/sites.json"
 		;;
 	title)
 		req_title=${idvalue//⁄/\/}
-		list_site_titles |\
-		while read addr this_title
-		do
-			if [ "$this_title" = "$req_title" ]
-			then
-				echo $addr
-				break
-			fi
-		done
+		if [ -e "$zite_title_cache_file" ]
+		then
+			req_title_esc=${req_title//\\/\\\\}
+			grep -m1 -P "^\S+ \Q${req_title_esc}\E" "$zite_title_cache_file" | cut -f1 -d' '
+		else
+			list_site_titles |\
+			while read addr this_title
+			do
+				if [ "$this_title" = "$req_title" ]
+				then
+					echo $addr
+					break
+				fi
+			done
+		fi
 		;;
 	esac
 }
@@ -223,6 +218,9 @@ case "$1" in
 		fi
 	done
 	}
+	;;
+/name/*|/title/*)
+	exit $ENOTDIR
 	;;
 *)
 	exit $ENOENT

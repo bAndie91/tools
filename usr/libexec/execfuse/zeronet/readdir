@@ -85,7 +85,11 @@ list_site_titles()
 	local cache_mtime=`stat -c %Y "$zite_title_cache_file" || echo 0`
 	local mtime addr
 	
-	mkdir -p "$(dirname "$zite_title_cache_file")"
+	if [ ! -e  "$zite_title_cache_file" ]
+	then
+		mkdir -p "$(dirname "$zite_title_cache_file")"
+		touch "$zite_title_cache_file"
+	fi
 	
 	join -1 2 -2 1 -a 1 <(find "$ZERONET_DATA" -mindepth 2 -maxdepth 2 -name content.json -printf "%T@ %h\n" |\
 		sed -e 's@^\([^.]\+\)\.[^ ]\+ .*\?/\([^/]\+\)$@\1 \2@' |\
@@ -101,8 +105,11 @@ list_site_titles()
 			title=`jq -r '.title' "$ZERONET_DATA/$addr/content.json"`
 			changed=yes
 		fi
-		titles[$addr]=$title
-		echo "$addr $title"
+		if [ -n "$title" ]
+		then
+			titles[$addr]=$title
+			echo "$addr $title"
+		fi
 	done
 	if [ $changed = yes ]
 	then

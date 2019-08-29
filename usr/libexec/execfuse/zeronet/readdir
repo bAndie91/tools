@@ -85,23 +85,44 @@ list_site_domains()
 list_site_titles()
 {
 	[ -n "$ZERONET_DATA" ] || return $EIO
-	jq -r '[.address, .title] | join(" ")' "$ZERONET_DATA/"*"/content.json"
+	local cache_file=~/.cache/fuse-zeronet/titles
+	local cache_mtime=`stat -c %Y "$cache_file" || echo 0`
+	local mtime addr
+	
+	mkdir -p "$(dirname "$cache_file")"
+	
+	join -1 2 -2 1 -a 1 <(find "$ZERONET_DATA" -mindepth 2 -maxdepth 2 -name content.json -printf "%T@ %h\n" |\
+		sed -e 's@^\([^.]\+\)\.[^ ]\+ .*\?/\([^/]\+\)$@\1 \2@' |\
+		sort -k2) \
+		"$cache_file" |\
+	{
+	changed=no
+	while read -r addr mtime title
+	do
+		if [ $mtime -ge $cache_mtime ]
+		then
+			jq -r '[.address, (.title|split("\n")|join(""))] | join(" ")' "$ZERONET_DATA/$addr/content.json"
+			changed=yes
+		else
+			echo "$addr $title"
+		fi
+	done
+	}
+	tee "$cache_file.new" && \
+	mv -f "$cache_file.new" "$cache_file"
 }
 
 find_out_zite_address()
 {
-	local x=`slice / 2 "$1"`
-	local y=`slice / 3 "$1"`
+	local idtype=`slice / 2 "$1"`
+	local idvalue=`slice / 3 "$1"`
 	
-	case "$x" in
-	addr)
-		echo "$y"
-		;;
+	case "$idtype" in
 	name)
 		list_site_domains |\
 		while read addr name
 		do
-			if [ "$name" = "$y" ]
+			if [ "$name" = "$idvalue" ]
 			then
 				echo $addr
 				break
@@ -109,11 +130,11 @@ find_out_zite_address()
 		done
 		;;
 	title)
-		y=${y//⁄/\/}
+		req_title=${idvalue//⁄/\/}
 		list_site_titles |\
-		while read addr title
+		while read addr this_title
 		do
-			if [ "$title" = "$y" ]
+			if [ "$this_title" = "$req_title" ]
 			then
 				echo $addr
 				break
@@ -143,42 +164,39 @@ case "$1" in
 	print_entry_dir name
 	print_entry_dir title
 ;;
-/addr|/name|/title)
+/addr)
 	if [ -n "$ZERONET_DATA" ]
 	then
-		join -j1 <(list_site_domains | sort) <(list_site_titles | sort) |\
-		while read addr name title
+		jq -r 'to_entries | .[].key' "$ZERONET_DATA/sites.json" |\
+		while read addr
 		do
-			mtime=`stat -c %Y "$ZERONET_DATA/$addr"`
-			case "$1" in
-			/addr)
-				print_entry_dir "$addr"
-				;;
-			/name)
-				if [ -n "$name" -a "$name" != - ]
-				then
-					print_entry_symlink "$name"
-				fi
-				;;
-			/title)
-				if [ -n "$title" ]
-				then
-					title_safe=${title//\//⁄}
-					print_entry_symlink "$title_safe"
-				fi
-				;;
-			esac
+			print_entry_dir "$addr"
+		done
+	fi
+	;;
+/name)
+	if [ -n "$ZERONET_DATA" ]
+	then
+		jq -r '.[] | select(.domain) | .domain' "$ZERONET_DATA/sites.json" |\
+		while read name
+		do
+			print_entry_symlink "$name"
+		done
+	fi
+	;;
+/title)
+	if [ -n "$ZERONET_DATA" ]
+	then
+		jq -r 'select(.title!="")|.title' "$ZERONET_DATA"/*/content.json |\
+		while read -r title
+		do
+			title_safe=${title//\//⁄}
+			print_entry_symlink "$title_safe"
 		done
 	fi
 	;;
 /addr/*)
-	ZITE=`find_out_zite_address "$1"`
-	
-	if [ -z "$ZITE" ]
-	then
-		exit $ENOENT
-	fi
-	
+	ZITE=`slice / 3 "$1"`
 	PREFIX=`slice / 4- "$1"`
 	if [ -n "$PREFIX" ]
 	then
@@ -215,14 +233,8 @@ exit 0
 
 getattr)
 case "$1" in
-/addr/*/*|/name/*/*|/title/*/*)
-	ZITE=`find_out_zite_address "$1"`
-	
-	if [ -z "$ZITE" ]
-	then
-		exit $ENOENT
-	fi
-	
+/addr/*/*)
+	ZITE=`slice / 3 "$1"`
 	lookup_path=`slice / 4- "$1"`
 	
 	if [ -n "$ZERONET_DATA" -a -e "$ZERONET_DATA/$ZITE/$lookup_path" ]

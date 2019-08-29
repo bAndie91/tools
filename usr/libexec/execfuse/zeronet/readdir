@@ -92,20 +92,28 @@ list_site_titles()
 		sort -k2) \
 		"$zite_title_cache_file" |\
 	{
-	changed=no  # TODO
+	declare -A titles
+	changed=no
 	while read -r addr mtime title
 	do
 		if [ $mtime -ge $cache_mtime ]
 		then
-			jq -r '[.address, (.title|split("\n")|join(""))] | join(" ")' "$ZERONET_DATA/$addr/content.json"
+			title=`jq -r '.title' "$ZERONET_DATA/$addr/content.json"`
 			changed=yes
-		else
-			echo "$addr $title"
 		fi
+		titles[$addr]=$title
+		echo "$addr $title"
 	done
+	if [ $changed = yes ]
+	then
+		for addr in "${!titles[@]}"
+		do
+			echo "$addr ${titles[$addr]}"
+		done | sort > "$zite_title_cache_file.new"
+		mv -f "$zite_title_cache_file.new" "$zite_title_cache_file"
+		# TODO: account for LF char in title string
+	fi
 	}
-	tee "$zite_title_cache_file.new" && \
-	mv -f "$zite_title_cache_file.new" "$zite_title_cache_file"
 }
 
 find_out_zite_address()
@@ -180,15 +188,12 @@ case "$1" in
 	fi
 	;;
 /title)
-	if [ -n "$ZERONET_DATA" ]
-	then
-		jq -r 'select(.title!="")|.title' "$ZERONET_DATA"/*/content.json |\
-		while read -r title
-		do
-			title_safe=${title//\//⁄}
-			print_entry_symlink "$title_safe"
-		done
-	fi
+	list_site_titles |\
+	while read -r addr title
+	do
+		title_safe=${title//\//⁄}
+		print_entry_symlink "$title_safe"
+	done
 	;;
 /addr/*)
 	ZITE=`slice / 3 "$1"`

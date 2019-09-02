@@ -13,11 +13,46 @@ PAM_IGNORE=25
 #PAM_TTY=ssh
 #PAM_TYPE=open_session
 #PAM_TYPE=close_session
-#PAM_USER=sysop
+#PAM_USER=joedoe
 
+last_reboot()
+{
+	last_wtmp_entry 7 reboot
+}
+last_wtmp_login()
+{
+	last_wtmp_entry 1 "$1"
+}
+last_wtmp_entry()
+{
+	local wtmp_field=$1
+	local wtmp_match=$2
+	
+	for wtmp in $(echo /var/log/wtmp* | tr " " "\n" | sort -t. -k2n)
+	do
+		timestamp=$(
+			LD_PRELOAD=/usr/lib/yazzy-preload/openhelper.so \
+			OPENHELPER_FNMATCH='/var/log/wtmp.*.*' \
+			OPENHELPER_COMMAND='case "$OPENHELPER_FILE" in
+			*.xz) exec unxz -c "$OPENHELPER_FILE";;
+			*.gz) exec gunzip -c "$OPENHELPER_FILE";;
+			*.bz2) exec bunzip2 -c "$OPENHELPER_FILE";;
+			*) exit 95;;
+			esac' \
+			lastcsv -f "$wtmp" -n 1 "$wtmp_match" |\
+			wtmp_match=$wtmp_match \
+			awk -F';' '$'$wtmp_field'==ENVIRON["wtmp_match"]{print $5}'
+		)
+		if [ -n "$timestamp" ]
+		then
+			echo "$timestamp"
+			break
+		fi
+	done
+}
 
-lastreboot=`lastcsv -n 1 reboot | awk -F';' '$7=="reboot"{print $5}'`
-lastlogin=`lastcsv -n 1 "$PAM_USER" | awk -F';' '$1=="'"$PAM_USER"'"{print $5}'`
+lastreboot=`last_reboot`
+lastlogin=`last_wtmp_login "$PAM_USER"`
 
 if expr "$*" : '.*\<force\>' >/dev/null || [ -z "$lastlogin" ] || [ "$lastlogin" -le "$lastreboot" ] 2>/dev/null
 then

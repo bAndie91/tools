@@ -8,6 +8,10 @@
 	renames = copies
 	algorithm = patience
 
+[diff "image"]
+	textconv = "fn(){ identify \"$1\"; exiftool -ALL \"$1\"; }; fn"
+	cachetextconv = true
+
 [color]
 	ui = auto
 	status = auto
@@ -51,7 +55,7 @@
 	set-track = ! "fn(){ [ -n \"$1\" ] && b=$1 || b=$(git symbolic-ref --quiet --short HEAD); git branch --set-upstream \"$b\" \"${2:-origin}/$b\"; }; fn"
 	show-track = ! "fn(){ [ -n \"$1\" ] && b=$1 || b=$(git symbolic-ref --quiet --short HEAD); git config --get-all \"branch.$b.remote\"; git config --get-all \"branch.$b.merge\"; }; fn"
 	
-	delete-remote-branch = ! "fn(){ if [ -z \"$1\" ]; then echo \"Which branch?\" >&2; return 1; fi; remote=$(git config --get-all \"branch.$1.remote\" | head -n1); [ -n \"$remote\" ] || remote=origin; git push \"$remote\" --delete \"$1\"; }; fn"
+	delete-remote-ref = ! "fn(){ if [ -z \"$1\" ]; then echo \"Which branch/tag?\" >&2; return 1; fi; remote=$(git config --get-all \"branch.$1.remote\" | head -n1); [ -n \"$remote\" ] || remote=origin; git push \"$remote\" --delete \"$1\"; }; fn"
 	
 	search = ! "fn(){ git rev-list --all | GIT_PAGER='' xargs -L 32 git grep \"$@\" | less $LESS -F; }; fn"
 	search-commit = log -p --pickaxe-all -S
@@ -85,6 +89,8 @@
 	commit-tracked = ! "fn(){ git commit -a -m \"$*\"; }; fn"
 	ct = ! "git commit-tracked"
 	commit-stage = ! "fn(){ git commit -m \"$*\"; }; fn"
+	rephrase = commit --amend
+	
 	push-branch = ! "fn(){ branch=$(git symbolic-ref --quiet --short HEAD); if [ -z \"$branch\" ]; then echo \"not on a branch\" >&2; return 1; fi; remote=$(git config --get \"branch.$branch.remote\"); git push \"${remote:-origin}\" \"$branch\"; }; fn"
 	fixup = ! "hash=$(git show -s --format=%H); git commit -a -m \"fixup! $hash\"; EDITOR=true VISUAL=true git rebase --interactive --autosquash $hash^"
 	edit-commit = ! "fn(){ subs=''; for com in \"$@\"; do hash=$(git show -s --format=%h \"$1\"); subs=\"$subs${subs:+; }s/^pick \\($hash\\)/edit \\1/\"; done; GIT_SEQUENCE_EDITOR=\"sed -i -e '$subs'\" git rebase --interactive $hash^; }; fn"
@@ -100,7 +106,7 @@
 	preserve = stash save --no-keep-index --include-untracked
 	save = stash save --no-keep-index
 	save-unstaged = stash save --keep-index
-	refund = ! "fn(){ ref=$(git stash list | grep -m1 \"$*\" | cut -f1 -d:); if [ -n \"$ref\" ]; then git stash show -p \"$ref\"; git stash apply \"$ref\"; else echo \"Can not find such a stashed commit with substring '$*'.\" >&2; git stash list >&2; return 1; fi; }; fn"
+	unsave = ! "fn(){ ref=$(git stash list | grep -m1 \"$*\" | cut -f1 -d:); if [ -n \"$ref\" ]; then git stash show -p \"$ref\"; git stash apply \"$ref\"; else echo \"Can not find such a stashed commit with substring '$*'.\" >&2; git stash list >&2; return 1; fi; }; fn"
 	stash-list = stash list
 	slist = stash list
 	

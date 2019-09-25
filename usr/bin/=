@@ -21,12 +21,7 @@ do_calc()
 		# decimal dot
 		word=${word//,/.}
 		
-		# a single '+' plus sign is special for expr, it makes the next argument literal,
-		# so we make our plus sign liternal with a preceeding plus sign.
-		local plus=''
-		if [ "$word" = + ]; then plus=+; fi
-		
-		if expr $plus "$word" : '^-\?[0-9].*[^0-9.].*[0-9]$' >/dev/null
+		if expr + "$word" : '^-\?[0-9].*[^0-9.].*[0-9]$' >/dev/null
 		then
 			# it's an expression starting and ending with numbers
 			# group them together

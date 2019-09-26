@@ -1,0 +1,11 @@
+#!/bin/sh
+
+if [ "$1" -gt 0 ] 2>/dev/null
+then
+	ps -o pid= --ppid=$1 | tr "\n" " "
+else
+	echo "Usage: $0 <pid>" >&2
+	exit 1
+fi
+
+# Why not ``pgrep -P $parent_pid`` ?

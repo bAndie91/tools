@@ -1,0 +1,168 @@
+#!/usr/bin/env perl
+###################
+
+$me=$0;
+$0="taslis";
+sub heply { system "pod2text", $me; }
+exit heply if $ARGV[0] eq '--help';
+use Term::ReadKey;
+ReadMode 4;
+sub bye { exit ReadMode 0 }
+sub getkey { while(not defined ($k = ReadKey(-1))){} return $k }
+$SIG{INT}=$SIG{STOP}=$SIG{STOP}=$SIG{TSTP}=$SIG{QUIT}='bye';
+
+# active window id
+$awid = hex((`xprop -root -f _NET_ACTIVE_WINDOW 0x " \\\$0" _NET_ACTIVE_WINDOW` =~ /(\S+)$/)[0]);
+
+while(1){
+	@tl=();
+	for(split/[\r\n]+/,`wmctrl -lp`){
+		($wid, $wrksp, $pid, $host, $title)=split/\s+/;
+		if(open(P,"/proc/$pid/stat")) { ($state)=(<P>=~/\)\s+(\S+)/); close P }
+		push @tl,[$wid, $wrksp, $pid, $_, $state];
+		$L = 2+length$_ if length$_ > $L;	# set longest line
+		
+	}
+	bye unless @tl;
+
+	# sort order by workspace
+	@tl = sort { $$a[1] <=> $$b[1] } @tl;
+	# set selection if active window id match
+	if(tell STDERR == 0) {
+		for(0..$#tl) {
+			$in = $_ and last if hex $tl[$_][0] == $awid;
+		}
+	}
+
+	# clear screen region
+	print STDERR "\033[s\033[1;0H", ( ((" " x $L) . "\n") x ($#tl+2) ), "\033[u";
+
+	$in=$#tl if $in>$#tl;
+	$pos = tell STDERR;
+
+	print STDERR "\033[s\033[1;0H";
+	for(0..$#tl) {
+		printf STDERR "%s%s\033[m\n",($_==$in?"\033[44;1;36m":"\033[1;36m"),$tl[$_][3];
+	}
+	print STDERR "\033[u";
+
+	$k=getkey;
+	if($k =~ /q/i) { bye }
+	elsif($k eq chr(27)) {
+		$k=getkey;
+		if($k eq '[') {
+			$k=getkey;
+			if($k =~ /[DA]/) {	# arrow left/up
+				$in-- if $in > 0
+			}
+			elsif($k =~ /[CB]/) {	# arrow right/down
+				$in++ if $in < $#tl
+			}
+			elsif($k =~ /[H5]/) {	# home/pg up
+				$in=0
+			}
+			elsif($k =~ /[F6]/) {	# end/pg down
+				$in=$#tl
+			}
+			elsif($k eq chr(27)) { bye }
+		}
+		elsif($k eq chr(27)) { bye }
+	}
+	elsif($k =~ /c/i) {
+		system("wmctrl -ic ".$tl[$in][0]);
+	}
+	elsif($k =~ /[ts ]/i) {
+		kill ${$tl[$in]}[4] eq 'T' ? 18 : ${$tl[$in]}[4] eq 'S' ? 19 : 0, $$tl[$in][2]  if $$tl[$in][2];	# CONT,TSTP
+	}
+	elsif($k =~ /k/i) {
+		kill 9, $$tl[$in][2]  if $$tl[$in][2];	# KILL
+	}
+	elsif($k =~ /h/i) {
+		kill 1, $$tl[$in][2]  if $$tl[$in][2];	# HUP
+	}
+	elsif($k =~ /i/i) {
+		kill 2, $$tl[$in][2]  if $$tl[$in][2];	# INT
+	}
+	elsif($k =~ /d/i) {
+		$/=undef;
+		print STDERR "Commandline:\t";
+		open A,"/proc/".${$tl[$in]}[2]."/cmdline";
+		print STDERR join(" ",split/\x0/,<A>)."\n";
+		close A;
+		print STDERR "Directory:\t";
+		print STDERR readlink "/proc/".${$tl[$in]}[2]."/cwd","\n";
+		$/="\n";
+		open A,"/proc/".${$tl[$in]}[2]."/status";
+		/^(ppid|uid|gid):/i and print STDERR $_ while<A>;
+		close A;
+	}
+	elsif($k eq '?') {
+		heply
+	}
+	elsif($k =~ /[\r\n]/) {
+		ReadMode 0;
+		system("wmctrl -ia ".$tl[$in][0]);
+		exit 0;
+	}	
+}
+
+__END__
+
+=pod
+
+=head1 NAME
+
+taslis - WM's Window List
+
+=head1 DESCRIPTION
+
+B<Taslis> stands for I<tas>kI<lis>t. List X11 clients provided by wmctrl(1) in ANSI-compatible terminal.
+
+=head1 KEYS
+
+=over 8
+
+=item Left,Right
+
+Select item
+
+=item Enter
+
+Switch to workspace and raise window
+
+=item C
+
+Close window gracefully
+
+=item H
+
+Hangup selected process
+
+=item I
+
+Interrupt process
+
+=item S,T,Space
+
+Suspend, Resume process
+
+=item K
+
+Kill process
+
+=item D
+
+Process's details
+
+=item Q
+
+Dismiss
+
+=item ?
+
+Help
+
+=back
+
+=cut
+

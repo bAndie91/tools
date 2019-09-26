@@ -1,0 +1,29 @@
+#!/bin/bash
+
+
+domain_tld=$1
+domain=${domain_tld%.*}
+expr "$domain" : ".*\\." >/dev/null && tld=${domain_tld##*.}
+
+url="http://www.domain.hu/domain/domainsearch/"
+request="domain=$domain&tld=${ltd:-hu}"
+
+curl -s "$url?$request" \
+	| iconv -f latin2 -t utf8 \
+	| perl -ne '
+		if(/ns=([0-9a-z\.]+)/) {
+			print $1."\t";
+		}
+		if(/class=list2/) {
+			s/(<[^>]+>)+/\t/g;
+			s/^\s+|\s+$//g;
+			/--(.*)$/;
+			$_=$1;
+			s/^\s+|\s+$//g;
+			print $_;
+		}
+	'
+	echo	# NL
+
+#curl -s "$url?$request"
+

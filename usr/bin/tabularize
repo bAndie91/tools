@@ -1,19 +1,89 @@
 #!/bin/bash
 
 
+TAB=$'\t'
+IFS=''
+
+set_ascii()
+{
+	verticalBar='|'
+	horizontalBar='-'
+	topleftCorner='+'
+	toprightCorner='+'
+	bottomleftCorner='+'
+	bottomrightCorner='+'
+	leftCross='+'
+	middleCross='+'
+	rightCross='+'
+	topCross='+'
+	bottomCross='+'
+}
+set_unicode()
+{
+	verticalBar='│'
+	horizontalBar='─'
+	topleftCorner='┌'
+	toprightCorner='┐'
+	bottomleftCorner='└'
+	bottomrightCorner='┘'
+	leftCross='├'
+	middleCross='┼'
+	rightCross='┤'
+	topCross='┬'
+	bottomCross='┴'
+}
+
+
+set_unicode
+
+
+while [ -n "$1" ]
+do
+case "$1" in
+-a|--ascii)
+	set_ascii
+	;;
+-u|--unicode)
+	set_unicode
+	;;
+esac
+shift
+done
+
+
+explode()
+{
+	local separator=$1
+	local string=$2
+	local new_string
+	EXPLODE_ARRAY=()
+	
+	while [ -n "$string" ]
+	do
+		EXPLODE_ARRAY+=("${string%%$separator*}")
+		new_string=${string#*$separator}
+		if [ "$string" = "$new_string" ]
+		then
+			break
+		fi
+		string=$new_string
+	done
+	
+	# return $EXPLODE_ARRAY
+}
+
+
 # compute width of each column
 
 column_width=()
 text=''
 while read -r line
 do
-	text=$text${text:+$'\n'}$line
-	IFS=$'\t'
-	cells=($line)
-	IFS=$'\n\t '
-
+	text="$text${text:+$'\n'}$line"
+	explode $'\t' "$line"
+	
 	column=0
-	for cell in "${cells[@]}"
+	for cell in "${EXPLODE_ARRAY[@]}"
 	do
 		width=${#cell}
 		if [ -z "${column_width[$column]}" ] || [ $width -gt "${column_width[$column]}" ]
@@ -25,30 +95,54 @@ do
 done
 
 
+set -u
+
 # compose the format string
 
-fmt=''
+cellFmt=''
+topFmt=''
+innerFmt=''
+bottomFmt=''
 segments=()
 for column in "${!column_width[@]}"
 do
-	fmt="$fmt|%${column_width[$column]}s"
+	swidth=%${column_width[$column]}s
+	cellFmt="$cellFmt$verticalBar$swidth"
+	topFmt="${topFmt:-$topleftCorner}${topFmt:+$topCross}$swidth"
+	innerFmt="${innerFmt:-$leftCross}${innerFmt:+$middleCross}$swidth"
+	bottomFmt="${bottomFmt:-$bottomleftCorner}${bottomFmt:+$bottomCross}$swidth"
 	segments+=('')
 done
-fmt="$fmt|"
+cellFmt="$cellFmt$verticalBar"
+topFmt="$topFmt$toprightCorner"
+innerFmt="$innerFmt$rightCross"
+bottomFmt="$bottomFmt$bottomrightCorner"
 
-vborder=`printf -- "$fmt\n" "${segments[@]}" | tr "| " "+-"`
+topGrid=`printf -- "$topFmt\n" "${segments[@]}"`
+topGrid=${topGrid// /$horizontalBar}
+innerGrid=`printf -- "$innerFmt\n" "${segments[@]}"`
+innerGrid=${innerGrid// /$horizontalBar}
+bottomGrid=`printf -- "$bottomFmt\n" "${segments[@]}"`
+bottomGrid=${bottomGrid// /$horizontalBar}
 
 
 
 # print the table
 
+line_no=1
 while read -r line
 do
-	IFS=$'\t'
-	cells=($line)
-	IFS=$'\n\t '
-
-	echo "$vborder"
-	printf -- "$fmt\n" "${cells[@]}"
+	if [ $line_no = 1 ]
+	then
+		echo "$topGrid"
+	else
+		echo "$innerGrid"
+	fi
+	
+	explode $'\t' "$line"
+	printf -- "$cellFmt\n" "${EXPLODE_ARRAY[@]}"
+	
+	let line_no++
 done <<<"$text"
-echo "$vborder"
+
+echo "$bottomGrid"

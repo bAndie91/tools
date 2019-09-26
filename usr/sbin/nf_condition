@@ -1,0 +1,7 @@
+#!/bin/bash
+
+if [ -n "$2" ]; then
+	echo "$2" > /proc/net/nf_condition/"$1"
+else
+	cat /proc/net/nf_condition/"$1"
+fi

@@ -1,0 +1,60 @@
+#!/bin/bash
+
+set -e
+set -u
+
+declare -a argv=()
+declare -a bindfs_opts=($(bindfs --help | grep -Eio "[-]-[a-z0-9-]+"))
+fuse_opts=
+
+mntname=$1
+shift
+mntpoint=$1
+shift
+
+while [ $# -gt 0 ]
+do
+case "$1" in
+-o)
+	shift
+	oldIFS=$IFS
+	IFS=,
+	for option in $1
+	do
+		is_bindfs_opt=0
+		for bindfs_opt in "${bindfs_opts[@]}"
+		do
+			option_key=${option%%=*}
+			if [ ".--$option_key" = ".$bindfs_opt" ]
+			then
+				if [ "$option_key" = mirror -o "$option_key" = mirror-only ]
+				then
+					option=${option//:/,}
+				fi
+				argv+=("--$option")
+				is_bindfs_opt=1
+				break
+			fi
+		done
+		if [ $is_bindfs_opt = 0 ]
+		then
+			fuse_opts=$fuse_opts${fuse_opts:+,}$option
+		fi
+	done
+	IFS=$oldIFS
+	;;
+-n|-s)
+	true
+	;;
+*)
+	echo "Unknown option: $1" >&2
+	exit 255
+	;;
+esac
+shift
+done
+
+set +u
+
+exec bindfs "${argv[@]}" ${fuse_opts:+-o "$fuse_opts"} "$mntname" "$mntpoint"
+

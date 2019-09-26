@@ -36,7 +36,7 @@ typedef int boolean;
 #define PRINTDEBUG(...) {}
 #endif
 
-boolean EQ(char* a, char* b)
+boolean EQ(const char* a, const char* b)
 {
 	if(a==NULL || b==NULL || strcmp(a,b) != 0) return FALSE;
 	return TRUE;
@@ -97,7 +97,7 @@ boolean parse_option_bool(const char* configline, const char* option, boolean* v
 	return found;
 }
 
-char* get_real_comm(const char* argv0, char** real_argv0)
+char* get_real_comm(char* argv0, char** real_argv0)
 {
 	char* cp;
 	char* real_comm;
@@ -231,35 +231,15 @@ int main(int argc, char** argv, char** envp)
 	PRINTDEBUG("Controlled mode.");
 	
 	
-	group_ids = mallocab(sizeof(gid_t*));
-	pwent = getpwuid(myuid);
-	if(pwent == NULL)
+	/* Gather group IDs the current user (process) is member of. */
+	n_groups = getgroups(0, NULL) + 1;
+	group_ids = mallocab(sizeof(gid_t*) * n_groups);
+	if(getgroups(n_groups - 1, group_ids) == -1)
 	{
-		errx(126, "No pw entry for uid %d.", myuid);
+		errx(errno, "Can not get groups for uid %d.", myuid);
 	}
-	group_ids[0] = pwent->pw_gid;
-	
-	setgrent();
-	n_groups = 1;
-	/* Gather group IDs the current user is member of. */
-	/* Iterate through system groups. */
-	while((grent = getgrent()) != NULL)
-	{
-		/* Iterate through members of this group. */
-		for(n = 0; grent->gr_mem[n] != NULL; n++)
-		{
-			pwent = getpwnam(grent->gr_mem[n]);
-			/* Check if current user is member of this group. */
-			if(pwent != NULL && pwent->pw_uid == myuid)
-			{
-				group_ids = reallocab(group_ids, (n_groups+1) * sizeof(gid_t*));
-				group_ids[n_groups] = grent->gr_gid;
-				n_groups++;
-			}
-		}
-	}
-	PRINTDEBUG("Groups found: %d", n_groups-1);
-	endgrent();
+	group_ids[n_groups - 1] = getegid();
+	PRINTDEBUG("Groups found: %d", n_groups);
 	
 	
 	fh = fopen(CONFFILE, "r");

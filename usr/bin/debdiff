@@ -1,0 +1,35 @@
+#!/bin/bash
+
+view_deb()
+{
+	dpkg-deb -I "$1"
+	echo
+	dpkg-deb -c "$1" | sort -k6
+}
+
+declare -a opts
+f1=''
+f2=''
+
+while [ -n "$1" ]
+do
+	case "$1" in
+	-*)
+		opts+=("$1")
+		;;
+	*)
+		if [ -z "$f1" ]
+		then
+			f1=$1
+		elif [ -z "$f2" ]
+		then
+			f2=$1
+		else
+			opts+=("$1")
+		fi
+		;;
+	esac
+	shift
+done
+
+diff "${opts[@]}" <(view_deb "$f1") <(view_deb "$f2")

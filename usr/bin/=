@@ -1,0 +1,57 @@
+#!/bin/bash
+
+do_calc()
+{
+	local word
+	declare -a expression
+	
+	for word
+	do
+		# multiplication operator
+		word=${word//×/*}
+		
+		# parenthesis
+		word=${word//[/(}
+		word=${word//]/)}
+		
+		# bitshift operators
+		word=${word//shr/>>}
+		word=${word//shl/<<}
+		
+		# decimal dot
+		word=${word//,/.}
+		
+		if expr + "$word" : '^-\?[0-9].*[^0-9.].*[0-9]$' >/dev/null
+		then
+			# it's an expression starting and ending with numbers
+			# group them together
+			expression+=("($word)")
+		else
+			expression+=("$word")
+		fi
+	done
+	
+	expression=${expression[*]}
+	
+	# tousands separator
+	expression=`sed -e 's/\([0-9]\)[ ]\+\([0-9]\)/\1\2/g' <<<"$expression"`
+	
+	echo "« $expression" >&2
+	echo "$expression" | bc -l -q
+}
+
+if [ "$CLICALC_MODE" = loop ]
+then
+	while read -p "» " -a exp
+	do
+		do_calc "${exp[@]}"
+	done
+else
+	if [ -z "$*" ]
+	then
+		export CLICALC_MODE=loop
+		rlwrap "$0"
+	else
+		do_calc "$@"
+	fi
+fi

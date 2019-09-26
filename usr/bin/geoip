@@ -1,0 +1,16 @@
+echo == ipInfo ==
+curl http://ipinfo.io/$1
+echo
+
+# disable due to captcha
+#echo == Geody ==
+#curl -L -A "Mozilla/5.0" -s "http://www.geody.com/geoip.php?ip=$1" | sed '/^IP:/!d;s/<[^>][^>]*>//g'
+
+echo == FreeGeoip ==
+wget -qO - http://freegeoip.net/xml/$1 | sed '3,12!d;s/<//g;s/>/: /g;s/\/.*//g'
+
+echo == GeoipTool ==
+wget -qO - http://www.geoiptool.com/en/?IP=$1 | pup 'div.sidebar-data' | grep -v '<img' | html2text
+
+echo == ip2location ==
+curl -sSL http://ip2location.com/$1 | sed -n '/tbody/,/\/tbody/p' | sed -e 's@<tbody@<table border=1@' | w3m -T text/html -dump

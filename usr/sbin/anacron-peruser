@@ -1,0 +1,29 @@
+#!/bin/bash
+
+set -e
+
+peruser_anacrontabs=/var/spool/cron/anacrontabs
+peruser_anacronspool=/var/spool/anacron/users
+users=$(members users)
+users=${users// /$'\n'}
+
+install -d $peruser_anacrontabs -m 0711 -o root -g root
+install -d $peruser_anacronspool -m 0755 -o root -g root
+
+getent passwd | while IFS=: read user x uid pgid gecos home shell
+do
+	if grep -qx "$user" <<<"$users"
+	then
+		install -d "$peruser_anacronspool/$user" -m 0770 -o root -g "$pgid"
+		
+		crontab=$peruser_anacrontabs/$user
+		touch "$crontab"
+		chown root:$pgid "$crontab"
+		chmod 0660 "$crontab"
+		
+		(
+			cd "$home"
+			sudo -u "$user" anacron -t "$crontab" -S "$peruser_anacronspool/$user"
+		)
+	fi
+done

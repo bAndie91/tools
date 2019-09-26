@@ -1,5 +1,9 @@
 #!/bin/bash
 
+. "`dirname "$(readlink -f "$0")"`/common.sh"
+
+if [ -e "$2$1" ]
+then
 find "$2$1" -mindepth 1 -maxdepth 1 \
 	-printf 'ino=%i mode=%M nlink=%n uid=%U gid=%G rdev=0 size=%s blksize=512 blocks=%b atime=%A@ mtime=%T@ ctime=%C@ %f\0' |\
 basedir=$2 cwd=$1 perl -e '
@@ -19,8 +23,10 @@ $cache = "";
 if($folder_time <= $cache_time)
 {
 	close STDIN;
-	system("cat", $cache_file);
-	exit $?;
+	open my $f, "<", $cache_file or exit 5;
+	$/ = chr 0;
+	print while <$f>;
+	exit 0;
 }
 
 open $cache_fh, ">", $cache_file;
@@ -60,14 +66,14 @@ while(<>)
 					{
 						$hdr{$hname} = $'\'';
 						$pos = tell $fh;
-						$hdr{$hname} .= $_ while <$fh> and s/^(\s+.+)/$1/;
+						$hdr{$hname} .= $_ while $_=<$fh> and s/^\s+(.+)[\r\n]*$/$1/;
 						seek $fh, $pos, 0;
 					}
 					last if scalar keys %hdr == 2;
 				}
 				close $fh;
 				
-				$name = join " █ ", 
+				$name = join " ✉ ", 
 					map {s/^"(.+?)"/$1/; $_} 
 					map {s{/}{∕}g; $_}
 					map {s{\x00}{}g; $_}
@@ -92,3 +98,6 @@ while(<>)
 
 close $cache_fh;
 '
+else
+	exit $ENOENT
+fi

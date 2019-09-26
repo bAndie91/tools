@@ -1,0 +1,122 @@
+#!/usr/bin/env perl
+
+use Data::Dumper;
+use MediaWiki::Bot;
+use Getopt::Long;
+use Digest::MD5 qw/md5_hex/;
+use Encode;
+use LWP::UserAgent;
+
+
+%mw_login = ();
+%http_login = ();
+$isMinor = 0;
+$Usage_str = "Usage: $0 [--user <wiki user>] [--password <wiki password>] [--summary <summary text>] [--minor] --article <article name> <mediawiki_url>\n";
+
+
+Getopt::Long::Configure(qw/no_ignore_case/);
+GetOptions(
+	'u|user=s'	=> \$mw_login{'username'},
+	'p|password=s'	=> \$mw_login{'password'},
+	's|summary=s'	=> \$Summary,
+	'a|article=s'	=> \$Article,
+	'm|minor'	=> \$isMinor,
+) or
+die $Usage_str;
+
+
+
+$Article =~ s/ /_/g;
+$Article =~ s/^./\u$&/g;
+$Article_decoded = Encode::decode_utf8($Article);
+
+$Url = $ARGV[0] or die $Usage_str;
+#$Url =~ /^(?'schema'[a-z0-9_+-]+):\/\/(((?'user'[^:@]+)(:(?'password'[^@]*))?)@)?(?'host'[^\/]+)(?'path'\/.*?)(?'article'[^\/=?&]*)$/i;
+$Url =~ /^(?'schema'[a-z0-9_+-]+):\/\/(((?'user'[^:@]+)(:(?'password'[^@]*))?)@)?(?'hostport'[^\/]+)(?'path'\/.*)?$/i;
+
+
+$mw_schema = lc $+{'schema'};
+$mw_hostport = $+{'hostport'};
+$mw_path = $+{'path'} || "/";
+$basic_username = $+{'user'};
+$basic_password = $+{'password'};
+
+
+if(defined $+{'user'} or defined $+{'password'}) {
+	$ua = LWP::UserAgent->new();
+	$http_response = $ua->get($mw_schema."://".$mw_hostport.$mw_path.($mw_path =~ /\/$/ ? "" : "/")."api.php");
+	$auth_header = $http_response->header('WWW-Authenticate');
+
+	$realm = '';
+	if($auth_header =~ /Realm="(.*)"/i) { $realm = $1; }
+	elsif($auth_header =~ /Realm=([^\s;]+)/i) { $realm = $1; }
+	
+	($host, $port) = $mw_hostport =~ /^([^:]+)(?::(.*))?$/;
+	if(not defined $port) {
+		if($mw_schema eq "https") {
+			$port = 443;
+		}
+		else {
+			$port = 80;
+		}
+	}
+
+	%{$mw_login{'basic_auth'}} = (
+		netloc => "$host:$port",
+		realm => $realm,
+		uname => $basic_username,
+		pass => $basic_password,
+	);
+}
+
+# MediaWiki usernames are capital
+$mw_login{'username'} =~ s/^./\u$&/;
+
+
+# Create a Perl wikipedia object, and have it automatically log in and configure itself
+$bot = MediaWiki::Bot->new(
+	{
+		protocol	=> $mw_schema,
+		host		=> $mw_hostport,
+		path		=> $mw_path,
+		login_data	=> \%mw_login,
+		# Turn debugging on, to see what the bot is doing
+		debug		=> 1,
+	}
+);
+
+die "Could not connect to MediaWiki.\n" unless $bot;
+
+
+print STDERR "Enter new text for '$Article'!\n" if -t 0;
+
+$/ = undef;
+$wikitext = <STDIN>;
+$wikitext =~ s/\n*$/\n\n/;
+$wikitext =~ s/\r//g;
+$wikitext =~ s/\n/\r\n/g;
+$wikitext = Encode::decode_utf8($wikitext);
+
+
+
+print STDERR "Posting to MediaWiki ...\n";
+
+if($wikitext ne '') {
+	# Note: This does not warn of edit conflicts, it just overwrites existing text.
+	$result = $bot->edit(
+		{
+			page	=> $Article_decoded,
+			text	=> $wikitext,
+			md5	=> md5_hex(Encode::encode_utf8($wikitext)),
+			summary	=> $Summary,
+			minor	=> $isMinor,
+		}
+	);
+	
+	$result = $result->{'edit'};
+	printf "%s\t%s\n", $_, Encode::encode_utf8($result->{$_}) for keys %$result;
+}
+
+
+$bot->logout();
+

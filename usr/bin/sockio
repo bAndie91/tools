@@ -1,0 +1,188 @@
+#!/usr/bin/env perl
+
+# Takes a command and arguments as arguments.
+# Connects the command stdio to a tcp/udp/unix socket.
+
+use Socket qw/AF_UNIX AF_INET SOCK_STREAM pack_sockaddr_in inet_aton sockaddr_un/;
+use POSIX ':sys_wait_h';
+use Data::Dumper;
+use Fcntl qw/F_GETFL F_SETFL O_NONBLOCK O_RDONLY O_WRONLY/;
+
+
+sub blockio
+{
+  flag($_[0], ~O_NONBLOCK);
+}
+sub nonblockio
+{
+  flag($_[0], O_NONBLOCK);
+}
+sub flag
+{
+  fcntl($_[0], F_SETFL, fcntl($_[0], F_GETFL, 0) | $_[1]);
+}
+sub sigchld
+{
+  # This handler makes select(2) interrupted, and child process reaped,
+  # and stdin excluded from watched fds.
+  1;
+}
+
+
+if(defined $ENV{'SOCKIO_AF'})
+{
+  $af = $ENV{'SOCKIO_AF'};
+}
+else
+{
+  print STDERR "SOCKIO_AF not given, fallback to 'tcp'\n";
+  $af = 'tcp';
+}
+unless($af ~~ [qw/file abstract tcp/])
+{
+  die "invalid SOCKIO_AF given, choose one of file, abstract, tcp\n";
+}
+
+if($af ~~ [qw/file abstract/])
+{
+  socket $srv, AF_UNIX, SOCK_STREAM, 0 or die $!;
+  setsockopt($srv, SOL_SOCKET, SO_PASSCRED, 1);
+  if($af eq 'abstract')
+  {
+    $addr = sockaddr_un "\x00sockio-pid-$$";
+  }
+  else
+  {
+    $addr = sockaddr_un "/tmp/sockio-pid-$$";
+  }
+  bind $srv, $addr or die $!;
+}
+elsif($af eq 'tcp')
+{
+  socket $srv, AF_INET, SOCK_STREAM, 0 or die $!;
+  BIND_TCP:
+  $port = int(rand() * (65_535 - 10_000)) + 10_000;
+  $addr = pack_sockaddr_in($port, inet_aton('localhost'));
+  print STDERR "bind to tcp/$port ... ";
+  if(bind $srv, $addr)
+  {
+    print STDERR "ok\n";
+  }
+  else
+  {
+    print STDERR "$!\n";
+    if($!{'EADDRINUSE'}) { goto BIND_TCP; }
+    else { exit $!; }
+  }
+}
+
+listen $srv, 1 or die $!;
+
+
+$pid = fork;
+if($pid == 0)
+{
+  if($af ~~ [qw/file abstract/])
+  {
+    socket $cln, AF_UNIX, SOCK_STREAM, 0 or die $!;
+  }
+  elsif($af == 'tcp')
+  {
+    socket $cln, AF_INET, SOCK_STREAM, 0 or die $!;
+  }
+  CONNECT:
+  if(not connect $cln, $addr)
+  {
+    if($!{'ECONNREFUSED'}) { sleep 0.1; goto CONNECT; }
+    else { die $!; }
+  }
+  open STDIN, '<&=', fileno $cln or die $!;
+  open STDOUT, '>&=', fileno $cln or die $!;
+  flag(STDIN, O_RDONLY);
+  flag(STDOUT, O_WRONLY);
+  exec {$ARGV[0]} @ARGV;
+  exit 127;
+}
+
+
+accept $clnt, $srv;
+select $clnt;
+$|++;
+select STDOUT;
+$|++;
+
+@watch_in = (\*STDIN, $clnt);
+undef $exitcode;
+nonblockio(STDIN);
+nonblockio($clnt);
+$SIG{'CHLD'} = \&sigchld;
+
+
+
+while(1)
+{
+  if(scalar @watch_in == 0)
+  {
+    last;
+  }
+  
+  $fds_in = '';
+  for my $fd (@watch_in)
+  {
+    vec($fds_in, fileno($fd), 1) = 1;
+  }
+  
+  select($fds_in, undef, undef, undef);
+  
+  if(vec($fds_in, fileno(STDIN), 1) == 1)
+  {
+    READ_STDIN:
+    $stdin_bytes = sysread STDIN, $buf, 4096;
+    if($stdin_bytes > 0)
+    {
+      print {$clnt} $buf;
+      goto READ_STDIN;
+    }
+    
+    if($stdin_bytes eq 0)
+    {
+      shutdown $clnt, 1;
+      close STDIN;
+      @watch_in = grep {$_ ne \*STDIN} @watch_in;
+    }
+  }
+  if(vec($fds_in, fileno($clnt), 1) == 1)
+  {
+    READ_CLNT:
+    $clnt_bytes = sysread $clnt, $buf, 4096;
+    if($clnt_bytes > 0)
+    {
+      print {STDOUT} $buf;
+      goto READ_CLNT;
+    }
+    
+    if($clnt_bytes eq 0)
+    {
+      shutdown $clnt, 0;
+      close STDOUT;
+      @watch_in = grep {$_ ne $clnt} @watch_in;
+    }
+  }
+  
+  if(not defined $exitcode and waitpid $pid, WNOHANG)
+  {
+    $exitcode = $? >> 8;
+    
+    shutdown $clnt, 1;
+    close STDIN;
+    @watch_in = grep {$_ ne \*STDIN} @watch_in;
+  }
+}
+
+
+if(not defined $exitcode)
+{
+  waitpid $pid, 0;
+  $exitcode = $? >> 8;
+}
+exit $exitcode;

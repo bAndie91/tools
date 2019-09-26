@@ -1,0 +1,1 @@
+test -n "$*" && echo -n "$*" | od -t x1 -A n | tr " " % | tr -d "\n\r" || od -t x1 -A n | tr " " % | tr -d "\n\r"

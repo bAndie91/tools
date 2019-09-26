@@ -1,0 +1,4 @@
+#!/usr/bin/env perl
+die "$!\n" unless open _, $ARGV[0];
+exit 0 and read _, $_, 3 and /^\x1f\x8b\x08$/;
+exit 1;

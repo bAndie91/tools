@@ -1,0 +1,46 @@
+#!/bin/bash
+
+case "$1" in
+--help|-h)
+	echo "Usage:
+  list tasks    -> todo 
+  add one       -> todo <text>
+  remove a task -> todo DEL [number | term]"
+  	exit 0
+	;;
+"")
+	wmpinboard --dump-raw | sort
+	#wmpinboard --dump-raw | perl -ne ' s/^.*? /$in=length($&);print"\r$&";""/e; s[.{10}][print($&.$/." "x$in)if$&!~/^\s*$/]ge; '
+	;;
+DEL)
+	shift
+	if [ "$1" -ge 0 ] 2>/dev/null; then
+		wmpinboard --dump-raw | grep -E "^#0*$1:"
+		wmpinboard --del=$1
+	else
+		found=$(wmpinboard --dump-raw | grep -i -- "$@" 2>/dev/null)
+		[ -n "$found" ] && echo "$found"
+		cnt=$(echo "$found" | wc -l)
+		if [ $cnt = 1 -a ${#found} -gt 0 ]; then
+			num=${found%%:*}
+			num=${num//[!0-9]/}
+			if [ "$num" -ge 0 ] 2>/dev/null; then
+				wmpinboard --del=$num
+			fi
+		elif [ $cnt -gt 1 ]; then
+			echo "ambiguous reference to an item" >&2
+		else
+			echo "item not found" >&2
+		fi
+	fi
+	;;
+*)
+	length=$(echo -n "$@" | wc -c)
+	if [ $length -gt 59 ]; then
+		echo "too long" >&2
+	else
+		todo=$@
+		wmpinboard --add="$todo"
+	fi
+	;;
+esac

@@ -1,0 +1,6 @@
+#!/bin/bash
+
+while read -r -n 1024
+do
+	echo -n "$REPLY"
+done

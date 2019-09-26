@@ -1,0 +1,157 @@
+#!/bin/bash
+###########
+
+colspan=7
+
+###########
+
+is_fs_loop() {
+	expr "$1" : "$2" >/dev/null
+}
+
+unslashify() {
+	while expr "${!1}" : ".*//" >/dev/null; do
+		eval "$1=\${$1//\/\//\/}"
+	done
+	[ "${!1: -1}" = / ] && eval "$1=\${$1:0:\$[\${#$1}-1]}"
+}
+
+iter() {
+	iterroot=$1
+	unslashify iterroot
+	pwd=$(pwd)
+	declare -a fields
+ 
+	find -L "$iterroot" -type d | \
+	while read scandir; do
+		echo -n . >&2
+	
+		echo "<a name=\"$scandir\"></a>"
+		echo "<table>"
+		parent=
+		parents=
+		oldIFS=$IFS
+		IFS=/
+		#for dir in ${wd:1}; do
+		for dir in $scandir; do
+			if [ -z "$dir" ]; then
+				parent=/
+				parents="<a href='#/'>/</a>"
+			else
+				if [ "$parent" = / ]; then
+					parent="/$dir"
+				else
+					parent="$parent${parent:+/}$dir"
+				fi
+				parents="$parents${parents:+/}<a href='#$parent'>$dir</a>"
+			fi
+		done
+		IFS=$oldIFS
+		echo "<tr><td colspan=$colspan><h2>$parents</h2></td></tr>"
+	
+		if cd "$scandir"; then
+			#wd=$(pwd)
+			wd=$scandir
+		
+			for f in .* *; do
+				if [ -d "$f" ]; then
+					[ "$f" = . ] && continue
+					if [ "$f" = .. ]; then
+						#stat -c "<tr><td>%A</td><td class=numeric>%h</td><td>%U</td><td>%G</td><td class=numeric>%s</td><td>%y</td><td><a href=\"#$pwd\">${f}</a></td></tr>" "./$f" 2>/dev/null
+						true
+					else
+						href="#${wd}/${f}"
+						if [ -L "$f" ]; then
+							l=$(readlink -n -e "./$f")
+							is_fs_loop "$l" "$base" && href="#$l"
+						fi
+						fields=($(stat -c "%A %h %U %G %s %Y" "./$f" 2>/dev/null))
+						fields[5]=`date -d@${fields[5]}`
+						printf "<tr><td>%s</td><td class=numeric>%s</td><td>%s</td><td>%s</td><td class=numeric>%s</td><td>%s</td><td><a href=\"%s\">%s</a></td></tr>\n" "${fields[@]}" "$href" "$f"
+					fi
+				fi
+			done
+			for f in .* *; do
+				if [ ! -d "$f" ]; then
+					fields=($(stat -c "%A %h %U %G %s %Y" "./$f" 2>/dev/null))
+					fields[5]=`date -d@${fields[5]}`
+					printf "<tr><td>%s</td><td class=numeric>%s</td><td>%s</td><td>%s</td><td class=numeric>%s</td><td>%s</td><td>%s</td></tr>\n" "${fields[@]}" "$f"
+				fi
+			done
+			echo "</table>"
+			#for f in .* *; do
+			#	if [ "$f" != . -a "$f" != .. -a -d "$f" ]; then
+			#		if [ -L "$f" ] && is_fs_loop "$(readlink -n -e "./$f")" "$base"; then
+			#			true
+			#		else
+			#			iter "$f"
+			#		fi
+			#	fi
+			#done
+			
+			#cd ..
+			cd "$pwd"
+		else
+			echo "<tr><td colspan=$colspan><i>Can't change directory: $scandir</i></tr>"
+			echo "</table>"	
+		fi
+	done
+	return 0
+}
+
+# HEADER
+echo "<html>
+<head>
+	<meta http-equiv='Content-Type' content='text/html; charset=UTF-8' />
+	<style>
+	table {
+		border: 1px solid black;
+		margin-bottom: 6px;
+	}
+	tr:not(:first-child):hover td {
+		background: lightblue;
+	}
+	tr:first-child a {
+		text-decoration: none;
+	}
+	tr:first-child a:hover {
+		background: lightblue;
+	}
+	tr:nth-child(odd) {
+		background: #b0b0b0;
+	}
+	tr:nth-child(even) {
+		background: #e0e0e0;
+	}
+	td.numeric {
+		text-align: right;
+	}
+	td:first-child:not([colspan]) {
+		letter-spacing: -1.5pt;
+		font-family: monospace;
+	}
+	h2 {
+		margin: 0;
+	}
+	td:not(:last-child) {
+		white-space: nowrap;
+	}
+	</style>
+</head>
+<body>
+"
+
+[ -z "$1" ] && set .
+
+# CONTENT
+while [ -n "$1" ]; do
+	base=$(readlink -n -f "$1")
+	iter "$1"
+	shift
+done
+echo >&2
+
+# FOOTER
+echo "<p align=right><hr>Made by <em>ls2html</em>.</p>
+</body>
+</html>"

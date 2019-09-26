@@ -1,0 +1,14 @@
+#!/bin/bash
+
+mesg y
+
+if [ ! -z "$2" ]; then
+	user="$1"
+	shift
+	for terminal in `who | grep -E "^$user\\s" | awk '{print $2}'`; do
+		echo -e "$*" | write "$user" "$terminal" 2>/dev/null
+	done
+else
+	echo "Use: $0 <user> <message>" >&2
+fi
+

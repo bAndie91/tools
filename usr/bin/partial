@@ -1,0 +1,56 @@
+#!/bin/bash
+
+set -e
+set -o pipefail
+set -u
+
+print_partial()
+{
+	cat "$dir/stdout"
+}
+
+warnx()
+{
+	echo "${0##*/}: $*" >&2
+}
+
+declare -a command=("$@")
+command_str=${command[*]}
+commandhash=`echo "$command_str" | sha256sum | cut -f1 -d' '`
+
+dir=~/.cache/partial/$commandhash
+mkdir -p "$dir"
+
+exec {lockfd}>>"$dir/lock"
+flock -x $lockfd
+
+exec {runlockfd}>>"$dir/running.lock"
+warnx "state in $dir"
+
+if flock -n -x $runlockfd
+then
+	if [ -e "$dir/status" ]
+	then
+		warnx "command finished: $(stat -c %y "$dir/status")"
+		print_partial
+		exit `cat "$dir/status"`
+	else
+		echo "$command_str" > "$dir/command.txt"
+		
+		(
+			flock -u $lockfd
+			set +e
+			command "${command[@]}" > "$dir/stdout"
+			echo -n $? >"$dir/status"
+		) &
+		
+		warnx "command started"
+		exit 115
+	fi
+else
+	flock -u $runlockfd
+	
+	warnx "command is in progress since $(stat -c %y "$dir/command.txt"), partial output follows."
+	print_partial
+	exit 114
+fi

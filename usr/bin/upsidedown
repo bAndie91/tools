@@ -1,0 +1,4 @@
+#!/bin/bash
+
+sed -e 'y/abcdefghijklmnopqrstuvwxyz0123456789!@&_+ABCDEFGHIJKLMNOPQRSTUVWXYZ?/eqcpaJby!f×lwuo&Þjs+n^mxhz015Eµ29L86¡©æ¯±V¶>C3JÐHIFK7WNOdÕäSîñAMXÁZ¿/' | rev
+

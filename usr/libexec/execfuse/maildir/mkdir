@@ -1,3 +1,10 @@
 #!/bin/sh
 
-exec mkdir "$2$1"
+. "`dirname "$(readlink -f "$0")"`/common.sh"
+
+if mkdir "$2$1"
+then
+	exit 0
+else
+	exit $EIO
+fi

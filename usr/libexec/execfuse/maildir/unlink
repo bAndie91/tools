@@ -1,0 +1,7 @@
+#!/bin/bash
+
+. "`dirname "$(readlink -f "$0")"`/common.sh"
+
+fname=`virt2phy_filepath "$1"`
+
+rm "$2$fname"

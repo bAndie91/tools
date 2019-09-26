@@ -1,0 +1,452 @@
+#!/bin/bash
+
+EPERM=1
+ENOENT=2
+EIO=5
+EAGAIN=11
+EACCESS=13
+EBUSY=16
+EEXIST=17
+EINVAL=22
+EFBIG=27
+ENOSPC=28
+ESPIPE=29
+ENOSYS=38
+ENOTEMPTY=39
+EOPNOTSUPP=95
+
+. /usr/lib/yazzy-utils/bash-utils || exit $EIO
+
+export PYTHONIOENCODING=utf8
+fmode=-rw-r--r--
+dmode=drwxr-xr-x
+#GID=`id -g`
+GID=0
+cache_basedir=~/.cache/execfuse-s3
+
+
+mk_cache_key()
+{
+	local x=$1
+	local cachekey=${x//%/%25}
+	cachekey=${cachekey//./%2E}
+	cachekey=${cachekey//\//%2F\/}
+	echo "$cachekey"
+}
+
+fixerrno-aws()
+{
+	local errno
+	local stderr
+	local fd2r fd2w
+	
+	pipe fd2r fd2w
+	aws "$@" 2>&$fd2w
+	[ $? = 0 ] && errno=0 || errno=$EIO
+	# aws cli's exit code is not distinctive enough.
+	
+	close $fd2w
+	stderr=$(cat <&$fd2r)
+	close $fd2r
+	
+	echo "$stderr" >&2
+	
+	case "$1" in
+	s3)
+		if [[ $stderr =~ Not\ Found$ ]]
+		then
+			errno=$ENOENT
+		fi
+		# TODO gather more error messages/codes
+		;;
+	s3api)
+		if [[ $stderr =~ NoSuchKey|NoSuchBucket ]]
+		then
+			errno=$ENOENT
+		elif [[ $stderr =~ AccessDenied ]]
+		then
+			errno=$EACCESS
+		elif [[ $stderr =~ BucketAlreadyExists|BucketAlreadyOwnedByYou ]]
+		then
+			errno=$EEXIST
+		elif [[ $stderr =~ BucketNotEmpty ]]
+		then
+			errno=$ENOTEMPTY
+		elif [[ $stderr =~ InvalidArgument|InvalidBucketName ]]
+		then
+			errno=$EINVAL
+		elif [[ $stderr =~ InlineDataTooLarge|MaxMessageLengthExceeded|MaxPostPreDataLengthExceededError ]]
+		then
+			errno=$EFBIG
+		elif [[ $stderr =~ InvalidRange ]]
+		then
+			errno=$ESPIPE
+		elif [[ $stderr =~ MethodNotAllowed ]]
+		then
+			errno=$EPERM
+		elif [[ $stderr =~ ServiceUnavailable|SlowDown ]]
+		then
+			errno=$EBUSY
+		elif [[ $stderr =~ TooManyBuckets ]]
+		then
+			errno=$ENOSPC
+		fi
+		;;
+	esac
+	return $errno
+}
+
+cache-s3-ls()
+{
+	local s3uri
+	local cachekey
+	local cachedir
+	local cachefile
+	declare -a ps
+	local ec
+	
+	s3uri=$1
+	cachekey=`mk_cache_key "$s3uri"`
+	cachedir=$cache_basedir/$cachekey
+	mkdir -p "$cachedir"
+	cachefile=$cachedir/data
+	
+	if [ -f "$cachefile" ]
+	then
+		stat -c %Y "$cachefile"
+		cat "$cachefile"
+	else
+		echo 0
+		fixerrno-aws s3 ls "$s3uri" | tee "$cachefile"
+		ps=(${PIPESTATUS[@]})
+		ec=${ps[0]}
+		if [ $ec != 0 ]
+		then
+			mv -f "$cachefile" "$cachedir/data.error"
+			echo -n $ec > "$cachedir/err"
+		fi
+		return $ec
+	fi
+}
+
+cache-add-entry()
+{
+	local s3_pfx_uri=$1
+	local entry=$2
+	
+	local cachekey=`mk_cache_key "$s3_pfx_uri"`
+	echo "$entry" >> "$cache_basedir/$cachekey/data"
+}
+
+cache-del-entry()
+{
+	local s3_pfx_uri=$1
+	local entry=$2
+	
+	local cachekey=`mk_cache_key "$s3_pfx_uri"`
+	entry=$entry perl -i -ne 'if(/^(\s*PRE|\S+\s+\S+\s+\S+) (.+)/ and $2 eq $ENV{entry}){}else{print}' "$cache_basedir/$cachekey/data" 
+}
+
+return_to_fuse()
+{
+	local ps=("$@")
+	if [ ${ps[0]} != 0 ]
+	then
+		exit ${ps[0]}
+	else
+		exit ${ps[1]}
+	fi
+}
+
+print_base_dir_attr()
+{
+	echo -ne "ino=1 mode=$dmode nlink=2 uid=$UID gid=$GID rdev=0 size=0 blksize=512 blocks=0 atime=$cache_timestamp mtime=$mtime ctime=0${1:+ $1\0}"
+}
+
+set_Bucket_and_Key()
+{
+	local path=$1
+	path=${1:1}  # strip leading slash
+	Bucket=${path%%/*}
+	if [[ $path =~ / ]]
+	then
+		Key=${path#*/}
+	else
+		Key=''
+	fi
+}
+
+
+
+fuseop=${0##*/}
+cache_timestamp=0
+mtime=0
+
+
+case "$fuseop" in
+readdir)
+
+case "$1" in
+/)
+	print_base_dir_attr .
+	
+	cache-s3-ls s3:// |\
+	{
+		read cache_timestamp
+		while read -r date time bucket
+		do
+			mtime=`date +%s -d "$date $time"`
+			echo -ne "ino=1 mode=$dmode nlink=2 uid=$UID gid=$GID rdev=0 size=0 blksize=512 blocks=0 atime=$cache_timestamp mtime=$mtime ctime=0 $bucket\0"
+		done
+	}
+	;;
+*)
+	set_Bucket_and_Key "$1"
+	
+	{
+		cache-s3-ls "s3://$Bucket/$Key${Key:+/}" |\
+		sed -e 's/^\s\+PRE/0 0 PRE/'
+		exit ${PIPESTATUS[0]}
+	}|\
+	{
+		read cache_timestamp
+		declare -A dirs=()
+		while read -r date time size fname
+		do
+			if [ "$size" = PRE ]
+			then
+				fname=${fname:0:-1}
+				if [ -n "$fname" ]
+				then
+					# NOTE: mtime is 0 here
+					print_base_dir_attr "$fname"
+					dirs["$fname"]=1
+				fi
+			else
+				if [ -n "$fname" ]
+				then
+					if [ -n "${dirs[$fname]}" ]
+					then
+						# this is an object which is also a keyprefix
+						# suffix it with '#' sign which is unlikely in real object names
+						fname="$fname#"
+					fi
+					mtime=`date +%s -d "$date $time"`
+					echo -ne "ino=1 mode=$fmode nlink=1 uid=$UID gid=$GID rdev=0 size=$size blksize=512 blocks=0 atime=$cache_timestamp mtime=$mtime ctime=0 $fname\0"
+				fi
+			fi
+		done
+	}
+	return_to_fuse ${PIPESTATUS[@]}
+	;;
+esac
+;; # readdir
+
+getattr)
+case "$1" in
+/)
+	print_base_dir_attr
+	;;
+*)
+	set_Bucket_and_Key "$1"
+	
+	if [ -z "$Key" ]
+	then
+		# viewing a bucket folder
+		# ensure the bucket exists based on the default bucket list
+		# TODO: support cross-account buckets
+		
+		cache-s3-ls s3:// |\
+		{
+			read cache_timestamp
+			while read -r date time this_bucket
+			do
+				if [ "$this_bucket" = "$Bucket" ]
+				then
+					mtime=`date +%s -d "$date $time"`
+					print_base_dir_attr
+					exit 0
+				fi
+			done
+			exit $ENOENT
+		}
+		return_to_fuse ${PIPESTATUS[@]}
+	else
+		# viewing an s3 object
+		# find its type: keyprefix (dir) or object key (file)
+		# lookup the parent dir
+		
+		if [[ $Key =~ / ]]
+		then
+			key_dirname=${Key%/*}/
+		else
+			key_dirname=''
+		fi
+		key_basename=${Key##*/}
+		
+		{
+			cache-s3-ls "s3://$Bucket/$key_dirname" |\
+			sed -e 's/^\s\+PRE/0 0 PRE/'
+			exit ${PIPESTATUS[0]}
+		}|\
+		{
+			read cache_timestamp
+			declare -A dirs=()
+			while read -r date time size fname
+			do
+				if [ "$size" = PRE ]
+				then
+					fname=${fname:0:-1}
+					if [ -n "$fname" ]
+					then
+						dirs["$fname"]=1
+					fi
+				else
+					if [ -n "${dirs[$fname]}" ]
+					then
+						# a keyprefix exists with this object basename, pretend it has a '#' suffix
+						fname="$fname#"
+					fi
+				fi
+				if [ "$fname" = "$key_basename" ]
+				then
+					if [ "$size" = PRE ]
+					then
+						# it's a key prefix, show there is a dir
+						# get mtime from the listing of this current keyprefix, only if it's cached
+						cachekey=`mk_cache_key "s3://$Bucket/$Key/"`
+						cachefile=$cache_basedir/$cachekey/data
+						if [ -f "$cachefile" ]
+						then
+							datetime=`sed -ne '/^\S\+ \S\+\s\+0 $/{s/\s\+0 $//p;q}' "$cachefile"`
+							if [ -n "$datetime" ]
+							then
+								mtime=`date +%s -d "$datetime"`
+							fi
+						fi
+						print_base_dir_attr
+					else
+						# it's an object key, show there is a file
+						mtime=`date +%s -d "$date $time"`
+						echo -ne "ino=1 mode=$fmode nlink=1 uid=$UID gid=$GID rdev=0 size=$size blksize=512 blocks=0 atime=$cache_timestamp mtime=$mtime ctime=0"
+					fi
+					exit 0
+				fi
+			done
+			exit $ENOENT
+		}
+		return_to_fuse ${PIPESTATUS[@]}
+	fi
+	# notreached
+	;;
+esac
+;; # getattr
+
+read_file)
+	bucket_and_key=$1
+	# trim trailing '#' sign which is there on object key which is also a keyprefix
+	bucket_and_key=${bucket_and_key%#}
+	fixerrno-aws s3 cp "s3:/$bucket_and_key" -
+	exit $?
+;; # read_file
+
+write_file)
+	bucket_and_key=$1
+	# trim trailing '#' sign which is there on object key which is also a keyprefix
+	bucket_and_key=${bucket_and_key%#}
+	fixerrno-aws s3 cp - "s3:/$bucket_and_key"
+	exit $?
+;; # write_file
+
+chmod)
+	bucket_and_key=$1
+	bucket_and_key=${1:1}
+	cachekey=`mk_cache_key "s3://$bucket_and_key${bucket_and_key:+/}"`
+	found=no
+	case ".$2" in
+	.00000)
+		# chmod 0 [<DIR>]
+		# clear cache recursively from within this directory.
+		
+		x=`find "$cache_basedir/$cachekey" -type f -name "data" -printf x -delete`
+		if [ -n "$x" ];
+		then
+			found=yes
+		fi
+		;;
+	.00001)
+		# chmod 1 [<DIR>]
+		# clear cache of this directory.
+		
+		cachefile="$cache_basedir/$cachekey/data"
+		if [ -e "$cachefile" ]
+		then
+			found=yes
+			rm "$cachefile"
+		fi
+		;;
+	*)	exit $EINVAL;;
+	esac
+	
+	if [ $found = yes ]
+	then
+		exit 0
+	else
+		# it was either a single file (which does not have own cachefile)
+		# or the corresponding cache file (of a directory) was missing.
+		#
+		# the formal case is more likely (because userspace apps often calls 
+		# stat(2) before chmod, so the dir cache will populated anyway),
+		# so we indicate that we do not support clearig cache on files.
+		exit $EOPNOTSUPP
+	fi
+;; # chmod
+
+mkdir)
+	set_Bucket_and_Key "$1"
+	if [ -n "$Key" ]
+	then
+		Key=$Key/
+		fixerrno-aws s3api put-object --bucket "$Bucket" --key "$Key"
+		errno=$?
+		if [ $errno = 0 ]
+		then
+			parent=`dirname "$Bucket/$Key"`
+			leaf=`basename "$Bucket/$Key"`
+			cache-add-entry "s3://$parent/" "0 0 PRE $leaf/"
+		fi
+		exit $errno
+	else
+		exit $EOPNOTSUPP
+	fi
+;; # mkdir
+
+rmdir|unlink)
+	set_Bucket_and_Key "$1"
+	if [ -n "$Key" ]
+	then
+		if [ "$fuseop" = rmdir ]
+		then
+			Key=$Key/
+		fi
+		
+		fixerrno-aws s3api delete-object --bucket "$Bucket" --key "$Key"
+		errno=$?
+		if [ $errno = 0 ]
+		then
+			parent=`dirname "$Bucket/$Key"`
+			leaf=`basename "$Bucket/$Key"`
+			if [ "$fuseop" = rmdir ]
+			then
+				leaf=$leaf/
+			fi
+			cache-del-entry "s3://$parent/" "$leaf"
+		fi
+		exit $errno
+	else
+		exit $EOPNOTSUPP
+	fi
+;; # rmdir unlink
+
+*)	exit $ENOSYS;;
+esac

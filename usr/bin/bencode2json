@@ -1,0 +1,7 @@
+#!/usr/bin/env python
+
+import sys
+import json
+import bencode
+
+print json.dumps(bencode.bdecode(''.join(sys.stdin.readlines())), ensure_ascii=False)

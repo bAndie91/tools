@@ -37,7 +37,7 @@ pipe()
 	exec {wtr}>/proc/$pid1/fd/1 {rdr}</proc/$pid2/fd/0
 	
 	disown $pid2
-	kill $pid1 $pid2
+	kill -KILL $pid1 $pid2  # sometimes INT and TERM are blocked, but it's safe to kill such a no-op process
 	
 	eval $1=$rdr
 	eval $2=$wtr
@@ -192,28 +192,38 @@ untry()
 	return 0
 }
 
+fixerrexit()
+{
+	( eval "expr '$-' : '.*e' >/dev/null && set -e; $*"; )
+}
+
 template()
 {
 	cat "$@" |\
 	{
-		local line tvar var replace sedexpr
-		while read line
+		local rline tvar var replace sedexpr
+		while read -r
 		do
+			rline=$REPLY
 			sedexpr=""
-			grep -Eo '%[a-zA-Z0-9\./_-]+%' <<<"$line" |\
+			{ grep -Eo '%[a-zA-Z0-9\./_-]+%' <<<"$rline" || true; } |\
 			sort -u |\
 			{
 				while read tvar
 				do
 					# strip percent marks
-					var=${tvar:1:$[${#tvar}-2]}
+					var=${tvar:1:-1}
 					# resolve bash variable
 					replace=${!var}
+					# avoid backrefs
+					replace=${replace//\\/\\\\}
+					# avoid whole match backref
+					replace=${replace//&/\\&}
 					# compose sed expression like: s@%user\.name%@joe@g;s@%user\.email%@joe\@local@g;
 					sedexpr="${sedexpr}s@${tvar//\./\\.}@${replace//@/\@}@g;"
 				done
 				# action
-				sed -e "$sedexpr" <<<"$line"
+				sed -e "$sedexpr" <<<"$rline"
 			}
 		done
 	}
@@ -222,4 +232,26 @@ template()
 errorlevel()
 {
 	return $1
+}
+
+bash_join()
+{
+	local IFS=$1
+	shift
+	echo "$*"
+}
+
+in_list()
+{
+	local needle=$1
+	local hay
+	shift
+	for hay in "$@"
+	do
+		if [ ".$hay" = ".$needle" ]
+		then
+			return 0
+		fi
+	done
+	return 1
 }

@@ -60,20 +60,22 @@ is_empty_directory()
 
 is_writable_dir()
 {
-	if [ "$dryrun" != yes -a "$activewritetest" = yes ]
+	local access_code=`echo_status no_err_trap [ -w "$1" ]`
+	
+	if [ "$dryrun" != yes ]
 	then
-		local testfile=''
-		local werr=''
-		while [ -z "$testfile" -o -e "$testfile" ]
-		do
-			testfile=$1/takeown-writetest.$RANDOM
-		done
-		werr=`echo_status no_err_trap touch "$testfile"`
-		[ ! -e "$testfile" ] || rm "$testfile" || true
-		return $werr
-	else
-		return `echo_status no_err_trap [ -w "$1" ]`
+		if [ "$activewritetestonly" = yes -o \( $access_code = 0 -a "$activewritetest" = yes \) ]
+		then
+			local testfile=''
+			while [ -z "$testfile" -o -e "$testfile" ]
+			do
+				testfile=$1/takeown-writetest.$RANDOM
+			done
+			access_code=`echo_status no_err_trap touch "$testfile"`
+			[ ! -e "$testfile" ] || rm "$testfile" || true
+		fi
 	fi
+	return $access_code
 }
 
 is_recursive()
@@ -553,6 +555,7 @@ strict=([mode]='' [group]='' [acl]='' [xattr]='')
 do_chgrp=yes
 ignoreerrors=''
 activewritetest=''
+activewritetestonly=''
 silent_strictness_check=no
 do_cleanup=yes
 besteffort=no
@@ -568,7 +571,8 @@ Options:
  -v, --verbose             verbose
  -n, --dry-run             dry run
  -R, --recursive           recurse into directories
- -w, --active-write-test   active write test (instead of access(2))
+ -w, --active-write-test   active write test if access(2) reports writable
+ -W, --active-write-test-only   active write test regardless of access(2), default is access(2) only
  
  -i, --ignore              ignore failures on files given in command arguments
  -b, -I, --best-effort     ignore any failure while recursing (force -i -T)
@@ -604,7 +608,7 @@ Exit code:
 	-C|--no-cleanup)
 		do_cleanup=no
 		;;
-	-R|--recursive)
+	-R|--recursive|--recurse)
 		recursive=yes
 		;;
 	--no-group|--no-chgrp)
@@ -654,6 +658,9 @@ Exit code:
 		;;
 	-w|--active-write-test)
 		activewritetest=yes
+		;;
+	-w|--active-write-test-only)
+		activewritetestonly=yes
 		;;
 	-*)
 		errx 1 "Unknown option: $1"

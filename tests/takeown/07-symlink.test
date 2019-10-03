@@ -4,7 +4,8 @@ setting
 end
 
 action
-../../../usr/bin/takeown link1
+../../../usr/bin/takeown
+link1
 end
 
 expections

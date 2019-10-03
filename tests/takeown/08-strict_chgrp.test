@@ -4,7 +4,9 @@ setting
 end
 
 action
-../../../usr/bin/takeown --strict-chgrp file1
+../../../usr/bin/takeown
+--strict-chgrp
+file1
 end
 
 expections
@@ -16,7 +18,10 @@ status fail
 end
 
 action
-../../../usr/bin/takeown --strict-chgrp --no-chgrp file2
+../../../usr/bin/takeown
+--strict-chgrp
+--no-chgrp
+file2
 end
 
 expections

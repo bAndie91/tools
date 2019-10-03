@@ -5,7 +5,9 @@ setting
 end
 
 action
-../../../usr/bin/takeown -R dir1
+../../../usr/bin/takeown
+-R
+dir1
 end
 
 expections

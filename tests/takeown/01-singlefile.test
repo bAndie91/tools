@@ -5,7 +5,8 @@ setting
 end
 
 action
-../../../usr/bin/takeown file1
+../../../usr/bin/takeown
+file1
 end
 
 expections
@@ -14,7 +15,8 @@ exists no file1.tookown
 end
 
 action
-../../../usr/bin/takeown nonwritable/file2
+../../../usr/bin/takeown
+nonwritable/file2
 end
 
 expections

@@ -55,6 +55,8 @@ do
 				cd "$testdir"
 				status_checked=no
 				exit_status=''
+				cmd_environ=()
+				cmd_environ_unset=()
 				
 				while read -r section
 				do
@@ -106,6 +108,25 @@ do
 							../chown --no-dereference $owner "$file" </dev/null
 						done
 						;;
+					environ)
+						while read -r env
+						do
+							if [ ."$env" = .end ]; then break; fi
+							if [ -z "${env//[!=]/}" ]
+							then
+								cmd_environ_unset=(-u "$env")
+							else
+								cmd_environ+=("$env")
+							fi
+						done
+						;;
+					cleanup-pre-script)
+						while read -r cmd
+						do
+							if [ ".$cmd" = .end ]; then break; fi
+							echo "$cmd" >>cleanup-pre.sh
+						done
+						;;
 					action)
 						status_checked=no
 						exit_status=''
@@ -114,12 +135,12 @@ do
 						while read -r arg
 						do
 							if [ ."$arg" = .end ]; then break; fi
-							cmd_args+=($arg)
+							cmd_args+=("$arg")
 						done
 						
 						set +e
-						"${cmd_args[@]}" </dev/null
-						exit_status=$?
+						env "${cmd_environ_unset[@]}" "${cmd_environ[@]}" "${cmd_args[@]}" </dev/null 2> >(tee stderr >&2) 1> >(tee stdout >/dev/null)
+						exit_status=${PIPESTATUS[0]}
 						set -e
 						;;
 					expections)
@@ -138,6 +159,7 @@ do
 								break
 							fi
 							
+							expection_failed_msg=''
 							operator='=='
 							
 							case $propname in
@@ -163,9 +185,11 @@ do
 								fact=${fact/-/f}
 								;;
 							status)
+								expection_failed_msg="status"
 								case "$desire" in
 								fail) desire='!=0';;
 								success) desire='==0';;
+								*) echo "wrong keyword: '$desire'" >&2; exit 255;;
 								esac
 								
 								operator=${desire//[0-9]/}
@@ -174,6 +198,21 @@ do
 								
 								fact=$exit_status
 								status_checked=yes
+								;;
+							stderr|stdout)
+								expection_failed_msg="$propname $desire {$file}"
+								
+								case "$desire" in
+								match) operator='==';;
+								not-match) operator='!=';;
+								*) echo "wrong keyword: '$desire'" >&2; exit 255;;
+								esac
+								pattern=$file
+								
+								set +e
+								grep -E -q -m1 "$pattern" "$propname"
+								if [ $? = 0 ]; then fact=match; else fact=not-match; fi
+								set -e
 								;;
 							esac
 							
@@ -191,7 +230,11 @@ do
 							then
 								true
 							else
-								echo "Expection failed: $file $propname - desired $operator '$desire', detected '$fact'" >&2
+								if [ -z "$expection_failed_msg" ]
+								then
+									expection_failed_msg="$file $propname"
+								fi
+								echo "Expection failed: $expection_failed_msg - desired $operator '$desire', detected '$fact'" >&2
 								false
 							fi
 						done
@@ -208,7 +251,9 @@ do
 			)
 			
 			# delete test base directory if we can
-			rm -r "$testdir" 2>/dev/null || true
+			echo "INFO: Cleanup $testdir" >&2
+			if [ -e "$testdir"/cleanup-pre.sh ]; then ( cd "$testdir" && bash cleanup-pre.sh; ); fi
+			rm -r "$testdir" || true
 		}
 	)
 	

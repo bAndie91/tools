@@ -3,7 +3,10 @@ setting
 end
 
 action
-../../../usr/bin/takeown --no-cleanup --strict-chgrp file1
+../../../usr/bin/takeown
+--no-cleanup
+--strict-chgrp
+file1
 end
 
 expections

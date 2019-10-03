@@ -5,7 +5,10 @@ setting
 end
 
 action
-../../../usr/bin/takeown --ignore nonwritable/file1 file2
+../../../usr/bin/takeown
+--ignore
+nonwritable/file1
+file2
 end
 
 expections

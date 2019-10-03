@@ -3,7 +3,8 @@ setting
 end
 
 action
-../../../usr/bin/takeown dir1
+../../../usr/bin/takeown
+dir1
 end
 
 expections

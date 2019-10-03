@@ -1,5 +1,35 @@
 setting
-0755 SELF targetdir
+0755 root targetdir/
+0644 root targetdir/file
+0755 SELF readonlydir/
 end
 
-# TODO
+action
+# make a directory which is seemingly writable, but it is not
+sh
+-c
+bindfs -g $USER -p g+rw targetdir readonlydir
+end
+
+cleanup-pre-script
+fusermount -u readonlydir
+end
+
+environ
+LANGUAGE=C
+LANG=C
+end
+
+action
+../../../usr/bin/takeown
+--active-write-test
+--recursive
+readonlydir
+end
+
+expections
+status fail
+stderr match ^touch: cannot touch `readonlydir/takeown-writetest\.
+type f targetdir/file
+type f readonlydir/file
+end

@@ -5,7 +5,10 @@ setting
 end
 
 action
-../../../usr/bin/takeown -R --best-effort dir1
+../../../usr/bin/takeown
+-R
+--best-effort
+dir1
 end
 
 expections

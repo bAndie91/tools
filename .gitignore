@@ -4,3 +4,4 @@ ssh-groupcommand/*sh.ssh
 ssh-groupcommand/t_*
 !ssh-groupcommand/t_*.c
 !ssh-groupcommand/t_*.h
+tests/*/_test.*

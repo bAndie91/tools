@@ -51,8 +51,13 @@ last_wtmp_entry()
 	done
 }
 
-lastreboot=`last_reboot`
 lastlogin=`last_wtmp_login "$PAM_USER"`
+lastreboot=`last_reboot`
+
+if [ -n "$lastlogin" ]
+then
+	lastlogin=$lastlogin perl -MTime::Duration -e 'printf "Last login: %s\n", ago(time - $ENV{"lastlogin"});'
+fi
 
 if expr "$*" : '.*\<force\>' >/dev/null || [ -z "$lastlogin" ] || [ "$lastlogin" -le "$lastreboot" ] 2>/dev/null
 then

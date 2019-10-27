@@ -1,0 +1,81 @@
+#!/bin/bash
+
+# vidir
+#
+# Edit many files at once.
+#
+# Missing LF at the end of the file is not preserved.
+
+
+Recursive=no
+shopt -s nullglob
+
+cleanup()
+{
+	rm "$tmpfile"
+}
+
+prepcat()
+{
+	dir_depth=$[dir_depth + 1]
+	for file in "$@"
+	do
+		if [ -d "$file" ]
+		then
+			if [ $dir_depth -le 1 -o $Recursive = yes ]
+			then
+				prepcat "$file"/*
+			fi
+		else
+			cat "$file" | filename=$file perl -pe 's/^/$ENV{filename}:/; s/\n?$/\n/'
+			nfiles=$[nfiles + 1]
+		fi
+	done
+}
+
+tmpfile=`mktemp -t vidir.tmp-XXXXXX`
+trap cleanup EXIT
+set -e
+
+while [ $# -gt 0 ]
+do
+	case "$1" in
+	-R|-r|--recursive)
+		Recursive=yes;;
+	--)	shift
+		break;;
+	-*)	echo "Unknown option: $1" >&2
+		false;;
+	*)	break;;
+	esac
+	shift
+done
+
+nfiles=0
+dir_depth=0
+prepcat "$@" >"$tmpfile"
+
+echo "Opening $nfiles to edit ..." >&2
+
+command ${EDITOR:-${VISUAL:-vi}} "$tmpfile"
+
+cat "$tmpfile" | cut -s -f1 -d: | sed -e 's@\(.\+\)/[^/]\+@\1@' | sort -u | xargs mkdir -p
+
+echo "Saving edited files ..." >&2
+
+cat "$tmpfile" | perl -ne '
+	if(($path, $line) = /([^:]+):(.*)/s)
+	{
+		if(not exists $fhs{$path})
+		{
+			if(not open $fhs{$path}, ">", $path)
+			{
+				warn "$!: $path\n";
+				$fhs{$path} = undef;
+			}
+		}
+		if(defined $fhs{$path})
+		{
+			print {$fhs{$path}} $line or warn sprintf "%s while writing %d bytes to %s\n", $!, length $line, $path;
+		}
+	}'

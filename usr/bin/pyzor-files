@@ -1,0 +1,22 @@
+#!/bin/bash
+
+args=()
+
+while [ $# -gt 0 ]
+do
+	if [ ".$arg" = .-- ]
+	then
+		shift
+		break
+	else
+		args+=("$1")
+	fi
+	shift
+done
+
+set -e
+
+for file in "$@"
+do
+	pyzor "${args[@]}" < "$file"
+done

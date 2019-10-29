@@ -36,8 +36,10 @@ set_unicode()
 
 set_unicode
 
+declare -A right_align_cols=()
+right_align_guess=yes
 
-while [ -n "$1" ]
+while [ $# -gt 0 ]
 do
 case "$1" in
 -a|--ascii)
@@ -45,6 +47,20 @@ case "$1" in
 	;;
 -u|--unicode)
 	set_unicode
+	;;
+--align-right)
+	right_align_guess=''
+	shift
+	while [ $# -gt 0 ] && [ "${1:0:1}" != - ]
+	do
+		right_align_cols[$1]=x
+		shift
+	done
+	continue
+	;;
+-*)
+	echo "Unknown option: $1" >&2
+	exit -1
 	;;
 esac
 shift
@@ -76,7 +92,10 @@ explode()
 # compute width of each column
 
 column_width=()
+num_line=0
 text=''
+numericals_by_col=()
+non_numericals_by_col=()
 while read -r line
 do
 	text="$text${text:+$'\n'}$line"
@@ -90,8 +109,21 @@ do
 		then
 			column_width[$column]=$width
 		fi
+			
+		# guess if this cell has numerical content (skip 1st line as it's likely a header)
+		if [ "$right_align_guess" = yes -a $num_line -gt 0 -a -n "$cell" ]
+		then
+			if [ "$cell" -ge 0 -o "$cell" -lt 0 ] 2>/dev/null
+			then
+				let numericals_by_col[$column]++
+			else
+				let non_numericals_by_col[$column]++
+			fi
+		fi
 		let column++
 	done
+	
+	let num_line++
 done
 
 
@@ -106,7 +138,13 @@ bottomFmt=''
 segments=()
 for column in "${!column_width[@]}"
 do
-	swidth=%${column_width[$column]}s
+	sgn=-
+	if [ "$right_align_guess" = yes -a ${numericals_by_col[$column]:-0} -ge ${non_numericals_by_col[$column]:-0} ] || [ "$right_align_guess" != yes -a "${right_align_cols[$column]:-}" ]
+	then
+		sgn=''
+	fi
+	
+	swidth=%$sgn${column_width[$column]}s
 	cellFmt="$cellFmt$verticalBar$swidth"
 	topFmt="${topFmt:-$topleftCorner}${topFmt:+$topCross}$swidth"
 	innerFmt="${innerFmt:-$leftCross}${innerFmt:+$middleCross}$swidth"

@@ -38,6 +38,8 @@ set_unicode
 
 declare -A right_align_cols=()
 right_align_guess=yes
+horizontalLines=yes
+margins=yes
 
 while [ $# -gt 0 ]
 do
@@ -48,6 +50,12 @@ case "$1" in
 -u|--unicode)
 	set_unicode
 	;;
+-H)
+	horizontalLines=''
+	;;
+-M)
+	margins=''
+	;;
 --align-right)
 	right_align_guess=''
 	shift
@@ -57,6 +65,18 @@ case "$1" in
 		shift
 	done
 	continue
+	;;
+-h|--help)
+	echo "Usage: some_command | tabularize [-a | -u | -c] [<options>]
+Options:
+ -a, --ascii    7-bit ascii borders
+ -u, --unicode  borders with nice graphical chars
+ -H             no horizontal lines
+ -M             no margins, ie. no right-most and left-most vertical borders
+ --align-right NUM [NUM [...]]
+                align these columns to the right, others to the left. turn off
+                auto-detection. default is auto-detect based on numeric content."
+	exit
 	;;
 -*)
 	echo "Unknown option: $1" >&2
@@ -113,7 +133,7 @@ do
 		# guess if this cell has numerical content (skip 1st line as it's likely a header)
 		if [ "$right_align_guess" = yes -a $num_line -gt 0 -a -n "$cell" ]
 		then
-			if [ "$cell" -ge 0 -o "$cell" -lt 0 ] 2>/dev/null
+			if expr + "$cell" : '[+-]\?[0-9.,]\+$' >/dev/null 2>&1
 			then
 				let numericals_by_col[$column]++
 			else
@@ -136,6 +156,7 @@ topFmt=''
 innerFmt=''
 bottomFmt=''
 segments=()
+sequentColumn=''
 for column in "${!column_width[@]}"
 do
 	sgn=-
@@ -145,24 +166,32 @@ do
 	fi
 	
 	swidth=%$sgn${column_width[$column]}s
-	cellFmt="$cellFmt$verticalBar$swidth"
-	topFmt="${topFmt:-$topleftCorner}${topFmt:+$topCross}$swidth"
-	innerFmt="${innerFmt:-$leftCross}${innerFmt:+$middleCross}$swidth"
-	bottomFmt="${bottomFmt:-$bottomleftCorner}${bottomFmt:+$bottomCross}$swidth"
+	cellFmt="${cellFmt:-${margins:+$verticalBar}}${sequentColumn:+$verticalBar}$swidth"
+	topFmt="${topFmt:-${margins:+$topleftCorner}}${sequentColumn:+$topCross}$swidth"
+	innerFmt="${innerFmt:-${margins:+$leftCross}}${sequentColumn:+$middleCross}$swidth"
+	bottomFmt="${bottomFmt:-${margins:+$bottomleftCorner}}${sequentColumn:+$bottomCross}$swidth"
 	segments+=('')
+	
+	sequentColumn=yes
 done
-cellFmt="$cellFmt$verticalBar"
-topFmt="$topFmt$toprightCorner"
-innerFmt="$innerFmt$rightCross"
-bottomFmt="$bottomFmt$bottomrightCorner"
+cellFmt="$cellFmt${margins:+$verticalBar}"
+topFmt="$topFmt${margins:+$toprightCorner}"
+innerFmt="$innerFmt${margins:+$rightCross}"
+bottomFmt="$bottomFmt${margins:+$bottomrightCorner}"
 
-topGrid=`printf -- "$topFmt\n" "${segments[@]}"`
-topGrid=${topGrid// /$horizontalBar}
-innerGrid=`printf -- "$innerFmt\n" "${segments[@]}"`
-innerGrid=${innerGrid// /$horizontalBar}
-bottomGrid=`printf -- "$bottomFmt\n" "${segments[@]}"`
-bottomGrid=${bottomGrid// /$horizontalBar}
 
+topGrid=''
+innerGrid=''
+bottomGrid=''
+if [ $horizontalLines ]
+then
+	topGrid=`printf -- "$topFmt" "${segments[@]}"`
+	topGrid=${topGrid// /$horizontalBar}$'\n'
+	innerGrid=`printf -- "$innerFmt" "${segments[@]}"`
+	innerGrid=${innerGrid// /$horizontalBar}$'\n'
+	bottomGrid=`printf -- "$bottomFmt" "${segments[@]}"`
+	bottomGrid=${bottomGrid// /$horizontalBar}$'\n'
+fi
 
 
 # print the table
@@ -172,9 +201,9 @@ while read -r line
 do
 	if [ $line_no = 1 ]
 	then
-		echo "$topGrid"
+		echo -n "$topGrid"
 	else
-		echo "$innerGrid"
+		echo -n "$innerGrid"
 	fi
 	
 	explode $'\t' "$line"
@@ -183,4 +212,4 @@ do
 	let line_no++
 done <<<"$text"
 
-echo "$bottomGrid"
+echo -n "$bottomGrid"

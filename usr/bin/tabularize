@@ -133,7 +133,7 @@ do
 		# guess if this cell has numerical content (skip 1st line as it's likely a header)
 		if [ "$right_align_guess" = yes -a $num_line -gt 0 -a -n "$cell" ]
 		then
-			if expr + "$cell" : '[+-]\?[0-9.,]\+$' >/dev/null 2>&1
+			if expr + "$cell" : '[+-]\?[0-9., ]\+$' >/dev/null 2>&1
 			then
 				let numericals_by_col[$column]++
 			else

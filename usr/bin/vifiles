@@ -55,9 +55,15 @@ nfiles=0
 dir_depth=0
 prepcat "$@" >"$tmpfile"
 
-echo "Opening $nfiles to edit ..." >&2
+echo "Opening $nfiles files to edit ..." >&2
 
 command ${EDITOR:-${VISUAL:-vi}} "$tmpfile"
+
+read -e -p "Apply changes? [y/n] " -i n
+if [ "${REPLY^^}" != Y ]
+then
+	exit
+fi
 
 cat "$tmpfile" | cut -s -f1 -d: | sed -e 's@\(.\+\)/[^/]\+@\1@' | sort -u | xargs mkdir -p
 

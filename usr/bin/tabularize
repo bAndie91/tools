@@ -146,6 +146,12 @@ do
 	let num_line++
 done
 
+if [ $num_line = 0 ]
+then
+	# no input, no output
+	exit 0
+fi
+
 
 set -u
 

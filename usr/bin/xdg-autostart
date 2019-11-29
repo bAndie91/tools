@@ -10,7 +10,7 @@ loadprops()
 {
 	prop=()
 	local IFS=$'\n'
-	for line in $(cat "$1")
+	for line in `grep -vE '^\s*(#|$)' "$1"`
 	do
 		key=${line%%=*}
 		prop[${key,,}]=${line#*=}
@@ -92,12 +92,12 @@ done
 
 for desktop_file in $HOME/.config/autostart/*.desktop /etc/xdg/autostart/*.desktop
 do
+	filename=${desktop_file##*/}
 	loadprops "$desktop_file"
-	Name=${prop[name]}
-
-	if [ "${seen[$Name]}" != 1 ]
+	
+	if [ "${seen[$filename]}" != 1 ]
 	then
-		seen[$Name]=1
+		seen[$filename]=1
 
 		if ison hidden
 		then

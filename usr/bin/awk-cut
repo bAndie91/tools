@@ -31,7 +31,7 @@ awk-cut()
 			y=${colspec##*-}
 			;;
 		[0-9]*([0-9,]))
-			expr=$expr"N=0; split(\"${colspec//,/ }\", A, /,/); for(X in A){printf(\"%s%s\", N==0 ? \"\" : OFS, \$A[X]); N++};"
+			expr=$expr"N=0; split(\"$colspec\", A, /,/); for(X in A){printf(\"%s%s\", N==0 ? \"\" : OFS, \$A[X]); N++};"
 			;;
 		*)
 			echo "Invalid column spec: $colspec" >&2

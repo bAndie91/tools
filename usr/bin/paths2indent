@@ -1,0 +1,30 @@
+#!/usr/bin/env perl
+
+my %parsed;
+my $DIRSEP = '/';
+
+while(my $path = <STDIN>)
+{
+	my $ref = \%parsed;
+	$path =~ s/\n$//;
+	
+	for my $element (split /$DIRSEP/, $path)
+	{
+		next if $element eq '';
+		$ref->{$element} = {} if not exists $ref->{$element};
+		$ref = $ref->{$element};
+	}
+}
+
+sub output
+{
+	my $indent = shift;
+	my $ref = shift;
+	for my $key (keys %$ref)
+	{
+		printf "%s%s\n", ' 'x$indent, $key;
+		output($indent+1, $ref->{$key});
+	}
+}
+
+output(0, \%parsed);

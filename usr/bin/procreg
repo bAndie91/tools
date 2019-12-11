@@ -1,0 +1,106 @@
+#!/bin/bash
+
+# NAME
+# 
+#  procreg - process regulator
+# 
+# SYNOPSIS
+# 
+#  procreg [regulator command and arguments] -- [long-running command and arguments]
+#
+#  Regulate the CPU time of a process by run/pause it according to any logic 
+#  implemented in any other command (it's the regulator command).
+# 
+# GOAL
+# 
+#  Run a long-running process in parallel to a short-living "regulator" command.
+#  According to the regulator command's exit status, the long-running process
+#  will be paused and unpaused. Exit status 0 unpauses the process, non-zero
+#  pauses it. Regulator can vary the checking interval.
+# 
+# EXPLANATION
+# 
+#  Long-running process started in its own process group. On pause event, a
+#  SIGSTOP is sent to the process group, on unpause it gets SIGCONT. No two
+#  signals of the same kind (STOP, CONT) are sent consecutively.
+#  
+#  Regulator command may produce output; if there is output, the last line is
+#  interpreted as a number and the command will be called at least those many
+#  seconds later next. If there is no output, $PROCREG_INTERVAL sec is delayed,
+#  or 0 sec in absence of it.
+#  
+#  It terminates the long-running process when itself get interrupted or 
+#  terminated.
+# 
+# LIMITATIONS
+# 
+#  Further process groups created by long-running process will not be regulated.
+# 
+# ENVIRONMENT
+# 
+#  PROCREG_INTERVAL
+#  PROCREG_STATUS
+
+toolname=procreg
+declare -a controller_cmd
+declare -a controlled_cmd
+
+while [ $# -gt 0 ]
+do
+	if [ "$1" = -- ]
+	then
+		shift
+		break
+	fi
+	controller_cmd+=("$1")
+	shift
+done
+
+while [ $# -gt 0 ]
+do
+	controlled_cmd+=("$1")
+	shift
+done
+
+quit()
+{
+	kill -TERM -$pid
+	if [ "$PROCREG_STATUS" = STOP ]
+	then
+		kill -CONT -$pid
+	fi
+	exit 130
+}
+
+trap quit TERM INT
+
+setsid "${controlled_cmd[@]}" &
+pid=$!
+PROCREG_STATUS=RUN
+export PROCREG_STATUS
+
+echo "$toolname: RUN $pid" >&2
+
+while kill -0 -$pid 2>/dev/null
+do
+	stdout=`command "${controller_cmd[@]}"`
+	code=$?
+	mapfile -t output <<<"$stdout"
+	delay=${output[-1]}
+	
+	if [ $code = 0 -a $PROCREG_STATUS != RUN ]
+	then
+		echo "$toolname: CONT -$pid" >&2
+		kill -CONT -$pid
+		PROCREG_STATUS=RUN
+	elif [ $code != 0 -a $PROCREG_STATUS = RUN ]
+	then
+		echo "$toolname: STOP -$pid" >&2
+		kill -STOP -$pid
+		PROCREG_STATUS=STOP
+	fi
+	
+	sleep ${delay:-${PROCREG_INTERVAL:-0}}
+done
+
+wait

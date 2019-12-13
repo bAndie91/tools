@@ -72,16 +72,27 @@ quit()
 	exit 130
 }
 
+exists()
+{
+	local pid=$1
+	declare -g ancestor_valid
+	if [ "$ancestor_valid" != no ]
+	then
+		kill -0 $pid 2>/dev/null && return 0 || ancestor_valid=no
+	fi
+	kill -0 -$pid 2>/dev/null
+}
+
 trap quit TERM INT
 
-setsid "${controlled_cmd[@]}" &
+setpgrp "${controlled_cmd[@]}" &
 pid=$!
 PROCREG_STATUS=RUN
 export PROCREG_STATUS
 
 echo "$toolname: RUN $pid" >&2
 
-while kill -0 -$pid 2>/dev/null
+while exists $pid
 do
 	stdout=`command "${controller_cmd[@]}"`
 	code=$?

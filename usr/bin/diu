@@ -1,0 +1,43 @@
+#!/bin/bash
+
+shopt -s dotglob
+shopt -s nullglob
+
+show_num_of_entries()
+{
+	local prefix name entries recursive_num pwd mynum
+	prefix=${1:+$1/}
+	shift
+	mynum=0
+	
+	for name in "$@"
+	do
+		if [ ! -L "$name" ]
+		then
+			if [ -d "$name" ]
+			then
+				pwd=$PWD
+				if cd "$name"
+				then
+					entries=(*)
+					show_num_of_entries "$prefix$name" "${entries[@]}"
+					recursive_num=$[${#entries[@]} + $NUM]
+					echo "$recursive_num	$prefix$name"
+					mynum=$[$mynum + $recursive_num]
+					cd "$pwd"
+				fi
+			elif [ ! -e "$name" ]
+			then
+				echo "$0: $name: not found" >&2
+			fi
+		fi
+	done
+	NUM=$mynum
+}
+
+if [ $# = 0 ]
+then
+	set .
+fi
+
+show_num_of_entries '' "$@"

@@ -2,11 +2,14 @@
 
 shopt -s dotglob
 shopt -s nullglob
+CROSSDEV=allow
 
 show_num_of_entries()
 {
-	local prefix name entries recursive_num pwd mynum
+	local prefix name entries recursive_num pwd mynum parent_dev dev
 	prefix=${1:+$1/}
+	shift
+	parent_dev=$1
 	shift
 	mynum=0
 	
@@ -16,15 +19,22 @@ show_num_of_entries()
 		then
 			if [ -d "$name" ]
 			then
-				pwd=$PWD
-				if cd "$name"
+				if [ $CROSSDEV = deny ]
 				then
-					entries=(*)
-					show_num_of_entries "$prefix$name" "${entries[@]}"
-					recursive_num=$[${#entries[@]} + $NUM]
-					echo "$recursive_num	$prefix$name"
-					mynum=$[$mynum + $recursive_num]
-					cd "$pwd"
+					dev=`stat -c %D "$name"`
+				fi
+				if [ $CROSSDEV = allow -o -z "$parent_dev" -o "$dev" = "$parent_dev" ]
+				then
+					pwd=$PWD
+					if cd "$name"
+					then
+						entries=(*)
+						show_num_of_entries "$prefix$name" "$dev" "${entries[@]}"
+						recursive_num=$[${#entries[@]} + $NUM]
+						echo "$recursive_num	$prefix$name"
+						mynum=$[$mynum + $recursive_num]
+						cd "$pwd"
+					fi
 				fi
 			elif [ ! -e "$name" ]
 			then
@@ -35,9 +45,36 @@ show_num_of_entries()
 	NUM=$mynum
 }
 
+while [ $# -gt 0 ]
+do
+	case "$1" in
+	-h|--help)
+		echo "$0: [options] [<directory> [...]]
+options:
+ -x, --one-file-system"
+		exit 0
+		;;
+	-x|--one-file-system)
+		CROSSDEV=deny
+		;;
+	--)
+		shift
+		break
+		;;
+	-*)
+		echo "$0: unknown option: $1" >&2
+		exit -1
+		;;
+	*)
+		break
+		;;
+	esac
+	shift
+done
+
 if [ $# = 0 ]
 then
 	set .
 fi
 
-show_num_of_entries '' "$@"
+show_num_of_entries '' '' "$@"

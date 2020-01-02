@@ -111,7 +111,9 @@ do
 		PROCREG_STATUS=STOP
 	fi
 	
-	sleep ${delay:-${PROCREG_INTERVAL:-0}}
+	sec=${delay:-${PROCREG_INTERVAL:-0}}
+	echo "$toolname: next check in $sec sec" >&2
+	sleep $sec
 done
 
 wait

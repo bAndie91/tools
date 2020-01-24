@@ -40,7 +40,7 @@ while(<STDIN>)
 		}
 	}
 	
-	push $ForkPoint->{subtree}, {data=>$data, parent=>$ForkPoint, subtree=>[]};
+	push @{$ForkPoint->{subtree}}, {data=>$data, parent=>$ForkPoint, subtree=>[]};
 	#print Dumper $Tree;
 	
 	$spaces_prev = $spaces;

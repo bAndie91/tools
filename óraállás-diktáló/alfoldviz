@@ -2,14 +2,94 @@
 
 set -e
 
-trap 'help; exit 255' ERR
+curlargs=(-sS)
+HelpText="Használat: $0 [felhasználási_hely_azonosító] [mérőóra_gyári_száma] [email] [óraállás]
+  $0 --history [email] [jelszó]"
+response=''
+declare -g Cookies="acceptCookies=1"
 
-help()
+
+assert()
 {
-	echo "Használat: $0 [felhasználási_hely_azonosító] [mérőóra_gyári_száma] [email] [óraállás]"
+	local msg=$1
+	shift
+	if ! command "$@"
+	then
+		echo "$msg" >&2
+		save_diag
+		exit 1
+	fi
 }
 
-test $# = 4
+save_diag()
+{
+	tmp=`tempfile -s .txt`
+	{
+		echo == Cookies
+		echo "$Cookies"
+		echo
+		echo == Curl args
+		echo "${curlargs[@]}" "$url"
+		if [ -n "$response" ]
+		then
+			echo
+			echo == Response
+			echo "$response"
+		fi
+	}>"$tmp"
+	echo "Diagnosztika mentve ebbe a fájlba: $tmp" >&2
+}
+
+start_session()
+{
+	local url=$1
+	# get session (and other) cookie
+	local cookies=`curl "${curlargs[@]}" "$url" -b "$Cookies" -c /dev/fd/3 3>&1 1>/dev/null | awk '{if(!/# /){print $6,"=",$7,";"}}'`
+	Cookies="$Cookies;$cookies"
+}
+
+urlencode()
+{
+	local s=$1
+	s=${s//+/%2B}
+	echo "$s"
+}
+	
+
+if [ ".$1" = .--history ]
+then
+	url=https://www.alfoldviz.hu/ugyfelszolgalat/e-ugyfelszolgalat
+	start_session "$url"
+	url=https://www.alfoldviz.hu/ugyfelszolgalat/e-ugyfelszolgalat/bejelentkezes
+	email=`urlencode "$2"`
+	password=`urlencode "$3"`
+	response=`curl "${curlargs[@]}" -i "$url" -d "email=$email" -d "password=$password" -b "$Cookies"`
+	echo "$response" |\
+	{
+		read httpver status message
+		[ "$status" = 302 ]
+		while IFS=: read -r header content
+		do
+			if [ "$header" = Location ] && expr "$content" : '.*bejelentkezes' >/dev/null
+			then
+				echo "Hibás bejelentkezés" >&2
+				exit 2
+			fi
+			if [ -z "$header" ]
+			then
+				break
+			fi
+		done
+	}
+	ps=("${PIPESTATUS[@]}")
+	assert "Rossz státusz bejelentkezéskor" [ ${ps[1]} = 0 ]
+	Cookies="acceptCookies=1;"`echo "$response" | grep -i ^Set-Cookie: | cut -f2 -d: | cut -f1 -d';' | tr "\n" ";"`
+	url=https://www.alfoldviz.hu/ugyfelszolgalat/e-ugyfelszolgalat/korabbi-meroallasok-listaja/betoltes
+	curl "${curlargs[@]}" "$url" -b "$Cookies" | html2text -utf8
+	exit ${PIPESTATUS[0]}
+fi
+
+assert "$HelpText" [ $# = 4 ]
 
 fogyhely=$1
 merogysz=$2
@@ -17,14 +97,10 @@ email=$3
 meroallas=$4
 
 url=https://www.alfoldviz.hu/ugyfelszolgalat/meroallas-bejelentes
-curlargs=(-sS)
-
-# get session (and other) cookie
-cookies=`curl "${curlargs[@]}" "$url" -H "Cookie: acceptCookies=1" -c /dev/fd/3 3>&1 1>/dev/null | sed -e 's/^#HttpOnly_//'`
-# add 'acceptCookies' cookie to the cookie jar
-cookies="$cookies"$'\n'"$(tail -n1 <<<"$cookies" | awk '{print $1,$2,$3,$4,$5}') acceptCookies 1"
+start_session "$url"
 # get CSRF token
-csrf_token=`curl "${curlargs[@]}" "$url" -b /dev/fd/3 3<<<"$cookies" | pup 'input[name=_token] attr{value}'`
+csrf_token=`curl "${curlargs[@]}" "$url" -b "$Cookies" | pup 'input[name=_token] attr{value}'`
+assert "CSRF tokent nem találtam" [ -n "$csrf_token" ]
 
 # fill form input fields
 curlargs+=( \
@@ -36,24 +112,13 @@ curlargs+=( \
 )
 
 # fire report
-response=`curl -i -L "${curlargs[@]}" "$url" -b /dev/fd/3 3<<<"$cookies" 2>&1`
+response=`curl -i -L "${curlargs[@]}" "$url" -b "$Cookies" 2>&1`
 
 if echo "$response" | grep -o "Az adatok feldolgozását megkezdtük."
 then
 	exit 0
 else
-	echo "Az Alföldvíz nem nyugtázta a bejelentést." >&2
-	tmp=`tempfile -s .txt`
-	{
-		echo == Cookies
-		echo "$cookies"
-		echo
-		echo == Curl args
-		echo "${curlargs[@]}" "$url"
-		echo
-		echo == Response
-		echo "$response"
-	}>"$tmp"
-	echo "Diagnosztika mentve ebbe a fájlba: $tmp" >&2
+	echo "Az Alföldvíz NEM nyugtázta a bejelentést." >&2
+	save_diag
 	exit 1
 fi

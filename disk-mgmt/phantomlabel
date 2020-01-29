@@ -1,0 +1,63 @@
+#!/usr/bin/env perl
+
+use warnings;
+$myname = "phantomlabel";
+$size_buf_label = 100;
+
+$new_label = $ARGV[1];
+if(defined $new_label)
+{
+	if(length $new_label > $size_buf_label - 1)
+	{
+		die "$myname: label must not exceed $size_buf_label bytes\n";
+	}
+	if($new_label =~ m{[/\\]})
+	{
+		die "$myname: label must not contain '/' or '\\' char\n";
+	}
+}
+
+open $target_device, '+<', $ARGV[0] or die "$myname: open: $!";
+
+sub show_current_data
+{
+	$offset_signature = 0x10040;
+	$size_signature = 8;
+	seek $target_device, $offset_signature, 0 or die "$myname: seek: $!";
+	$read_bytes = read $target_device, $buf_signature, $size_signature or die "$myname: read: $!";
+	if($read_bytes != $size_signature)
+	{
+		die sprintf "%s: could not read %d bytes at 0x%X\n", $myname, $size_signature, $offset_signature;
+	}
+	printf "# octets at 0x%X\n", $offset_signature;
+	printf "%s\n", join " ", map { sprintf "%02X", $_ } unpack 'C'.$size_signature, $buf_signature;
+	
+	$offset_label = 0x1012B;
+	$size_buf_new_label = defined $new_label ? length($new_label) + 1 : 100;
+	seek $target_device, $offset_label, 0 or die "$myname: seek: $!";
+	$read_bytes = read $target_device, $buf_label, $size_buf_new_label or die "$myname: read: $!";
+	if($read_bytes != $size_buf_new_label)
+	{
+		die sprintf "%s: could not read %d bytes at 0x%X\n", $myname, $size_buf_new_label, $offset_label;
+	}
+	printf "# octets at 0x%X\n", $offset_label;
+	printf "%s\n", join " ", map { sprintf "%02X", $_ } unpack 'C'.$size_buf_new_label, $buf_label;
+}
+
+show_current_data;
+
+if(defined $new_label)
+{
+	print "# writing new label\n";
+	
+	$signature = '_BHRfS_M';
+	seek $target_device, $offset_signature, 0 or die "$myname: seek: $!";
+	print {$target_device} $signature or die "$myname: write: $!";
+	
+	seek $target_device, $offset_label, 0 or die "$myname: seek: $!";
+	print {$target_device} $new_label.chr(0) or die "$myname: write: $!";
+	
+	print "# new label is written\n";
+	
+	show_current_data;
+}

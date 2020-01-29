@@ -1,0 +1,28 @@
+#!/bin/sh
+
+set -u
+
+usage="[DDWRITE_REWIND=<sectors>] [DDWRITE_INCREMENT=<sectors>] ddwrite <device> [<initial-seek>]"
+rewind_sectors=${DDWRITE_REWIND:-10}
+increment=${DDWRITE_INCREMENT:-10000}
+
+devpath=${1?$usage}
+if [ ! -e "$devpath" ]
+then
+	echo "$usage" >&2
+	exit 255
+fi
+seek=${2:-0}
+
+while true
+do
+	echo "ddwrite: device=$devpath seek=$seek" >&2
+	ddoutput=`LANG=C dd if=/dev/zero of="$devpath" bs=512 oflag=direct seek=$seek count=$increment 2>&1`
+	echo "$ddoutput" >&2
+	if expr "$ddoutput" : '.*No space left on device' >/dev/null
+	then
+		break
+	fi
+	sectors=`echo "$ddoutput" | grep "records out" | tail -n1 | sed -e "s/[^0-9].*//"`
+	seek=$(( seek + sectors - ( sectors < increment ? rewind_sectors : 0 ) ))
+done

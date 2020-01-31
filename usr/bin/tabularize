@@ -163,19 +163,20 @@ innerFmt=''
 bottomFmt=''
 segments=()
 sequentColumn=''
+columnAlignment=()
 for column in "${!column_width[@]}"
 do
-	sgn=-
 	if [ "$right_align_guess" = yes -a ${numericals_by_col[$column]:-0} -ge ${non_numericals_by_col[$column]:-0} ] || [ "$right_align_guess" != yes -a "${right_align_cols[$column]:-}" ]
 	then
-		sgn=''
+		columnAlignment[$column]=left
+	else
+		columnAlignment[$column]=right
 	fi
 	
-	swidth=%$sgn${column_width[$column]}s
-	cellFmt="${cellFmt:-${margins:+$verticalBar}}${sequentColumn:+$verticalBar}$swidth"
-	topFmt="${topFmt:-${margins:+$topleftCorner}}${sequentColumn:+$topCross}$swidth"
-	innerFmt="${innerFmt:-${margins:+$leftCross}}${sequentColumn:+$middleCross}$swidth"
-	bottomFmt="${bottomFmt:-${margins:+$bottomleftCorner}}${sequentColumn:+$bottomCross}$swidth"
+	cellFmt="${cellFmt:-${margins:+$verticalBar}}${sequentColumn:+$verticalBar}%*s"
+	topFmt="${topFmt:-${margins:+$topleftCorner}}${sequentColumn:+$topCross}%${column_width[$column]}s"
+	innerFmt="${innerFmt:-${margins:+$leftCross}}${sequentColumn:+$middleCross}%${column_width[$column]}s"
+	bottomFmt="${bottomFmt:-${margins:+$bottomleftCorner}}${sequentColumn:+$bottomCross}%${column_width[$column]}s"
 	segments+=('')
 	
 	sequentColumn=yes
@@ -213,7 +214,17 @@ do
 	fi
 	
 	explode $'\t' "$line"
-	printf -- "$cellFmt\n" "${EXPLODE_ARRAY[@]}"
+	printf_args=()
+	for column in "${!column_width[@]}"
+	do
+		[ $column -lt ${#EXPLODE_ARRAY[@]} ] && cell=${EXPLODE_ARRAY[$column]} || cell=''
+		chars=${#cell}
+		bytes=`LANG=C; echo "${#cell}"`
+		swidth=$[ ${column_width[$column]} + ( $bytes - $chars ) ]
+		[ ${columnAlignment[$column]} = left ] && swidth=-$swidth
+		printf_args+=($swidth "$cell")
+	done
+	printf -- "$cellFmt\n" "${printf_args[@]}"
 	
 	let line_no++
 done <<<"$text"

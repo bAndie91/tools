@@ -1,0 +1,27 @@
+#!/usr/bin/perl
+
+# See also -> irc://irc.freenode.net/query:buubot3
+
+use strict;
+no strict 'vars';
+no strict 'refs';
+use warnings;
+
+use Data::Dumper;
+$Data::Dumper::Indent--;
+
+$| = 1;
+
+# an alias for exit()
+sub quit { exit; }
+
+my ($ver,$maj,$min) = ($] =~ /(\d+)\.(\d{3})(\d{3})/);
+$maj += 0;
+$min += 0;
+print +(split '/', $^X)[-1], " $ver.$maj.$min\n";
+
+$, = ',';
+$THE_PROMPT = '% ';
+print $THE_PROMPT;
+while (<>) { print eval; print +($@ || "\n") . $THE_PROMPT };
+

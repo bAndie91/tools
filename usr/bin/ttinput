@@ -1,0 +1,14 @@
+#!/usr/bin/env perl
+
+# https://johnlane.ie/injecting-terminal-input.html
+
+$tty = shift @ARGV || '/dev/tty';
+sysopen $fd, $tty, O_WRONLY|O_NONBLOCK or die "open $tty: $!\n";;
+
+while(<STDIN>)
+{
+	for $ch (split //)
+	{
+		ioctl($fd, 0x5412, $ch) or die "ioctl: $!\n";
+	}
+}

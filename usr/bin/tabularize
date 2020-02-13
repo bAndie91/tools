@@ -168,9 +168,9 @@ for column in "${!column_width[@]}"
 do
 	if [ "$right_align_guess" = yes -a ${numericals_by_col[$column]:-0} -ge ${non_numericals_by_col[$column]:-0} ] || [ "$right_align_guess" != yes -a "${right_align_cols[$column]:-}" ]
 	then
-		columnAlignment[$column]=left
-	else
 		columnAlignment[$column]=right
+	else
+		columnAlignment[$column]=left
 	fi
 	
 	cellFmt="${cellFmt:-${margins:+$verticalBar}}${sequentColumn:+$verticalBar}%*s"

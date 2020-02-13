@@ -69,7 +69,7 @@ main()
 	# Sanity Check
 	#\( \( ! -perm -0444 -o -perm /0002 \) -o \( -type d ! -perm -0111 \) \)
 	fakeroot $fakeroot_opt find deb/usr/ ! -perm -0444 -printf "WARN: File/dir is not readable for everybody: %p\n"
-	fakeroot $fakeroot_opt find deb/usr/ -perm /0002 -printf "WARN: File/dir is writable for others: %p\n"
+	fakeroot $fakeroot_opt find deb/usr/ ! -type l -perm /0002 -printf "WARN: File/dir is writable for others: %p\n"
 	fakeroot $fakeroot_opt find deb/usr/ -type d ! -perm -0111 -printf "WARN: Dir is not searchable for everybody: %p\n"
 	
 	# Create Package

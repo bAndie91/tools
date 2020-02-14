@@ -9,11 +9,11 @@ true <<EOF
 
 =head1 NAME
 
-uncomment - stripping comment lines from config files
+nocomment - stripping comment lines from config files
 
 =head1 SYNOPSIS
 
-uncomment [B<grep-arguments>]
+nocomment [B<grep-arguments>]
 
 =head1 DESCRIPTION
 

@@ -28,6 +28,7 @@ fi
 url=https://magan.szepkartya.otpportalok.hu/egyenleglekerdezes/
 
 cookies=`curl -sS "$url" -c /dev/fd/3 3>&1 1>/dev/null`
+cookies="$cookies; cookie_prod=3"
 
 ajaxtoken=`curl -sS "$url" -b /dev/fd/3 3<<<"$cookies" |\
 	grep -Eo 'var\s+ajax_token\s*=\s*.[a-fA-Z0-9]+' | cut -f2 -d"'"`
@@ -38,6 +39,7 @@ curl -sS https://magan.szepkartya.otpportalok.hu/ajax/egyenleglekerdezes/ \
 	-H 'X-Requested-With: XMLHttpRequest' \
 	-d "s_azonosito_k=$cardnum8" \
 	-d "s_telekod_k=$telecode" \
-	-d "ajax_token=$ajaxtoken" |\
+	-d "ajax_token=$ajaxtoken" \
+	-d "s_captcha=" |\
 jq .
 

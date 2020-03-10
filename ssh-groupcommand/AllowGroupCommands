@@ -9,7 +9,7 @@ shell	--- **
 sftp	/usr/lib/openssh/sftp-server
 
 # Allow a single parameter.
-nogroup	echo *
+nogroup	ls *
 
 # Allow any num of parameters.
 nogroup	date **
@@ -21,10 +21,17 @@ nogroup	date **
 # This is useful because ssh client thinks she is issuing a shell
 # command, therefore quoting arguments, but we are converting it
 # to a pure execve(2) command-arguments sequence.
+#
 # N.B. This is NOT a real shell interpolation.
 # So e.g. bash -c "echo '$LANG'" will result in ["echo", "$LANG"] 
 # with literal string "$LANG".
+#
+# git(1) calls git-upload-pack/git-receive-pack over ssh with plain
+# arguments, no shell-synatax in them, so it's safe to "convert" to
+# OS command.
 
 gitusers	git-upload-pack **
 gitusers	git-receive-pack **
+
 !strip-quotes off
+# Rules after "!strip-quotes off" don't involve "conversion"

@@ -44,7 +44,7 @@ start_session()
 {
 	local url=$1
 	# get session (and other) cookie
-	local cookies=`curl "${curlargs[@]}" "$url" -b "$Cookies" -c /dev/fd/3 3>&1 1>/dev/null | awk '{if(!/# /){print $6,"=",$7,";"}}'`
+	local cookies=`curl "${curlargs[@]}" "$url" -b "$Cookies" -c /dev/fd/3 3>&1 1>/dev/null | awk '{if(!/^(# |$)/){print $6"="$7";"}}'`
 	Cookies="$Cookies;$cookies"
 }
 

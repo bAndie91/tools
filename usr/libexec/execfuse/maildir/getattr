@@ -6,7 +6,7 @@ fname=`virt2phy_filepath "$1"`
 
 if [ -e "$2$fname" ]
 then
-	if find "$2$fname" -maxdepth 0 \
+	if find -L "$2$fname" -maxdepth 0 \
 		-printf 'ino=%i mode=%M nlink=%n uid=%U gid=%G rdev=0 size=%s blksize=512 blocks=%b atime=%A@ mtime=%T@ ctime=%C@' \
 		-quit
 	then

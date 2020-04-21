@@ -1,0 +1,45 @@
+#!/bin/bash
+
+set -e
+set -o pipefail
+
+cd /var/run/pam_holdthedoor
+
+for file in req-*
+do
+	uuid=${file:4}
+	
+	# note, $file is trusted
+	. $file
+	age=`perl -MTime::Duration -e "print ago(time - $PAM_HOLDTHEDOOR_TIMESTAMP)"`
+	exp=`perl -MTime::Duration -e "print ago(time - $PAM_HOLDTHEDOOR_EXPIRE)"`
+	
+	echo "Access request:"
+	echo "  when:            $(date -d "@$PAM_HOLDTHEDOOR_TIMESTAMP") ($age)"
+	echo "  request expires: $(date -d "@$PAM_HOLDTHEDOOR_EXPIRE") ($exp)"
+	echo "  source host:     $PAM_RHOST"
+	echo "  tty:             $PAM_TTY"
+	echo "  local service:   $PAM_SERVICE"
+	echo "  login as:        $PAM_USER"
+	echo
+	
+	read -e -p "Allow? [y/n] " reply
+	
+	if [ $PAM_HOLDTHEDOOR_EXPIRE -le `date +%s` ]
+	then
+		echo "Request expired in the meanwhile."
+	else
+		if [ ".$reply" = .y ]
+		then
+			touch "allow-$uuid"
+			echo "You granted access."
+		elif [ ".$reply" = .n ]
+		then
+			rm "req-$uuid"
+			echo "You denied access."
+		else
+			echo "Undecided."
+		fi
+	fi
+	echo
+done

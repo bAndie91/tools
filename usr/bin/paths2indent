@@ -1,4 +1,9 @@
 #!/usr/bin/env perl
+# Input: list of file paths line-by-line
+# Output: leaf file name with leading tabs representing the depth on the tree
+#
+# Similar tools:
+# - https://github.com/jez/as-tree
 
 my %parsed;
 my $DIRSEP = '/';

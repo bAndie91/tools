@@ -1,7 +1,12 @@
 #!/usr/bin/env perl
+# Input: file names with leading tabs representing the depth on the directory tree, line-by-line
+# Output: ascii tree diagram with drawing chars
+#
+# Similar tools:
+# - https://github.com/jez/as-tree
 
-use Data::Dumper;
 
+#use Data::Dumper;
 
 $spaces_prev = 0;
 $level = 0;

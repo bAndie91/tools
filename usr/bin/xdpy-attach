@@ -67,6 +67,7 @@ is_shell_source()
 }
 
 
+echo "current DISPLAY=$DISPLAY" >&2
 dpy=`find_display`
 if [ -n "$dpy" ]
 then

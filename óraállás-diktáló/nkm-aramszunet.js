@@ -188,8 +188,10 @@ page.open(url_form, function(status)
 				var telepules_element = document.querySelector('li[data-label="' + param.telepules + '"]');
 				if(!telepules_element)
 				{
-					console.log("A település '" + param.telepules + "' nincs a tervezett áramszünetek listájában.");
-					return '';
+					var msg = "crawler: A település '" + param.telepules + "' nincs a tervezett áramszünetek listájában."
+					console.log(msg);
+					var output = "<tr><td>"+msg+"</td></tr>";
+					return JSON.stringify({'result': {'output': output}, 'jump': 'end'});
 				}
 				eval(param.inject);
 				/* Filling in form fields and submit */
@@ -285,7 +287,8 @@ page.open(url_form, function(status)
 				}
 				
 				log(llDebug, "step " + stepindex + " jump " + ret);
-				stepindex += ret;
+				if(ret == 'end') stepindex = steps.length;
+				else stepindex += ret;
 				
 				if(stepindex >= steps.length)
 				{

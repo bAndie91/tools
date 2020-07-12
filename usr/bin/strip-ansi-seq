@@ -1,0 +1,2 @@
+#!/bin/sh
+exec sed -e 's/\[[^a-zA-Z]*[a-zA-Z]//g'

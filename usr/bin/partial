@@ -14,11 +14,77 @@ warnx()
 	echo "${0##*/}: $*" >&2
 }
 
+help()
+{
+	warnx "usage: partial [--restart|-r|--forget|-f|--pid|-p] <COMMAND> [<ARGUMENTS>]"
+}
+
+opt_restart=no
+opt_forget=no
+opt_pid=no
+
+while [ $# -gt 0 ]
+do
+	case "${1:-}" in
+	--restart|-r)
+		opt_restart=yes
+		;;
+	--forget|-f)
+		opt_forget=yes
+		;;
+	--pid|-p)
+		opt_pid=yes
+		;;
+	--help)
+		help
+		exit
+		;;
+	--)
+		shift
+		break
+		;;
+	-*)
+		warnx "unknown option '$1'"
+		exit -1
+		;;
+	*)
+		break
+		;;
+	esac
+	shift
+done
+
+if [ $# = 0 ]
+then
+	help
+	exit -1
+fi
+
 declare -a command=("$@")
 command_str=${command[*]}
 commandhash=`echo "$command_str" | sha256sum | cut -f1 -d' '`
 
 dir=~/.cache/partial/$commandhash
+
+if [ $opt_pid = yes ]
+then
+	echo "$dir/pid"
+	exit
+fi
+if [ $opt_forget = yes -o $opt_restart = yes ]
+then
+	if [ -d "$dir" ]
+	then
+		pid=`cat "$dir/pid"`
+		kill "$pid"
+		rm -r "$dir"
+	fi
+	if [ $opt_forget = yes ]
+	then
+		exit
+	fi
+fi
+
 mkdir -p "$dir"
 
 exec {lockfd}>>"$dir/lock"
@@ -44,6 +110,7 @@ then
 			echo -n $? >"$dir/status"
 		) &
 		
+		echo $! > "$dir/pid"
 		warnx "command started"
 		exit 115
 	fi

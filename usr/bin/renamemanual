@@ -1,14 +1,24 @@
 #!/bin/bash
 
-if [ -z "$1" -o ."$1" = .--help ]; then
+if [ -z "$1" -o ."$1" = .--help ]
+then
 	echo "Usage: $0 [files...]" >&2
 	exit 1
 fi
 
 for file in "$@"
 do
-	read -e -i "$file" -p "$file -> "
-	if [ "$REPLY" != "$file" -a -n "$REPLY" ]; then
-		mv -i -v "$file" "$REPLY"
-	fi
+	while true
+	do
+		read -e -i "$file" -p "$file -> "
+		if [ "$REPLY" != "$file" -a -n "$REPLY" ]
+		then
+			if mv -i -v "$file" "$REPLY"
+			then
+				break
+			fi
+		else
+			break
+		fi
+	done
 done

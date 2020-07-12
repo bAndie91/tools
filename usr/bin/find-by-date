@@ -1,0 +1,254 @@
+#!/bin/bash
+
+set -u
+set -e
+set -E
+set -o pipefail
+trap 'echo "Internal error in ${FUNCNAME:-main}" >&2; exit -2' ERR
+
+
+
+from=''
+till=''
+current_ts=`date +%s`
+current_dt=`date +%Y%m%d%H%M -d @$current_ts`
+current_Year=${current_dt:0:4}
+current_month=${current_dt:4:2}
+current_day=${current_dt:6:2}
+current_Hour=${current_dt:8:2}
+current_Min=${current_dt:10:2}
+
+timeunits=(Year month day Hour Min)
+
+declare -a formats
+declare -A fmt
+formats+=("YYYY-mm-dd_HH:MM")
+fmt['([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})_([0-9]{1,2})[.:]([0-9]{1,2})']="Year month day Hour Min"
+formats+=("YYYY-mm-dd_HH")
+fmt['([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})_([0-9]{1,2})']="Year month day Hour"
+formats+=("YYYY-mm-dd")
+fmt['([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})']="Year month day"
+formats+=("YYYY-mm")
+fmt['([0-9]{4})-([0-9]{1,2})']="Year month"
+formats+=("YYYY")
+fmt['([0-9]{4})']="Year"
+formats+=("     mm-dd")
+fmt['([0-9]{1,2})-([0-9]{1,2})']="month day"
+formats+=("        dd")
+fmt['([0-9]{1,2})']="day"
+formats+=("     mm-dd_HH:MM")
+fmt['([0-9]{1,2})-([0-9]{1,2})_([0-9]{1,2})[.:]([0-9]{1,2})']="month day Hour Min"
+formats+=("     mm-dd_HH")
+fmt['([0-9]{1,2})-([0-9]{1,2})_([0-9]{1,2})']="month day Hour"
+formats+=("        dd_HH:MM")
+fmt['([0-9]{1,2})_([0-9]{1,2})[.:]([0-9]{1,2})']="day Hour Min"
+formats+=("        dd_HH")
+fmt['([0-9]{1,2})_([0-9]{1,2})']="day Hour"
+formats+=("           HH:")
+fmt['([0-9]{1,2})[:.]']="Hour"
+formats+=("          _HH")
+fmt['_([0-9]{1,2})']="Hour"
+
+
+usage()
+{
+	echo "Usage: $0 [from-date][\"--\"till-date] [find-parameters]
+Date-time formats:"
+for f in "${formats[@]}"
+do
+	echo "  $f"
+done
+	exit -1
+}
+
+ago_min()
+{
+	local ts
+	ts=`date +%s -d "$1"`
+	echo $[ ($current_ts - $ts) / 60 ]
+}
+
+parsedatetime()
+{
+	local regex
+	local boundary=$1
+	local n=''
+	local timeunit
+	
+	for timeunit in "${timeunits[@]}"
+	do
+		eval "${boundary}_$timeunit="
+	done
+	
+	for regex in "${!fmt[@]}"
+	do
+		if [[ "${!boundary}" =~ ^$regex$ ]]
+		then
+			n=1
+			for timeunit in ${fmt[$regex]}
+			do
+				eval ${boundary}_$timeunit=${BASH_REMATCH[$n]}
+				n=$[n+1]
+			done
+			break
+		fi
+	done
+	[ -n "$n" ] && return 0 || return 1
+}
+
+timeunit_limit()
+{
+	case "$1" in
+	min|from)
+		case "$2" in
+		Year)		echo 1970 ;;
+		month|day)	echo 1 ;;
+		*)			echo 0 ;;
+		esac
+		;;
+	max|till)
+		case "$2" in
+		Year)	false ;;
+		month)	echo 12 ;;
+		day)	date +%d -d "$3-$4-1 + 1 month - 1 day" ;;
+		Hour)	echo 23 ;;
+		Min)	echo 59 ;;
+		esac
+		;;
+	*)
+		false
+		;;
+	esac
+}
+
+complete_times()
+{
+	local boundary=$1
+	local miss=1
+	local n
+	local var val
+	local longer_timeunit longer_var longer_val
+	local shorter_timeunit shorter_var shorter_val
+	local var_Y var_m
+	local current_var current_val
+	local current_shorter_var current_shorter_val
+	
+	while [ $miss -gt 0 ]
+	do
+		miss=0
+		for n in "${!timeunits[@]}"
+		do
+			timeunit=${timeunits[$n]}
+			var=${boundary}_$timeunit
+			val=${!var}
+			if [ -z "$val" ]
+			then
+				if [ $n = 0 ]
+				then
+					longer_val=''
+				else
+					longer_timeunit=${timeunits[$[n-1]]}
+					longer_var=${boundary}_$longer_timeunit
+					longer_val=${!longer_var}
+				fi
+				
+				if [ -n "$longer_val" ]
+				then
+					var_Y=${boundary}_Year
+					var_m=${boundary}_month
+					val=`timeunit_limit $boundary $timeunit ${!var_Y} ${!var_m}`
+					eval $var=$val
+				else
+					if [ $[n+1] -ge ${#timeunits[@]} ]
+					then
+						shorter_val=''
+					else
+						shorter_timeunit=${timeunits[$[n+1]]}
+						shorter_var=${boundary}_$shorter_timeunit
+						shorter_val=${!shorter_var}
+					fi
+					
+					if [ -n "$shorter_val" ]
+					then
+						if [ "$boundary" = till ]
+						then
+							current_var=from_$timeunit
+							current_shorter_var=from_$shorter_timeunit
+							cmp=-ge
+							ts=`date +%s -d "$from_Year-$from_month-$from_day $from_Hour:$from_Min"`
+							op=+
+						else
+							current_var=current_$timeunit
+							current_shorter_var=current_$shorter_timeunit
+							cmp=-lt
+							ts=$current_ts
+							op=-
+						fi
+						current_val=${!current_var}
+						current_shorter_val=${!current_shorter_var}
+						
+						if [ "$shorter_val" $cmp "$current_shorter_val" ]
+						then
+							eval $var=$current_val
+						else
+							dt=`date +%Y-%m-%dT%H:%M -d @$ts`
+							val=`date +%${timeunit:0:1} -d "$dt $op 1 $timeunit"`
+							eval $var=$val
+						fi
+					else
+						miss=$[miss + 1]
+					fi
+				fi
+			fi
+		done
+	done
+}
+
+
+if [ "$#" -lt 1 ]
+then
+	usage
+fi
+
+if [[ "$1" =~ ^(.*?)--(.*)$ ]]
+then
+	from=${BASH_REMATCH[1]}
+	till=${BASH_REMATCH[2]}
+elif [[ "$1" =~ ^(.*)$ ]]
+then
+	from=${BASH_REMATCH[1]}
+elif [[ "$1" =~ ^--(.*)$ ]]
+then
+	till=${BASH_REMATCH[1]}
+else
+	usage
+fi
+shift
+
+
+for boundary in from till
+do
+	if [ -n "${!boundary}" ]
+	then
+		parsedatetime $boundary
+		complete_times $boundary
+	fi
+done
+
+
+
+declare -a find_opts
+if [ -n "$from" ]
+then
+	printf "From: %04d-%02d-%02d %02d:%02d\n" $from_Year $from_month $from_day $from_Hour $from_Min >&2
+	mins=`ago_min "$from_Year-$from_month-$from_day $from_Hour:$from_Min"`
+	find_opts+=(-mmin -$mins)
+fi
+if [ -n "$till" ]
+then
+	printf "Till: %04d-%02d-%02d %02d:%02d\n" $till_Year $till_month $till_day $till_Hour $till_Min >&2
+	mins=`ago_min "$till_Year-$till_month-$till_day $till_Hour:$till_Min"`
+	find_opts+=(-mmin +$mins)
+fi
+
+find "${find_opts[@]}" "$@"

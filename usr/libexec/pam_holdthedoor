@@ -1,0 +1,116 @@
+#!/bin/bash
+
+PAM_SUCCESS=0
+PAM_SERVICE_ERR=3
+PAM_SYSTEM_ERR=4
+PAM_PERM_DENIED=6
+PAM_AUTH_ERR=7
+PAM_AUTHINFO_UNAVAIL=9
+PAM_TRY_AGAIN=24
+PAM_IGNORE=25
+PAM_CONV_AGAIN=30
+
+set -e
+set -o pipefail
+trap 'pam_response PAM_SYSTEM_ERR' ERR
+
+do_log()
+{
+	local msg=$*
+	logger -p auth.info -t "$PROGNAME" -- "pam_holdthedoor($PAM_SERVICE:$PAM_TYPE): $msg, logname=$LOGNAME uid=$UID euid=$EUID tty=$PAM_TTY ruser=$PAM_RUSER rhost=$PAM_RHOST user=$PAM_USER" || true
+}
+
+pam_response()
+{
+	local code=${!1}
+	do_log "code $code $1"
+	exit $code
+}
+
+hex2chars()
+{
+	local xx
+	while read -N2 xx
+	do
+		printf "\x$xx"
+	done
+}
+
+
+IFS='' read PAM_PASSWORD || true
+unset activation_password
+timeout=10
+started=`date +%s`
+
+
+case "$PAM_TYPE" in
+auth)
+	for param in "$@"
+	do
+		case "$param" in
+		activation_password_hex=*)
+			activation_password=`echo "$param" | cut -d= -f2 | hex2chars`
+			;;
+		activation_password=*)
+			activation_password=${param:20}
+			;;
+		timeout=*)
+			timeout=${param:8}
+			;;
+		*)
+			echo "pam_holdthedoor: unknown parameter '$param' - ignore" >&2
+			;;
+		esac
+	done
+	
+	if [ "${activation_password+x}" = x ]
+	then
+		if [ "$PAM_PASSWORD" = "$activation_password" ]
+		then
+			mkdir -p /var/run/pam_holdthedoor
+			uuid=`cat /proc/sys/kernel/random/uuid`
+			
+			{
+				for var in PAM_RHOST PAM_TTY PAM_USER PAM_SERVICE
+				do
+					value=${!var}
+					value_esc=${value//\'/\'\\\'\'}
+					echo "$var='$value_esc'"
+				done
+				echo PAM_HOLDTHEDOOR_TIMESTAMP=$started
+				echo PAM_HOLDTHEDOOR_EXPIRE=$[started + timeout]
+			}>/var/run/pam_holdthedoor/req-$uuid
+			
+			do_log "waiting for approval"
+			echo "Waiting for approval..."
+			
+			response=PAM_AUTHINFO_UNAVAIL
+			
+			while true
+			do
+				now=`date +%s`
+				if [ $now -gt $[started + timeout] ]
+				then
+					break
+				fi
+				if [ ! -e /var/run/pam_holdthedoor/req-$uuid ]
+				then
+					response=PAM_PERM_DENIED
+					break
+				fi
+				if [ -e /var/run/pam_holdthedoor/allow-$uuid ]
+				then
+					response=PAM_SUCCESS
+					break
+				fi
+				sleep 0.2
+			done
+			
+			rm /var/run/pam_holdthedoor/req-$uuid || true
+			rm /var/run/pam_holdthedoor/allow-$uuid || true
+			pam_response $response
+		fi
+	fi
+esac
+
+pam_response PAM_IGNORE

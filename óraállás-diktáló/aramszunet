@@ -1,0 +1,10 @@
+#!/bin/bash
+
+set -e
+set -u
+
+telepules=$1
+utca=$2
+
+./aramszunetek "$telepules" |\
+grep "$utca"

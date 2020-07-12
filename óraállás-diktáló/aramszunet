@@ -1,6 +1,10 @@
 #!/bin/bash
 
-set -e
+# EXIT CODES
+#   0 - outage is not expected
+#  10 - outage IS expected
+#   * - crawler error (see there)
+
 set -u
 
 telepules=$1
@@ -8,3 +12,19 @@ utca=$2
 
 ./aramszunetek "$telepules" |\
 grep "$utca"
+
+ps=(${PIPESTATUS[@]})
+if [ ${ps[0]} != 0 ]
+then
+	echo "crawler error" >&2
+	exit ${ps[0]}
+else
+	if [ ${ps[1]} = 0 ]
+	then
+		echo "Áramszünet VÁRHATÓ" >&2
+		exit 10
+	else
+		echo "Áramszünet nem várható" >&2
+		exit 0
+	fi
+fi

@@ -11,6 +11,7 @@ telepules=$1
 utca=$2
 
 ./aramszunetek "$telepules" |\
+html2text -utf8 |\
 grep "$utca"
 
 ps=(${PIPESTATUS[@]})
@@ -19,7 +20,7 @@ then
 	echo "crawler error" >&2
 	exit ${ps[0]}
 else
-	if [ ${ps[1]} = 0 ]
+	if [ ${ps[2]} = 0 ]
 	then
 		echo "Áramszünet VÁRHATÓ" >&2
 		exit 10

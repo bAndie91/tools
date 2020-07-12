@@ -13,7 +13,6 @@ phantomjs2 --ssl-protocol=any --ignore-ssl-errors=true --web-security=false ./nk
 	echo "<table>"
 	cat | sed -e 's@<br>@; @g'
 	echo "</table>"
-}|\
-html2text -utf8
+}
 
 exit ${PIPESTATUS[0]}

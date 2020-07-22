@@ -1,0 +1,26 @@
+#! perl
+
+use constant {RXVT_CAPTURE=>1, RXVT_PASS=>()};
+
+sub on_osc_seq_perl
+{
+	my ($rxvt, $osc, $resp) = @_;
+	if($osc eq "linefeed")
+	{
+		$rxvt->scr_add_lines("\n");
+		return RXVT_CAPTURE;
+	}
+	return RXVT_PASS;
+}
+
+sub on_user_command
+{
+	my ($rxvt, $comm) = @_;
+	if($comm eq "linefeed_and_meta_return")
+	{
+		$rxvt->scr_add_lines("\n");
+		$rxvt->tt_write("\x1B\r");
+	}
+}
+
+1;

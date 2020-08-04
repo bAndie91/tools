@@ -4,9 +4,4 @@
 
 fname=`virt2phy_filepath "$1"`
 
-if [ -e "$3$fname" ]
-then
-	echo -n "$3$fname"
-else
-	exit $ENOENT
-fi
+truncate -c -s "$2" "$3$fname" && exit 0 || exit $EIO

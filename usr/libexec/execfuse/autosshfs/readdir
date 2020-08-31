@@ -3,6 +3,10 @@
 # Usage:
 # execfuse ./autosshfs ~/mnt/ssh -o fsname=autosshfs.$USER,allow_root
 
+# You have to set this in ~/.ssh/config:
+#   ControlMaster auto
+#   ControlPath ~/.ssh/ctrl/%r@%n(%h):%p.sock
+
 shopt -s nullglob
 
 operation=${0##*/}
@@ -152,7 +156,7 @@ then
 					host=${BASH_REMATCH[2]}
 					port=${BASH_REMATCH[3]}
 					
-					lock_nb "mount+$conn" setsid sshfs -o Port=$port,transform_symlinks,reconnect "$user@$host:/" "$EXECFUSE_MOUNTPOINT$1" >/dev/null 2>&1 &
+					lock_nb "mount+$conn" setsid sshfs -o Port=$port,ControlMaster=no,transform_symlinks,reconnect "$user@$host:/" "$EXECFUSE_MOUNTPOINT$1" >/dev/null 2>&1 &
 					# -o sftp_server='sudo /usr/lib/openssh/sftp-server'
 				fi
 				exit 0

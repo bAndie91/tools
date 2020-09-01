@@ -73,12 +73,23 @@ if [ -n "$dpy" ]
 then
 	echo "Setting DISPLAY to '$dpy'" >&2
 	apply DISPLAY "$dpy"
+	
+	if [ -n "$STY" ]
+	then
+		screen -S "$STY" -X setenv DISPALY "$dpy"
+	fi
+	
 	dbus=`DISPLAY="$dpy" xprop -root DBUS_SESSION_BUS_ADDRESS | cut -s -f2- -d= | cut -f2 -d'"'`
 	dbus=${dbus// /}
 	if [ -n "$dbus" ]
 	then
 		echo "Setting DBUS_SESSION_BUS_ADDRESS to '$dbus'" >&2
 		apply DBUS_SESSION_BUS_ADDRESS "$dbus"
+		
+		if [ -n "$STY" ]
+		then
+			screen -S "$STY" -X setenv DBUS_SESSION_BUS_ADDRESS "$dbus"
+		fi
 	fi
 	
 	if [ -n "$1" ]

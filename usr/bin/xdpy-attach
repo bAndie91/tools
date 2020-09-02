@@ -3,7 +3,7 @@
 # source up this script to setup new DISPLAY 
 # environent in the current session
 
-find_display()
+_xdpy_attach_find_display()
 {
 	declare -A confirm_xdpy_pid
 	
@@ -51,9 +51,9 @@ find_display()
 	unset confirm_xdpy_pid
 }
 
-apply()
+_xdpy_attach_apply()
 {
-	if is_shell_source
+	if _xdpy_attach_is_shell_source
 	then
 		export $1=$2
 	else
@@ -61,35 +61,38 @@ apply()
 	fi
 }
 
-is_shell_source()
+_xdpy_attach_is_shell_source()
 {
 	[ "$0" != "$BASH_SOURCE" ]
 }
 
+_xdpy_attach_screen_setenv()
+{
+	if [ -n "$STY" ]
+	then
+		echo "Setting Gnu/Screen env $1" >&2
+		screen -S "$STY" -X setenv "$1" "$2"
+	fi
+}
+
 
 echo "current DISPLAY=$DISPLAY" >&2
-dpy=`find_display`
+dpy=`_xdpy_attach_find_display`
 if [ -n "$dpy" ]
 then
 	echo "Setting DISPLAY to '$dpy'" >&2
-	apply DISPLAY "$dpy"
+	_xdpy_attach_apply DISPLAY "$dpy"
 	
-	if [ -n "$STY" ]
-	then
-		screen -S "$STY" -X setenv DISPALY "$dpy"
-	fi
+	_xdpy_attach_screen_setenv DISPLAY "$dpy"
 	
 	dbus=`DISPLAY="$dpy" xprop -root DBUS_SESSION_BUS_ADDRESS | cut -s -f2- -d= | cut -f2 -d'"'`
 	dbus=${dbus// /}
 	if [ -n "$dbus" ]
 	then
 		echo "Setting DBUS_SESSION_BUS_ADDRESS to '$dbus'" >&2
-		apply DBUS_SESSION_BUS_ADDRESS "$dbus"
+		_xdpy_attach_apply DBUS_SESSION_BUS_ADDRESS "$dbus"
 		
-		if [ -n "$STY" ]
-		then
-			screen -S "$STY" -X setenv DBUS_SESSION_BUS_ADDRESS "$dbus"
-		fi
+		_xdpy_attach_screen_setenv DBUS_SESSION_BUS_ADDRESS "$dbus"
 	fi
 	
 	if [ -n "$1" ]

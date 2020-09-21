@@ -1,0 +1,2 @@
+#!/bin/sh
+whisper-info "$@" | perl -ne 's/seconds\s*per\s*point/resolution/i; /(.*retention|resolution): (\d+)/i and printf "%s = %d sec = %d min = %d hour = %d day = %d year\n", $1, $2, $2/60, $2/3600, $2/3600/24, $2/3600/24/365;'

@@ -1,0 +1,23 @@
+#! perl
+
+use constant {RXVT_CAPTURE=>1, RXVT_PASS=>(),};
+
+sub on_osc_seq_perl
+{
+	my ($rxvt, $osc, $resp) = @_;
+	
+	if(my ($query) = ($osc =~ /^queryinfo;([^;]+)/))
+	{
+		if ($query eq "DISPLAY")
+		{
+			$rxvt->tt_write($rxvt->display_id . "\n");
+			return RXVT_CAPTURE;
+		}
+		elsif ($query eq "DBUS_SESSION_BUS_ADDRESS")
+		{
+			$rxvt->tt_write($ENV{$query} . "\n");
+			return RXVT_CAPTURE;
+		}
+	}
+	return RXVT_PASS;
+}

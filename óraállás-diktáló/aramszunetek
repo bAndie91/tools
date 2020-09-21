@@ -1,0 +1,18 @@
+#!/bin/bash
+
+set -e
+set -u
+
+telepules=$1
+
+dt1=`date +%Y.%m.%d`
+dt2=`date +%Y.%m.%d -d "now + 1 month"`
+
+phantomjs2 --ssl-protocol=any --ignore-ssl-errors=true --web-security=false ./nkm-aramszunet.js --debug "$telepules" $dt1 $dt2 |\
+{
+	echo "<table>"
+	cat | sed -e 's@<br>@; @g'
+	echo "</table>"
+}
+
+exit ${PIPESTATUS[0]}

@@ -1,0 +1,20 @@
+#!/usr/bin/env perl
+
+use Encode::Base58;
+
+if ($ARGV[0] eq '-d')
+{
+	$fnc = \&decode_base58;
+}
+else
+{
+	$fnc = \&encode_base58;
+}
+
+$\ = "\n";
+
+while(<STDIN>)
+{
+	chomp;
+	print $fnc->($_);
+}

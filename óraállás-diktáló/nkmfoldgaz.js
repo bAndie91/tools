@@ -124,13 +124,14 @@ page.open(url_form, function(status)
 				var spans = document.getElementsByTagName('span');
 				for(var x = 0; x < spans.length; x++)
 				{
-					if(spans[x].innerText.match(/^Rögzít/))
+					if(spans[x].innerText.match(/állás mentése/))
 					{
 						button_span = spans[x];
 					}
 				}
 				if(typeof button_span == 'undefined')
 				{
+					// uncomment this to see the current document and debug
 					//console.log(document.querySelectorAll('html')[0].outerHTML);
 					console.log("Waiting for submit button...");
 					return 0;

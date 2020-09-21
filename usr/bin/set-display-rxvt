@@ -1,0 +1,41 @@
+#!/bin/bash
+
+osc_queryinfo()
+{
+	local pre=''
+	local suf=''
+	if [ -n "$STY" ]
+	then
+		pre=$'\033P'
+		suf=$'\033\134'
+	fi
+	echo -n "$pre"$'\033]777;queryinfo;'"$1"$'\007'"$suf"
+}
+
+echo -n "Querying DISPLAY from rxvt - " >&2
+osc_queryinfo DISPLAY
+read -s -t 0.5 rxvt_queryinfo
+echo "$rxvt_queryinfo" >&2
+if [ -n "$rxvt_queryinfo" ]
+then
+	echo "DISPLAY=$rxvt_queryinfo"
+	export DISPLAY=$rxvt_queryinfo
+	unset rxvt_queryinfo
+else
+	unset rxvt_queryinfo
+	false
+fi
+
+echo -n "Querying DBUS_SESSION_BUS_ADDRESS from rxvt - " >&2
+osc_queryinfo DBUS_SESSION_BUS_ADDRESS
+read -s -t 0.5 rxvt_queryinfo
+echo "$rxvt_queryinfo" >&2
+if [ -n "$rxvt_queryinfo" ]
+then
+	echo "DBUS_SESSION_BUS_ADDRESS=$rxvt_queryinfo"
+	export DBUS_SESSION_BUS_ADDRESS=$rxvt_queryinfo
+	unset rxvt_queryinfo
+else
+	unset rxvt_queryinfo
+	false
+fi

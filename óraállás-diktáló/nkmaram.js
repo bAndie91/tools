@@ -248,28 +248,8 @@ page.open(url_form, function(status)
 					return false;
 				}
 				/* Wait for page to load */
-				var buttons = document.querySelectorAll('form#meroTajRegForm input.button');
+				var buttons = document.querySelectorAll('input[type=submit][name^=meroallasBejelentes]');
 				if(!buttons)
-				{
-					console.log("Waiting for page "+location.href+" ...");
-					return 0;
-				}
-				for(var i = 0; i<buttons.length; i++)
-				{
-					console.log("[DEBUG] button \""+buttons[i].value+"\"");
-					if(buttons[i].value.match(/folytat/))
-					{
-						/* Submit form to proceed (2) */
-						eval(param.clickFunc)(buttons[i]);
-						return 1;
-					}
-				}
-				return 0;
-			},
-			function(param)
-			{
-				var submit_btn = document.querySelector('form#meroallasBejelentes input.button');
-				if(!submit_btn)
 				{
 					console.log("Waiting for page "+location.href+" ...");
 					return 0;
@@ -282,10 +262,17 @@ page.open(url_form, function(status)
 					inputs[i].value = param.oraallas[i];
 				}
 				
-				/* Sumbit Utility Usage Report */
-				eval(param.clickFunc)(submit_btn);
-				
-				return 1;
+				for(var i = 0; i<buttons.length; i++)
+				{
+					console.log("[DEBUG] button \""+buttons[i].value+"\"");
+					if(buttons[i].value.match(/mentés/))
+					{
+						/* Submit form to proceed (2) */
+						eval(param.clickFunc)(buttons[i]);
+						return 1;
+					}
+				}
+				return 0;
 			},
 			function(param)
 			{
@@ -303,6 +290,11 @@ page.open(url_form, function(status)
 				
 				return 1;
 			},
+			/*
+				FIXME
+				> ERROR: ReferenceError: Can't find variable: clickedButton
+				> STACK: [{"file":"https://www.nkmenergia.hu/aram/meroallas/meroSzamla.jsf?id=1300461","line":4648,"function":"onclick"},{"file":"","line":0,"function":"dispatchEvent"},{"file":"","line":1,"function":""},{"file":"","line":12,"function":""},{"file":"","line":15,"function":""}]
+			*/
 			function(param)
 			{
 				/* Wait for page to load */

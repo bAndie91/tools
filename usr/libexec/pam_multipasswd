@@ -1,8 +1,18 @@
 #!/usr/bin/env perl
 
-# pam_exec.so [debug] [expose_authtok] [seteuid] [quiet] [log=file] command [...]
-# environment variables: PAM_RHOST, PAM_RUSER, PAM_SERVICE, PAM_TTY, PAM_USER, PAM_TYPE, PROGNAME
-# pure-ftpd auth required pam_exec_wrap.so expose_authtok /usr/local/libexec/pam_multipasswd
+# Synopsis:
+#   pam_exec.so [debug] [expose_authtok] [seteuid] [quiet] [log=file] /usr/local/libexec/pam_multipasswd [pam_service]
+# Files:
+#   /etc/security/pam_multipasswd.conf
+#   /etc/security/pam_multipasswd.hook (script)
+# Environment variables:
+#   PAM_RHOST, PAM_RUSER, PAM_SERVICE, PAM_TTY, PAM_USER, PAM_TYPE, PROGNAME
+# Example pam config:
+#   pure-ftpd auth required pam_exec_wrap.so expose_authtok /usr/local/libexec/pam_multipasswd
+# Hook script outputs lines like:
+#   set <variable> <value>
+#   Variables recognized: shadow_home rhost tty pam_servicenick
+#   So you can override these internal variables dynamically call-by-call
 
 use Digest::MD5;
 use MIME::Base64;
@@ -68,8 +78,8 @@ sub pam_return($)
 {
 	my $pam_result = shift;
 	openlog $ENV{'PROGNAME'}, '', Sys::Syslog::LOG_AUTH;
-	syslog Sys::Syslog::LOG_INFO, sprintf "pam_multipasswd(%s:%s): code %d, logname=%s uid=%d euid=%d tty=%s ruser=%s rhost=%s user=%s", 
-		$pam_service, $ENV{'PAM_TYPE'}, $pam_result, $ENV{'LOGNAME'}||(getpwuid$<)[0], $<, $>, $ENV{'PAM_TTY'}, $ENV{'PAM_RUSER'}, $ENV{'PAM_RHOST'}, $ENV{'PAM_USER'};
+	syslog Sys::Syslog::LOG_INFO, sprintf "pam_multipasswd(%s:%s): code %d, logname=%s uid=%d euid=%d tty=%s ruser=%s rhost=%s user=%s shadow_home=%s", 
+		$pam_service, $ENV{'PAM_TYPE'}, $pam_result, $ENV{'LOGNAME'}||(getpwuid$<)[0], $<, $>, $ENV{'PAM_TTY'}, $ENV{'PAM_RUSER'}, $ENV{'PAM_RHOST'}, $ENV{'PAM_USER'}, $shadow_home;
 	exit $pam_result;
 }
 
@@ -152,8 +162,7 @@ pam_return(PAM_IGNORE) if $ENV{'PAM_TYPE'} ne 'auth';
 $givenpass = <STDIN>;
 $givenpass =~ s/[\r\n\x00]*$//;
 $pam_result = undef;
-$home = (getpwnam $ENV{'PAM_USER'})[7];
-pam_return(PAM_USER_UNKNOWN) if not defined $home;
+$shadow_home = (getpwnam $ENV{'PAM_USER'})[7];
 
 open my $fh, '<', $configfile;
 while(<$fh>)
@@ -176,6 +185,23 @@ close $fh;
 my $rhost = defined $ENV{'PAM_RHOST'} ? $ENV{'PAM_RHOST'} : "unknown";
 my $tty   = defined $ENV{'PAM_TTY'}   ? $ENV{'PAM_TTY'}   : "unknown";
 
+# Hook script
+open my $ph, '-|', "/etc/security/pam_multipasswd.hook";
+while(<$ph>)
+{
+	if(my ($variable, $value) = /^set (shadow_home|rhost|tty|pam_servicenick) (.*)$/)
+	{
+		eval "\$$variable = \$value";
+	}
+	else
+	{
+		print STDERR "pam_multipasswd: unrecognized hook script output: $_";
+	}
+}
+close $ph;
+
+pam_return(PAM_USER_UNKNOWN) if not defined $shadow_home;
+
 @precedence = (
 	"$pam_servicenick.d/rhost/$rhost",
 	"$pam_servicenick.d/tty/$tty",
@@ -183,7 +209,7 @@ my $tty   = defined $ENV{'PAM_TTY'}   ? $ENV{'PAM_TTY'}   : "unknown";
 	"other",
 );
 
-for my $pwdfile (map {"$home/.shadow.d/$_"} @precedence)
+for my $pwdfile (map {"$shadow_home/.shadow.d/$_"} @precedence)
 {
 	if(-f $pwdfile)
 	{

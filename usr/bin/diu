@@ -26,7 +26,7 @@ show_num_of_entries()
 				if [ $CROSSDEV = allow -o -z "$parent_dev" -o "$dev" = "$parent_dev" ]
 				then
 					pwd=$PWD
-					if cd "$name"
+					if cd -- "$name"
 					then
 						entries=(*)
 						show_num_of_entries "$prefix$name" "$dev" "${entries[@]}"

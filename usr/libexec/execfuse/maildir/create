@@ -1,0 +1,12 @@
+#!/bin/bash
+
+. "`dirname "$(readlink -f "$0")"`/common.sh"
+
+fname=`virt2phy_filepath "$1"`
+
+if [ -e "$3$fname" ]
+then
+	exit $EEXIST
+else
+	echo -n "$3$fname"
+fi

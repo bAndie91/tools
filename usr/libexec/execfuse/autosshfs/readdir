@@ -14,7 +14,7 @@ operation=${0##*/}
 attr_parentdir="ino=1 mode=drwxr-xr-x nlink=2 uid=0 gid=0 rdev=0 size=0 blksize=512 blocks=2 atime=0 mtime=0 ctime=0"
 attr_rootdir="ino=1 mode=drwxr-xr-x nlink=2 uid=$UID gid=0 rdev=0 size=0 blksize=512 blocks=2 atime=0 mtime=0 ctime=0"
 attr_entry="ino=1 mode=drwx------ nlink=1 uid=$UID gid=0 rdev=0 size=0 blksize=512 blocks=2 atime=0 mtime=0 ctime=0"
-attr_alias="ino=1 mode=lrwx------ nlink=1 uid=$UID gid=0 rdev=0 size=0 blksize=512 blocks=2 atime=0 mtime=0 ctime=0"
+attr_alias="ino=1 mode=drwx------ nlink=1 uid=$UID gid=0 rdev=0 size=0 blksize=512 blocks=2 atime=0 mtime=0 ctime=0"
 
 
 declare -A Conn
@@ -94,6 +94,8 @@ then
 
 elif [ "$operation" = readlink ]
 then
+	# UNUSED
+	
 	read_connections
 	for conn in "${!Conn[@]}"
 	do
@@ -108,6 +110,7 @@ then
 
 elif [ "$operation" = readdir ]
 then
+	# first umount all dead connections
 	cat /proc/mounts |\
 	while read -r dev mp rest
 	do
@@ -126,6 +129,7 @@ then
 		fi
 	done
 	
+	# list directories to each ssh connection when listing the root directory
 	if [ "$1" = / ]
 	then
 		printf "$attr_rootdir .\0"
@@ -141,6 +145,8 @@ then
 		
 		exit 0
 	
+	# when listing a subdirectory, mount the corresponding sshfs under it.
+	# and return async, so you need to chdir to the directory again to get the actual content.
 	else
 		printf "$attr_entry .\0"
 		printf "$attr_rootdir ..\0"
@@ -160,6 +166,15 @@ then
 					# -o sftp_server='sudo /usr/lib/openssh/sftp-server'
 				fi
 				exit 0
+			else
+				hostalias=`get_host_alias "$conn"`
+				if [ "$1" = "/$hostalias" ]
+				then
+					export mnt_trg=$EXECFUSE_MOUNTPOINT/$conn
+					export mnt_pnt=$EXECFUSE_MOUNTPOINT/$hostalias
+					lock_nb "bindmount+$conn" setsid bash -c 'if ! mountpoint "$mnt_pnt" && mountpoint "$mnt_trg"; then bindfs "$mnt_trg" "$mnt_pnt"; fi' >/dev/null 2>&1 &
+					exit 0
+				fi
 			fi
 		done
 		

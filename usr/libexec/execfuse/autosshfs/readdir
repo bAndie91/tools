@@ -11,6 +11,7 @@ shopt -s nullglob
 
 operation=${0##*/}
 
+connections_subdir=${EXECFUSE_MOUNTPOINT##*/}
 attr_parentdir="ino=1 mode=drwxr-xr-x nlink=2 uid=0 gid=0 rdev=0 size=0 blksize=512 blocks=2 atime=0 mtime=0 ctime=0"
 attr_rootdir="ino=1 mode=drwxr-xr-x nlink=2 uid=$UID gid=0 rdev=0 size=0 blksize=512 blocks=2 atime=0 mtime=0 ctime=0"
 attr_entry="ino=1 mode=drwx------ nlink=1 uid=$UID gid=0 rdev=0 size=0 blksize=512 blocks=2 atime=0 mtime=0 ctime=0"
@@ -65,6 +66,17 @@ _lock()
 	flock -x $flag "$dir/$conn" "$@"
 }
 
+mount_sshfs_async()
+{
+	local conn=$1
+	local port=$2
+	local user=$3
+	local host=$4
+	local target=$5
+	lock_nb "mount+$conn" setsid sshfs -o Port=$port,ControlMaster=no,transform_symlinks,reconnect "$user@$host:/" "$target" >/dev/null 2>&1 &
+	# -o sftp_server='sudo /usr/lib/openssh/sftp-server'
+}
+
 
 if [ "$operation" = getattr ]
 then
@@ -91,22 +103,6 @@ then
 		done
 		exit 1
 	fi
-
-elif [ "$operation" = readlink ]
-then
-	# UNUSED
-	
-	read_connections
-	for conn in "${!Conn[@]}"
-	do
-		hostalias=`get_host_alias "$conn"`
-		if [ "$1" = "/$hostalias" ]
-		then
-			echo -n "$conn"
-			exit 0
-		fi
-	done
-	exit 1
 
 elif [ "$operation" = readdir ]
 then
@@ -140,7 +136,7 @@ then
 		do
 			printf "$attr_entry %s\0" "$conn"
 			hostalias=`get_host_alias "$conn"`
-			printf "$attr_alias %s\0" "$hostalias"
+			ln -snf "$connections_subdir/$conn" "$EXECFUSE_MOUNTPOINT/../$hostalias"
 		done
 		
 		exit 0
@@ -162,17 +158,7 @@ then
 					host=${BASH_REMATCH[2]}
 					port=${BASH_REMATCH[3]}
 					
-					lock_nb "mount+$conn" setsid sshfs -o Port=$port,ControlMaster=no,transform_symlinks,reconnect "$user@$host:/" "$EXECFUSE_MOUNTPOINT$1" >/dev/null 2>&1 &
-					# -o sftp_server='sudo /usr/lib/openssh/sftp-server'
-				fi
-				exit 0
-			else
-				hostalias=`get_host_alias "$conn"`
-				if [ "$1" = "/$hostalias" ]
-				then
-					export mnt_trg=$EXECFUSE_MOUNTPOINT/$conn
-					export mnt_pnt=$EXECFUSE_MOUNTPOINT/$hostalias
-					lock_nb "bindmount+$conn" setsid bash -c 'if ! mountpoint "$mnt_pnt" && mountpoint "$mnt_trg"; then bindfs "$mnt_trg" "$mnt_pnt"; fi' >/dev/null 2>&1 &
+					mount_sshfs_async "$conn" "$port" "$user" "$host" "$EXECFUSE_MOUNTPOINT$1"
 					exit 0
 				fi
 			fi

@@ -1,0 +1,21 @@
+## A Virtual Richard Matthew Stallman
+##     from mail~AT~philipnewborough~DOT~co~DOT~uk
+##
+$the_cow = <<EOC;
+            $thoughts        @@@@@@ @
+             $thoughts     @@@@     @@
+              $thoughts   @@@@ =   =  @@ 
+               $thoughts @@@ @ _   _   @@ 
+                 @@@ @(0)|(0)  @@ 
+                @@@@   ~ | ~   @@
+                @@@ @  (o1o)    @@
+               @@@    #######    @
+               @@@   ##{+++}##   @@
+              @@@@@ ## ##### ## @@@@
+              @@@@@#############@@@@
+             @@@@@@@###########@@@@@@
+            @@@@@@@#############@@@@@
+            @@@@@@@### ## ### ###@@@@
+             @ @  @              @  @
+               @                    @
+EOC

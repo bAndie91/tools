@@ -53,7 +53,7 @@ if(!Glob.telepules || !Glob.date_from || !Glob.date_till)
 }
 
 
-var url_form = "https://www.nkmenergia.hu/aram/pages/online/aramszunet.jsf";
+var url_form = "https://www.mvmnext.hu/aram/pages/online/aramszunet.jsf";
 var loadInProgress = false;
 var stepindex = 0;
 var page = new WebPage();
@@ -107,7 +107,7 @@ page.onResourceRequested = function(requestData, networkRequest)
 	var hostpath = host+path;
 	// google maps seem to needed for the page to work properly, but I worked it around
 	//if(hostpath == 'maps.google.com/maps/api/js') allow = true;
-	if(host == 'www.nkmenergia.hu') allow = true;
+	if(host == 'www.mvmnext.hu') allow = true;
 	if(!allow)
 	{
 		log(llDebug, "deny: " + requestData.method + " " + requestData.url);

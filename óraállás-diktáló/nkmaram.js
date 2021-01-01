@@ -67,9 +67,9 @@ if(!Glob.oraallas && !Glob.show_history_only)
 
 
 
-var url_form = "https://www.nkmaram.hu/pages/wrapper.jsp?ebillCmd=login" /* ?id=740&ebillCmd=login */;
-Glob.url_history = "https://www.nkmaram.hu/pages/online/korabbiMeroAllOnlineUsz.jsf?id=1300460";
-Glob.url_report = "https://www.nkmaram.hu/meroallas/?id=1300461";
+var url_form = "https://www.mvmnext.hu/aram/pages/wrapper.jsp?id=740&ebillCmd=login";
+Glob.url_history = "https://www.mvmnext.hu/aram/pages/online/korabbiMeroAllOnlineUsz.jsf?id=1300460";
+Glob.url_report = "https://www.mvmnext.hu/aram/meroallas/?id=1300461";
 var loadInProgress = false;
 var stepindex = 0;
 var page = new WebPage();
@@ -151,7 +151,7 @@ page.open(url_form, function(status)
 			function(param)
 			{
 				/* Waiting page to load */
-				var field_user = document.querySelector('input.InputText[name=user]');
+				var field_user = document.querySelector('.loginForm input[name=user]');
 				if(!field_user)
 				{
 					//console.log(document.querySelectorAll('html')[0].outerHTML);
@@ -164,13 +164,13 @@ page.open(url_form, function(status)
 			{
 				/* Filling in form fields and submit */
 				
-				var field_user = document.querySelector('input.InputText[name=user]');
-				var field_pass = document.querySelector('input.InputText[name=password]');
+				var field_user = document.querySelector('.loginForm input[name=user]');
+				var field_pass = document.querySelector('.loginForm input[name=password]');
 				
 				field_user.value = param.felhasznalo;
 				field_pass.value = param.jelszo;
 				
-				var form = document.querySelector('.userContainer form.loginForm');
+				var form = document.querySelector('form.loginForm');
 				form.submit();
 				
 				return 1;

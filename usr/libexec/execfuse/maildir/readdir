@@ -6,7 +6,7 @@ if [ -e "$2$1" ]
 then
 find -L "$2$1" -mindepth 1 -maxdepth 1 \
 	-printf 'ino=%i mode=%M nlink=%n uid=%U gid=%G rdev=0 size=%s blksize=512 blocks=%b atime=%A@ mtime=%T@ ctime=%C@ %f\0' |\
-basedir=$2 cwd=$1 perl -e '
+fields=13 basedir=$2 cwd=$1 perl -e '
 use Encode;
 use Linux::UserXAttr ":all";
 use constant {STAT_ATIME => 8, STAT_MTIME => 9, STAT_CTIME => 10,};
@@ -18,7 +18,6 @@ $folder_time = (stat $ENV{basedir}.$ENV{cwd})[STAT_CTIME];
 $cache_basename = "maildirfs.cache";
 $cache_file = $ENV{basedir}.$ENV{cwd}."/".$cache_basename;
 $cache_time = (stat $cache_file)[STAT_MTIME];
-$cache = "";
 
 if($folder_time <= $cache_time)
 {
@@ -29,12 +28,12 @@ if($folder_time <= $cache_time)
 	exit 0;
 }
 
-open $cache_fh, ">", $cache_file;
+open $cache_fh, ">", $cache_file."~";
 
 while(<>)
 {
 	s/\x00$//;
-	@attr = split / /;
+	@attr = split / /, $_, $ENV{fields};
 	$fname = $attr[12];
 	
 	if($ENV{cwd} =~ m{/.getmail/})
@@ -89,6 +88,10 @@ while(<>)
 			$attr[12] = "$name [$fname].eml";
 		}
 	}
+	else
+	{
+		warn "$path: no file. strange.\n";
+	}
 	
 	return_dir_entry:
 	$entry = join(" ", @attr) . "\0";
@@ -97,6 +100,7 @@ while(<>)
 }
 
 close $cache_fh;
+rename $cache_file."~", $cache_file or warn "$cache_file: $!\n";
 '
 else
 	exit $ENOENT

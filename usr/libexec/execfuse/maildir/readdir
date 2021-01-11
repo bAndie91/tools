@@ -9,7 +9,7 @@ find -L "$2$1" -mindepth 1 -maxdepth 1 \
 fields=13 basedir=$2 cwd=$1 perl -e '
 use Encode;
 use Linux::UserXAttr ":all";
-use constant {STAT_ATIME => 8, STAT_MTIME => 9, STAT_CTIME => 10,};
+use constant {STAT_INODE => 1, STAT_ATIME => 8, STAT_MTIME => 9, STAT_CTIME => 10,};
 
 $xattr_file = "user.maildirfs.display_filename";
 $/ = chr 0;
@@ -85,7 +85,15 @@ while(<>)
 		
 		if($name)
 		{
-			$attr[12] = "$name [$fname].eml";
+			if($fname =~ /[][]/)
+			{
+				my $inode = (stat $path)[STAT_INODE];
+				$attr[12] = "$name {inode=$inode}.eml";
+			}
+			else
+			{
+				$attr[12] = "$name [$fname].eml";
+			}
 		}
 	}
 	else

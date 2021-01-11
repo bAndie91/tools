@@ -2,7 +2,7 @@
 
 . "`dirname "$(readlink -f "$0")"`/common.sh"
 
-fname1=`virt2phy_filepath "$1"`
-fname2=`virt2phy_filepath "$2"`
+fname1=`virt2phy_filepath "$1" "$3"`
+fname2=`virt2phy_filepath "$2" "$3"`
 
 mv "$3$fname1" "$3$fname2"

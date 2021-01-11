@@ -2,7 +2,7 @@
 
 . "`dirname "$(readlink -f "$0")"`/common.sh"
 
-fname=`virt2phy_filepath "$1"`
+fname=`virt2phy_filepath "$1" "$2"`
 
 if [ -e "$2$fname" ]
 then

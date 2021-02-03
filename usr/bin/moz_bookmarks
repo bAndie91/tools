@@ -1,0 +1,85 @@
+#!/bin/bash
+
+set -e
+set -o pipefail
+set -u
+
+indent()
+{
+	sed -e 's/^/	/'
+}
+
+
+cd ~/.moonchild\ productions/pale\ moon/
+cd *.default
+dbfile=places.sqlite
+
+
+sqlite3 -list "$dbfile" "SELECT 'bookmark', id, parent, fk, title FROM moz_bookmarks;
+SELECT 'place', NULL, NULL, id, url FROM moz_places;
+SELECT 'feed', item_id, NULL, NULL, content FROM moz_items_annos WHERE anno_attribute_id=(SELECT id FROM moz_anno_attributes WHERE name='livemark/feedURI')" |\
+{
+	declare -A place_ids
+	declare -A parent_ids
+	declare -A titles
+	declare -A urls
+	declare -A bm_urls
+	
+	while read -r type bookmark_id parent_id place_id content
+	do
+		case "$type" in
+		bookmark)
+			place_ids[$bookmark_id]=$place_id
+			parent_ids[$bookmark_id]=$parent_id
+			titles[$bookmark_id]=$content
+			;;
+		place)
+			urls[$place_id]=$content
+			;;
+		feed)
+			bm_urls[$bookmark_id]=$content
+			;;
+		esac
+	done
+
+	show_bookmarks()
+	{
+		local parent_id=$1
+		local place_id
+		local bookmark_id
+		local title
+		local url
+		
+		for bookmark_id in "${!parent_ids[@]}"
+		do
+			if [ ${parent_ids[$bookmark_id]} = $parent_id ]
+			then
+				title=${titles[$bookmark_id]}
+				echo "${title:-(no title)}"
+				
+				set +u
+				url=${bm_urls[$bookmark_id]}
+				set -u
+				if [ -z "$url" ]
+				then
+					place_id=${place_ids[$bookmark_id]}
+					if [ "$place_id" != NULL ]
+					then
+						url=${urls[$place_id]}
+					fi
+				fi
+				if [ -n "$url" ]
+				then
+					echo "$url"
+				fi
+				
+				show_bookmarks $bookmark_id | indent
+				
+				echo
+			fi
+		done
+	}
+	
+	parent_id=0
+	show_bookmarks $parent_id
+}

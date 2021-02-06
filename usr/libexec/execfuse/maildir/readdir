@@ -96,9 +96,9 @@ while(<>)
 			}
 		}
 	}
-	else
+	elsif(!-e $path)
 	{
-		warn "$path: no file. strange.\n";
+		warn "$path: does not exist. strange.\n";
 	}
 	
 	return_dir_entry:

@@ -163,6 +163,12 @@ int main(int argc, char** argv, char** envp)
 	mallopt(M_CHECK_ACTION, 7);
 	
 	
+	if(getenv("SHELL_DIRECTLY_BY_SSHD") != NULL)
+	{
+		unsetenv("SHELL_DIRECTLY_BY_SSHD");
+		goto controlled_mode;
+	}
+	
 	/* Check parent process owner. */
 	myuid = getuid();
 	parentpid = getppid();
@@ -173,11 +179,13 @@ int main(int argc, char** argv, char** envp)
 		PRINTDEBUG("Parent UID: %u", stat_buf.st_uid);
 		if(stat_buf.st_uid != myuid)
 		{
+			/* Parent process run not by us */
 			goto controlled_mode;
 		}
 	}
 	else
 	{
+		/* Parent process run by root */
 		goto controlled_mode;
 	}
 	
@@ -207,7 +215,7 @@ int main(int argc, char** argv, char** envp)
 				PRINTDEBUG("Parent command: %s", cmd);
 				if(EQ(cmd, "sshd") || EQ(cmd, "dropbear"))
 				{
-					/* We are called by SSHd. */
+					/* We are called by an SSHd. */
 				}
 				else
 				{

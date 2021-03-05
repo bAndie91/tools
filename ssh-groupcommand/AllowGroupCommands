@@ -1,9 +1,25 @@
+# this config file takes effect when your login shell is sh.ssh (or bash.ssh).
+# sh.ssh looks up which commands (shell command lines) are allowed by the
+# invoking user's group membership.
+#
+# using sh.ssh as login shell enables sysadmins to:
+#  - allow ~/.ssh/rc system wide
+#     - but don't allow it here anyone only for certain groups
+#  - users still can write their files including ~/.ssh/rc
+#  - allow both password and pubkey auth
+#     - because running .ssh/rc can only by disable globally or per-pubkey
+#  - while not worrying about arbitrary commands called by ~/.ssh/rc
+#     - because it is not allowed here only for certain groups
+
 # Show error message when ~/.ssh/rc is going to be run.
 # Valid parameters: on, off
 !report-dotsshrc off
 
 # Allow any command lines and interactive shell for shell group.
 shell	--- **
+
+# shell group users can run anything anyways
+shell	/bin/sh .ssh/rc
 
 # Allow sftp only for sftp group, no parameter allowed.
 sftp	/usr/lib/openssh/sftp-server
@@ -34,4 +50,4 @@ gitusers	git-upload-pack **
 gitusers	git-receive-pack **
 
 !strip-quotes off
-# Rules after "!strip-quotes off" don't involve "conversion"
+# Rules after "!strip-quotes off" don't involve dump quote-stripping

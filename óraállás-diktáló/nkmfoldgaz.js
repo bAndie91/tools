@@ -241,6 +241,19 @@ page.open(url_form, function(status)
 		timeout = 500;
 		worker = function()
 		{
+			function display_nkm_result(result)
+			{
+				try {
+					var v = result.replace(/\\x(..)/g, function(match, group_1, start_pos, whole_string){
+						return String.fromCharCode(Number("0x" + group_1));
+					});
+					stdout.write(v + "\n");
+				}
+				catch(error) {
+					true;
+				}
+			}
+			
 			if(!loadInProgress)
 			{
 				/* Make sure we are in the correct frame */
@@ -285,6 +298,7 @@ page.open(url_form, function(status)
 					{
 						stderr.write("[OK] Transaction passed.\n");
 						stdout.write(Glob.result + "\n");
+						display_nkm_result(Glob.result);
 						phantom.exit(0);
 					}
 					else
@@ -293,6 +307,7 @@ page.open(url_form, function(status)
 						stderr.write(Glob.result_elem_html_outer + "\n");
 						stderr.write(Glob.result_elem_text_inner + "\n");
 						stderr.write(Glob.result + "\n");
+						display_nkm_result(Glob.result);
 						phantom.exit(5);
 					}
 				}

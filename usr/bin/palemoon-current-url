@@ -1,0 +1,10 @@
+#!/bin/bash
+
+set -e -o pipefail -u
+
+sessionstore=`cat "$HOME/.moonchild productions/pale moon"/*.default/sessionstore.js`
+selectedWindow=`echo "$sessionstore" | jq -r ".selectedWindow"`
+selectedTab=`echo "$sessionstore" | jq -r ".windows[$((selectedWindow - 1))].selected"`
+url=`echo "$sessionstore" | jq -r ".windows[$((selectedWindow - 1))].tabs[$((selectedTab - 1))].entries[0].url"`
+
+echo "$url"

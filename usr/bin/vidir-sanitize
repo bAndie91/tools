@@ -1,0 +1,10 @@
+#!/bin/bash
+
+set -e
+set -o pipefail
+set -u
+
+cat "$1" |\
+noacute |\
+sed -e 's/ /_/g' |\
+sponge "$1"

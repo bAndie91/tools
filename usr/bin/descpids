@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# get descendant processes PIDs
+
+declare -A all_descendants=()
+declare -A all_ancestors=()
+
+for ancestor in "$@"
+do
+	all_ancestors[$ancestor]=''
+done
+
+while [ "${#all_ancestors[@]}" -gt 0 ]
+do
+	for ancestor in "${!all_ancestors[@]}"
+	do
+		for descendant in `pgrep -P "$ancestor"`
+		do
+			all_descendants[$descendant]=''
+			all_ancestors[$descendant]=''
+		done
+		unset all_ancestors[$ancestor]
+	done
+done
+
+echo "${!all_descendants[@]}"

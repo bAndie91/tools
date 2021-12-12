@@ -30,8 +30,8 @@ local sign_ahead=▲
 local sign_behind=▼
 local sign_unstag=✎
 local sign_staged=✈
-#local sign_stash=⌂ ❂ ⚑ ⚒ ◳ ◪ ◕ ◍ ⌘ ∗ ● � ❖ 🍱 ✪ ⦿
-local sign_stash=◕
+#local sign_stash=⌂ ❂ ⚑ ⚒ ◳ ◪ ◕ ◍ ⌘ ∗ ● � ❖ 🍱 ✪ ⍟ ⦿ ◕
+local sign_stash=◳
 local sign_pushpull=★
 local sign_origin=☆
 local sign_clean=✔
@@ -42,6 +42,11 @@ trueish()
 {
 	[ "${1,,}" = true -o "${1,,}" = yes -o "${1,,}" = y ] || [ "$1" -gt 0 ] 2>/dev/null
 }
+
+if ! trueish "$GIT_PROMPT_ENABLE"
+then
+	return
+fi
 
 get_tracking_branch()
 {

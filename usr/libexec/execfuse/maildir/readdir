@@ -65,7 +65,7 @@ while(<>)
 					{
 						$hdr{$hname} = $'\'';
 						$pos = tell $fh;
-						$hdr{$hname} .= $_ while $_=<$fh> and s/^\s+(.+)[\r\n]*$/$1/;
+						$hdr{$hname} .= $_ while $_=<$fh> and s/^\s+(.+)[\r\n]*$/ $1/;
 						seek $fh, $pos, 0;
 					}
 					last if scalar keys %hdr == 2;

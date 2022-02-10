@@ -1,0 +1,24 @@
+#!/bin/bash
+
+xmlquote()
+{
+	local s=$1
+	s=${s//&/&amp;}
+	s=${s//</&lt;}
+	s=${s//>/&gt;}
+	s=${s//\"/&quot;}
+	echo "$s"
+}
+
+echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<opml version=\"1.0\"><body>"
+
+while read -r title url
+do
+	title=`xmlquote "$title"`
+	url=`xmlquote "$url"`
+	
+	echo "<outline type=\"rss\" title=\"$title\" text=\"$title\" xmlUrl=\"$url\" filtercmd=\"/home/sysop/bin/rss-conv/full-article\" />"
+done
+
+echo "</body></opml>"

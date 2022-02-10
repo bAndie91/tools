@@ -83,6 +83,12 @@ sub hexord
 	sprintf "0x%X", ord $_[0];
 }
 
+sub uniqsort
+{
+	my %h = map {$_=>1} @_;
+	return sort keys %h;
+}
+
 sub is_applicable_transformer
 {
 	my ($chr, $trnkey) = @_;
@@ -149,10 +155,10 @@ for my $style (@ARGV)
 	}
 }
 
-if(not exists $Transformer{$trans_style})
+unless(exists $Transformer{$trans_style} or @appenders)
 {
 	die "Unknown style or style can not be used alone: $trans_style\n".
-	    "Styles: ".(join ' ', grep {!/_/} sort keys %Transformer, keys %Appender)."\n";
+	    "Styles: ".(join ' ', uniqsort split /_/, join '_', keys %Transformer, keys %Appender)."\n";
 }
 
 

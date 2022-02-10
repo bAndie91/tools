@@ -1,0 +1,8 @@
+#!/bin/bash
+
+set -e
+set -u
+
+is_hidden=false
+
+echo -n "WIFI:T:WPA;S:${1?enter SSID argument};P:${2?enter PSK argument};H:$is_hidden;"

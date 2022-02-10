@@ -1,0 +1,12 @@
+#!/bin/bash
+
+report_size()
+{
+	msgprefix="$1" perl -pe '$s += length $_; END { 1 while $s =~ s/(\d)(\d\d\d)(( \d\d\d)*)$/\1 \2\3/; print STDERR "$ENV{msgprefix}$s bytes\n"; }'
+}
+
+input=`cat | report_size 'input size: '`
+echo -n 'data:image/png;base64,'
+convert -background none -font /usr/share/fonts/truetype/freefont/FreeSans.ttf "$@" label:"$input" png:- |\
+report_size 'image size: ' | base64 | tr -d "\n" |\
+report_size 'base64 size: '

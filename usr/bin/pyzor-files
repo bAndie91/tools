@@ -1,10 +1,17 @@
 #!/bin/bash
 
+if [ $# = 0 ]
+then
+	echo "Usage: pyzor-files [<action>] -- <file-1> [<file-2> [<file-n> ...]]"
+	echo "Note that 'check' action returns the last checked file's status only."
+	exit -1
+fi
+
 args=()
 
 while [ $# -gt 0 ]
 do
-	if [ ".$arg" = .-- ]
+	if [ ".$1" = .-- ]
 	then
 		shift
 		break
@@ -13,8 +20,6 @@ do
 	fi
 	shift
 done
-
-set -e
 
 for file in "$@"
 do

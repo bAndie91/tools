@@ -4,16 +4,8 @@ use Data::Dumper;
 use Getopt::Long;
 use Perl::Tokenizer;
 
-$IFS = '\s+';
+do $ENV{'PERL5LIB_ROOT'}."/usr/lib/tdat/common.pl";
 
-sub strip
-{
-	my $res = $_[0];
-	chomp $res;
-	$res =~ s/^\s*//;
-	$res =~ s/\s*$//;
-	return $res;
-}
 
 GetOptions(
 	'F=s' => \$IFS,
@@ -26,26 +18,13 @@ OPTIONS:
 
 my $header = <STDIN>;
 print $header;
-
-# parse the first line as column headers
-my @COLUMNS = split /$IFS/, strip $header;
+my @COLUMNS = parse_column_headers($header);
 undef $header;
 
-# take arguments as perl expression and translate bare words to variables referring to the input fields
-my $filter_expr = join ' ', @ARGV;
-my @filter_code;
-perl_tokens {
-	my ($token_type, $start, $end) = @_;
-	my $token = substr $filter_expr, $start, $end-$start;
-	if($token_type eq 'bare_word')
-	{
-		$token = "\$FIELD{'$token'}";
-	}
-	push @filter_code, $token;
-} $filter_expr;
 
-my $FILTER_CODE = join '', @filter_code;
-undef @filter_code;
+# take arguments as perl expression and transform bare words to variables referring to the input fields
+my $filter_expr = join ' ', @ARGV;
+my $FILTER_CODE = transform_to_perl_expression 'FIELD', $filter_expr;
 undef $filter_expr;
 if($ENV{'TDSEL_DEBUG'}) { warn "filter code: $FILTER_CODE\n"; }
 
@@ -53,25 +32,15 @@ if($ENV{'TDSEL_DEBUG'}) { warn "filter code: $FILTER_CODE\n"; }
 # filter input
 while(<STDIN>)
 {
-	my $show = 0;
-	my %FIELD = ();
-	my @FIELDS = split /$IFS/, strip $_;
-	my $col_num = 0;
+	my $do_show = 0;
 	
-	for my $col_name (@COLUMNS)
-	{
-		$FIELD{$col_name} = $FIELDS[$col_num];
-		$col_num++;
-	}
-	undef $col_num;
-	undef @FIELDS;
-	
+	my %FIELD = parse_record($_, @COLUMNS);
 	
 	my $match = eval $FILTER_CODE;
 	die $@ if $@;
-	if($match) { $show = 1; }
+	if($match) { $do_show = 1; }
 	
-	if($show)
+	if($do_show)
 	{
 		print;
 	}

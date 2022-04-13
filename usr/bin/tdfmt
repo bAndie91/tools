@@ -1,0 +1,53 @@
+#!/usr/bin/env perl5.18-or-later
+
+use Data::Dumper;
+use Getopt::Long;
+use Perl::Tokenizer;
+
+do $ENV{'PERL5LIB_ROOT'}."/usr/lib/tdat/common.pl";
+
+$skip_output_headers = 0;
+
+GetOptions(
+	'F=s' => \$IFS,
+	's=s' => \$OFS,
+	'n' => \$skip_output_headers,
+) or
+die "Usage: $0 [<OPTIONS>] <EXPRESSION> [<EXPRESSION> [...]]
+OPTIONS:
+  -F REGEX   input field separator (default: /$IFS/)
+  -s STRING  output field separator (default: ".vardump($OFS).")
+  -n         do not output headers
+\n";
+
+
+my $header = <STDIN>;
+my @COLUMNS = parse_column_headers($header);
+undef $header;
+
+$\ = "\n";
+
+my @OUTPUT_COLUMNS = @ARGV;
+if(not $skip_output_headers)
+{
+	print join $OFS, @OUTPUT_COLUMNS;
+}
+
+my @OUTPUT_EXPR = map {transform_to_perl_expression('FIELD', $_)} @OUTPUT_COLUMNS;
+if($ENV{'TDFMT_DEBUG'}) { warn Dumper \@OUTPUT_EXPR; }
+
+
+# process input
+while(<STDIN>)
+{
+	my %FIELD = parse_record($_, @COLUMNS);
+	my @output_fields = ();
+	
+	for my $expr (@OUTPUT_EXPR)
+	{
+		my $field_value = eval $expr;
+		die $@ if $@;
+		push @output_fields, $field_value;
+	}
+	print join $OFS, @output_fields;
+}

@@ -1,0 +1,58 @@
+#!/usr/bin/env perl
+
+if('--help' ~~ @ARGV)
+{
+	die "Usage: $0 [<RANGES> [<RANGES> [...]]] [-- <FILE>]
+  Read from STDIN, or from FILE if specified.
+  RANGES is comma-delimited list of line numbers and inclusive ranges.
+  Special symbol 'EOF' represents the end of the input file.
+  Examples:
+    1
+    2-10
+    1,5-10
+    2,4,6,8,10-EOF\n";
+}
+
+my @ranges;
+
+while(exists $ARGV[0])
+{
+	if($ARGV[0] eq '--')
+	{
+		shift @ARGV;
+		last;
+	}
+	for my $range (split /,/, $ARGV[0])
+	{
+		if($range =~ /^(\d+)(?:-(\d+|EOF))?$/)
+		{
+			push @ranges, [$1, $2];
+		}
+		else
+		{
+			die "invalid range: $range\n";
+		}
+	}
+	shift @ARGV;
+}
+
+while(<>)
+{
+	my $include = 0;
+	for my $range (@ranges)
+	{
+		my ($from, $to) = @$range;
+		if(defined $to)
+		{
+			if($. >= $from and ($to eq 'EOF' or $. <= $to)) { $include = 1; }
+		}
+		else
+		{
+			if($. == $from) { $include = 1; }
+		}
+	}
+	if($include)
+	{
+		print;
+	}
+}

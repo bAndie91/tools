@@ -1,0 +1,90 @@
+#!/usr/bin/env perl5.18-or-later
+
+use Data::Dumper;
+use Getopt::Long;
+use Perl::Tokenizer;
+
+do $ENV{'PERL5LIB_ROOT'}."/usr/lib/tdat/common.pl" or die "$@: $!";
+
+$skip_output_headers = 0;
+
+GetOptions(
+	'F=s' => \$IFS,
+	's=s' => \$OFS,
+	'n' => \$skip_output_headers,
+) or
+die "Usage: $0 [<OPTIONS>] <DEF> [<DEF> [...]]
+OPTIONS:
+  -F REGEX   input field separator (default: /$IFS/)
+  -s STRING  output field separator (default: ".vardump($OFS).")
+  -n         do not output headers
+DEF is the output column definition, which is a Perl expression with
+input column names replaced with the input field value row-by-row.
+Optionally prepended it by \"NEWNAME =>\" to name the column's header.
+";
+
+
+my $header = <STDIN>;
+my @INPUT_COLUMNS = parse_column_headers($header);
+undef $header;
+
+$\ = "\n";
+
+# TODO: support displaying all columns as-is
+# TODO: support column exclusion
+
+my @OUTPUT_COLUMNS = @ARGV;
+my @OUTPUT_EXPR;
+my $col_num = 0;
+for my $expr (@OUTPUT_COLUMNS)
+{
+	my $new_col_name;
+	my $new_expr;
+	my $token_num = 0;
+	perl_tokens {
+		my ($token_type, $start, $end) = @_;
+		if($token_num == 0) { $new_col_name = substr $expr, $start, $end-$start; }
+		elsif($token_num == 1) {
+			if($token_type eq 'fat_comma') { 1; } else { $new_col_name = undef; }
+		}
+		elsif($token_num == 2) {
+			if(defined $new_col_name) { $new_expr = substr $expr, $start; }
+		}
+		else { return; }
+		if($token_type !~ /space/) { $token_num++; }
+	} $expr;
+	
+	
+	if(defined $new_col_name)
+	{
+		$OUTPUT_COLUMNS[$col_num] = $new_col_name;
+	}
+	$OUTPUT_EXPR[$col_num] = defined $new_expr ? $new_expr : $expr;
+	$OUTPUT_EXPR[$col_num] = transform_to_perl_expression('FIELD', $OUTPUT_EXPR[$col_num]);
+	$col_num++;
+}
+undef $col_num;
+if($ENV{'TDFMT_DEBUG'}) { warn Dumper \@OUTPUT_EXPR; }
+
+
+if(not $skip_output_headers)
+{
+	print join $OFS, @OUTPUT_COLUMNS;
+}
+
+
+
+# process input
+while(<STDIN>)
+{
+	my %FIELD = parse_record($_, @INPUT_COLUMNS);
+	my @output_fields = ();
+	
+	for my $expr (@OUTPUT_EXPR)
+	{
+		my $field_value = eval $expr;
+		die $@ if $@;
+		push @output_fields, $field_value;
+	}
+	print join $OFS, @output_fields;
+}

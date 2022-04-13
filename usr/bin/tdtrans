@@ -1,0 +1,41 @@
+#!/usr/bin/env perl5.18-or-later
+
+use Data::Dumper;
+use Getopt::Long;
+use Perl::Tokenizer;
+
+do $ENV{'PERL5LIB_ROOT'}."/usr/lib/tdat/common.pl" or die "$@: $!";
+
+GetOptions(
+	'F=s' => \$IFS,
+	's=s' => \$OFS,
+) or
+die "Usage: $0 [<OPTIONS>] <CODE>
+OPTIONS:
+  -F REGEX   input field separator (default: /$IFS/)
+  -s STRING  output field separator (default: ".vardump($OFS).")
+CODE is Perl code which executed agains the input data. Bare words,
+which are column names, carry the given field's value row-by-row.
+";
+
+
+my $header = <STDIN>;
+my @COLUMNS = parse_column_headers($header);
+undef $header;
+
+my $TRANSFORM_CODE = transform_to_perl_expression('FIELD', join(' ', @ARGV));
+if($ENV{'TDTRANS_DEBUG'}) { warn Dumper $TRANSFORM_CODE; }
+
+
+$\ = "\n";
+print join $OFS, @COLUMNS;
+
+
+# process input
+while(<STDIN>)
+{
+	my %FIELD = parse_record($_, @COLUMNS);
+	eval $TRANSFORM_CODE;
+	die $@ if $@;
+	print join $OFS, map {$FIELD{$_}} @COLUMNS;
+}

@@ -59,6 +59,9 @@ sub transform_to_perl_expression
 	
 	my $perl_expr = join '', @perl_expr;
 	return $perl_expr;
+	
+	# TODO: support "name.sub" style column names too
+	# TODO: support "column name" style column names too
 }
 
 sub vardump

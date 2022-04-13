@@ -4,7 +4,7 @@ use Data::Dumper;
 use Getopt::Long;
 use Perl::Tokenizer;
 
-do $ENV{'PERL5LIB_ROOT'}."/usr/lib/tdat/common.pl";
+do $ENV{'PERL5LIB_ROOT'}."/usr/lib/tdat/common.pl" or die "$@: $!";
 
 
 GetOptions(
@@ -13,7 +13,10 @@ GetOptions(
 die "Usage: $0 [<OPTIONS>] <FILTER>
 OPTIONS:
   -F REGEX   input field separator (default: $IFS)
-\n";
+FILTER is a Perl expression with column names replaced by the
+field's value row-by-row. A given row is output when the FILTER
+expression evaluates to true.
+";
 
 
 my $header = <STDIN>;
@@ -24,7 +27,7 @@ undef $header;
 
 # take arguments as perl expression and transform bare words to variables referring to the input fields
 my $filter_expr = join ' ', @ARGV;
-my $FILTER_CODE = transform_to_perl_expression 'FIELD', $filter_expr;
+my $FILTER_CODE = transform_to_perl_expression('FIELD', $filter_expr);
 undef $filter_expr;
 if($ENV{'TDSEL_DEBUG'}) { warn "filter code: $FILTER_CODE\n"; }
 

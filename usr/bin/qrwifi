@@ -3,6 +3,12 @@
 set -e
 set -u
 
+if [ $# -lt 2 ]
+then
+	echo "Usage: $0 [<SSID>] [<PSK>]" >&2
+	false
+fi
+
 is_hidden=false
 
 echo -n "WIFI:T:WPA;S:${1?enter SSID argument};P:${2?enter PSK argument};H:$is_hidden;"

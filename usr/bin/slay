@@ -2,14 +2,15 @@
 
 usagedie()
 {
-	echo "Usage:
- slay [-SIGNAL] <PID>
- slayall [-SIGNAL] <PROCESS-NAME>" >&2
+	echo "Usage of $myname(1) is the same as $killname(1)" >&2
+	$killname --help >&2
 	exit 1
 }
 
 myname=${0##*/}
+killname=${myname/slay/kill}
 declare -a argv
+target=''
 
 while [ -n "$1" ]
 do
@@ -19,7 +20,6 @@ do
 		argv+=("$1")
 		;;
 	*)
-		prm=$1
 		argv+=("$1")
 		;;
 	esac

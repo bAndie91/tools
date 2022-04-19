@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# BEGIN-DOCUMENTATION
 # NAME
 # 
 #  regulate - process regulator
@@ -40,6 +41,7 @@
 # 
 #  REGULATE_INTERVAL
 #  REGULATE_STATUS
+# END-DOCUMENTATION
 
 toolname=regulate
 declare -a controller_cmd
@@ -47,6 +49,13 @@ declare -a controlled_cmd
 
 while [ $# -gt 0 ]
 do
+	case "$1" in
+	--help|-h)
+		cat "$0" | awk '/[B]EGIN-DOCUMENTATION/,/[E]ND-DOCUMENTATION/ {print}' | sed -e '1d;$d;s/^# \?//'
+		exit 1
+		;;
+	esac
+	
 	if [ "$1" = -- ]
 	then
 		shift

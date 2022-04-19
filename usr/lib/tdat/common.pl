@@ -7,12 +7,12 @@ use Perl::Tokenizer;
 $IFS = '\s+';
 $OFS = "\t";
 
-sub strip
+sub strip_record_and_dangling_field_separators
 {
 	my $res = $_[0];
 	chomp $res;
-	$res =~ s/^\s*//;
-	$res =~ s/\s*$//;
+	$res =~ s/^$IFS//;
+	$res =~ s/$IFS$//;
 	return $res;
 }
 
@@ -20,7 +20,7 @@ sub parse_column_headers
 {
 	# parse the first line as column headers
 	my $headers = $_[0];
-	my @COLUMNS = split /$IFS/, strip $headers;
+	my @COLUMNS = split /$IFS/, strip_record_and_dangling_field_separators $headers;
 	return @COLUMNS;
 }
 
@@ -30,7 +30,7 @@ sub parse_record
 	my @column_names = @_;
 	
 	my %FIELD = ();
-	my @FIELDS = split /$IFS/, strip $record_raw;
+	my @FIELDS = split /$IFS/, strip_record_and_dangling_field_separators($record_raw), scalar @column_names;
 	my $col_num = 0;
 	
 	for my $col_name (@column_names)

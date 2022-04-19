@@ -16,7 +16,25 @@ warnx()
 
 help()
 {
-	warnx "usage: partial [--restart|-r|--forget|-f|--pid|-p] <COMMAND> [<ARGUMENTS>]"
+	warnx "Usage: partial [--restart|--forget|--pid] <COMMAND> [<ARGUMENTS>]
+
+Description
+  On first invocation 'partial' starts COMMAND in the background.
+  On subsequest invocations, it outputs everything COMMAND's output so far and
+  keep COMMAND running in the background. Hence the name 'partial', because it
+  shows a command's partial outputs. When COMMAND finished, 'partial' outputs
+  the whole output and exits with COMMAND exit status code.
+
+Options
+  -f,--forget    terminate (kill SIGTERM) previous instance of the same command
+                 and clean up status directory
+  -r,--restart   terminate if running (like -f) and start again
+  -p,--pid       display PID file path
+
+Exit codes
+  115  COMMAND started
+  114  partial output showed
+  *    COMMAND returned with this status code"
 }
 
 opt_restart=no
@@ -76,7 +94,11 @@ then
 	if [ -d "$dir" ]
 	then
 		pid=`cat "$dir/pid"`
-		kill "$pid"
+		while kill -0 "$pid"
+		do
+			kill "$pid"
+			sleep 0.2
+		done
 		rm -r "$dir"
 	fi
 	if [ $opt_forget = yes ]

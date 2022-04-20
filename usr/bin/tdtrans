@@ -8,15 +8,51 @@ do $ENV{'PERL5LIB_ROOT'}."/usr/lib/tdat/common.pl" or die "$@: $!";
 
 GetOptions(
 	'F=s' => \$IFS,
-	's=s' => \$OFS,
+	'S=s' => \$OFS,
 ) or
 die "Usage: $0 [<OPTIONS>] <CODE>
 OPTIONS:
   -F REGEX   input field separator (default: /$IFS/)
-  -s STRING  output field separator (default: ".vardump($OFS).")
+  -S STRING  output field separator (default: ".vardump($OFS).")
 CODE is Perl code which executed agains the input data. Bare words,
 which are column names, carry the given field's value row-by-row.
 ";
+
+
+---
+my @OUTPUT_EXPR;
+my $col_num = 0;
+for my $expr (@OUTPUT_COLUMNS)
+{
+	my $new_col_name;
+	my $new_expr;
+	my $token_num = 0;
+	perl_tokens {
+		my ($token_type, $start, $end) = @_;
+		if($token_num == 0) { $new_col_name = substr $expr, $start, $end-$start; }
+		elsif($token_num == 1) {
+			if($token_type eq 'fat_comma') { 1; } else { $new_col_name = undef; }
+		}
+		elsif($token_num == 2) {
+			if(defined $new_col_name) { $new_expr = substr $expr, $start; }
+		}
+		else { return; }
+		if($token_type !~ /space/) { $token_num++; }
+	} $expr;
+	
+	
+	if(defined $new_col_name)
+	{
+		$OUTPUT_COLUMNS[$col_num] = $new_col_name;
+	}
+	$OUTPUT_EXPR[$col_num] = defined $new_expr ? $new_expr : $expr;
+	$OUTPUT_EXPR[$col_num] = transform_to_perl_expression('FIELD', $OUTPUT_EXPR[$col_num]);
+	$col_num++;
+}
+undef $col_num;
+if($ENV{'TDFMT_DEBUG'}) { warn Dumper \@OUTPUT_EXPR; }
+---
+
 
 
 my $header = <STDIN>;

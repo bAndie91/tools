@@ -73,4 +73,8 @@ sub vardump
 	return $ret;
 }
 
+sub any { $_ && return 1 for @_; 0 }
+
+sub all { $_ || return 0 for @_; 1 }
+
 1;

@@ -4,14 +4,19 @@ use Getopt::Long;
 use Perl::Tokenizer;
 
 # common defaults
-$IFS = '\s+';
+$IFS = qr/\t/;
 $OFS = "\t";
 
-sub strip_record_and_dangling_field_separators
+sub lstrip_ifs
 {
 	my $res = $_[0];
-	chomp $res;
 	$res =~ s/^$IFS//;
+	return $res;
+}
+
+sub rstrip_ifs
+{
+	my $res = $_[0];
 	$res =~ s/$IFS$//;
 	return $res;
 }
@@ -20,7 +25,7 @@ sub parse_column_headers
 {
 	# parse the first line as column headers
 	my $headers = $_[0];
-	my @COLUMNS = split /$IFS/, strip_record_and_dangling_field_separators $headers;
+	my @COLUMNS = split /$IFS/, $headers;
 	return @COLUMNS;
 }
 
@@ -30,7 +35,7 @@ sub parse_record
 	my @column_names = @_;
 	
 	my %FIELD = ();
-	my @FIELDS = split /$IFS/, strip_record_and_dangling_field_separators($record_raw), scalar @column_names;
+	my @FIELDS = split /$IFS/, $record_raw, scalar @column_names;
 	my $col_num = 0;
 	
 	for my $col_name (@column_names)
@@ -72,9 +77,5 @@ sub vardump
 	$Data::Dumper::Terse = $terse;
 	return $ret;
 }
-
-sub any { $_ && return 1 for @_; 0 }
-
-sub all { $_ || return 0 for @_; 1 }
 
 1;

@@ -1,0 +1,47 @@
+#!/usr/bin/env perl5.18-or-later
+
+use Data::Dumper;
+use Getopt::Long;
+use Perl::Tokenizer;
+
+do $ENV{'PERL5LIB_ROOT'}."/usr/lib/tdat/common.pl" or die "$@: $!";
+
+$lstrip = 0;
+$rstrip = 0;
+
+GetOptions(
+	'F=s' => \$IFS,
+	'S=s' => \$OFS,
+	'l' => \$lstrip,
+	'r' => \$rstrip,
+) or
+die "Usage: $0 [<OPTIONS>]
+OPTIONS:
+  -F REGEX    input field separator (default: /$IFS/)
+  -S STRING   output field separator (default: ".vardump($OFS).")
+  -l          strip dangling input field separators from left
+  -r          strip dangling input field separators from right
+";
+
+
+my $header = <STDIN>;
+chomp $header;
+$header = lstrip_ifs($header) if $lstrip;
+$header = rstrip_ifs($header) if $rstrip;
+my @COLUMNS = parse_column_headers($header);
+undef $header;
+
+$\ = "\n";
+
+print join $OFS, @COLUMNS;
+
+
+# process input
+while(<STDIN>)
+{
+	chomp;
+	$_ = lstrip_ifs($_) if $lstrip;
+	$_ = rstrip_ifs($_) if $rstrip;
+	my %FIELD = parse_record($_, @COLUMNS);
+	print join $OFS, map { $FIELD{$_} } @COLUMNS;
+}

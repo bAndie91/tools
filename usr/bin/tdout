@@ -6,49 +6,43 @@ use Perl::Tokenizer;
 
 do $ENV{'PERL5LIB_ROOT'}."/usr/lib/tdat/common.pl" or die "$@: $!";
 
-$skip_output_headers = 0;
-$excludelist = 0;
+my $skip_output_headers = 0;
+my @add_columns;
+my @exclude_columns;
 
 GetOptions(
 	'F=s' => \$IFS,
 	'S=s' => \$OFS,
-	'n' => \$skip_output_headers,
-	'x' => \$excludelist,
+	'H' => \$skip_output_headers,
+	'p=s{1,}' => \@add_columns,
+	'x=s{1,}' => \@exclude_columns,
 ) or
-die "Usage: $0 [<OPTIONS>] [--] [-]<COLUMN> [[-]<COLUMN> [...]]
+die "Usage: $0 [<OPTIONS>] [<COLUMN> [<COLUMN> [...]]]
 OPTIONS:
-  -F REGEX   input field separator (default: /$IFS/)
-  -S STRING  output field separator (default: ".vardump($OFS).")
-  -n         do not output headers
-COLUMN is the column's name to be shown, in order. If COLUMN is prefixed
-by a minus sign (\"-\") then all columns are shown except COLUMN.
+  -F REGEX        input field separator (default: /$IFS/)
+  -S STRING       output field separator (default: ".vardump($OFS).")
+  -H              do not output headers
+  -p COL COL ...  prepend new column(s) with the given name(s)
+  -x COL COL ...  show all columns except the given ones
+COLUMNs are the column names to be shown only, in order, unless -x or -a is
+given. If no COLUMN is given, then all will be shown (except the ones specified
+by -x).
 ";
 
 
 my $header = <STDIN>;
+chomp $header;
 my @INPUT_COLUMNS = parse_column_headers($header);
 undef $header;
 
-$\ = "\n";
-
 
 my @OUTPUT_COLUMNS;
-# check if either all columns
-if(scalar @ARGV > 0)
-{
-	if((all map {/^-/} @ARGV) or (all map {!/^-/} @ARGV)) {}
-	else { die "Do not mix column inclusion and exclusion."; }
-}
-if($ARGV[0] =~ /^-/)
-{
-	my @exclude = map {substr $_, 1} @ARGV;
-	@OUTPUT_COLUMNS = grep { not $_ ~~ @exclude } @INPUT_COLUMNS;
-}
-else
-{
-	@OUTPUT_COLUMNS = @ARGV;
-}
+@OUTPUT_COLUMNS = @ARGV ? @ARGV : @INPUT_COLUMNS;
+unshift @OUTPUT_COLUMNS, @add_columns;
+@OUTPUT_COLUMNS = grep { my $c = $_; not grep {$_ eq $c} @exclude_columns } @OUTPUT_COLUMNS;
 
+
+$\ = "\n";
 
 if(not $skip_output_headers)
 {
@@ -59,14 +53,7 @@ if(not $skip_output_headers)
 # process input
 while(<STDIN>)
 {
+	chomp;
 	my %FIELD = parse_record($_, @INPUT_COLUMNS);
-	my @output_fields = ();
-	
-	for my $expr (@OUTPUT_EXPR)
-	{
-		my $field_value = eval $expr;
-		die $@ if $@;
-		push @output_fields, $field_value;
-	}
-	print join $OFS, @output_fields;
+	print join $OFS, map { $FIELD{$_} } @OUTPUT_COLUMNS;
 }

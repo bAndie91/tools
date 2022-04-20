@@ -21,6 +21,7 @@ expression evaluates to true.
 
 my $header = <STDIN>;
 print $header;
+chomp $header;
 my @COLUMNS = parse_column_headers($header);
 undef $header;
 
@@ -32,18 +33,18 @@ undef $filter_expr;
 if($ENV{'TDSEL_DEBUG'}) { warn "filter code: $FILTER_CODE\n"; }
 
 
+$\ = "\n";
+
 # filter input
 while(<STDIN>)
 {
-	my $do_show = 0;
-	
+	chomp;
 	my %FIELD = parse_record($_, @COLUMNS);
 	
 	my $match = eval $FILTER_CODE;
 	die $@ if $@;
-	if($match) { $do_show = 1; }
 	
-	if($do_show)
+	if($match)
 	{
 		print;
 	}

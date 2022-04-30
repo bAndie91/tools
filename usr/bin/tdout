@@ -17,7 +17,7 @@ GetOptions(
 	'p=s{1,}' => \@add_columns,
 	'x=s{1,}' => \@exclude_columns,
 ) or
-die "Usage: $0 [<OPTIONS>] [<COLUMN> [<COLUMN> [...]]]
+die "Usage: $0 [<OPTIONS>] [--] [<COLUMN> [<COLUMN> [...]]]
 OPTIONS:
   -F REGEX        input field separator (default: /$IFS/)
   -S STRING       output field separator (default: ".vardump($OFS).")
@@ -26,7 +26,9 @@ OPTIONS:
   -x COL COL ...  show all columns except the given ones
 COLUMNs are the column names to be shown only, in order, unless -x or -a is
 given. If no COLUMN is given, then all will be shown (except the ones specified
-by -x).
+by -x). Multiple column names can be specified after '-p', so separate '-p'
+option's parameters from the rest of COLUMN names by '--' (double dash) to
+make them unambiguous.
 ";
 
 

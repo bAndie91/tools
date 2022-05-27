@@ -72,7 +72,7 @@ use Data::Dumper;
 );
 %PAM_STATUS_TEXT = reverse %PAM_STATUS;
 use Sys::Syslog qw/openlog syslog/;
-use List::Util;
+use List::MoreUtils qw/any/;
 
 
 
@@ -150,7 +150,7 @@ sub in_subnet_ip4($$)
 	# the /0 mask matches to the whole world
 	return 1 if $mask == 0;
 	# mask IPv4 addresses
-	return (((unpack('N', pack('C4', split(/\./,$ip))) ^ unpack('N', pack('C4', split(/\./, $subnet)))) & (0xFFFFFFFF << (32-$mask))) == 0);
+	return (((unpack('N', pack('C4', split(/\./, $ip))) ^ unpack('N', pack('C4', split(/\./, $subnet)))) & (0xFFFFFFFF << (32-$mask))) == 0);
 }
 
 

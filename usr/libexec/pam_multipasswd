@@ -72,6 +72,7 @@ use Data::Dumper;
 );
 %PAM_STATUS_TEXT = reverse %PAM_STATUS;
 use Sys::Syslog qw/openlog syslog/;
+use List::Util;
 
 
 
@@ -223,7 +224,7 @@ for my $pwdfile (map {"$shadow_home/.shadow.d/$_"} @precedence)
 				my ($uuser, $upass, $ucidr) = split /:/;
 				if($uuser eq '*' or $uuser eq $ENV{'PAM_USER'})
 				{
-					if(!defined $ucidr or in_subnet_ip4($ucidr, $rhost))
+					if(!defined $ucidr or any {in_subnet_ip4($_, $rhost)} split /,/, $ucidr)
 					{
 						$pam_result = check_password($uuser, $givenpass, $upass);
 						if($pam_result eq $PAM_STATUS{SUCCESS})

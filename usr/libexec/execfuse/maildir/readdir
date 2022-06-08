@@ -10,6 +10,7 @@ fields=13 basedir=$2 cwd=$1 perl -e '
 use Encode;
 use Linux::UserXAttr ":all";
 use constant {STAT_INODE => 1, STAT_ATIME => 8, STAT_MTIME => 9, STAT_CTIME => 10,};
+use constant {EIO => 5,};
 
 $xattr_file = "user.maildirfs.display_filename";
 $/ = chr 0;
@@ -22,7 +23,7 @@ $cache_time = (stat $cache_file)[STAT_MTIME];
 if($folder_time <= $cache_time)
 {
 	close STDIN;
-	open my $f, "<", $cache_file or exit 5;
+	open my $f, "<", $cache_file or exit EIO;
 	$/ = chr 0;
 	print while <$f>;
 	exit 0;
@@ -104,11 +105,11 @@ while(<>)
 	return_dir_entry:
 	$entry = join(" ", @attr) . "\0";
 	print $entry;
-	print {$cache_fh} $entry;
+	print {$cache_fh} $entry or exit int $!;
 }
 
 close $cache_fh;
-rename $cache_file."~", $cache_file or warn "$cache_file: $!\n";
+rename $cache_file."~", $cache_file or exit int $!;
 '
 else
 	exit $ENOENT

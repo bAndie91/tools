@@ -1,6 +1,6 @@
 #!/bin/bash
 
-if [ -z "$1" -o ."$1" = .--help ]
+if [ -z "$1" ] || [ ."$1" = .--help ]
 then
 	echo "Usage: $0 [files...]" >&2
 	exit 1
@@ -10,7 +10,7 @@ for file in "$@"
 do
 	while true
 	do
-		read -e -i "$file" -p "$file -> "
+		read -e -i "$file" -p "old: $file"$'\n'"new: "
 		if [ "$REPLY" != "$file" -a -n "$REPLY" ]
 		then
 			if mv -i -v "$file" "$REPLY"
@@ -20,5 +20,6 @@ do
 		else
 			break
 		fi
+		echo
 	done
 done

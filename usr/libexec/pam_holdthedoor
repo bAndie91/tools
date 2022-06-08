@@ -23,7 +23,7 @@ do_log()
 pam_response()
 {
 	local code=${!1}
-	do_log "code $code $1"
+	do_log "code $code, $1"
 	exit $code
 }
 

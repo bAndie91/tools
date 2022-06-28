@@ -1,0 +1,4 @@
+#!/bin/bash
+
+find /proc/ -regex '.+/ns/.+' -printf '%l\n' 2>/dev/null |\
+{ type uq >/dev/null 2>&1 && uq || sort -u ; }

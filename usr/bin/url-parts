@@ -1,0 +1,37 @@
+#!/usr/bin/env python
+
+import sys
+import re
+import urlparse
+
+delimiter = '\t'
+
+if '--help' in sys.argv:
+	sample = urlparse.urlsplit('')
+	print "Usage: echo URL | url-parts [PART-1 [PART-2 [...]]]"
+	print "PART-N is one of:", ' '.join([attr for attr in dir(sample) 
+		if not attr.startswith('_') and not hasattr(getattr(sample, attr), '__call__')])
+	print "or 'query.PARAM' to access individual query string parameters."
+	sys.exit(0)
+
+while True:
+	line = sys.stdin.readline()
+	if line == '':
+		break
+	line = line.strip()
+	url = urlparse.urlsplit(line)
+	for param_name, param_values in urlparse.parse_qs(url.query).iteritems():
+		field_name = 'query.%s' % param_name
+		if len(param_values) == 1:
+			setattr(url, field_name, param_values[0])
+		for index, param_value in enumerate(param_values):
+			setattr(url, '%s.%d' % (field_name, index), param_value)
+	for arg in sys.argv[1:]:
+		if arg == '?':
+			value = repr([attr for attr in dir(url) if not attr.startswith('__')])
+		elif hasattr(url, arg):
+			value = getattr(url, arg)
+		else:
+			value = ''
+		print value, delimiter,
+	print ''

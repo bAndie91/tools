@@ -29,6 +29,7 @@ do
 	shift
 done
 
+declare -a opts=()
 fuse_options=''
 IFS=','
 for opt in $options
@@ -38,6 +39,9 @@ do
 	ro)	echo "readonly is not supported" >&2
 		exit 2
 		;;
+	assume_vfat)
+		opts+=(-F)
+		;;
 	*)	fuse_options="$fuse_options${fuse_options:+,}$opt"
 		;;
 	esac
@@ -46,7 +50,7 @@ IFS=$' \t\n'
 
 if [ -z "$fuse_options" ]
 then
-	mount.posixovl -S "$sourcedir" "$targetdir"
+	mount.posixovl "${opts[@]}" -S "$sourcedir" "$targetdir"
 else
-	mount.posixovl -S "$sourcedir" "$targetdir" -- "$fuse_options"
+	mount.posixovl "${opts[@]}" -S "$sourcedir" "$targetdir" -- "$fuse_options"
 fi

@@ -12,7 +12,7 @@ use Linux::UserXAttr ":all";
 use constant {STAT_INODE => 1, STAT_ATIME => 8, STAT_MTIME => 9, STAT_CTIME => 10,};
 use constant {EIO => 5,};
 
-$xattr_file = "user.maildirfs.display_filename";
+$xattr_displayname = "user.maildirfs.display_filename";
 $/ = chr 0;
 
 $folder_time = (stat $ENV{basedir}.$ENV{cwd})[STAT_CTIME];
@@ -50,7 +50,7 @@ while(<>)
 	$path = $ENV{basedir}.$ENV{cwd}."/".$fname;
 	if(-f $path)
 	{
-		my $name = getxattr($path, $xattr_file);
+		my $name = getxattr($path, $xattr_displayname);
 		
 		if(not $name)
 		{
@@ -64,23 +64,27 @@ while(<>)
 					last if /^$/;
 					if(($hname) = /^(From|Subject):\s*/i)
 					{
-						$hdr{$hname} = $'\'';
+						$hdr{$hname} = [$'\''];
 						$pos = tell $fh;
-						$hdr{$hname} .= $_ while $_=<$fh> and s/^\s+(.+)[\r\n]*$/ $1/;
+						push @{$hdr{$hname}}, $_ while $_=<$fh> and s/^\s+(.+)[\r\n]*$/$1/;
 						seek $fh, $pos, 0;
 					}
 					last if scalar keys %hdr == 2;
 				}
 				close $fh;
 				
+				$hdr_from = encode "utf8", join " ", map { decode "MIME-Header", $_ } @{$hdr{From}};
+				$hdr_subj = encode "utf8", join " ", map { decode "MIME-Header", $_ } @{$hdr{Subject}};
+				
 				$name = join " ✉ ", 
 					map {s/^"(.+?)"/$1/; $_} 
 					map {s{/}{∕}g; $_}
 					map {s{\x00}{}g; $_}
-					map {encode "utf8", decode "MIME-Header", $_} 
-					grep {defined} $hdr{From}, $hdr{Subject};
+					grep {$_ ne ""} $hdr_from, $hdr_subj;
 				
-				setxattr $path, $xattr_file, $name, 0;
+				# setxattr $path, "user.xdg.origin.email.from", $hdr{From}, 0;
+				# setxattr $path, "user.xdg.origin.email.subject", $hdr{Subject}, 0;
+				setxattr $path, $xattr_displayname, $name, 0;
 			}
 		}
 		

@@ -18,7 +18,6 @@ ENOSYS=38
 ENOTEMPTY=39
 EOPNOTSUPP=95
 
-set -x; exec 2>>/tmp/d
 
 GID=0
 fmode=-rw-r--r--

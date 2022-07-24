@@ -15,36 +15,20 @@ use constant {EIO => 5,};
 $xattr_displayname = "user.maildirfs.display_filename";
 $/ = chr 0;
 
-$folder_time = (stat $ENV{basedir}.$ENV{cwd})[STAT_CTIME];
-$cache_basename = "maildirfs.cache";
-$cache_file = $ENV{basedir}.$ENV{cwd}."/".$cache_basename;
-$cache_time = (stat $cache_file)[STAT_MTIME];
-
-if($folder_time <= $cache_time)
-{
-	close STDIN;
-	open my $f, "<", $cache_file or exit EIO;
-	$/ = chr 0;
-	print while <$f>;
-	exit 0;
-}
-
-open $cache_fh, ">", $cache_file."~";
-
 while(<>)
 {
 	s/\x00$//;
 	@attr = split / /, $_, $ENV{fields};
 	$fname = $attr[12];
 	
-	if($ENV{cwd} =~ m{/.getmail/})
+	if($ENV{cwd} =~ m{/.})
 	{
-		goto return_dir_entry;
+		goto return_dir_entry_itself;
 	}
 	
-	if($fname eq $cache_basename)
+	if($fname =~ /^\./)
 	{
-		next;
+		goto return_dir_entry_itself;
 	}
 	
 	$path = $ENV{basedir}.$ENV{cwd}."/".$fname;
@@ -106,14 +90,10 @@ while(<>)
 		warn "$path: does not exist. strange.\n";
 	}
 	
-	return_dir_entry:
+	return_dir_entry_itself:
 	$entry = join(" ", @attr) . "\0";
 	print $entry;
-	print {$cache_fh} $entry or exit int $!;
 }
-
-close $cache_fh;
-rename $cache_file."~", $cache_file or exit int $!;
 '
 else
 	exit $ENOENT

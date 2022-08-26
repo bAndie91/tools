@@ -4,7 +4,7 @@
 
 declare -a argv
 declare -a screen_names
-screen_name=
+screen_name=''
 new_screen=0
 
 
@@ -35,7 +35,7 @@ then
 	
 	if [ -z "$screen_name" ]
 	then
-		screen_names=(`find "${SCREENDIR:-/var/run/screen/S-$USER}" -mindepth 1 -maxdepth 1 -printf "%f\n" 2>/dev/null`)
+		screen_names=(`find "${SCREENDIR:-/var/run/screen/S-$USER}" -mindepth 1 -maxdepth 1 ! -name '.*' -printf "%f\n" 2>/dev/null`)
 		if [ ${#screen_names[@]} -gt 1 ]
 		then
 			new_screen_str=$'\t'"New Screen"

@@ -1,15 +1,8 @@
 #!/bin/bash
 
-maxdepth=''
-depth=0
-
-if [ "$1" -ge 0 ] 2>/dev/null
-then
-	maxdepth=$1
-	shift
-fi
 pattern=$1
 shift
+depth=0
 
 if expr "$pattern" : '.*/' >/dev/null
 then
@@ -19,7 +12,7 @@ else
 fi
 
 
-while [ -z "$maxdepth" -o "$depth" -le "${maxdepth:-0}" ]
+while true
 do
 	#echo -e "\r[KDepth $depth" >&2
 	find "${@:-.}" -mindepth "$depth" -maxdepth "$depth" -xdev \
@@ -29,7 +22,7 @@ do
 	[ -z "$cont" ] && break
 	let depth++
 done |{
-c=`tput cols`
+cols=`tput cols`
 curpath=''
 while read -r fd path
 do
@@ -46,9 +39,9 @@ do
 	if [ $SECONDS -gt ${t:-0} ]
 	then
 		x=$curpath
-		if [ ${#x} -gt $[c-3] ]
+		if [ ${#x} -gt $[cols-3] ]
 		then
-			x=…${x: -$[c-4]}/…
+			x=…${x: -$[cols-4]}/…
 		else
 			x=$x/…
 		fi
@@ -68,15 +61,16 @@ true <<EOF
 
 =head1 NAME
 
-ff - horizontal file finder
+ff - find files horizontally
 
 =head1 SYNOPSIS
 
-ff [B<depth>] <B<pattern>> [B<path>-1] [B<path>-2] ... [B<path>-n]
+ff <B<pattern>> [B<path>-1] [B<path>-2] ... [B<path>-n]
 
 =head1 DESCRIPTION
 
-Searches for B<pattern> in files and folders given in B<path>s recursively (optionally at most B<depth> depth), case-insensitively, horizontaly.
+Search files which name matches to B<pattern> (or path if B<pattern> contains '/'), in B<path>s directories recursively, case-insensitively.
+Searching is done horizontaly, ie. scan the upper-most directory level first completely, then move to the next level down.
 
 =cut
 

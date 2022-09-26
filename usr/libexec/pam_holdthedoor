@@ -49,13 +49,13 @@ auth)
 	do
 		case "$param" in
 		activation_password_hex=*)
-			activation_password=`echo "$param" | cut -d= -f2 | hex2chars`
+			activation_password=`echo "${param#*=}" | hex2chars`
 			;;
 		activation_password=*)
-			activation_password=${param:20}
+			activation_password=${param#*=}
 			;;
 		timeout=*)
-			timeout=${param:8}
+			timeout=${param#*=}
 			;;
 		*)
 			echo "pam_holdthedoor: unknown parameter '$param' - ignore" >&2

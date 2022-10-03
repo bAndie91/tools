@@ -2,13 +2,14 @@
 
 target_template="%Y/%m/%d/"
 time_field=Y
-verbose_mv=
+verbose_mv=''
 dryrun=0
-minlevel=
-maxlevel=
-files_type=
+minlevel=''
+maxlevel=''
+files_type=''
 copy=1
-do_touch=
+do_touch=''
+overwrite_opt='--no-clobber'
 
 usage() {
 	echo -n "Usage: ./organizebydate [-t <template>] [-c | -m | -a] [-v] [-n] [[-i | -x] <num>] <files, directories>
@@ -18,6 +19,7 @@ usage() {
                    %@    File's directory path
                    %.    File's name itself
  --move, --copy   Move or copy files, default is copy
+ --overwrite      Enable overwrite, default is no-clobber
  --ctime, -c, --mtime, -m, --atime, -a
                   Timestamping based on change-, modify- (default) or access-time
  --email, -E      Files are raw Emails, timestamping based on Date header
@@ -75,6 +77,9 @@ while [ -n "$1" ]; do
 	--move)
 		copy=0
 		;;
+	--overwrite)
+		overwrite_opt=''
+		;;
 	--copy)
 		copy=1
 		;;
@@ -105,8 +110,8 @@ find "$@" ${minlevel:+-mindepth $minlevel} ${maxlevel:+-maxdepth $maxlevel} -typ
 	do
 		basedir=`dirname "$file"`
 		basename=`basename "$file"`
-		datetime=
-		filetime=
+		datetime=''
+		filetime=''
 		
 		case "$files_type" in
 		email)
@@ -157,8 +162,8 @@ find "$@" ${minlevel:+-mindepth $minlevel} ${maxlevel:+-maxdepth $maxlevel} -typ
 		
 		if [ "$dryrun" = 1 ]
 		then
-			sgn=-
-			[ "$copy" = 1 ] && sgn==
+			sgn='-'
+			[ "$copy" = 1 ] && sgn='='
 			echo "$file $sgn> $target"
 		else
 			if [ "${target: -1}" = / ]
@@ -171,9 +176,9 @@ find "$@" ${minlevel:+-mindepth $minlevel} ${maxlevel:+-maxdepth $maxlevel} -typ
 			
 			if [ "$copy" = 1 ]
 			then
-				cp $verbose_mv -n "$file" "$target"
+				cp $verbose_mv $overwrite_opt "$file" "$target"
 			else
-				mv $verbose_mv -n "$file" "$target"
+				mv $verbose_mv $overwrite_opt "$file" "$target"
 			fi
 			if [ "$do_touch" = 1 ]
 			then

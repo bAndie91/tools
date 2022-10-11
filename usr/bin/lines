@@ -2,8 +2,8 @@
 
 if('--help' ~~ @ARGV)
 {
-	die "Usage: $0 [<RANGES> [<RANGES> [...]]] [-- <FILE>]
-  Read from STDIN, or from FILE if specified.
+	die "Usage: $0 [<RANGES> [<RANGES> [...]]] [-- <FILE> [<FILE> [...]]]
+  Read from STDIN, or from FILEs if specified, STDIN otherwise.
   RANGES is comma-delimited list of line numbers and inclusive ranges.
   Special symbol 'EOF' represents the end of the input file.
   Examples:
@@ -36,8 +36,12 @@ while(exists $ARGV[0])
 	shift @ARGV;
 }
 
+# load this delayed
+eval 'use ARGV::readonly; 1' or die;
+
 while(<>)
 {
+	$. = 1 if $ARGV ne $prev_ARGV;
 	my $include = 0;
 	for my $range (@ranges)
 	{
@@ -55,4 +59,5 @@ while(<>)
 	{
 		print;
 	}
+	$prev_ARGV = $ARGV;
 }

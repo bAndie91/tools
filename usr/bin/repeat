@@ -15,5 +15,6 @@ REPEAT_COUNT=0
 while [ $REPEAT_TIMES = -1 -o $REPEAT_COUNT -lt $REPEAT_TIMES ]
 do
 	"$@"
+	REPEAT_COUNT=$[REPEAT_COUNT + 1]
 	sleep ${REPEAT_DELAY:-0}
 done

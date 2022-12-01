@@ -108,8 +108,8 @@ auth)
 				sleep 0.2
 			done
 			
-			rm /var/run/pam_holdthedoor/req-$uuid || true
-			rm /var/run/pam_holdthedoor/allow-$uuid || true
+			[ -e /var/run/pam_holdthedoor/req-$uuid ] &&   rm /var/run/pam_holdthedoor/req-$uuid   || true
+			[ -e /var/run/pam_holdthedoor/allow-$uuid ] && rm /var/run/pam_holdthedoor/allow-$uuid || true
 			pam_response $response
 		fi
 	fi

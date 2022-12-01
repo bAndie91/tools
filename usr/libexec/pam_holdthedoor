@@ -95,11 +95,13 @@ auth)
 				fi
 				if [ ! -e /var/run/pam_holdthedoor/req-$uuid ]
 				then
+					echo "Permission denied"
 					response=PAM_PERM_DENIED
 					break
 				fi
 				if [ -e /var/run/pam_holdthedoor/allow-$uuid ]
 				then
+					echo "Permission granted"
 					response=PAM_SUCCESS
 					break
 				fi

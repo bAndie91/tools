@@ -68,7 +68,7 @@ then
 fi
 
 
-for file in /tmp/ssh-*/agent.* $HOME/.cache/keyring-*/ssh
+for file in /tmp/ssh-*/agent.* $HOME/.gnupg/S.gpg-agent.ssh $HOME/.cache/keyring-*/ssh
 do
 	if [ -S "$file" ]
 	then

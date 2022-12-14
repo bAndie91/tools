@@ -40,11 +40,21 @@ save_diag()
 	echo "Diagnosztika mentve ebbe a fájlba: $tmp" >&2
 }
 
+http_headers()
+{
+	awk 'BEGIN{h=1} { if(/^\r?$/){h=0} if(h){print} }'
+}
+
+extract_cookies()
+{
+	http_headers | grep -i ^Set-Cookie: | cut -f2 -d: | cut -f1 -d';' | tr "\n" ";"
+}
+
 start_session()
 {
 	local url=$1
 	# get session (and other) cookie
-	local cookies=`curl "${curlargs[@]}" "$url" -b "$Cookies" -c /dev/fd/3 3>&1 1>/dev/null | awk '{if(!/^(# |$)/){print $6"="$7";"}}'`
+	local cookies=`curl "${curlargs[@]}" "$url" -b "$Cookies" -i | extract_cookies`
 	Cookies="$Cookies;$cookies"
 }
 
@@ -60,6 +70,7 @@ if [ ".$1" = .--history ]
 then
 	url=https://www.alfoldviz.hu/ugyfelszolgalat/e-ugyfelszolgalat
 	start_session "$url"
+	
 	url=https://www.alfoldviz.hu/ugyfelszolgalat/e-ugyfelszolgalat/bejelentkezes
 	email=`urlencode "$2"`
 	password=`urlencode "$3"`
@@ -83,7 +94,8 @@ then
 	}
 	ps=("${PIPESTATUS[@]}")
 	assert "Rossz státusz bejelentkezéskor" [ ${ps[1]} = 0 ]
-	Cookies="acceptCookies=1;"`echo "$response" | grep -i ^Set-Cookie: | cut -f2 -d: | cut -f1 -d';' | tr "\n" ";"`
+	Cookies="acceptCookies=1;"`echo "$response" | extract_cookies`
+	
 	url=https://www.alfoldviz.hu/ugyfelszolgalat/e-ugyfelszolgalat/korabbi-meroallasok-listaja/betoltes
 	curl "${curlargs[@]}" "$url" -b "$Cookies" | html2text -utf8
 	exit ${PIPESTATUS[0]}

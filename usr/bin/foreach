@@ -1,0 +1,11 @@
+#!/bin/bash
+
+FOREACH_VAR=$1
+shift
+FOREACH_COMMAND=$*
+
+while read -r $FOREACH_VAR
+do
+	set -- ${!FOREACH_VAR}
+	eval "$FOREACH_COMMAND"
+done

@@ -57,8 +57,8 @@ while(<>)
 				}
 				close $fh;
 				
-				$hdr_from = encode "utf8", join " ", map { decode "MIME-Header", $_ } @{$hdr{From}};
-				$hdr_subj = encode "utf8", join " ", map { decode "MIME-Header", $_ } @{$hdr{Subject}};
+				$hdr_from = encode "utf8", join " ", map { s/[\x00-\x1F\x7F]+/ /g; decode "MIME-Header", $_ } @{$hdr{From}};
+				$hdr_subj = encode "utf8", join " ", map { s/[\x00-\x1F\x7F]+/ /g; decode "MIME-Header", $_ } @{$hdr{Subject}};
 				
 				$name = join " ✉ ", 
 					map {s/^"(.+?)"/$1/; $_} 

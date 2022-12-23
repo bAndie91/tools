@@ -15,6 +15,12 @@ use constant {EIO => 5,};
 $xattr_displayname = "user.maildirfs.display_filename";
 $/ = chr 0;
 
+sub sanitize
+{
+	$_[0] =~ s/[\x00-\x1F\x7F]+/ /g;
+	return $_[0];
+}
+
 while(<>)
 {
 	s/\x00$//;
@@ -48,7 +54,7 @@ while(<>)
 					last if /^$/;
 					if(($hname) = /^(From|Subject):\s*/i)
 					{
-						$hdr{$hname} = [$'\''];
+						$hdr{$hname} = [ $'\'' ];
 						$pos = tell $fh;
 						push @{$hdr{$hname}}, $_ while $_=<$fh> and s/^\s+(.+)[\r\n]*$/$1/;
 						seek $fh, $pos, 0;
@@ -57,8 +63,8 @@ while(<>)
 				}
 				close $fh;
 				
-				$hdr_from = encode "utf8", join " ", map { s/[\x00-\x1F\x7F]+/ /g; decode "MIME-Header", $_ } @{$hdr{From}};
-				$hdr_subj = encode "utf8", join " ", map { s/[\x00-\x1F\x7F]+/ /g; decode "MIME-Header", $_ } @{$hdr{Subject}};
+				$hdr_from = encode "utf8", sanitize decode "MIME-Header", join " ", @{$hdr{From}};
+				$hdr_subj = encode "utf8", sanitize decode "MIME-Header", join " ", @{$hdr{Subject}};
 				
 				$name = join " ✉ ", 
 					map {s/^"(.+?)"/$1/; $_} 

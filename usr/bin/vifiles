@@ -4,10 +4,11 @@
 #
 # Edit many files at once.
 #
-# Missing LF at the end of the file is not preserved.
+# If a LF char at the end of the file is missing, it'll be added.
 
 
 Recursive=no
+Force=no
 shopt -s nullglob
 
 cleanup()
@@ -33,7 +34,7 @@ prepcat()
 	done
 }
 
-tmpfile=`mktemp -t vidir.tmp-XXXXXX`
+tmpfile=`mktemp -t vifiles.tmp-XXXXXX`
 trap cleanup EXIT
 set -e
 
@@ -42,6 +43,18 @@ do
 	case "$1" in
 	-R|-r|--recursive)
 		Recursive=yes;;
+	-f|--force)
+		Force=yes;;
+	-h|--help)
+		echo "vifiles - edit multiple files at once
+
+Usage: vifiles [-R] [FILES]
+Options:
+ -R, -r, --recursive    open all files within the directories specified in parameters
+ -f, --force            don't ask confirmation to save changes (provided that the editor exited without error code)
+
+vifiles opens up your text editor (search list: \$EDITOR, \$VISUAL, vi) to edit a file with the content of all of the files specified in parameters, each line prefixed with the file name from which it's coming from. Save changes back to the original files."
+		exit;;
 	--)	shift
 		break;;
 	-*)	echo "Unknown option: $1" >&2
@@ -58,6 +71,7 @@ prepcat "$@" >"$tmpfile"
 echo "Opening $nfiles files to edit ..." >&2
 
 command ${EDITOR:-${VISUAL:-vi}} "$tmpfile"
+# 'errexit' is set
 
 read -e -p "Apply changes? [y/n] " -i n
 if [ "${REPLY^^}" != Y ]
@@ -65,7 +79,8 @@ then
 	exit
 fi
 
-cat "$tmpfile" | cut -s -f1 -d: | sed -e 's@\(.\+\)/[^/]\+@\1@' | sort -u | xargs mkdir -p
+# create directories if any new added in the file paths
+cat "$tmpfile" | cut -s -f1 -d: | sed -e 's@\(.\+\)/[^/]\+@\1@' | sort -u | xargs --verbose -d "\n" mkdir -v -p
 
 echo "Saving edited files ..." >&2
 
@@ -76,12 +91,12 @@ cat "$tmpfile" | perl -ne '
 		{
 			if(not open $fhs{$path}, ">", $path)
 			{
-				warn "$!: $path\n";
+				warn "vifiles: $path: $!\n";
 				$fhs{$path} = undef;
 			}
 		}
 		if(defined $fhs{$path})
 		{
-			print {$fhs{$path}} $line or warn sprintf "%s while writing %d bytes to %s\n", $!, length $line, $path;
+			print {$fhs{$path}} $line or warn sprintf "vifiles: %s while writing %d bytes to %s\n", $!, length $line, $path;
 		}
 	}'

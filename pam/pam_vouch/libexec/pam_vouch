@@ -17,7 +17,7 @@ trap 'pam_response PAM_SYSTEM_ERR' ERR
 do_log()
 {
 	local msg=$*
-	logger -p auth.info -t "$PROGNAME" -- "pam_holdthedoor($PAM_SERVICE:$PAM_TYPE): $msg, logname=$LOGNAME uid=$UID euid=$EUID tty=$PAM_TTY ruser=$PAM_RUSER rhost=$PAM_RHOST user=$PAM_USER" || true
+	logger -p auth.info -t "$PROGNAME" -- "pam_vouch($PAM_SERVICE:$PAM_TYPE): $msg, logname=$LOGNAME uid=$UID euid=$EUID tty=$PAM_TTY ruser=$PAM_RUSER rhost=$PAM_RHOST user=$PAM_USER" || true
 }
 
 pam_response()
@@ -58,7 +58,7 @@ auth)
 			timeout=${param#*=}
 			;;
 		*)
-			echo "pam_holdthedoor: unknown parameter '$param' - ignore" >&2
+			echo "pam_vouch: unknown parameter '$param' - ignore" >&2
 			;;
 		esac
 	done
@@ -67,7 +67,7 @@ auth)
 	then
 		if [ "$PAM_PASSWORD" = "$activation_password" ]
 		then
-			mkdir -p /var/run/pam_holdthedoor
+			mkdir -p /var/run/pam_vouch
 			uuid=`cat /proc/sys/kernel/random/uuid`
 			
 			{
@@ -77,9 +77,9 @@ auth)
 					value_esc=${value//\'/\'\\\'\'}
 					echo "$var='$value_esc'"
 				done
-				echo PAM_HOLDTHEDOOR_TIMESTAMP=$started
-				echo PAM_HOLDTHEDOOR_EXPIRE=$[started + timeout]
-			}>/var/run/pam_holdthedoor/req-$uuid
+				echo PAM_VOUCH_TIMESTAMP=$started
+				echo PAM_VOUCH_EXPIRE=$[started + timeout]
+			}>/var/run/pam_vouch/req-$uuid
 			
 			do_log "waiting for approval"
 			echo "Waiting for approval..."
@@ -93,13 +93,13 @@ auth)
 				then
 					break
 				fi
-				if [ ! -e /var/run/pam_holdthedoor/req-$uuid ]
+				if [ ! -e /var/run/pam_vouch/req-$uuid ]
 				then
 					echo "Permission denied"
 					response=PAM_PERM_DENIED
 					break
 				fi
-				if [ -e /var/run/pam_holdthedoor/allow-$uuid ]
+				if [ -e /var/run/pam_vouch/allow-$uuid ]
 				then
 					echo "Permission granted"
 					response=PAM_SUCCESS
@@ -108,8 +108,8 @@ auth)
 				sleep 0.2
 			done
 			
-			[ -e /var/run/pam_holdthedoor/req-$uuid ] &&   rm /var/run/pam_holdthedoor/req-$uuid   || true
-			[ -e /var/run/pam_holdthedoor/allow-$uuid ] && rm /var/run/pam_holdthedoor/allow-$uuid || true
+			[ -e /var/run/pam_vouch/req-$uuid ] &&   rm /var/run/pam_vouch/req-$uuid   || true
+			[ -e /var/run/pam_vouch/allow-$uuid ] && rm /var/run/pam_vouch/allow-$uuid || true
 			pam_response $response
 		fi
 	fi

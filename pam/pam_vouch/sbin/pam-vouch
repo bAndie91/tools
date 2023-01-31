@@ -3,7 +3,7 @@
 set -e
 set -o pipefail
 
-cd /var/run/pam_holdthedoor
+cd /var/run/pam_vouch
 
 _resolveip()
 {
@@ -31,12 +31,12 @@ do
 	
 	# note, $file is trusted
 	. $file
-	age=`perl -MTime::Duration -e "print ago(time - $PAM_HOLDTHEDOOR_TIMESTAMP)"`
-	exp=`perl -MTime::Duration -e "print ago(time - $PAM_HOLDTHEDOOR_EXPIRE)"`
+	age=`perl -MTime::Duration -e "print ago(time - $PAM_VOUCH_TIMESTAMP)"`
+	exp=`perl -MTime::Duration -e "print ago(time - $PAM_VOUCH_EXPIRE)"`
 	
 	echo "Access request:"
-	echo "  when:            $(date -d "@$PAM_HOLDTHEDOOR_TIMESTAMP") ($(bolden "$age"))"
-	echo "  request expires: $(date -d "@$PAM_HOLDTHEDOOR_EXPIRE") ($exp)"
+	echo "  when:            $(date -d "@$PAM_VOUCH_TIMESTAMP") ($(bolden "$age"))"
+	echo "  request expires: $(date -d "@$PAM_VOUCH_EXPIRE") ($exp)"
 	echo "  source host:     $PAM_RHOST"
 	echo -n "  "; _resolveip "$PAM_RHOST"
 	echo "  tty:             $PAM_TTY"
@@ -46,7 +46,7 @@ do
 	
 	read -e -p "Allow? [y/n] " reply
 	
-	if [ $PAM_HOLDTHEDOOR_EXPIRE -le `date +%s` ]
+	if [ $PAM_VOUCH_EXPIRE -le `date +%s` ]
 	then
 		echo "Request expired in the meanwhile."
 	else

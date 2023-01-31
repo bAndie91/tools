@@ -2,13 +2,24 @@
 
 # Reattach screen and importing environment
 
+set -e
+. /usr/lib/yazzy-utils/bash-utils
+set +e
+
 declare -a argv
 declare -a screen_names
 screen_name=''
 new_screen=0
 
+is_dir_empty()
+{
+	local dir=$1
+	local anything=`find "$dir" -mindepth 1 -maxdepth 1 -print 1 -quit`
+	[ -z "$anything" ]
+}
 
-if [ -z "$1" ]
+
+if [ $# = 0 ]
 then
 	argv=(-dR)
 else
@@ -21,22 +32,32 @@ then
 	while [ -n "$1" ]
 	do
 		case "${1,,}" in
-		*r|r)
+		(*r|r)
 			shift
 			if [ ".${1:0:1}" != .- ]
 			then
 				screen_name=$1
 				break
-			fi
-			;;
+			fi;;
 		esac
 		shift
 	done
 	
 	if [ -z "$screen_name" ]
 	then
-		screen_names=(`find "${SCREENDIR:-/var/run/screen/S-$USER}" -mindepth 1 -maxdepth 1 ! -name '.*' -printf "%f\n" 2>/dev/null`)
-		if [ ${#screen_names[@]} -gt 1 ]
+		screendir=${SCREENDIR:-/var/run/screen/S-$USER}
+		if [ ! -d "$screendir" ] || is_dir_empty "$screendir"
+		then
+			screendir=/tmp/uscreens/S-$USER
+		fi
+		
+		screen_names=(`find "$screendir" -mindepth 1 -maxdepth 1 ! -name '.*' -printf "%f\n" 2>/dev/null`)
+		
+		if [ ${#screen_names[@]} = 1 ]
+		then
+			argv+=(-r)
+			screen_name=${screen_names[0]}
+		elif [ ${#screen_names[@]} -gt 1 ]
 		then
 			new_screen_str=$'\t'"New Screen"
 			while [ -z "$screen_name" ]
@@ -47,12 +68,15 @@ then
 				do
 					if [ "$screen_desc" = "$new_screen_str" ]
 					then
-						screen_name=${COLUMNS:-$(tput cols)}x${LINES:-$(tput lines)}
+						tty=`tty`
+						tty=${tty#/dev/}
+						tty=${tty//\//-}
+						screen_name=$tty.${COLUMNS:-$(tput cols)}x${LINES:-$(tput lines)}
 						new_screen=1
 					elif [ -n "$screen_desc" ]
 					then
-						screen_name=`sed -e 's/\s*\(\S\+\).*/\1/' <<<"$screen_desc"`
 						argv+=(-r)
+						screen_name=`sed -e 's/\s*\(\S\+\).*/\1/' <<<"$screen_desc"`
 					fi
 					break
 				done
@@ -62,21 +86,26 @@ then
 			done
 			unset new_screen_str
 		fi
+		unset screendir
+		unset screen_names
 	fi
 	
-	if [ $new_screen != 1 -a ${#screen_names[@]} -gt 0 ]
+	if [ $new_screen != 1 -a -n "$screen_name" ]
 	then
 		set -e
-		for env in DISPLAY SSH_AUTH_SOCK DBUS_SESSION_BUS_ADDRESS
+		for env in DISPLAY SSH_AUTH_SOCK DBUS_SESSION_BUS_ADDRESS XDG_SESSION_COOKIE WINDOWID
 		do
-			screen ${screen_name:+-S "$screen_name"} -X setenv "$env" "${!env}"
+			if bash_defined "$env"
+			then
+				echo "setting $env in $screen_name screen" >&2
+				screen ${screen_name:+-S "$screen_name"} -X setenv "$env" "${!env}"
+			fi
 		done
 		set +e
 		unset env
 	fi
 	unset new_screen
 	unset screen_name
-	unset screen_names
 fi
 
 exec screen "${argv[@]}"

@@ -1,0 +1,21 @@
+#!/bin/bash
+
+screen -ls |\
+grep -Evi '^(No Sockets found|[0-9]+ Sockets? in)|^\s*$' |\
+while IFS=$'\n' read -r line
+do
+	echo "$line"
+	if [[ $line =~ ^[\ $'\t']+([^ $'\t']+) ]]
+	then
+		sty=${BASH_REMATCH[1]}
+		for win in `screen -S "$sty" -Q @echo -p %v`
+		do
+			win=${win//[!0-9]/}
+			title=`screen -S "$sty" -p "$win" -Q @echo -p %t`
+			echo $'\t'$'\t'$win$'\t'"$title"
+			unset title
+		done
+		unset win
+		unset sty
+	fi
+done

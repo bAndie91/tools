@@ -17,7 +17,7 @@
 | [user-tools/grepdatetime](user-tools/grepdatetime) | filter lines from log files between the give dates
 | [user-tools/Head](user-tools/Head) | output only one screen from the beginning of input stream
 | [user-tools/header.sed](user-tools/header.sed) | output until the first double (CR)LF
-| [user-tools/hidedir](user-tools/hidedir) | hide directories by umount or overmount them with an empty dir in a separated namespace
+| [root-tools/hidedir](root-tools/hidedir) | hide directories by umount or overmount them with an empty dir in a separated namespace
 | [user-tools/inisort](user-tools/inisort) | sort INI file's content according to another one
 | [user-tools/lpset](user-tools/lpset) | setup printers and their options interactively
 | [user-tools/lsata](user-tools/lsata) | list ATA device numbers and corresponding block devices
@@ -32,12 +32,12 @@
 | [user-tools/renamemanual](user-tools/renamemanual) | prompt user for filenames to rename files interactively
 | [user-tools/repeat](user-tools/repeat) | repeat running a command (optionally N times)
 | [user-tools/rsacrypt](user-tools/rsacrypt) | encrypt/decrypt streams with RSA keys
-| [user-tools/rxvt-inband](user-tools/rxvt-inband) | client program for Rxvt Inband Filetransfer plugin
+| [xbin/rxvt-inband](xbin/rxvt-inband) | client program for Rxvt Inband Filetransfer plugin
 | [user-tools/screenconsole](user-tools/screenconsole) | open a commandline, send commands to running GNU/screen session
 | [user-tools/slay](user-tools/slay) | continously kill a process unlit it lives
 | [user-tools/slayall](user-tools/slayall) | same but by process name
 | [user-tools/ssh-agent-finder](user-tools/ssh-agent-finder) | search and reuse already started and loaded ssh-agent
-| [user-tools/sshwho](user-tools/sshwho) | display logged-in ssh sessions like who
+| [root-tools/sshwho](root-tools/sshwho) | display logged-in ssh sessions like who
 | [user-tools/straceall](user-tools/straceall) | strace all processes given by name
 | [user-tools/swap](user-tools/swap) | swap two files in name
 | [user-tools/symlinks2dot](user-tools/symlinks2dot) | output a graph (graphviz) illustrating forwarded symlinks

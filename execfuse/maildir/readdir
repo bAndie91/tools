@@ -27,7 +27,7 @@ while(<>)
 	@attr = split / /, $_, $ENV{fields};
 	$fname = $attr[12];
 	
-	if($ENV{cwd} =~ m{/.})
+	if($ENV{cwd} =~ m{/\.})
 	{
 		goto return_dir_entry_itself;
 	}

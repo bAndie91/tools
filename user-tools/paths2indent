@@ -5,8 +5,16 @@
 # Similar tools:
 # - https://github.com/jez/as-tree
 
-my %parsed;
+use Getopt::Long;
+
+my $do_sort = 0;
 my $DIRSEP = '/';
+
+GetOptions(
+	's|sort!' => \$do_sort,
+) or die;
+
+my %parsed;
 
 while(my $path = <STDIN>)
 {
@@ -25,7 +33,7 @@ sub output
 {
 	my $indent = shift;
 	my $ref = shift;
-	for my $key (keys %$ref)
+	for my $key ($do_sort ? (sort keys %$ref) : (keys %$ref))
 	{
 		printf "%s%s\n", ' 'x$indent, $key;
 		output($indent+1, $ref->{$key});

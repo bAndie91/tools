@@ -66,6 +66,19 @@ case "$1" in
 	done
 	continue
 	;;
+-v)
+	shift
+	verticalBar=$1
+        topleftCorner=$1
+        toprightCorner=$1
+        bottomleftCorner=$1
+        bottomrightCorner=$1
+        leftCross=$1
+        middleCross=$1
+        rightCross=$1
+        topCross=$1
+        bottomCross=$1
+	;;
 -h|--help)
 	echo "Usage: some_command | tabularize [-a | -u | -c] [<options>]
 Options:
@@ -73,6 +86,7 @@ Options:
  -u, --unicode  borders with nice graphical chars
  -H             no horizontal lines
  -M             no margins, ie. no right-most and left-most vertical borders
+ -v CHAR        vertical separator characters
  --align-right NUM [NUM [...]]
                 align these columns to the right, others to the left. turn off
                 auto-detection. default is auto-detect based on numeric content."

@@ -81,19 +81,20 @@ case "$1" in
 	;;
 -h|--help)
 	echo "Usage: some_command | tabularize [-a | -u | -c] [<options>]
+Takes TAB-delimited lines of text and outputs formatted table.
 Options:
  -a, --ascii    7-bit ascii borders
  -u, --unicode  borders with nice graphical chars
  -H             no horizontal lines
  -M             no margins, ie. no right-most and left-most vertical borders
- -v CHAR        vertical separator characters
+ -v CHAR        vertical separator character(s)
  --align-right NUM [NUM [...]]
                 align these columns to the right, others to the left. turn off
                 auto-detection. default is auto-detect based on numeric content."
 	exit
 	;;
 -*)
-	echo "Unknown option: $1" >&2
+	echo "$0: unknown option: $1" >&2
 	exit -1
 	;;
 esac

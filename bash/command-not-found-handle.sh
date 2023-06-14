@@ -6,8 +6,7 @@ command_not_found_handle()
 	#shift
 	#declare -a args=("$@")
 	
-	echo "bash: $command: command not found" >&2
-	echo -n "did you mean... " >&2
+	echo -n "bash: $command: command not found. did you mean... " >&2
 	
 	local threshold
 	if [ ${#command} -le 4 ]

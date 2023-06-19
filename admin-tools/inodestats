@@ -1,0 +1,45 @@
+#!/usr/bin/env perl
+
+use Data::Dumper;
+
+$LINES = $ENV{'LINES'} || `tput lines`;
+
+open LSOF, '-|', qw/lsof -n -Fcpi +c0/;
+while(<LSOF>)
+{   
+    ($a, $b) = (/^(.)(.*)/);
+    if($a eq "p")
+    {   
+        $pid=$b;
+    }
+    elsif($a eq "i")
+    {   
+        push @{$T{$pid}->{$a}},$b;
+    }
+    else
+    {   
+        $T{$pid}->{$a} = $b;
+    }
+}
+close LSOF;
+
+for $pid (keys %T)
+{   
+    $C{$T{$pid}->{'c'}}->{'nproc'}++;
+    $C{$T{$pid}->{'c'}}->{'inodes'} += scalar @{$T{$pid}->{'i'}};
+}
+
+for $c (keys %C)
+{   
+    $C{$c}->{'iperp'} = $C{$c}->{'inodes'} / $C{$c}->{'nproc'};
+}
+
+
+$line = 0;
+$sortby = $ARGV[0] || "inodes";
+for $c (sort { $C{$b}->{$sortby} <=> $C{$a}->{$sortby} } keys %C)
+{   
+    printf "%-16s  %4d prc  %5s ino  %7.1f i/p\n", $c, $C{$c}->{'nproc'}, $C{$c}->{'inodes'}, $C{$c}->{'iperp'} ;
+    $line++;
+    last if ($LINES and $line >= $LINES - 2);
+}

@@ -1,0 +1,31 @@
+#!/bin/bash
+
+
+case "$1" in
+--scan)
+	shift
+	fdupes -n -1 -r "$@"
+	;;
+--from-file)
+	shift
+	while read file1 fileN; do
+		if [ -e "$file1" ]; then
+			for file in $fileN; do
+				ln -f -v "$file1" "$file"
+			done
+		fi
+	done <"$1"
+	;;
+*)
+	echo \
+"Makes hardlinks from identical files as reported by fdupes(1).
+
+USAGE
+  Create duplication report: $0 --scan [directories] > [report-file]
+  Make hardlinks according to duplication report: $0 --from-file [report-file]
+
+BUGS
+  Does not work with files have IFS in their name." >&2
+	exit 1
+	;;
+esac

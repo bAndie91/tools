@@ -20,39 +20,60 @@ TOOLS = 2opml adr2html asterisk-log-separator awk-cut base58 base64url \
   taslis tests text2img-dataurl touchx ttinput uchmod unicodestyle \
   upsidedown url_decode url_encode url_encode_bf url-parts vidir-sanitize \
   vifiles waitpid whisper-retention-info wikibot \
-  xdg-autostart xml2json
+  xdg-autostart xml2json msg perl-repl rsync-semichroot
 
-install-msg:
-	install --compare msg $(TOOLS_TARGET_DIR)/
-	install --compare ../bash/bash_completion.d/msg /etc/bash_completion.d/
+TOOLS_TARGET_FILES := $(addprefix $(TOOLS_TARGET_DIR)/,$(TOOLS))
 
-install-perl-repl:
-	install --compare perl-repl $(TOOLS_TARGET_DIR)/
-	install --compare ../libexec/perlshell /usr/libexec/
 
-install-rsync-semichroot:
-	install --compare rsync-semichroot $(TOOLS_TARGET_DIR)/
-	install --compare ../doc/rsync-semichroot.txt /usr/share/doc/tool/rsync-semichroot.txt
+install-msg: $(TOOLS_TARGET_DIR)/msg /etc/bash_completion.d/msg
+
+/etc/bash_completion.d/msg:
+	install ../bash/bash_completion.d/msg $@
+	@echo remove $@ >> uninstall.sh
+
+install-perl-repl: $(TOOLS_TARGET_DIR)/perl-repl /usr/libexec/perlshell
+
+/usr/libexec/perlshell:
+	install ../libexec/perlshell $@
+	@echo remove $@ >> uninstall.sh
+
+install-rsync-semichroot: $(TOOLS_TARGET_DIR)/rsync-semichroot /usr/share/doc/tool/rsync-semichroot.txt
+
+/usr/share/doc/tool/rsync-semichroot.txt:
+	install ../doc/rsync-semichroot.txt $@
+	@echo remove $@ >> uninstall.sh
+
+install-bash-functions: install-basedir-lib /usr/lib/tool/bash-utils
+
+/usr/lib/tool/bash-utils:
+	install ../bash/bash-utils $@
+	@echo remove $@ >> uninstall.sh
+
 
 install-basedirs: install-basedir-lib
 	mkdir -p $(TOOLS_TARGET_DIR)
+	@echo remove $(TOOLS_TARGET_DIR) >> uninstall.sh
 	mkdir -p /usr/share/doc/tool
+	@echo remove /usr/share/doc/tool >> uninstall.sh
 
 install-basedir-lib:
 	mkdir -p /usr/lib/tool
+	@echo remove /usr/lib/tool >> uninstall.sh
 
-install-bash-functions: install-basedir-lib
-	install --compare ../bash/bash-utils /usr/lib/tool/
 
-install-all: install-basedirs install-msg install-perl-repl install-rsync-semichroot install-bash-functions install-manpages
-	set -e ;\
-	for tool in $(TOOLS);\
-	do\
-		install --compare $$tool $(TOOLS_TARGET_DIR)/ ;\
-	done
+
+install-all: install-basedirs install-msg install-perl-repl install-rsync-semichroot \
+  install-bash-functions $(TOOLS_TARGET_FILES) install-manpages
+
+
+$(TOOLS_TARGET_FILES):
+	install $(notdir $@) $(TOOLS_TARGET_DIR)/
+	@echo remove $(TOOLS_TARGET_DIR)/$(notdir $@) >> uninstall.sh
+
 
 list-tools:
 	@echo $(TOOLS) | tr " " "\n" | sort
+
 
 
 MANPAGES_DIR = ../doc/man

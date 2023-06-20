@@ -7,3 +7,4 @@
 /tests/*/_test.*
 /doc/man/*
 !/doc/man/Makefile
+uninstall.sh

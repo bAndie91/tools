@@ -1,0 +1,108 @@
+#!/bin/bash
+
+# This is a wrapper for 'fusefile'
+# enabling to invoke from standard 'mount' command
+# as 'mount -t fusefile ./file1 ./mountpoint'
+
+
+warnx()
+{
+	echo "mount.fusefile: $@" >&2
+}
+
+declare -a my_opts
+declare -a fuse_opts
+command="exec fusefile"
+fake_command="warnx fusefile"
+isset_fuse_fsname=no
+access_mode=''
+param1=''
+param2=''
+
+while [ -n "$1" ]
+do
+	case "$1" in
+	-o)
+		shift
+		for opt in ${1//,/ }
+		do
+			case "$opt" in
+			rw)
+				access_mode=-w
+				;;
+			ro)
+				access_mode=-r
+				;;
+			offset=*|size=*|mode=*)
+				opt_chr=${opt:0:1}
+				opt_chr=${opt_chr^^}
+				opt_val=${opt#*=}
+				my_opts+=(-$opt_chr "$opt_val")
+				;;
+			writeonly)
+				access_mode=-W
+				;;
+			readappend)
+				access_mode=-a
+				;;
+			appendonly)
+				access_mode=-A
+				;;
+			*)
+				#echo "mount.fusefile: unknown option: -o $opt" >&2
+				#exit -1
+				fuse_opts+=(-o "$opt")
+				if [ "${opt:0:7}" = "fsname=" ]
+				then
+					isset_fuse_fsname=yes
+				fi
+				;;
+			esac
+		done
+		;;
+	-v)
+		set -x
+		;;
+	-f)
+		command=$fake_command
+		;;
+	-n)
+		true
+		;;
+	--help)
+		echo "mount.fusefile -o OPTIONS FILE MOUNTPOINT
+Options:
+  rw, ro, writeonly, readappend, appendonly,
+  offset=OFFSET, size=SIZE, mode=MODE, FUSE-options
+"
+		exit -1
+		;;
+	--)
+		shift
+		break
+		;;
+	-*)
+		echo "mount.fusefile: unknown option: $1" >&2
+		exit -1
+		;;
+	*)
+		if [ -z "$param1" ]
+		then
+			param1=$1
+			if [ $isset_fuse_fsname = no ]
+			then
+				fuse_opts+=(-o "fsname=$1")
+			fi
+		elif [ -z "$param2" ]
+		then
+			param2=$1
+		else
+			echo "mount.fusefile: too many parameter: $1" >&2
+			exit -1
+		fi
+		;;
+	esac
+	shift
+done
+
+$command "$param1" "$param2" $access_mode "${my_opts[@]}" "${fuse_opts[@]}"

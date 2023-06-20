@@ -1,0 +1,47 @@
+#!/bin/bash
+
+# fstab-compatible mount script for fuse-xattrs -overlay fs
+
+set -e
+set -o pipefail
+set -u
+
+sourcedir=$1
+shift
+targetdir=$1
+shift
+options=''
+
+while [ $# -gt 0 ]
+do
+	case "$1" in
+	-o)
+		shift
+		options=$1
+		;;
+	*)
+		echo "mount.xattrovlfs: unknown parameter: $1" >&2
+		exit 1
+		;;
+	esac
+	shift
+done
+
+fsname="xattr-overlay($sourcedir)"
+
+declare -a fuse_options=()
+IFS=','
+for opt in $options
+do
+	case "$opt" in
+	default|rw) true;;  # ignore
+	ro)	echo "mount.xattrovlfs: readonly is not supported" >&2
+		exit 2
+		;;
+	*)	fuse_options+=(-o "$opt")
+		;;
+	esac
+done
+IFS=$' \t\n'
+
+fuse-xattrs "$sourcedir" "$targetdir" -o fsname="$fsname" "${fuse_options[@]}"

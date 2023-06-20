@@ -1,0 +1,15 @@
+#!/usr/bin/env perl
+
+use POSIX;
+
+system @ARGV;
+$status = ${^CHILD_ERROR_NATIVE};
+
+if(WIFSIGNALED($status))
+{
+	printf STDERR "command terminated by signal %d.\n", WTERMSIG($status);
+}
+else
+{
+	printf STDERR "command exited with status %d.\n", WEXITSTATUS($status);
+}

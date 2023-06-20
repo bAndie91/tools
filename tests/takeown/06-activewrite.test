@@ -21,7 +21,7 @@ LANG=C
 end
 
 action
-../../../usr/bin/takeown
+../../user-tools/takeown
 --active-write-test
 --recursive
 readonlydir

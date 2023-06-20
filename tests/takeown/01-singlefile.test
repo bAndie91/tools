@@ -5,7 +5,7 @@ setting
 end
 
 action
-../../../usr/bin/takeown
+../../user-tools/takeown
 file1
 end
 
@@ -15,7 +15,7 @@ exists no file1.tookown
 end
 
 action
-../../../usr/bin/takeown
+../../user-tools/takeown
 nonwritable/file2
 end
 

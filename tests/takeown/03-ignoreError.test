@@ -5,7 +5,7 @@ setting
 end
 
 action
-../../../usr/bin/takeown
+../../user-tools/takeown
 --ignore
 nonwritable/file1
 file2

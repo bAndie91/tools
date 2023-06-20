@@ -5,7 +5,7 @@ setting
 end
 
 action
-../../../usr/bin/takeown
+../../user-tools/takeown
 -R
 --best-effort
 dir1

@@ -4,7 +4,7 @@ setting
 end
 
 action
-../../../usr/bin/takeown
+../../user-tools/takeown
 link1
 end
 

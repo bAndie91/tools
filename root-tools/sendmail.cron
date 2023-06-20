@@ -1,0 +1,59 @@
+#!/bin/bash
+
+set -e
+set -o pipefail
+set -u
+
+. /usr/lib/tools/bash-utils
+
+basedir=/var/log/cron/user
+timestamp=`date "+%F %T %z"`
+
+if [ "X$(grandparentexe)" = X/usr/sbin/cron ]
+then
+	cron_user=''
+	cron_job=''
+	partial_cron_message=''
+	while read -r line
+	do
+		if [ -n "$cron_user" -a -n "$cron_job" ]
+		then
+			full_cron_message=$partial_cron_message$(cat)
+			message_body=`echo "$full_cron_message" |\
+				perl -pe '
+					BEGIN { $in_header=1; }
+					if($in_header)
+					{
+						$in_header=0 if $_ eq "\n";
+						$_="";
+					}
+				'`
+			if [ "$message_body" = "STDIN EOF!"$'\r' -o "$message_body" = "STDIN EOF!"$'\r\n' -o "$message_body" = "" -o "$message_body" = $'\n' ]
+			then
+				continue
+			fi
+			unset message_body
+			
+			command_name_noslash=`echo "$cron_job" | sed -e 's@/@⁄@g'`
+			command_name_noslash=${command_name_noslash:0:255}
+			user_name_noslash=`echo "$cron_user" | sed -e 's@/@⁄@g'`
+			if [ ! -d "$basedir/$user_name_noslash" ]
+			then
+				install -o "$cron_user" -m 0750 -d "$basedir/$user_name_noslash"
+			fi
+			logfile=$basedir/$user_name_noslash/$command_name_noslash
+			echo "$full_cron_message" | sed -e 's!^!'"$timestamp\t"'!' >> "$logfile"
+		else
+			partial_cron_message=$partial_cron_message$line$'\n'
+			if [ "${line:0:3}" = To: ]
+			then
+				cron_user=${line:4}
+			elif [ "${line:0:8}" = Subject: ]
+			then
+				cron_job=`echo "$line" | cut -d' ' -f4-`
+			fi
+		fi
+	done
+else
+	errx -1 "I only save cron job outputs to $basedir. Call me only within cron."
+fi

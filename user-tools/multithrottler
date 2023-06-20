@@ -1,0 +1,201 @@
+#!/usr/bin/env perl
+
+use lib '/usr/lib/multithrottler';
+use Data::Dumper;
+use Throttler;
+use YAML;
+use Getopt::Long;
+Getopt::Long::Configure('no_ignore_case');
+
+sub warnxf
+{
+	my $_ = shift;
+	if(defined and $_ ne '')
+	{
+		$_ .= "\n" unless /\n$/;
+		s/^/multithrottler: /mg;
+	}
+	return $_;
+}
+sub warnx
+{
+	print STDERR warnxf(@_);
+}
+sub errx
+{
+	$! = 255;
+	die warnxf(@_);
+}
+
+$OverLimitStatusCode = 11;
+$Itemkey = '.';
+$Usage = "Usage:
+  multithrottler [--rate <MAXITEMS>/<INTERVAL> | --reset] --zone <FILE>
+  multithrottler [-r RATE | -Z] --zone <FILE> [-F] [-c CODE] [--item <KEY>] <COMMAND> [<ARGS>]
+  multithrottler [--info] [--dump] --zone <FILE>
+
+Options:
+  -r, --rate      define how many items are permitted within a given interval
+                  (in seconds). you can just simply define/redefine rate or
+                  define/redefine rate and run command in a single invocation.
+                  not need to define rate if you already have the zone file.
+                  if you redefine the rate, counters get reset.
+  -n, --no-redefine-rate
+  --no-redefine   define rate only if the zone does not exists yet,
+                  i.e. prevent overwrite. use with --rate.
+  -f, -z, --zonefile  
+  --zone, --file  where to store throttling records
+  -Z, --reset     reset counters in the zone
+  -F, --force     force insert item. but throttle is neccessary.
+  -c, --code      status code for throttling (default is $OverLimitStatusCode)
+  -i, -k, --itemkey
+  --item, --key   key of the item to insert (default is \".\")
+  --info          display rate info
+  --dump          dump zone records
+";
+%ThrottlerParams = ('backend' => 'YAML');
+
+
+sub readRate
+{
+	eval {
+		my $zonedata = YAML::LoadFile($Zonefile);
+		my $rate = $zonedata->{'chain'}->{'max_items'} . '/' . $zonedata->{'chain'}->{'interval'};
+		parseRate($rate) or die "Can not parse rate info";
+		1;
+	} or errx "Could not load YAML '$Zonefile'. Delete and create again.\n$@";
+}
+sub parseRate
+{
+	$Rate = $_[0];
+	if($Rate =~ /^(\d+)\/(\d+)$/) {
+		$ThrottlerParams{'max_items'} = $1;
+		$ThrottlerParams{'interval'} = $2;
+	} else {
+		return '';
+	}
+	return 1;
+}
+sub cast_throttler
+{
+	$Throttler = Throttler->new(%ThrottlerParams) or errx "Could not cast Throttler instance";
+}
+
+
+GetOptions(
+	'r|rate=s' => sub{ parseRate($_[1]) or die; },
+	'n|no-redefine|no-redefine-rate' => \$noRedefineRate,
+	'Z|reset' => \$ThrottlerParams{'reset'},
+	'F|force' => \$doForce,
+	'f|z|file|zone|zonefile=s' => \$Zonefile,
+	'i|k|item|key|itemkey=s' => \$Itemkey,
+	'c|code=i' => \$OverLimitStatusCode,
+	'info' => \$doInfo,
+	'dump' => \$doDump,
+)
+or die $Usage;
+
+$ThrottlerParams{'backend_options'}->{'db_file'} = $Zonefile;
+$doReset = $ThrottlerParams{'reset'};
+($Command, @Args) = @ARGV;
+
+
+
+if(defined $Zonefile)
+{
+	my $mode = '';
+	$mode .= 'r' if defined $Rate;
+	$mode .= 'Z' if $doReset;
+	$mode .= 'C' if defined $Command;
+	$mode .= 'F' if $doForce;
+	$mode .= 'x' if $doInfo or $doDump;
+	
+	if(not($mode ~~ ['r', 'rC', 'rCF', 'Z', 'C', 'CF', 'x', 'ZC', 'ZCF']))
+	{
+		errx "Wrong combination of options. ($mode)";
+	}
+	
+	if($mode eq 'x')
+	{
+		readRate;
+		
+		if($doInfo)
+		{
+			print "rate=$Rate\n";
+		}
+		if($doDump)
+		{
+			cast_throttler();
+			print $Throttler->buckets_dump;
+		}
+		exit 0;
+	}
+	
+	if($noRedefineRate)
+	{
+		eval { readRate; 1; }
+	}
+	
+	if(!defined $Rate)
+	{
+		readRate;
+	}
+	
+	cast_throttler();
+	
+	if($mode =~ /C/)
+	{
+		my $allowed;
+		for my $attempt (1, 2)
+		{
+			if(eval {
+				if($Throttler->try_push('key' => $Itemkey, 'force' => $doForce))
+				{
+					$allowed = 1;
+				}
+				else
+				{
+					$allowed = 0;
+				}
+				1;
+			})
+			{
+				last;
+			}
+			else
+			{
+				warnx "Throttler module error\n$@";
+				if($attempt == 1)
+				{
+					warnx "Resetting Throttler zone file";
+					# if there was Throttler module exception, try to reset the backend repairing it so.
+					undef $Throttler;
+					$ThrottlerParams{'reset'} = 1;
+					cast_throttler();
+				}
+				else
+				{
+					errx;
+				}
+			}
+		}
+		
+		if($allowed)
+		{
+			exec $Command, @Args;
+			warnx "failed to exec: $Command\n";
+			exit 127;
+		}
+		else
+		{
+			exit $OverLimitStatusCode;
+		}
+	}
+	else
+	{
+		# it was either just a rate setup or counter reset
+		exit 0;
+	}
+}
+
+die $Usage;

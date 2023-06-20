@@ -1,15 +1,12 @@
 #!/bin/bash
 
-grep -Ev '^[[:space:]]*(#|;|//|$)' "$@"
-
-
 true <<EOF
 
 =pod
 
 =head1 NAME
 
-nocomment - stripping comment lines from config files
+nocomment - remove comment lines from input stream
 
 =head1 SYNOPSIS
 
@@ -27,3 +24,5 @@ grep(1)
 =cut
 
 EOF
+
+grep -Ev '^[[:space:]]*(#|;|//|$)' "$@"

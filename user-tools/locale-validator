@@ -1,0 +1,59 @@
+#!/bin/bash
+
+# outputs locale variable names (LANG, LC_MESSAGE, LC_ALL, ...) which
+# are found to be unavailable on the system.
+
+set -e
+. /usr/lib/tool/bash-utils
+
+
+locale |\
+{
+locales=($(locale -a))
+localecodes=($(for locale in "${locales[@]}"; do echo ${locale%%.*}; done))
+languagecodes=($(for localecode in "${localecodes[@]}"; do echo ${localecode%%_*}; done))
+
+while IFS='=' read option settings
+do
+	valid=no
+	settings=${settings//\"/}
+	
+	if [ -z "$settings" ]
+	then
+		continue
+	fi
+	
+	for setting in ${settings//:/ }
+	do
+		parts=(${setting/./ })
+		langcode=${parts[0]}
+		charset=${parts[1]}
+		charset=${charset//-/}
+		charset=${charset,,}
+		
+		if [ -z "${langcode//[!_]/}" ]
+		then
+			setting=$langcode
+			list=("${languagecodes[@]}")
+		elif [ -n "$charset" ]
+		then
+			setting=$langcode.$charset
+			list=("${locales[@]}")
+		else
+			setting=$langcode
+			list=("${localecodes[@]}")
+		fi
+		
+		if in_list "$setting" "${list[@]}"
+		then
+			valid=yes
+			break
+		fi
+	done
+	
+	if [ $valid = no ]
+	then
+		echo $option
+	fi
+done
+}

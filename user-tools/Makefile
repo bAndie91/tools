@@ -20,7 +20,8 @@ TOOLS = 2opml adr2html asterisk-log-separator awk-cut base58 base64url \
   taslis tests text2img-dataurl touchx ttinput uchmod unicodestyle \
   upsidedown url_decode url_encode url_encode_bf url-parts vidir-sanitize \
   vifiles waitpid whisper-retention-info wikibot \
-  xdg-autostart xml2json msg perl-repl rsync-semichroot
+  xdg-autostart xml2json msg perl-repl rsync-semichroot locale-validator \
+  reportcmdstatus multithrottler
 
 TOOLS_TARGET_FILES := $(addprefix $(TOOLS_TARGET_DIR)/,$(TOOLS))
 
@@ -49,6 +50,12 @@ install-bash-functions: install-basedir-lib /usr/lib/tool/bash-utils
 	install ../bash/bash-utils $@
 	@echo remove $@ >> uninstall.sh
 
+install-multithrottler: $(TOOLS_TARGET_DIR)/multithrottler /usr/lib/multithrottler/Throttler.pm
+
+/usr/lib/multithrottler/Throttler.pm:
+	install ../lib/multithrottler/Throttler.pm $@
+	@echo remove $@ >> uninstall.sh
+
 
 install-basedirs: install-basedir-lib
 	mkdir -p $(TOOLS_TARGET_DIR)
@@ -63,10 +70,11 @@ install-basedir-lib:
 
 
 install-all: install-basedirs install-msg install-perl-repl install-rsync-semichroot \
+  install-multithrottler \
   install-bash-functions $(TOOLS_TARGET_FILES) install-manpages
 
 
-$(TOOLS_TARGET_FILES):
+$(TOOLS_TARGET_FILES): install-basedirs
 	install $(notdir $@) $(TOOLS_TARGET_DIR)/
 	@echo remove $(TOOLS_TARGET_DIR)/$(notdir $@) >> uninstall.sh
 

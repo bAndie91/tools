@@ -1,3 +1,14 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+Head - output as many lines from the first part of files as many lines on the terminal currently
+
+=cut
+EOF
+
+
 head -n "$((${LINES:-$(tput lines)}-1))" "$@"

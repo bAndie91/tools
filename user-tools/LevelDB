@@ -159,3 +159,13 @@ else
 	warn "Invalid command: $ARGV[1]\n";
 	exit 1;
 }
+
+__END__
+
+=pod
+
+=head1 NAME
+
+LevelDB - Commandline interface for Google's leveldb key-value storage
+
+=cut

@@ -1,3 +1,13 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+Tail - output as many lines from the end of files as many lines on the terminal currently
+
+=cut
+EOF
+
 tail -n "$((${LINES:-$(tput lines)}-1))" "$@"

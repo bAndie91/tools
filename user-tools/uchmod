@@ -50,7 +50,7 @@ true <<EOF
 
 =head1 NAME
 
-uchmod - umask and chmod
+uchmod - chmod files according to umask
 
 =head1 SYNOPSIS
 

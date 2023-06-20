@@ -1,5 +1,24 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+2opml - Convert list of URLs to OPML.
+
+=head1 SYNOPSIS
+
+2opml [--add-attributes <ATTRIBUTES>] < urls.txt
+
+=head1 DESCRIPTION
+
+Convert text file, containing "<TITLE> <URL>" looking lines, to OPML.
+
+=cut
+EOF
+
+
 xmlquote()
 {
 	local s=$1
@@ -10,6 +29,27 @@ xmlquote()
 	echo "$s"
 }
 
+add_attributes=''
+
+while [ $# != 0 ]
+do
+	case "$1" in
+	--help)
+		echo "Usage: 2opml [--add-attributes <ATTRIBUTES>] < urls.txt"
+		echo "Convert text file, containing \"<TITLE> <URL>\" looking lines, to OPML."
+		exit;;
+	--add-attributes)
+		shift
+		add_attributes=$1;;
+	--)
+		shift
+		break;;
+	-*)
+		break;;
+	esac
+	shift
+done
+
 echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
 <opml version=\"1.0\"><body>"
 
@@ -18,7 +58,7 @@ do
 	title=`xmlquote "$title"`
 	url=`xmlquote "$url"`
 	
-	echo "<outline type=\"rss\" title=\"$title\" text=\"$title\" xmlUrl=\"$url\" filtercmd=\"/home/sysop/bin/rss-conv/full-article\" />"
+	echo "<outline type=\"rss\" title=\"$title\" text=\"$title\" xmlUrl=\"$url\" $add_attributes />"
 done
 
 echo "</body></opml>"

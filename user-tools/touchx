@@ -1,5 +1,15 @@
 #!/bin/sh
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+touchx - set execution bit on files and creates them if neccessary
+
+=cut
+EOF
+
 set -e
 
 touch "$@"

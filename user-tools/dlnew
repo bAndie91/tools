@@ -193,7 +193,7 @@ sub main
 
 =head1 NAME
 
-dlnew
+dlnew - Download web rource if local copy is older
 
 =head1 SYNOPSIS
 

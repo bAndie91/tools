@@ -1,5 +1,15 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+tabularize - Takes TAB-delimited lines of text and outputs formatted table.
+
+=cut
+EOF
+
 
 TAB=$'\t'
 IFS=''

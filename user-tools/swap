@@ -1,5 +1,15 @@
 #!/bin/bash
-# This script swaps two files.
+
+true <<EOF
+=pod
+
+=head1 NAME
+
+swap - swaps two files' names
+
+=cut
+EOF
+
 
 set -e
 

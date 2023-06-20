@@ -35,11 +35,11 @@ install-rsync-semichroot:
 	install --compare ../doc/rsync-semichroot.txt /usr/share/doc/tools/rsync-semichroot.txt
 
 install-basedirs: install-basedir-lib
-	mkdir /usr/tools
-	mkdir /usr/share/doc/tools
+	mkdir -p /usr/tools
+	mkdir -p /usr/share/doc/tools
 
 install-basedir-lib:
-	mkdir /usr/lib/tools
+	mkdir -p /usr/lib/tools
 
 install-bash-functions: install-basedir-lib
 	install --compare ../bash/bash-utils /usr/lib/tools/

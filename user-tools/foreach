@@ -1,11 +1,50 @@
 #!/bin/bash
 
-FOREACH_VAR=$1
-shift
-FOREACH_COMMAND=$*
+FOREACH_MODE=command
 
-while read -r $FOREACH_VAR
+help()
+{
+	echo "Usage: foreach [--sh] <COMMAND> [<ARGS> ...]"
+	echo "Run COMMAND for each stdin input line, adding the input line as last argument."
+	echo "If celled with --sh, COMMAND is run within the shell context and input line is in \$DATA."
+}
+
+while [ $# != 0 ]
 do
-	set -- ${!FOREACH_VAR}
-	eval "$FOREACH_COMMAND"
+	case "$1" in
+	--help)
+		help
+		exit
+		;;
+	--sh)
+		FOREACH_MODE=sh
+		;;
+	--)
+		shift
+		break;;
+	-*)
+		echo "foreach: unknown option: $1" >&2
+		exit -1
+		;;
+	*)	break;;
+	esac
+	shift
+done
+
+if [ $# = 0 ]
+then
+	help >&2
+	exit -1
+fi
+
+declare -a FOREACH_COMMAND=("$@")
+
+while read -r DATA
+do
+	if [ $FOREACH_MODE = command ]
+	then
+		command "${FOREACH_COMMAND[@]}" "$DATA"
+	else
+		eval "${FOREACH_COMMAND[@]}"
+	fi
 done

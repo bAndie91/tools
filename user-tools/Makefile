@@ -5,9 +5,9 @@ TOOLS = 2opml adr2html asterisk-log-separator awk-cut base58 base64url \
   bencode2json chattr-cow chattr-nocow chromium_cookie_decrypt.py \
   chshebang convert_chromium_cookies_to_netscape.sh corner_time cut.awk \
   debdiff descpids dfbar digasn digwiki diu dlnew dump_php_session.php eat \
-  errorlevel error_reporting.php fcomplete fc-search-codepoint ff fgat \
-  find-by-date findnewestfile findoldestfile geoip git-checkout-sparse \
-  gitdiff grepdatetime Head header.sed \
+  errorlevel error_reporting.php fcomplete fc-search-codepoint fdupes-hardlink ff fgat \
+  find-by-date findnewestfile findoldestfile foreach \
+  geoip git-checkout-sparse gitdiff grepdatetime Head header.sed \
   indent2tree inisort is_gzip jobsel json2bencode json2msgpack LevelDB \
   lines list_screens lpset ls2html lsata lsenv mime_extract mkdeb moz_bookmarks \
   msgpack2json mysql-fix-orphan-privileges.php noacute nocomment nthash.py \
@@ -50,3 +50,6 @@ install-all: install-basedirs install-msg install-perl-repl install-rsync-semich
 	do\
 		install --compare $$tool $(TOOLS_TARGET_DIR)/ ;\
 	done
+
+list-tools:
+	@echo $(TOOLS) | tr " " "\n" | sort

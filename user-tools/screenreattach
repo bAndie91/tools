@@ -3,7 +3,7 @@
 # Reattach screen and importing environment
 
 set -e
-. /usr/lib/tools/bash-utils
+. /usr/lib/tool/bash-utils
 set +e
 
 declare -a argv

@@ -15,7 +15,7 @@ ENOSYS=38
 ENOTEMPTY=39
 EOPNOTSUPP=95
 
-. /usr/lib/tools/bash-utils || exit $EIO
+. /usr/lib/tool/bash-utils || exit $EIO
 
 export PYTHONIOENCODING=utf8
 fmode=-rw-r--r--

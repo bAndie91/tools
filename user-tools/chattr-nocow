@@ -3,7 +3,7 @@
 set -e
 set -u
 
-. /usr/lib/tools/bash-utils
+. /usr/lib/tool/bash-utils
 
 
 is_cow()

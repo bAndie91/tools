@@ -1,5 +1,5 @@
 
-TOOLS_TARGET_DIR = /usr/tools
+TOOLS_TARGET_DIR = /usr/tool
 
 TOOLS = 2opml adr2html asterisk-log-separator awk-cut base58 base64url \
   bencode2json chattr-cow chattr-nocow chromium_cookie_decrypt.py \
@@ -32,17 +32,17 @@ install-perl-repl:
 
 install-rsync-semichroot:
 	install --compare rsync-semichroot $(TOOLS_TARGET_DIR)/
-	install --compare ../doc/rsync-semichroot.txt /usr/share/doc/tools/rsync-semichroot.txt
+	install --compare ../doc/rsync-semichroot.txt /usr/share/doc/tool/rsync-semichroot.txt
 
 install-basedirs: install-basedir-lib
-	mkdir -p /usr/tools
-	mkdir -p /usr/share/doc/tools
+	mkdir -p $(TOOLS_TARGET_DIR)
+	mkdir -p /usr/share/doc/tool
 
 install-basedir-lib:
-	mkdir -p /usr/lib/tools
+	mkdir -p /usr/lib/tool
 
 install-bash-functions: install-basedir-lib
-	install --compare ../bash/bash-utils /usr/lib/tools/
+	install --compare ../bash/bash-utils /usr/lib/tool/
 
 install-all: install-basedirs install-msg install-perl-repl install-rsync-semichroot install-bash-functions
 	set -e ;\

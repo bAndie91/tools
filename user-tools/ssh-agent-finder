@@ -8,7 +8,7 @@ list_all_sockets=''
 verbose=''
 sourced=''
 
-. /usr/lib/yazzy-utils/bash-utils
+. /usr/lib/tools/bash-utils
 
 parse_opts()
 {

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-. /usr/lib/yazzy-utils/bash-utils
+. /usr/lib/tools/bash-utils
 
 if [ "$1" = --help ]
 then

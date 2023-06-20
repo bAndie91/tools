@@ -1,7 +1,9 @@
 *.o
-ssh-groupcommand/*.so
-ssh-groupcommand/*sh.ssh
-ssh-groupcommand/t_*
-!ssh-groupcommand/t_*.c
-!ssh-groupcommand/t_*.h
-tests/*/_test.*
+/ssh-groupcommand/*.so
+/ssh-groupcommand/*sh.ssh
+/ssh-groupcommand/t_*
+!/ssh-groupcommand/t_*.c
+!/ssh-groupcommand/t_*.h
+/tests/*/_test.*
+/doc/man/*
+!/doc/man/Makefile

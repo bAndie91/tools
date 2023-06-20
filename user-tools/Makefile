@@ -44,7 +44,7 @@ install-basedir-lib:
 install-bash-functions: install-basedir-lib
 	install --compare ../bash/bash-utils /usr/lib/tool/
 
-install-all: install-basedirs install-msg install-perl-repl install-rsync-semichroot install-bash-functions
+install-all: install-basedirs install-msg install-perl-repl install-rsync-semichroot install-bash-functions install-manpages
 	set -e ;\
 	for tool in $(TOOLS);\
 	do\
@@ -53,3 +53,21 @@ install-all: install-basedirs install-msg install-perl-repl install-rsync-semich
 
 list-tools:
 	@echo $(TOOLS) | tr " " "\n" | sort
+
+
+MANPAGES_DIR = ../doc/man
+MANPAGE_FILE_SUFFIX = .1.xz
+MANPAGE_FILES := $(addprefix $(MANPAGES_DIR)/,$(addsuffix $(MANPAGE_FILE_SUFFIX),$(TOOLS)))
+
+manpages: $(MANPAGE_FILES)
+
+$(MANPAGE_FILES):
+	@set -e ;\
+	tool=$$(basename "$@" $(MANPAGE_FILE_SUFFIX)) ;\
+	if podchecker "$$tool"; then \
+		pod2man --utf8 "$$tool" | xz > "$(MANPAGES_DIR)/$$tool$(MANPAGE_FILE_SUFFIX).tmp" ;\
+		mv "$(MANPAGES_DIR)/$$tool$(MANPAGE_FILE_SUFFIX).tmp" "$(MANPAGES_DIR)/$$tool$(MANPAGE_FILE_SUFFIX)" ;\
+	fi
+
+install-manpages: manpages
+	$(MAKE) -C ../doc/man

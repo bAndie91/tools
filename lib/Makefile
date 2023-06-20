@@ -1,6 +1,6 @@
 
 install-basedir-lib:
-	mkdir /usr/lib/tools
+	mkdir -p /usr/lib/tools
 
 install-bc-functions: install-basedir-lib
 	install --compare functions.bc /usr/lib/tools/

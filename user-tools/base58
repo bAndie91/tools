@@ -18,3 +18,15 @@ while(<STDIN>)
 	chomp;
 	print $fnc->($_);
 }
+
+
+__END__
+
+=pod
+
+=head1 NAME
+
+base58 - Encode to (decode from) Base58
+
+=cut
+

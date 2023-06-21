@@ -202,7 +202,7 @@ print PersonalBar(\@PB);
 print "<UL>" . $BMTree . "</UL>";
 
 # Footer
-print "<HR><FOOTER>Made by <A HREF=\"https://github.com/bAndie91/tools/blob/master/usr/bin/adr2html\">adr2html</A>.</FOOTER>";
+print "<HR><FOOTER>Made by <A HREF=\"https://github.com/bAndie91/tools/blob/master/user-tools/adr2html\">adr2html</A>.</FOOTER>";
 
 # Script - Restore expanded/collapsed state of nodes
 print "<SCRIPT TYPE='text/javascript'>\n";
@@ -235,4 +235,12 @@ for my $replaceid (keys %replaces) {
 print "</SCRIPT>";
 
 __END__
+
+=pod
+
+=head1 NAME
+
+adr2html - Convert Opera Hostlist 2.0 bookmarks to HTML
+
+=cut
 

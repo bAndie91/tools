@@ -1,5 +1,17 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+chattr-nocow - try hard to enable (chattr-cow) or disable (chattr-nocow) Copy-on-Write attribute on files
+
+=cut
+
+EOF
+
+
 set -e
 set -u
 

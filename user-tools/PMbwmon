@@ -1,10 +1,23 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+PMbwmon - Poor man's bandwidth monitor
+
+=cut
+
+EOF
+
+
 set -e
 
-usage() {
-    echo "Usage: $0 [kMG][bB]" >&2
-    exit 1
+usage()
+{
+	echo "Usage: $0 [kMG][bB]" >&2
+	exit 1
 }
 
 
@@ -38,19 +51,21 @@ fi
 
 
 shot=0
-while true; do
-
+while true
+do
     shot=$[shot+1]
     declare -A masters
 
-    for master in `cat /sys/class/net/bonding_masters 2>/dev/null`; do
+    for master in `cat /sys/class/net/bonding_masters 2>/dev/null`
+    do
         masters[$master]=1
         var=slaves_$master
         declare -a $var
         eval "$var=($(cat /sys/class/net/$master/bonding/slaves))"
     done
 
-    for iface in *; do
+    for iface in *
+    do
             [ ! -d "$iface" ] && continue
             [ "$iface" = lo ] && continue
 
@@ -62,17 +77,20 @@ while true; do
             rxd[$iface]=$[ ${rx1[$iface]} - ${rx0[$iface]} ]
             txd[$iface]=$[ ${tx1[$iface]} - ${tx0[$iface]} ]
 
-            if [ $shot -gt 1 ]; then
+            if [ $shot -gt 1 ]
+            then
                 printf "%6s  -  RX: %8d  TX: %8d  %sps"  "$iface" $[ ${rxd[$iface]} / $qt ] $[ ${txd[$iface]} / $qt ] "$prefix"
 
-                if [ -n "${masters[$iface]}" ]; then
+                if [ -n "${masters[$iface]}" ]
+                then
                         taps_rx_sum=0
                         taps_tx_sum=0
                         var=slaves_$iface
                         declare -a slaves
                         eval "slaves=(\${slaves_$iface[@]})"
 
-                        for slave in "${slaves[@]}"; do
+                        for slave in "${slaves[@]}"
+                        do
                                 taps_rx_sum=$[ $taps_rx_sum + ${rxd[$slave]} ]
                                 taps_tx_sum=$[ $taps_tx_sum + ${txd[$slave]} ]
                         done
@@ -81,12 +99,14 @@ while true; do
                         bond_rx=$[ ${rxd[$iface]} / $qt ]
                         bond_tx=$[ ${txd[$iface]} / $qt ]
 
-                        rx_comp_rt=
-                        tx_comp_rt=
-                        if [ $taps_rx_sum -ne 0 -a $taps_rx_sum -ne $bond_rx ]; then
+                        rx_comp_rt=''
+                        tx_comp_rt=''
+                        if [ $taps_rx_sum -ne 0 -a $taps_rx_sum -ne $bond_rx ]
+                        then
                                 rx_comp_rt=$[ ${bond_rx} / $taps_rx_sum ]
                         fi
-                        if [ $taps_tx_sum -ne 0 -a $taps_tx_sum -ne $bond_tx ]; then
+                        if [ $taps_tx_sum -ne 0 -a $taps_tx_sum -ne $bond_tx ]
+                        then
                                 tx_comp_rt=$[ ${bond_tx} / $taps_tx_sum ]
                         fi
 
@@ -98,5 +118,4 @@ while true; do
 
     echo
     sleep 1
-
 done

@@ -1,5 +1,35 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+awk-cut - Select fields from input stream with awk
+
+=head1 SYNOPSIS
+
+awk-cut [B<COLUMNS-SPEC>]
+
+Where B<COLUMNS-SPEC> is a variation of these:
+
+=over 8
+
+=item B<COLUMN>-
+
+=item -B<COLUMN>
+
+=item B<COLUMN>-B<COLUMN>
+
+=item B<COLUMN>[,B<COLUMN>[,B<COLUMN>[,...]]]
+
+=back
+
+=cut
+
+EOF
+
+
 shopt -s extglob
 
 awk-cut()

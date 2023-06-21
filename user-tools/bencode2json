@@ -1,5 +1,16 @@
 #!/usr/bin/env python
 
+"""
+=pod
+
+=head1 NAME
+
+bencode2json - Convert Bencode (BitTorrent's loosely structured data) to JSON
+
+=cut
+
+"""
+
 import sys
 import json
 import bencode

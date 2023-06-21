@@ -197,7 +197,7 @@ dlnew - Download web rource if local copy is older
 
 =head1 SYNOPSIS
 
-dlnew <-C> [B<url>] <B<file>>
+dlnew [-C] <B<url>> <B<file>>
 
 =head1 DESCRIPTION
 

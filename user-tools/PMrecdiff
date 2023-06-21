@@ -1,3 +1,15 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+PMrecdiff - Poor man's directory tree difference viewer, comparing file names and sizes recursively
+
+=cut
+
+EOF
+
+
 diff -bBiy --suppress-common-lines <(cd "$1"; find . -type f -printf "%p %s\n" -or -type d -printf "%p\n" | sort) <(cd "$2"; find . -type f -printf "%p %s\n" -or -type d -printf "%p\n" | sort)

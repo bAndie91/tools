@@ -96,3 +96,14 @@ for my $pid (keys %datetime)
 # delete small files:
 # find -type f -size -200c -delete
 
+
+__END__
+
+=pod
+
+=head1 NAME
+
+asterisk-log-separator - Split up Asterisk PBX log file into multiple files based on which process wrote each part
+
+=cut
+

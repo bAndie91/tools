@@ -1,11 +1,24 @@
 #!/bin/bash
 
-opts=
-f1=
-f2=
+true <<EOF
+=pod
 
-while [ -n "$1" ]; do
-    if [ "${1:0:1}" = "-" ]; then
+=head1 NAME
+
+PMdirindex - Poor man's hex diff viewer
+
+=cut
+
+EOF
+
+opts=''
+f1=''
+f2=''
+
+while [ -n "$1" ]
+do
+    if [ "${1:0:1}" = "-" ]
+    then
         opts="$opts $1"
     else
         [ -z "$f1" ] && f1="$1" || f2="$1"
@@ -14,4 +27,3 @@ while [ -n "$1" ]; do
 done
 
 ${DIFF:-diff} $opts <(hd -v "$f1") <(hd -v "$f2")
-

@@ -17,3 +17,14 @@ else
 {
 	die "Usage: $0 [-d | --decode]\n";
 }
+
+__END__
+
+=pod
+
+=head1 NAME
+
+base64url - Encode to (decode from) Base64-URL encoding
+
+=cut
+

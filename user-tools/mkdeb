@@ -47,6 +47,8 @@ GID or name of the owner group
 
 the file's path itself to which the attributes are applied, relative to C<./deb> directory.
 
+=back
+
 =cut
 
 EOF

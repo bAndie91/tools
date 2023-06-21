@@ -26,57 +26,59 @@ TOOLS = 2opml adr2html asterisk-log-separator awk-cut base58 base64url \
 TOOLS_TARGET_FILES := $(addprefix $(TOOLS_TARGET_DIR)/,$(TOOLS))
 
 
-install-msg: $(TOOLS_TARGET_DIR)/msg /etc/bash_completion.d/msg
+
+$(TOOLS_TARGET_DIR)/msg: /etc/bash_completion.d/msg
+$(TOOLS_TARGET_DIR)/perl-repl: /usr/libexec/perlshell
+$(TOOLS_TARGET_DIR)/rsync-semichroot: /usr/share/doc/tool/rsync-semichroot.txt
+$(TOOLS_TARGET_DIR)/multithrottler: /usr/lib/multithrottler/Throttler.pm
 
 /etc/bash_completion.d/msg:
 	install ../bash/bash_completion.d/msg $@
 	@echo remove $@ >> uninstall.sh
 
-install-perl-repl: $(TOOLS_TARGET_DIR)/perl-repl /usr/libexec/perlshell
-
 /usr/libexec/perlshell:
 	install ../libexec/perlshell $@
 	@echo remove $@ >> uninstall.sh
-
-install-rsync-semichroot: $(TOOLS_TARGET_DIR)/rsync-semichroot /usr/share/doc/tool/rsync-semichroot.txt
 
 /usr/share/doc/tool/rsync-semichroot.txt:
 	install ../doc/rsync-semichroot.txt $@
 	@echo remove $@ >> uninstall.sh
 
-install-bash-functions: install-basedir-lib /usr/lib/tool/bash-utils
-
-/usr/lib/tool/bash-utils:
+/usr/lib/tool/bash-utils: /usr/lib/tool
 	install ../bash/bash-utils $@
 	@echo remove $@ >> uninstall.sh
 
-install-multithrottler: $(TOOLS_TARGET_DIR)/multithrottler /usr/lib/multithrottler/Throttler.pm
-
-/usr/lib/multithrottler/Throttler.pm:
-	mkdir -p $(dir $@)
-	@echo remove $(dir $@) >> uninstall.sh
+/usr/lib/multithrottler/Throttler.pm: /usr/lib/multithrottler
 	install ../lib/multithrottler/Throttler.pm $@
 	@echo remove $@ >> uninstall.sh
 
-
-install-basedirs: install-basedir-lib
-	mkdir -p $(TOOLS_TARGET_DIR)
-	@echo remove $(TOOLS_TARGET_DIR) >> uninstall.sh
-	mkdir -p /usr/share/doc/tool
-	@echo remove /usr/share/doc/tool >> uninstall.sh
-
-install-basedir-lib:
-	mkdir -p /usr/lib/tool
-	@echo remove /usr/lib/tool >> uninstall.sh
+/usr/lib/multithrottler:
+	mkdir -p $@
+	@echo remove $@ >> uninstall.sh
 
 
+$(TOOLS_TARGET_DIR):
+	mkdir -p $@
+	@echo remove $@ >> uninstall.sh
 
-install-all: install-basedirs install-msg install-perl-repl install-rsync-semichroot \
-  install-multithrottler \
-  install-bash-functions $(TOOLS_TARGET_FILES) install-manpages
+/usr/share/doc/tool:
+	mkdir -p $@
+	@echo remove $@ >> uninstall.sh
+
+/usr/lib/tool:
+	mkdir -p $@
+	@echo remove $@ >> uninstall.sh
 
 
-$(TOOLS_TARGET_FILES): install-basedirs
+
+install-all: \
+  /usr/lib/tool/bash-utils \
+  install-tools install-manpages
+
+
+install-tools: $(TOOLS_TARGET_DIR) $(TOOLS_TARGET_FILES)
+
+$(TOOLS_TARGET_FILES): $(TOOLS_TARGET_DIR)/%: %
 	install $(notdir $@) $(TOOLS_TARGET_DIR)/
 	@echo remove $(TOOLS_TARGET_DIR)/$(notdir $@) >> uninstall.sh
 
@@ -95,7 +97,7 @@ manpages: $(MANPAGE_FILES)
 
 $(MANPAGE_FILES): $(MANPAGES_DIR)/man$(MANPAGE_SECTION)/%$(MANPAGE_FILE_SUFFIX): %
 	@mkdir -p $(MANPAGES_DIR)/man$(MANPAGE_SECTION)
-	if podchecker "$<"; then \
+	@if podchecker "$<"; then \
 		outfile="$(MANPAGES_DIR)/man$(MANPAGE_SECTION)/$<$(MANPAGE_FILE_SUFFIX)" ;\
 		pod2man --utf8 "$<" | xz > "$$outfile.tmp" &&\
 		mv -f "$$outfile.tmp" "$$outfile" ;\

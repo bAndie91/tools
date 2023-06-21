@@ -1,6 +1,16 @@
 #!/bin/bash
 
-# get descendant processes PIDs
+true <<EOF
+=pod
+
+=head1 NAME
+
+descpids - List all descendant process PIDs of the given process(es)
+
+=cut
+
+EOF
+
 
 declare -A all_descendants=()
 declare -A all_ancestors=()

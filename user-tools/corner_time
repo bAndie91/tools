@@ -1,5 +1,17 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+corner_time - Place a digital clock in the upper right hand corner of the terminal
+
+=cut
+
+EOF
+
+
 fmt=${1:-%H:%M:%S}
 str=$(date +"$fmt")
 

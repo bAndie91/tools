@@ -1,5 +1,16 @@
 #! /usr/bin/env python2
 
+"""
+=pod
+
+=head1 NAME
+
+chromium_cookie_decrypt.py - Decrypt Chromium web browser stored cookies and output cleartext
+
+=cut
+
+"""
+
 from Crypto.Cipher import AES
 from Crypto.Protocol.KDF import PBKDF2
 import sys

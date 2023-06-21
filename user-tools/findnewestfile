@@ -37,7 +37,7 @@ true <<EOF
 
 =head1 NAME
 
-findnewestfile, findoldestfile - search for the newest/oldest file
+findnewestfile - search for the newest (findnewestfile) or oldest (findoldestfile) file in a given path recursively
 
 =head1 SYNOPSIS
 

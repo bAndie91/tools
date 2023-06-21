@@ -1,5 +1,17 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+foreach - Run an OS or shell command on each input line, similar to xargs(1)
+
+=cut
+
+EOF
+
+
 FOREACH_MODE=command
 
 help()

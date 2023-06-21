@@ -1,7 +1,16 @@
 #!/bin/bash
-#
-# Change a script's default interpreter (shebang).
-#
+
+true <<EOF
+=pod
+
+=head1 NAME
+
+chshebang - Change a script's default interpreter
+
+=cut
+
+EOF
+
 
 force=0
 insert=0
@@ -11,13 +20,13 @@ NL=$'\n'
 while [ -n "$1" ]; do
 	case "$1" in
 	-h|--help)
-		echo "Usage: $0 [-h|--help] [-f|--force] [-i|--insert] [-d|--dummy] <interpreter> <files> ...
-  -f   force replace 1st line with newshell, even it does not start \`#!' signature
+		echo "Usage: $0 [-h|--help] [-f|--force] [-i|--insert] [-d|--dummy] <INTERPRETER> <FILES> ...
+  -f   force replace 1st line with INTERPRETER, even if it does not start \`#!' signature
   -i   insert, instead of replace
   -d   disable intelligent path preparation
-  newshell   basename or full path of new interpreter, leading \`#!' signature is unnecessary
-             eg: /usr/bin/awk, bash, #!/bin/sh
-  files      files to modify"
+  INTERPRETER   basename or full path of new interpreter, leading \`#!' signature is implicite
+                examplpes: /usr/bin/awk, bash, #!/bin/sh
+  FILES         files to modify"
 		exit 0;;
 	-f|--force)
 		force=1;;

@@ -1,12 +1,64 @@
 #!/bin/bash -e
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+mkdeb - Create a Debian package (.deb)
+
+=head1 SYNOPSIS
+
+mkdeb [-m | --multiarch]
+
+=head1 DESCRIPTION
+
+Create a *.deb file according to the package name and version info found in C<./deb/DEBIAN/control> file
+and include all file in the package found in C<./deb> folder. Update some of C<control> file's fields, eg.
+C<Version> (increase by 1 if there is any file in the package newer than C<control> file), C<Installed-Size>...
+
+In I<multiarch> mode, instead of C<./deb> folder, it takes data from all folders in the current working
+directory which name is a valid Debian architecture name (eg. amd64, i386, ...), and stores temporary
+files in C<./deb> for building each architecture's package.
+
+Mkdeb also considers C<mkdeb-perms.txt> file in the current working directory to set
+some file attributes in the package, otherwise all file attributes are gonna be the same as on the original.
+Each line in this file looks like:
+
+<B<MODE>> <B<OWNER>> <B<GROUP>> <B<PATH>>
+
+Where
+
+=over 8
+
+=item <B<MODE>>
+
+is an octal file permission mode, 3 or 4 digits, or "-" to ignore
+
+=item <B<OWNER>>
+
+UID or name of the owner user
+
+=item <B<GROUP>>
+
+GID or name of the owner group
+
+=item <B<PATH>>
+
+the file's path itself to which the attributes are applied, relative to C<./deb> directory.
+
+=cut
+
+EOF
+
+
 declare -a archs
 archs=(amd64 armel armhf hurd-i386 i386 kfreebsd-amd64 kfreebsd-i386 mips mipsel powerpc s390x sparc)
 mode=simple
 
 main()
 {
-	fakeroot_opt=
+	fakeroot_opt=''
 	
 	for attrib in Package Version Architecture
 	do
@@ -73,7 +125,7 @@ main()
 		fakeroot $fakeroot_opt find deb/usr/ ! -perm -0444 -printf "WARN: File/dir is not readable for everybody: %p\n"
 		fakeroot $fakeroot_opt find deb/usr/ ! -type l -perm /0002 -printf "WARN: File/dir is writable for others: %p\n"
 		fakeroot $fakeroot_opt find deb/usr/ -type d ! -perm -0111 -printf "WARN: Dir is not searchable for everybody: %p\n"
-	fi
+	fi >&2
 	
 	# Create Package
 	pkgfile="${Package}_${Version}_${Architecture}.deb"

@@ -2,3 +2,13 @@
 die "$!\n" unless open _, $ARGV[0];
 exit 0 and read _, $_, 3 and /^\x1f\x8b\x08$/;
 exit 1;
+
+__END__
+=pod
+
+=head1 NAME
+
+is_gzip - Return 0 if the file in argument has gzip signature
+
+=cut
+

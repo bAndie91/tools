@@ -15,10 +15,6 @@ lsenv - List environment variables of a process
 
 lsenv <B<pid>>
 
-=head1 DESCRIPTION
-
-
-
 =cut
 
 EOF

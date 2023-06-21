@@ -1,5 +1,17 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+lsata - List ATA devices on the system
+
+=cut
+
+EOF
+
+
 for lnk in /sys/block/sd*
 do
 	dev=${lnk##*/}

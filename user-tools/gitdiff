@@ -1,5 +1,17 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+gitdiff - View two files' diff by git-diff(1), even not under git version control
+
+=cut
+
+EOF
+
+
 declare -a args
 for arg in "$@"
 do

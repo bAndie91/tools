@@ -1,9 +1,19 @@
 #!/usr/bin/env perl
 
+=pod
+
+=head1 NAME
+
+lines - Output only the given lines of the input stream
+
+=cut
+
+
+
 if('--help' ~~ @ARGV)
 {
 	die "Usage: $0 [<RANGES> [<RANGES> [...]]] [-- <FILE> [<FILE> [...]]]
-  Read from STDIN, or from FILEs if specified, STDIN otherwise.
+  Read from from FILEs if specified, STDIN otherwise.
   RANGES is comma-delimited list of line numbers and inclusive ranges.
   Special symbol 'EOF' represents the end of the input file.
   Examples:

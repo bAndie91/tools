@@ -116,3 +116,18 @@ while(<$srt_hnd>)
 		print;
 	}
 }
+
+
+__END__
+
+=pod
+
+=head1 NAME
+
+inisort - Sort keys in an INI file according to the order of keys in an other INI file
+
+=head1 SYNOPSIS
+
+inisort [<B<UNSORTED>>] [<B<REFERENCE>>] > [<B<SORTED>>]
+
+=cut

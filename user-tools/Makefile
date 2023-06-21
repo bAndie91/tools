@@ -44,11 +44,11 @@ $(TOOLS_TARGET_DIR)/multithrottler: /usr/lib/multithrottler/Throttler.pm
 	install ../doc/rsync-semichroot.txt $@
 	@echo remove $@ >> uninstall.sh
 
-/usr/lib/tool/bash-utils: /usr/lib/tool
+/usr/lib/tool/bash-utils: | /usr/lib/tool
 	install ../bash/bash-utils $@
 	@echo remove $@ >> uninstall.sh
 
-/usr/lib/multithrottler/Throttler.pm: /usr/lib/multithrottler
+/usr/lib/multithrottler/Throttler.pm: | /usr/lib/multithrottler
 	install ../lib/multithrottler/Throttler.pm $@
 	@echo remove $@ >> uninstall.sh
 
@@ -78,6 +78,8 @@ install-all: \
 
 install-tools: $(TOOLS_TARGET_DIR) $(TOOLS_TARGET_FILES)
 
+$(TOOLS_TARGET_FILES): | $(TOOLS_TARGET_DIR)
+
 $(TOOLS_TARGET_FILES): $(TOOLS_TARGET_DIR)/%: %
 	install $(notdir $@) $(TOOLS_TARGET_DIR)/
 	@echo remove $(TOOLS_TARGET_DIR)/$(notdir $@) >> uninstall.sh
@@ -95,8 +97,13 @@ MANPAGE_FILES := $(foreach toolname,$(TOOLS),$(MANPAGES_DIR)/man$(MANPAGE_SECTIO
 
 manpages: $(MANPAGE_FILES)
 
+$(MANPAGES_DIR)/man*/*: $(MANPAGES_DIR)/man$(MANPAGE_SECTION)/
+
+$(MANPAGES_DIR)/man*/:
+	mkdir -p $@
+	@echo remove $@ >> uninstall.sh
+
 $(MANPAGE_FILES): $(MANPAGES_DIR)/man$(MANPAGE_SECTION)/%$(MANPAGE_FILE_SUFFIX): %
-	@mkdir -p $(MANPAGES_DIR)/man$(MANPAGE_SECTION)
 	@if podchecker "$<"; then \
 		outfile="$(MANPAGES_DIR)/man$(MANPAGE_SECTION)/$<$(MANPAGE_FILE_SUFFIX)" ;\
 		pod2man --utf8 "$<" | xz > "$$outfile.tmp" &&\

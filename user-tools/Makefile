@@ -85,17 +85,18 @@ list-tools:
 
 
 MANPAGES_DIR = ../doc/man
-MANPAGE_FILE_SUFFIX = .1.xz
-MANPAGE_FILES := $(addprefix $(MANPAGES_DIR)/,$(addsuffix $(MANPAGE_FILE_SUFFIX),$(TOOLS)))
+MANPAGE_SECTION = 1
+MANPAGE_FILE_SUFFIX = .$(MANPAGE_SECTION).xz
+MANPAGE_FILES := $(foreach toolname,$(TOOLS),$(MANPAGES_DIR)/man$(MANPAGE_SECTION)/$(toolname)$(MANPAGE_FILE_SUFFIX))
 
 manpages: $(MANPAGE_FILES)
 
-$(MANPAGE_FILES):
-	@set -e ;\
-	tool=$$(basename "$@" $(MANPAGE_FILE_SUFFIX)) ;\
-	if podchecker "$$tool"; then \
-		pod2man --utf8 "$$tool" | xz > "$(MANPAGES_DIR)/$$tool$(MANPAGE_FILE_SUFFIX).tmp" ;\
-		mv "$(MANPAGES_DIR)/$$tool$(MANPAGE_FILE_SUFFIX).tmp" "$(MANPAGES_DIR)/$$tool$(MANPAGE_FILE_SUFFIX)" ;\
+$(MANPAGE_FILES): $(MANPAGES_DIR)/man$(MANPAGE_SECTION)/%$(MANPAGE_FILE_SUFFIX): %
+	@mkdir -p $(MANPAGES_DIR)/man$(MANPAGE_SECTION)
+	if podchecker "$<"; then \
+		outfile="$(MANPAGES_DIR)/man$(MANPAGE_SECTION)/$<$(MANPAGE_FILE_SUFFIX)" ;\
+		pod2man --utf8 "$<" | xz > "$$outfile.tmp" &&\
+		mv -f "$$outfile.tmp" "$$outfile" ;\
 	fi
 
 install-manpages: manpages

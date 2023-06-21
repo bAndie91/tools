@@ -1,6 +1,17 @@
 #!/bin/bash
 
-# Reattach screen and importing environment
+true <<EOF
+=pod
+
+=head1 NAME
+
+screenreattach - Reattach to GNU/screen and import environment variables
+
+=cut
+
+EOF
+
+
 
 set -e
 . /usr/lib/tool/bash-utils

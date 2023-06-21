@@ -1,5 +1,16 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+screenconsole - Interactive CLI to run GNU/screen commands against current or specified screen session
+
+=cut
+
+EOF
+
 if [ ".$1" = ".-i" ]; then
 	shift
 	while read -a cmd; do

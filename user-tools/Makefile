@@ -53,6 +53,8 @@ install-bash-functions: install-basedir-lib /usr/lib/tool/bash-utils
 install-multithrottler: $(TOOLS_TARGET_DIR)/multithrottler /usr/lib/multithrottler/Throttler.pm
 
 /usr/lib/multithrottler/Throttler.pm:
+	mkdir -p $(dir $@)
+	@echo remove $(dir $@) >> uninstall.sh
 	install ../lib/multithrottler/Throttler.pm $@
 	@echo remove $@ >> uninstall.sh
 

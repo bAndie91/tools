@@ -7,6 +7,7 @@ SYSTEM_MANPAGES_FILES = $(addprefix $(SYSTEM_MANPAGES_PATH)/,$(MANPAGE_FILES))
 
 
 install-manpages: $(SYSTEM_MANPAGES_FILES)
+	/etc/cron.daily/man-db
 
 $(SYSTEM_MANPAGES_FILES): $(SYSTEM_MANPAGES_PATH)/%: %
 	install "$<" /usr/share/man/$<

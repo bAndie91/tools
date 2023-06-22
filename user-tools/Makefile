@@ -1,7 +1,9 @@
 
+REPO_ROOT ?= ..
+
 TOOLS_TARGET_DIR = /usr/tool
 
-TOOLS =   2opml adr2html asterisk-log-separator awk-cut base58 base64url \
+TOOLS ?=   2opml adr2html asterisk-log-separator awk-cut base58 base64url \
   bencode2json cdexec chattr-cow chattr-nocow chromium_cookie_decrypt.py \
   chshebang convert_chromium_cookies_to_netscape.sh corner_time \
   cut.awk daemonctl dataurl2bin debdiff descpids dfbar digasn diu dlnew \
@@ -24,7 +26,7 @@ TOOLS =   2opml adr2html asterisk-log-separator awk-cut base58 base64url \
   waitpid whisper-retention-info wikibot xdg-autostart xml2json \
   levenshtein-distance jaro-metric jaro-winkler-metric loggerexec \
   logrotate-counters logto pdfflop pngmetatext set-sys-path subst_sudo_user \
-  terminaltitle timestamper
+  terminaltitle timestamper set-xcursor-lock-and-run
 
 TOOLS_TARGET_FILES := $(addprefix $(TOOLS_TARGET_DIR)/,$(TOOLS))
 
@@ -36,23 +38,23 @@ $(TOOLS_TARGET_DIR)/rsync-semichroot: /usr/share/doc/tool/rsync-semichroot.txt
 $(TOOLS_TARGET_DIR)/multithrottler: /usr/lib/multithrottler/Throttler.pm
 
 /etc/bash_completion.d/msg:
-	install ../bash/bash_completion.d/msg $@
+	install $(REPO_ROOT)/bash/bash_completion.d/msg $@
 	@echo remove $@ >> uninstall.sh
 
 /usr/libexec/perlshell:
-	install ../libexec/perlshell $@
+	install $(REPO_ROOT)/libexec/perlshell $@
 	@echo remove $@ >> uninstall.sh
 
 /usr/share/doc/tool/rsync-semichroot.txt:
-	install ../doc/rsync-semichroot.txt $@
+	install $(REPO_ROOT)/doc/rsync-semichroot.txt $@
 	@echo remove $@ >> uninstall.sh
 
 /usr/lib/tool/bash-utils: | /usr/lib/tool
-	install ../bash/bash-utils $@
+	install $(REPO_ROOT)/bash/bash-utils $@
 	@echo remove $@ >> uninstall.sh
 
 /usr/lib/multithrottler/Throttler.pm: | /usr/lib/multithrottler
-	install ../lib/multithrottler/Throttler.pm $@
+	install $(REPO_ROOT)/lib/multithrottler/Throttler.pm $@
 	@echo remove $@ >> uninstall.sh
 
 /usr/lib/multithrottler:
@@ -94,7 +96,7 @@ list-tools:
 
 
 
-MANPAGES_DIR = ../doc/man
+MANPAGES_DIR = $(REPO_ROOT)/doc/man
 MANPAGE_SECTION = 1
 MANPAGE_FILE_SUFFIX = .$(MANPAGE_SECTION).xz
 MANPAGE_FILES := $(foreach toolname,$(TOOLS),$(MANPAGES_DIR)/man$(MANPAGE_SECTION)/$(toolname)$(MANPAGE_FILE_SUFFIX))
@@ -115,4 +117,4 @@ $(MANPAGE_FILES): $(MANPAGES_DIR)/man$(MANPAGE_SECTION)/%$(MANPAGE_FILE_SUFFIX):
 	fi
 
 install-manpages: manpages
-	$(MAKE) -C ../doc/man
+	$(MAKE) -C $(REPO_ROOT)/doc/man

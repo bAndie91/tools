@@ -1,0 +1,60 @@
+#!/bin/bash
+
+true <<EOF
+=pod
+
+=head1 NAME
+
+write - Wrapper for bsd-write, write(1), write to all terminals of the given user
+
+=cut
+
+EOF
+
+
+declare -a opts=()
+declare -a args=()
+user=''
+all_tty=''
+
+while [ $# -gt 0 ]
+do
+	case "$1" in
+	-h|--help)
+		echo "usage: write [--all-tty] [<user>]"
+		/usr/bin/write --help
+		exit
+		;;
+	--all-tty)
+		all_tty=1
+		;;
+	-*)
+		opts+=("$1")
+		;;
+	*)
+		args+=("$1")
+		
+		if [ -z "$user" ]
+		then
+			user=$1
+		fi
+		;;
+	esac
+	shift
+done
+
+if [ "$all_tty" ]
+then
+	message=`cat`
+	
+	for tty in `utmp | awk -v user="$user" '$3 == user {print $2}'`
+	do
+		if [ -e "/dev/$tty" ]
+		then
+			echo "write: writing message on $tty" >&2
+			/usr/bin/write "${opts[@]}" "$user" "$tty" <<< "$message"
+		fi
+	done
+else
+	exec /usr/bin/write "${opts[@]}" "${args[@]}"
+fi

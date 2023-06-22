@@ -1,0 +1,70 @@
+#!/bin/bash
+
+true <<EOF
+=pod
+
+=head1 NAME
+
+xlock, xunlock - Lock (unlock) X11 screen by disable (enable) input devices
+
+=cut
+
+EOF
+
+
+if expr "$0" : .*unlock >/dev/null
+then
+	xinputs_enable=1
+	xsetroot=(-cursor_name left_ptr)
+else
+	xinputs_enable=0
+	#xsetroot=(-cursor_name bogosity)
+fi
+
+xinput_enable_disable()
+{
+	local xinputs_enable=$1
+	local device_id
+	for device_id in $2
+	do
+		xinput set-int-prop "$device_id" "Device Enabled" 8 $xinputs_enable 2>/dev/null
+		xinput list-props "$device_id" | sed -ne "1p;/Device Enabled/p"
+	done
+}
+
+set_xinputs()
+{
+	echo "$0: DISPLAY=$DISPLAY" >&2
+	
+	if [ $xinputs_enable = 1 ]
+	then
+		device_ids=`xinput list --id-only`
+		xinput_enable_disable "$xinputs_enable" "$device_ids"
+		
+		run-parts ~/.local/share/xunlock.d
+	else
+		export -f xinput_enable_disable
+		
+		device_ids=`xinput list | grep -vw core | sed -ne "s/.*id=\([0-9]\+\).*/\1/p"`
+		set-xcursor-lock-and-run bash -c "xinput_enable_disable $xinputs_enable '$device_ids'"
+
+		run-parts ~/.local/share/xlock.d
+	fi
+	
+	if [ -n "$xsetroot" ]
+	then
+		xsetroot "${xsetroot[@]}"
+	fi
+}
+
+if [ -z "$DISPLAY" ]
+then
+	echo "$0: all Xorg displays ..." >&2
+	for DISPLAY in `xdpys`
+	do
+		export DISPLAY
+		set_xinputs
+	done
+else
+	set_xinputs
+fi

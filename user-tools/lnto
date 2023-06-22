@@ -1,0 +1,61 @@
+#!/bin/bash
+
+true <<EOF
+=pod
+
+=head1 NAME
+
+lnto - ln(1) convenience wrapper; you enter link target paths relative to the current directory
+
+=cut
+
+EOF
+
+
+set -e
+set -o pipefail
+
+type lrurs >/dev/null
+
+target_dir=''
+declare -a opts=()
+declare -a link_targets=()
+
+add_link_target()
+{
+	local file=$1
+	local filedir=`dirname "$file"`
+	local basename=`basename "$file"`
+	local relative_path=`lrurs "$filedir" "$target_dir"`"$basename"
+	link_targets+=("$relative_path")
+}
+
+
+while [ $# != 0 ]
+do
+	case "$1" in
+	--help|-h)
+		echo "Usage: $(basename "$0") [OPTIONS] <TARGET_DIR> [LINK_TARGET [LINK_TARGET [...]]]"
+		echo "Creates links (symlinks with -s) in TARGET_DIR which are pointing to LINK_TARGET."
+		echo "Unlike to ln(1), LINK_TARGET is relative to the current working directory, not to TARGET_DIR."
+		echo "OPTIONS are the same as for ln(1)."
+		exit
+		;;
+	--)	shift; break;;
+	-*)	opts+=("$1");;
+	*)	if [ -z "$target_dir" ]
+		then
+			target_dir=$1
+		else
+			add_link_target "$1"
+		fi;;
+	esac
+	shift
+done
+
+for file in "$@"
+do
+	add_link_target "$file"
+done
+
+ln "${opts[@]}" -t "$target_dir" "${link_targets[@]}"

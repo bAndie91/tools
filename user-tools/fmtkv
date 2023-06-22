@@ -1,0 +1,18 @@
+#!/usr/bin/env perl
+
+while(<>)
+{
+	s/(".*?"|\S+?)=(".*?"|\S+)/\n\t$&/g;
+	print;
+}
+
+__END__
+
+=pod
+
+=head1 NAME
+
+fmtkv - Tranform key=value (each optionally double-quoted) pairs into 1 pair by 1 line on the output
+
+=cut
+

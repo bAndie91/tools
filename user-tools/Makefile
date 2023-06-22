@@ -21,7 +21,9 @@ TOOLS = 2opml adr2html asterisk-log-separator awk-cut base58 base64url \
   upsidedown url_decode url_encode url_encode_bf url-parts vidir-sanitize \
   vifiles waitpid whisper-retention-info wikibot \
   xdg-autostart xml2json msg perl-repl rsync-semichroot locale-validator \
-  reportcmdstatus multithrottler
+  reportcmdstatus multithrottler \
+  cdexec daemonctl dataurl2bin fixlogfiledatetime fixRFC822filemtime fmtkv \
+  g_filename_to_uri kt lnto
 
 TOOLS_TARGET_FILES := $(addprefix $(TOOLS_TARGET_DIR)/,$(TOOLS))
 
@@ -98,7 +100,7 @@ MANPAGE_FILES := $(foreach toolname,$(TOOLS),$(MANPAGES_DIR)/man$(MANPAGE_SECTIO
 
 manpages: $(MANPAGE_FILES)
 
-$(MANPAGES_DIR)/man*/*: $(MANPAGES_DIR)/man$(MANPAGE_SECTION)/
+$(MANPAGES_DIR)/man*/*: | $(MANPAGES_DIR)/man$(MANPAGE_SECTION)/
 
 $(MANPAGES_DIR)/man*/:
 	mkdir -p $@

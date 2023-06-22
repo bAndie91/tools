@@ -1,0 +1,51 @@
+#!/usr/bin/env perl
+
+use MIME::Decoder;
+
+
+sub readupto
+{
+	my $stream = shift;
+	my $stopchar = shift;
+	my $c;
+	my $out;
+	
+	while(1)
+	{
+		my $ok = read $stream, $c, 1;
+		if(not defined $ok) { die "read error $!\n"; }
+		if(!$ok or $c eq $stopchar) { return $out; }
+		$out .= $c;
+	}
+}
+
+$scheme = readupto \*STDIN, ':';
+$scheme eq 'data' or die "stdin is not a data url\n";
+
+$meta = readupto \*STDIN, ',';
+if($meta =~ /([^;]+);(.*)/)
+{
+	($mime, $encoding) = ($1, $2);
+}
+else
+{
+	$mime = $meta;
+	$encoding = 'base64';
+}
+
+warn "MIME type is '$mime'\n";
+
+$decoder = new MIME::Decoder $encoding or die "unsupported encoding '$encoding'\n";
+$decoder->decode(\*STDIN, \*STDOUT) or die "decode error\n";
+
+
+__END__
+
+=pod
+
+=head1 NAME
+
+dataurl2bin - Decode "data:..." URLs from input stream and output the raw binary data
+
+=cut
+

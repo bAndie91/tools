@@ -1,0 +1,39 @@
+#!/bin/bash
+
+true <<EOF
+=pod
+
+=head1 NAME
+
+fixRFC822filemtime - Set a file's last modification time, which contains an email message in RFC-822 format, to the email's Date
+
+=cut
+
+EOF
+
+
+set -u
+set -e
+
+for file in "$@"
+do
+	if [ -f "$file" ]
+	then
+		if [ "${file:0:1}" != / ]
+		then
+			file=./$file
+		fi
+		
+		date=`egrep -im1 ^Date: "$file" | cut -f2- -d: | sed -e 's/\r//'`
+		
+		if [ -n "$date" ]
+		then
+			tstamp=`date +%s -d "$date"`
+			
+			if [ -n "$tstamp" ]
+			then
+				touch -t `date +%Y%m%d%H%M.%S -d "@$tstamp"` "$file"
+			fi
+		fi
+	fi
+done

@@ -1,0 +1,42 @@
+#!/bin/bash
+
+true <<EOF
+=pod
+
+=head1 NAME
+
+chmod - Call system's chmod(1) just warns if one of the files have ACL permissions set.
+
+=cut
+
+EOF
+
+
+declare -a argv=("$@")
+shiftparam=1
+
+while [ $# != 0 ]
+do
+	case "$1" in
+	--reference|--reference=*|-[rwxXst]|-[ugo])
+		shiftparam=0
+		;;
+	-*)
+		true
+		;;
+	*)
+		if [ $shiftparam -gt 0 ]
+		then
+			let shiftparam--
+		else
+			if [ -n "$(getfacl --skip-base --physical --numeric --omit-header --absolute-names "$1" 2>/dev/null)" ]
+			then
+				echo "${0##*/}: $1: Warning, the file has ACL records" >&2
+			fi
+		fi
+		;;
+	esac
+	shift
+done
+
+exec -a chmod /bin/chmod "${argv[@]}"

@@ -1,0 +1,16 @@
+#!/bin/bash
+
+true <<EOF
+=pod
+
+=head1 NAME
+
+g_filename_to_uri - Mimic g_filename_to_uri() GLib function creating a file:// url from path string
+
+=cut
+
+EOF
+
+
+echo -n file://$1 | \
+perl -pe 's{[^a-z0-9_!$~\x26-\x2E:@=+/]}{sprintf "%%%02X", ord$&}egi'

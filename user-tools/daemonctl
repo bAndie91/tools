@@ -1,0 +1,110 @@
+#!/bin/bash
+
+true <<EOF
+=pod
+
+=head1 NAME
+
+daemonctl - Manage preconfigured libslack daemon(1) daemons more conveniently
+
+=head1 DESCRIPTIONS
+
+Daemonctl presumes some facts about the system:
+
+=over 8
+
+=item daemons are configured in C</etc/daemon.conf>
+
+=item daemons log to /syslog/daemon/daemon.<DAEMON>/today.log
+
+=back
+
+=cut
+
+EOF
+
+
+set +e
+set -u
+
+. /usr/lib/tool/bash-utils
+
+status()
+{
+	local daemon status pid started
+	daemon=$1
+	
+	status=`daemon -n "$daemon" -v --running 2>&1`
+	if [ $? = 0 ]
+	then
+		pid=`cat /var/run/daemons/$daemon.pid`
+		started=`ps o lstart='' -p $pid`
+		status="$status (running since $started)"
+	fi
+	echo "$status"
+}
+
+list_pidfile_daemons()
+{
+	ls -1 /var/run/daemons | sed -e 's/\.pid$//'
+}
+
+list_configured_daemons()
+{
+	cat /etc/daemon.conf | perl -ne '/^\s*([^*#\s]\S*)/ and print "$1\n"'
+}
+
+if [ $# = 0 ]
+then
+	{ list_pidfile_daemons; list_configured_daemons; } |\
+	sort -u |\
+	while read daemon
+	do
+		status "$daemon"
+	done
+	exit
+fi
+
+daemon=$1
+shift
+verb=''
+if [ $# -gt 0 ]
+then
+	verb=$1
+	shift
+fi
+
+status "$daemon"
+
+case "$verb" in
+start)
+	daemon -n "$daemon" -v
+	;;
+stop)
+	daemon -n "$daemon" -v --stop
+	;;
+disable)
+	cat /etc/daemon.conf | daemon="$daemon" perl -pe 's/^\s*\Q$ENV{daemon}\E\s/# $&/' | sponge /etc/daemon.conf
+	;;
+enable)
+	cat /etc/daemon.conf | daemon="$daemon" perl -pe 's/^\s*#\s*(\Q$ENV{daemon}\E)/$1/' | sponge /etc/daemon.conf
+	;;
+restart)
+	daemon -n "$daemon" -v --stop
+	status
+	daemon -n "$daemon" -v
+	;;
+log)
+	tail "$@" -f /syslog/daemon/daemon.$daemon/today.log
+	;;
+'')
+	exit
+	;;
+*)
+	warnx "unknown verb '$verb'"
+	warnx "valid verbs: start restart stop log"
+	false
+	;;
+esac
+
+status "$daemon"

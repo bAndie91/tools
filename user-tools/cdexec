@@ -1,0 +1,82 @@
+#!/bin/bash
+
+true <<EOF
+=pod
+
+=head1 NAME
+
+cdexec - Run a given command in the given directory
+
+=head1 SYNOPSIS
+
+cdexec [--home | <B<DIRECTORY>>] [--] <B<COMMAND>> [<B<ARGS>>]
+
+Run a given command in the given directory.
+Set the target directory to the command's self directory if not given.
+
+=cut
+
+EOF
+
+
+set -e
+set -o pipefail
+set -u
+
+cd_into=''
+
+while [ $# != 0 ]
+do
+	case "$1" in
+	--help)
+		echo "Usage: $0 [--home | <DIRECTORY>] [--] <COMMAND> [<ARGS>]"
+		echo "Run a command in a specific directory."
+		echo "If DIRECTORY is not given and COMMAND is a path, chdir into COMMAND's directory."
+		exit
+		;;
+	--)
+		shift
+		break
+		;;
+	--home)
+		cd_into=$HOME
+		;;
+	-*)
+		# ignore
+		true
+		;;
+	*)
+		if [ -z "$cd_into" ]
+		then
+			cd_into=$1
+		else
+			# command follows
+			break
+		fi
+		;;
+	esac
+	shift
+done
+
+if [ $# = 0 -a -n "$cd_into" ]
+then
+	# no command given. probably the only parameter is meant to be the command, not the target directory.
+	set -- "$cd_into"
+	cd_into=''
+fi
+
+if [ -z "$cd_into" ]
+then
+	# target directory is the command's self directory
+	cmd=$1
+	if [[ $cmd =~ / ]]
+	then
+		cd_into=`dirname -- "$cmd"`
+	else
+		echo "cdexec: no target directory given." >&2
+		exit -1
+	fi
+fi
+
+cd "$cd_into"
+exec "$@"

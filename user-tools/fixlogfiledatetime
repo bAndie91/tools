@@ -1,0 +1,23 @@
+#!/bin/bash
+
+set -e
+
+anytail()
+{
+	case ${1##*.} in
+	gz) zcat "$1" | tail -n1;;
+	bz|bz2) bzcat "$1" | tail -n1;;
+	xz) xzcat "$1" | tail -n1;;
+	Z) compress -d -c "$1" | tail -n1;;
+	*) tail -n1 "$1";;
+	esac
+}
+
+help_text="Please give a perl(1) expression in DATETIME_PATTERN env variable to match and extract the datetime from log files. Example: 's/^[^>]+>((\S+\s+){3}).*/\$1/'"
+
+for f in "$@"
+do
+	dtstr=$(anytail "$f" | perl -ne "${DATETIME_PATTERN?$help_text} and print")
+	echo "$f	$dtstr"
+	touch "$f" -t $(date +%Y%m%d%H%M.%S -d "$dtstr")
+done

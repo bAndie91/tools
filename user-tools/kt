@@ -1,0 +1,49 @@
+#!/bin/bash
+
+true <<EOF
+=pod
+
+=head1 NAME
+
+kt - Run command in background terminal; keept(1) convenience wrapper
+
+=cut
+
+EOF
+
+
+if [ $# = 0 -o "$1" = --help ]
+then
+	echo "Usage: kt [jobs | <COMMAND> <ARGS> ...]"
+	echo "Run COMMAND in a background terminal, which you can re-attach to with the same command."
+	echo "\"kt jobs\" list running jobs."
+	echo "See keept(1) which does the heavy lifing."
+	exit
+fi
+
+if [ "$1" = jobs ]
+then
+	for cmdfile in ~/.cache/keept/kt-*.txt
+	do
+		socket=${cmdfile:0:-4}
+		if grep -q "$socket" /proc/net/unix
+		then
+			started=`stat -c %y "$socket" | cut -f1 -d.`
+			cmd=`cat "$cmdfile"`
+			pwd=`cat "$socket.cwd"`
+			echo "$started	$pwd	$cmd"
+		fi
+	done
+	exit
+fi
+
+command_hash=`echo -n "$*" | md5sum | cut -c 1-32`
+
+set -e
+
+mkdir -p ~/.cache/keept
+
+pwd > ~/.cache/keept/kt-$command_hash.cwd
+echo "$@" > ~/.cache/keept/kt-$command_hash.txt
+
+exec keept bwu ~/.cache/keept/kt-$command_hash "$@"

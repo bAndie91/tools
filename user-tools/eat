@@ -1,6 +1,18 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+eat - Read and echo back input (like cat(1)) until interrupted (ie. ignore end-of-file)
+
+=cut
+
+EOF
+
+
 while read -r -n 1024
 do
-	echo -n "$REPLY"
+	printf %s "$REPLY"
 done

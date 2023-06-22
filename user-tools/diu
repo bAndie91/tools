@@ -1,5 +1,17 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+diu - Display Inode usage, similar to du(1) for space usage
+
+=cut
+
+EOF
+
+
 shopt -s dotglob
 shopt -s nullglob
 CROSSDEV=allow

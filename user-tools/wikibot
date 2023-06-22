@@ -120,3 +120,14 @@ if($wikitext ne '') {
 
 $bot->logout();
 
+
+__END__
+
+=pod
+
+=head1 NAME
+
+wikibot - Update Wikimedia (Wikipedia) article
+
+=cut
+

@@ -1,2 +1,15 @@
 #!/bin/sh
+
+true <<EOF
+=pod
+
+=head1 NAME
+
+whisper-retention-info - Show data retention policy in Whisper timeseries database file
+
+=cut
+
+EOF
+
+
 whisper-info "$@" | perl -ne 's/seconds\s*per\s*point/resolution/i; /(.*retention|resolution): (\d+)/i and printf "%s = %d sec = %d min = %d hour = %d day = %d year\n", $1, $2, $2/60, $2/3600, $2/3600/24, $2/3600/24/365;'

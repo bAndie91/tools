@@ -1,5 +1,17 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+waitpid - Wait for a process to end (even if not child of current shell)
+
+=cut
+
+EOF
+
+
 if [ "$1" -gt 0 ] 2>/dev/null
 then
 	pid=$1
@@ -9,6 +21,6 @@ then
 	done
 	exit 0
 else
-	echo "Usage: $0 [pid]" >&2
+	echo "Usage: $0 [PID]" >&2
 	exit 1
 fi

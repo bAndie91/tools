@@ -1,3 +1,16 @@
+#!/bin/bash
+
+true <<EOF
+=pod
+
+=head1 NAME
+
+digasn - Query Autonom System Number (ASN) from DNS
+
+=cut
+
+EOF
+
 
 if [ "$1" -gt 0 ] 2>/dev/null
 then

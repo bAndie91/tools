@@ -1,1 +1,0 @@
-dig +short txt "${*// /_}".wp.dg.cx

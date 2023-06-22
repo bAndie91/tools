@@ -1,4 +1,15 @@
 #!/bin/bash
 
-sed -e 'y/abcdefghijklmnopqrstuvwxyz0123456789!@&_+ABCDEFGHIJKLMNOPQRSTUVWXYZ?/eqcpaJby!f×lwuo&Þjs+n^mxhz015Eµ29L86¡©æ¯±V¶>C3JÐHIFK7WNOdÕäSîñAMXÁZ¿/' | rev
+true <<EOF
+=pod
 
+=head1 NAME
+
+upsidedown - Transliterate input stream to text with upsidedown-looking chars
+
+=cut
+
+EOF
+
+
+sed -e 'y/abcdefghijklmnopqrstuvwxyz0123456789!@&_+ABCDEFGHIJKLMNOPQRSTUVWXYZ?/eqcpaJby!f×lwuo&Þjs+n^mxhz015Eµ29L86¡©æ¯±V¶>C3JÐHIFK7WNOdÕäSîñAMXÁZ¿/' | rev

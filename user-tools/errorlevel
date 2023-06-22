@@ -1,2 +1,15 @@
 #!/bin/sh
+
+true <<EOF
+=pod
+
+=head1 NAME
+
+errorlevel - Exit with the given status code
+
+=cut
+
+EOF
+
+
 exit $1

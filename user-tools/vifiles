@@ -1,10 +1,20 @@
 #!/bin/bash
 
-# vidir
-#
-# Edit many files at once.
-#
-# If a LF char at the end of the file is missing, it'll be added.
+true <<EOF
+=pod
+
+=head1 NAME
+
+vifiles - Edit multiple files as one
+
+=head1 LIMITATIONS
+
+If a LF char at the end of any files is missing, it'll be added after edit.
+
+=cut
+
+EOF
+
 
 
 Recursive=no

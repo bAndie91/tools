@@ -707,7 +707,7 @@ takeown [I<options>] <I<files> and I<directories>>
 
 Command chown(1) or chown(2) is permitted only for root (and processes with CAP_CHOWN), 
 but normal users can imitate this behavior.
-You can copy other users´ file for your own in a directory writable by you, 
+You can copy other users' file to your own in a directory writable by you, 
 and then replace the original file with your copy.
 It is quite tricky and maybe expensive (copying huge files), but gives you an option.
 Say, when somebody forgot to use the right user account when saving files directly to your folders.
@@ -721,29 +721,29 @@ See C<takeown --help> for option list.
 
 =head2 Call stack
 
- script --> main --> takeown
-                     /  |  \
-                    /   |   \
-                   /    |    \
-           takeown   takeown  takeown
-           _file    _symlink  _directory
-             |         |           |
- - - - - - - | - - - - | - - - - - | - - - - - - - - - - - - - -
- error       |         |           |
- handler     |         |           V         ,---> register_created_dir
- function:   |         |  ,--> takeown       |
- cleanup     |         |  |    _directory ---+---> register_moved_file
-             |         |  |    _recursive    |
-             |         |  |      | |     \   `---> register_
-             |         |  `------´ |      \    ,-> copied_file
-             |         V           V       \   |
-             |      copy_out <-- copy_out --\--'
-             |      _symlink     /           \
-             V                  /            |
-         copy_out <------------´             |
-           _file                             |
-             |                               |
-             `-------> copy_attributes <-----´
+  script --> main --> takeown
+                      /  |  \
+                     /   |   \
+                    /    |    \
+            takeown   takeown  takeown
+            _file    _symlink  _directory
+              |         |           |
+  - - - - - - | - - - - | - - - - - | - - - - - - - - - - - - - -
+  error       |         |           |
+  handler     |         |           V         ,---> register_created_dir
+  function:   |         |  ,--> takeown       |
+  cleanup     |         |  |    _directory ---+---> register_moved_file
+              |         |  |    _recursive    |
+              |         |  |      | |     \   `---> register_
+              |         |  `------´ |      \    ,-> copied_file
+              |         V           V       \   |
+              |      copy_out <-- copy_out --\--'
+              |      _symlink     /           \
+              V                  /            |
+          copy_out <------------´             |
+            _file                             |
+              |                               |
+              `-------> copy_attributes <-----´
 
 =cut
 

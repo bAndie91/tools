@@ -1,5 +1,17 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+tests - Show all attributes of the given files which can be tested by test(1) with same color ls(1) shows them
+
+=cut
+
+EOF
+
+
 color=yes
 filenames=yes
 sem=":"
@@ -10,8 +22,8 @@ while [ -n "$1" ]; do
 		echo "${0##*/} [-nc] [-s mark] [-F] <files>
 Displays files /directories/ details reported by test(1)
  -nc       no color
- -s mark   mark instead of semicolon next by filenames
- -F        with no filenames"
+ -s CHAR   put CHAR after filenames, instead of semicolon
+ -F        don't output filenames"
 		exit 0
 		;;
 	-nc)	color=no
@@ -73,42 +85,42 @@ if [ $color = yes ]; then
 	done
 	IFS="$oldifs"
 else			# no color
-	NO=
-	RF=
-	DIR=
-	SL=
-	PI=
-	SO=
-	DO=
-	BS=
-	CS=
-	NONE=
-	UNREAD=
-	SUID=
-	SGID=
-	STICKY=
-	X=
-	W=
+	NO=''
+	RF=''
+	DIR=''
+	SL=''
+	PI=''
+	SO=''
+	DO=''
+	BS=''
+	CS=''
+	NONE=''
+	UNREAD=''
+	SUID=''
+	SGID=''
+	STICKY=''
+	X=''
+	W=''
 fi
 
 #for line in `cat`; do
 for line in "$@"; do
-	bs=
-	cs=
-	d=
-	l=
-	rf=
-	sgid=
-	suid=
-	g=
-	o=
-	st=
-	gtz=
-	r=
-	w=
-	x=
-	so=
-	pi=
+	bs=''
+	cs=''
+	d=''
+	l=''
+	rf=''
+	sgid=''
+	suid=''
+	g=''
+	o=''
+	st=''
+	gtz=''
+	r=''
+	w=''
+	x=''
+	so=''
+	pi=''
 
 	if [ -e "$line" ]; then
 		[ -b "$line" ] && bs=y

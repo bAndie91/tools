@@ -1,5 +1,16 @@
 #!/usr/bin/env python
 
+"""
+=pod
+
+=head1 NAME
+
+url-parts - Extract specified parts from URLs given in input stream
+
+=cut
+
+"""
+
 from __future__ import print_function
 import sys
 import re

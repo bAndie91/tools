@@ -223,6 +223,15 @@ while(<STDIN>)
 	}
 }
 
+__END__
+
+=pod
+
+=head1 NAME
+
+unicodestyle - Add font styles to input text using Unicode
+
+=cut
 
 
 

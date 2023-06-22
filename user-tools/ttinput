@@ -1,6 +1,25 @@
 #!/usr/bin/env perl
 
-# https://johnlane.ie/injecting-terminal-input.html
+true <<EOF
+=pod
+
+=head1 NAME
+
+ttinput - Inject console input in a terminal as if the user typed
+
+=head1 SYNOPSIS
+
+echo Lorm ipsum | ttinput /dev/pts/1
+
+=head1 CREDITS
+
+L<https://johnlane.ie/injecting-terminal-input.html>
+
+=cut
+
+EOF
+
+
 
 $tty = shift @ARGV || '/dev/tty';
 sysopen $fd, $tty, O_WRONLY|O_NONBLOCK or die "open $tty: $!\n";;

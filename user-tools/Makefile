@@ -4,7 +4,7 @@ TOOLS_TARGET_DIR = /usr/tool
 TOOLS = 2opml adr2html asterisk-log-separator awk-cut base58 base64url \
   bencode2json chattr-cow chattr-nocow chromium_cookie_decrypt.py \
   chshebang convert_chromium_cookies_to_netscape.sh corner_time cut.awk \
-  debdiff descpids dfbar digasn digwiki diu dlnew dump_php_session.php eat \
+  debdiff descpids dfbar digasn diu dlnew dump_php_session.php eat \
   errorlevel error_reporting.php fcomplete fc-search-codepoint fdupes-hardlink ff fgat \
   find-by-date findnewestfile findoldestfile foreach \
   geoip git-checkout-sparse gitdiff grepdatetime Head header.sed \
@@ -73,7 +73,8 @@ $(TOOLS_TARGET_DIR):
 
 install-all: \
   /usr/lib/tool/bash-utils \
-  install-tools install-manpages
+  install-manpages \
+  install-tools
 
 
 install-tools: $(TOOLS_TARGET_DIR) $(TOOLS_TARGET_FILES)
@@ -106,7 +107,7 @@ $(MANPAGES_DIR)/man*/:
 $(MANPAGE_FILES): $(MANPAGES_DIR)/man$(MANPAGE_SECTION)/%$(MANPAGE_FILE_SUFFIX): %
 	@if podchecker "$<"; then \
 		outfile="$(MANPAGES_DIR)/man$(MANPAGE_SECTION)/$<$(MANPAGE_FILE_SUFFIX)" ;\
-		pod2man --utf8 "$<" | xz > "$$outfile.tmp" &&\
+		pod2man --name="$<" --section $(MANPAGE_SECTION) --utf8 "$<" | xz > "$$outfile.tmp" &&\
 		mv -f "$$outfile.tmp" "$$outfile" ;\
 	fi
 

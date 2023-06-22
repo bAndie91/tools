@@ -13,3 +13,15 @@ defined $bytes or die "$!\n";
 print {$dst} $buf or die "$!\n";
 $bytes > 0 or exit 0;
 goto LOOP;
+
+__END__
+
+=pod
+
+=head1 NAME
+
+fcomplete - Complete a smaller file with the data from a bigger one
+
+=cut
+
+EOF

@@ -1,5 +1,17 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+xdg-autostart - Start XDG autostart programms
+
+=cut
+
+EOF
+
+
 shopt -s nullglob
 declare -A seen
 declare -A prop
@@ -74,10 +86,10 @@ do
 	case "$1" in
 	-h|--help)
 		echo "Options:
- -n   Do not run anything, only show"
+ --dry-run, -n    Do not run anything, only show"
 		exit
 		;;
-	-n)
+	-n|--dry-run)
 		DRY=1
 		;;
 	*)

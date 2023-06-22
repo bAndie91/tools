@@ -1,5 +1,16 @@
 #!/usr/bin/env python
 
+"""
+=pod
+
+=head1 NAME
+
+xml2json - Convert XML input to JSON
+
+=cut
+
+"""
+
 import sys
 import xmltodict
 import json

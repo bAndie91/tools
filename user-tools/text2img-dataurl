@@ -1,5 +1,16 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+text2img-dataurl - Convert text input to image in "data:..." URL representation
+
+=cut
+
+EOF
+
 report_size()
 {
 	msgprefix="$1" perl -pe '$s += length $_; END { 1 while $s =~ s/(\d)(\d\d\d)(( \d\d\d)*)$/\1 \2\3/; print STDERR "$ENV{msgprefix}$s bytes\n"; }'

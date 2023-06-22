@@ -98,3 +98,13 @@ for(@table) {
 	printf $format, $row[COL_FS], $row[COL_MP], $usedpatt x $used, $freepatt x $free, "", $row[COL_SIZE];
 }
 
+__END__
+
+=pod
+
+=head1 NAME
+
+dfbar - Display disk space usage with simple bar chart (as reported by df(1))
+
+=cut
+

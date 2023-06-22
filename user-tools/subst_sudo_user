@@ -1,0 +1,50 @@
+#!/bin/bash
+
+true <<EOF
+=pod
+
+=head1 NAME
+
+subst_sudo_user - Sudo helper program
+
+=head1 SYNOPSIS
+
+subst_sudo_user <B<COMMAND>> [<B<ARGUMENTS>>]
+
+Substitute literal C<$SUDO_USER> in the B<ARGUMENTS> and run B<COMMAND>.
+
+=head1 RATIONALE
+
+It enables sys admins to define sudoers(5) rule in which each user is allowed to
+call a privileged command with thier own username in parameters. Example:
+
+  %users ALL=(root:root) NOPASSWD: /usr/tool/subst_sudo_user sudo passwd $SUDO_USER
+
+This rule allows users to run C<subst_sudo_user> with verbatim C<$SUDO_USER> parameter,
+so no shell variable resolution happens so far. C<Subst_sudo_user> in turn, running as root,
+replaces C<$SUDO_USER> to the value of C<SUDO_USER> environment variable, which is,
+by sudo(1), guaranteed to be the caller username. So effectively with this rule,
+each user can change their password without knowing the current one first.
+
+=cut
+
+EOF
+
+set -e
+set -o pipefail
+set -u
+
+declare -a args=()
+
+while [ $# -gt 0 ]
+do
+	if [ ".$1" = ".\$SUDO_USER" ]
+	then
+		args+=("$SUDO_USER")
+	else
+		args+=("$1")
+	fi
+	shift
+done
+
+exec "${args[@]}"

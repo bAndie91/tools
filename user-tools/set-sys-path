@@ -1,0 +1,15 @@
+#!/bin/bash
+
+true <<EOF
+=pod
+
+=head1 NAME
+
+set-sys-path - Set PATH according to /etc/environment and run a program
+
+=cut
+
+EOF
+
+export PATH=`pam_getenv PATH`
+exec "$@"

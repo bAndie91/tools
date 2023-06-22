@@ -1,0 +1,28 @@
+#!/bin/bash
+
+true <<EOF
+=pod
+
+=head1 NAME
+
+terminaltitle - Set the current terminal's title string
+
+=cut
+
+EOF
+
+
+title=$*
+title_esc=${title//\\/\\\\}
+
+case "$TERM" in
+(xterm*|rxvt*|urxvt*)
+	echo -ne "\033]0;$title_esc\007"
+	;;
+(screen*)
+	echo -ne "\033k$title_esc\033\\"
+	;;
+(*)
+	echo "$0: not supported terminal $TERM" >&2
+	;;
+esac

@@ -1,0 +1,25 @@
+#!/usr/bin/env python2.7
+
+"""
+=pod
+
+=head1 NAME
+
+pngmetatext - Put metadata text into PNG file
+
+=cut
+
+"""
+
+import sys
+import gtk
+
+filepath = sys.argv[1]
+pb = gtk.gdk.pixbuf_new_from_file(filepath)
+
+meta = {}
+for opt in sys.argv[2:]:
+	name, val = opt.split('=', 1)
+	meta[name] = val
+
+pb.save(filepath, 'png', meta)

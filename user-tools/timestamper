@@ -1,0 +1,24 @@
+#!/usr/bin/env perl
+
+use POSIX qw/strftime/;
+
+$fmt = $ENV{'TIMESTAMP_FMT'} || '%F %T %z';
+
+
+while(<STDIN>)
+{
+	print strftime($fmt, localtime);
+	print "\t";
+	print $_;
+}
+
+
+__END__
+
+=pod
+
+=head1 NAME
+
+timestamper - Prepend a timestamp to each input line
+
+=cut

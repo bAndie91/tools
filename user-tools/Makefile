@@ -23,7 +23,8 @@ TOOLS =   2opml adr2html asterisk-log-separator awk-cut base58 base64url \
   url_decode url_encode url_encode_bf url-parts vidir-sanitize vifiles \
   waitpid whisper-retention-info wikibot xdg-autostart xml2json \
   levenshtein-distance jaro-metric jaro-winkler-metric loggerexec \
-  logrotate-counters logto pdfflop
+  logrotate-counters logto pdfflop pngmetatext set-sys-path subst_sudo_user \
+  terminaltitle timestamper
 
 TOOLS_TARGET_FILES := $(addprefix $(TOOLS_TARGET_DIR)/,$(TOOLS))
 

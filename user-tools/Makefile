@@ -22,6 +22,8 @@ TOOLS =   2opml adr2html asterisk-log-separator awk-cut base58 base64url \
   tests text2img-dataurl touchx ttinput uchmod unicodestyle upsidedown \
   url_decode url_encode url_encode_bf url-parts vidir-sanitize vifiles \
   waitpid whisper-retention-info wikibot xdg-autostart xml2json \
+  levenshtein-distance jaro-metric jaro-winkler-metric loggerexec \
+  logrotate-counters logto pdfflop
 
 TOOLS_TARGET_FILES := $(addprefix $(TOOLS_TARGET_DIR)/,$(TOOLS))
 

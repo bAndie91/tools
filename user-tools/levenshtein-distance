@@ -1,0 +1,69 @@
+#!/usr/bin/env python2.7
+
+"""
+=pod
+
+=head1 NAME
+
+levenshtein-distance, jaro-metric, jaro-winkler-metric - Calculate the levenshtein distance (jaro/-winkler metric) of given strings
+
+=cut
+
+"""
+
+
+import Levenshtein
+import sys
+import os
+
+try:
+	str1 = sys.argv[1]
+except IndexError:
+	raise Exception("""
+Usage:
+  levenshtein-distance <string-1> [<string-2>]
+  jaro-metric <string-1> [<string-2>]
+  jaro-winkler-metric <string-1> [<string-2>]
+Environment:
+  JARO_WINKLER_PREFIX_WEIGHT
+Reads strings to compare from stdin unless string-2 is given.
+Prints the resulting metric, or the <metric> TAB <string-2> if read from stdin.
+""")
+
+
+if len(sys.argv) > 2:
+	str2 = sys.argv[2]
+	read_stdin = False
+else:
+	str2 = None
+	read_stdin = True
+
+jaro_winkler_prefix_weight = os.environ.get('JARO_WINKLER_PREFIX_WEIGHT')
+if jaro_winkler_prefix_weight is not None: jaro_winkler_prefix_weight = float(jaro_winkler_prefix_weight)
+
+
+if 'jaro' in sys.argv[0]:
+	if 'winkler' in sys.argv[0]:
+		method = 'jaro_winkler'
+	else:
+		method = 'jaro'
+else:
+	method = 'distance'
+
+
+if read_stdin:
+	while True:
+		str2 = sys.stdin.readline()
+		if str2 == '': break
+		str2 = str2.rstrip('\r\n')
+		
+		args = [str1, str2]
+		if jaro_winkler_prefix_weight is not None:
+			args.append(jaro_winkler_prefix_weight)
+		
+		print "%s\t%s" % (str(getattr(Levenshtein, method)(*args)), str2)
+else:
+	args = [str1, str2]
+	if jaro_winkler_prefix_weight is not None:
+		args.append(jaro_winkler_prefix_weight)
+	print getattr(Levenshtein, method)(*args)

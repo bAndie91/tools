@@ -1,0 +1,73 @@
+#!/bin/bash
+
+true <<EOF
+=pod
+
+=head1 NAME
+
+logrotate-counters - Increment numbers in file names
+
+=cut
+
+EOF
+
+
+set -u
+set -e
+set -o pipefail
+
+. /usr/lib/tool/bash-utils
+
+if [ $# = 0 ]
+then
+	warnx "This command is to increment counters in file names."
+	warnx "Usage: $0 [--dry-run] [basename-1 [basename-2 [...]]]"
+	warnx "Where basename is the file name (eg. \"access.log\") on which numbers in all \"access.log.NUMBER.*\" files are gonna be incremented."
+	exit 1
+fi
+
+dryrun=''
+
+if [ "$1" = --dry-run ]
+then
+	dryrun=1
+	shift
+fi
+
+shopt -s extglob
+shopt -s nullglob
+
+LF=$'\n'
+TAB=$'\t'
+
+for basename in "$@"
+do
+	basename_length=${#basename}
+	for filename in "$basename".+([0-9]).*
+	do
+		if [ -n "${filename//[!$TAB]/}" -o -n "${filename//[!$LF]/}" ]
+		then
+			warnx "Tab or linefeed char in filename - skipping it: $filename"
+			continue
+		fi
+		
+		ending=${filename:$basename_length}
+		if [[ $ending =~ ^\.([0-9]+)\.(.+)$ ]]
+		then
+			counter=${BASH_REMATCH[1]}
+			remainder=${BASH_REMATCH[2]}
+			newname=$basename.$[counter+1].$remainder
+			echo "$counter	$filename	$newname"
+		fi
+	done |\
+	sort -n -r |\
+	while read -r counter filename newname
+	do
+		if [ $dryrun ]
+		then
+			echo "$filename" '->' "$newname"
+		else
+			mv -n -v "$filename" "$newname"
+		fi
+	done
+done

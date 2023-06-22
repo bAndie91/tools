@@ -1,0 +1,46 @@
+#!/bin/bash
+
+true <<EOF
+=pod
+
+=head1 NAME
+
+pdfflop - Flop a PDF file's pages
+
+=cut
+
+EOF
+
+
+set -e
+set -o pipefail
+set -u
+
+input=''
+output=''
+
+while [ $# -gt 0 ]
+do
+	case "$1" in
+	--outfile|-o)
+		shift
+		output=$1
+		;;
+	-*)
+		echo "pdfflop: unknown option: $1" >&2
+		exit 1
+		;;
+	*)
+		if [ -z "$input" ]
+		then
+			input=$1
+		else
+			echo "pdfflop: extra argument: $1" >&2
+			exit 2
+		fi
+		;;
+	esac
+	shift
+done
+
+pdf90 "$input" -o /dev/stdout | pdfflip /dev/stdin -o /dev/stdout | pdf270 /dev/stdin -o "$output"

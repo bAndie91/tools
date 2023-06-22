@@ -1,0 +1,29 @@
+#!/bin/bash
+
+true <<EOF
+=pod
+
+=head1 NAME
+
+logto - Run a command and append its STDOUT and STDERR to a file
+
+=cut
+
+EOF
+
+
+if [ ".$1" = ".--help" ]
+then
+	echo "Usage: $0 <FILENAME> <COMMAND> [<ARGS>]"
+	echo "Save command's output (stdout and stderr) to file and keep normal stdout and stderr as well."
+	exit
+fi
+
+set -e
+set -o pipefail
+set -u
+
+logfile=$1
+shift
+
+exec "$@" 2> >(tee -a "$logfile" >&2) | tee -a "$logfile"

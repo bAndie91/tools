@@ -1,0 +1,34 @@
+#!/bin/bash
+
+true <<EOF
+=pod
+
+=head1 NAME
+
+loggerexec - Run a command and send STDOUT and STDERR to syslog
+
+=cut
+
+EOF
+
+
+if [ ".$1" = ".--help" ]
+then
+	echo "Usage: $0 <FACILITY> <IDENT> <COMMAND> [<ARGS>]"
+	echo "Send COMMAND's stdout and stderr to syslog."
+	echo "FACILITY is one of standard syslog facility names (user, mail, daemon, auth, local0, ...)"
+	echo "IDENT is a freely choosen identity name, also known as tag or programname."
+	echo "COMMAND's stdout goes as 'info' log level, stderr goes as 'error' log level."
+	exit
+fi
+
+set -e
+set -o pipefail
+set -u
+
+facility=$1
+shift
+ident=$1
+shift
+
+exec "$@" > >(logger -p "$facility.info" -t "$ident") 2> >(logger -p "$facility.error" -t "$ident")

@@ -28,7 +28,7 @@ TOOLS ?=   2opml adr2html asterisk-log-separator awk-cut base58 base64url \
   logrotate-counters logto pdfflop pngmetatext set-sys-path subst_sudo_user \
   terminaltitle timestamper set-xcursor-lock-and-run
 
-TOOLS_TARGET_FILES := $(addprefix $(TOOLS_TARGET_DIR)/,$(TOOLS))
+TOOLS_TARGET_FILES = $(addprefix $(TOOLS_TARGET_DIR)/,$(TOOLS))
 
 
 
@@ -97,23 +97,24 @@ list-tools:
 
 
 MANPAGES_DIR = $(REPO_ROOT)/doc/man
-MANPAGE_SECTION = 1
-MANPAGE_FILE_SUFFIX = .$(MANPAGE_SECTION).xz
-MANPAGE_FILES := $(foreach toolname,$(TOOLS),$(MANPAGES_DIR)/man$(MANPAGE_SECTION)/$(toolname)$(MANPAGE_FILE_SUFFIX))
+MANPAGE_SECTION ?= 1
+MANPAGE_SECTION_EXT ?= $(MANPAGE_SECTION)
+MANPAGE_FILE_SUFFIX = .$(MANPAGE_SECTION_EXT).xz
+MANPAGES_SUBDIR = $(MANPAGES_DIR)/man$(MANPAGE_SECTION)
+MANPAGE_FILES = $(foreach toolname,$(TOOLS),$(MANPAGES_SUBDIR)/$(toolname)$(MANPAGE_FILE_SUFFIX))
 
 manpages: $(MANPAGE_FILES)
 
-$(MANPAGES_DIR)/man*/*: | $(MANPAGES_DIR)/man$(MANPAGE_SECTION)/
+$(MANPAGES_DIR)/man*/*: | $(MANPAGES_SUBDIR)/
 
 $(MANPAGES_DIR)/man*/:
 	mkdir -p $@
 	@echo remove $@ >> uninstall.sh
 
-$(MANPAGE_FILES): $(MANPAGES_DIR)/man$(MANPAGE_SECTION)/%$(MANPAGE_FILE_SUFFIX): %
+$(MANPAGE_FILES): $(MANPAGES_SUBDIR)/%$(MANPAGE_FILE_SUFFIX): %
 	@if podchecker "$<"; then \
-		outfile="$(MANPAGES_DIR)/man$(MANPAGE_SECTION)/$<$(MANPAGE_FILE_SUFFIX)" ;\
-		pod2man --name="$<" --section $(MANPAGE_SECTION) --utf8 "$<" | xz > "$$outfile.tmp" &&\
-		mv -f "$$outfile.tmp" "$$outfile" ;\
+		pod2man --name="$<" --section $(MANPAGE_SECTION_EXT) --utf8 "$<" | xz > "$@.tmp" &&\
+		mv -f "$@.tmp" "$@" ;\
 	fi
 
 install-manpages: manpages

@@ -1,8 +1,8 @@
 #!/bin/bash
 
 host=gateway.localhost
-user=
-pass=
+user=''
+pass=''
 
 declare -A infoparam=([ip]="IP Address" [gw]="Default Gateway" [dns1]="Primary DNS" [dns2]="Secondary DNS")
 
@@ -46,7 +46,7 @@ dispatch()
 {
 	local path=$1
 	shift
-	curl -sS -u "$user:$pass" "$host$path" "$@"
+	curl -sS -u "$user:$pass" "http://$host$path" --connect-timeout 4 --max-time 5 "$@"
 }
 
 case "$1" in
@@ -132,7 +132,7 @@ pfwd)
 		[ -n "$3" ] || invalidparameters
 		dst=$3
 		proto=${4^^}
-		[ -z "$proto" -o "$proto" = TCP -o "$proto" = UDP ] || invalidparameters
+		[ -z "$proto" -o "$proto" = TCP -o "$proto" = UDP -o "$proto" = ALL ] || invalidparameters
 		
 		idx=$(
 			fetch_pfwd |\
@@ -174,43 +174,61 @@ pfwd)
 	fi
 	;;
 info)
-	param=$2
+	req_param=$2
 	dispatch /status/status_deviceinfo.htm |\
 	{
-	stage=
+	stage=''
 	while read line
 	do
-		for str in WAN IPv6
+		for str in WAN IPv6 ADSL
 		do
-			if expr "$line" : ".*$str" >/dev/null
+			if expr + "$line" : ".*$str" >/dev/null
 			then
 				stage=$str
 				break
 			fi
 		done
-		if [ "$stage" != WAN ]
+		if [ "$stage" != WAN -a "$stage" != ADSL ]
 		then
 			continue
 		fi
-		if [ -z "$param" ]
+		
+		if expr + "$line" : ".*Data Rate" >/dev/null
 		then
-			for str in "${infoparam[@]}"
-			do
-				if expr "$line" : ".*$str" >/dev/null
+			IFS=' <' read downlink_kbitps junk
+			IFS=' <' read uplink_kbitps junk
+			case "$req_param" in
+			downlink)	echo "$downlink_kbitps"; break;;
+			uplink)		echo "$uplink_kbitps"; break;;
+			'')
+				echo "Downlink rate	$downlink_kbitps kbit/s"
+				echo "Uplink rate	$uplink_kbitps kbit/s"
+				continue
+				;;
+			esac
+		fi
+		
+		for this_param in "${!infoparam[@]}"
+		do
+			if [ -n "$req_param" -a "$req_param" != "$this_param" ]
+			then
+				continue
+			fi
+			
+			param_label=${infoparam[$this_param]}
+			if expr + "$line" : ".*$param_label" >/dev/null
+			then
+				IFS='<' read data junk
+				if [ -n "$req_param" ]
 				then
-					IFS='<' read data rest
-					echo "$str	$data"
+					echo "$data"
+					break 2
+				else
+					echo "$param_label	$data"
 					break
 				fi
-			done
-		else
-			if expr "$line" : ".*${infoparam[$param]}" >/dev/null
-			then
-				IFS='<' read data rest
-				echo "$data"
-				break
 			fi
-		fi
+		done
 	done
 	}
 	;;
@@ -219,7 +237,7 @@ info)
 Commands:
   reboot
   info
-  info [ip|gw|dns1|dns2]
+  info [ip|gw|dns1|dns2|downlink|uplink]
   log
   pfwd
   pfwd <app_name> <start_port>[-end_port] <dest_ip> [TCP|UDP|ALL]

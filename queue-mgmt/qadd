@@ -1,0 +1,84 @@
+#!/bin/bash
+
+usage_help_text="Usage: qadd [<OPTIONS>] [--] [<COMMAND> <ARGS>]
+Add new command to run to the end of the queue.
+OPTIONS:
+  -q, --quiet
+  -d, --queue-dir
+  -x, --if-not-exists"
+
+. qadd-common
+
+
+if [ $qadd_no_dup ]
+then
+	qcleanup
+	
+	declare -a this_command=("$@")
+	
+	shopt -s nullglob
+	for itemfile in "$queue_dir"/*.comm
+	do
+		argnum=0
+		same_command=1
+		
+		exec {fd}<"$itemfile"
+		while read -r -d $'\0' -u $fd arg
+		do
+			if [ $argnum -ge ${#this_command[@]} ]
+			then
+				same_command=''
+				break
+			fi
+			if [ ".$arg" != ".${this_command[$argnum]}" ]
+			then
+				same_command=''
+				break
+			fi
+			argnum=$[argnum + 1]
+		done
+		exec {fd}>&-
+		if [ $same_command ] && [ $argnum != ${#this_command[@]} ]
+		then
+			same_command=''
+		fi
+		if [ $same_command ]
+		then
+			taskid=`basename "$itemfile" .comm`
+			echo "qadd: not adding, command is equivalent to task $taskid" >&2
+			exit -8
+		fi
+	done
+	shopt -u nullglob
+fi
+
+queue_item_file=''
+last_id=`cat "$queue_dir/.seq" 2>/dev/null || echo -n 0`
+
+while [ -z "$queue_item_file" -o -e "$queue_item_file" ]
+do
+	item_id=$[last_id + 1]
+	queue_item_file=$queue_dir/$item_id.comm
+	last_id=$item_id
+done
+
+
+pwd > "$queue_dir/$item_id.pwd"
+umask > "$queue_dir/$item_id.umask"
+
+for arg in "$@"
+do
+	printf '%s\000' "$arg"
+done > "$queue_item_file"
+
+declare -p -x > "$queue_dir/$item_id.env.bash"
+declare -p -x -f > "$queue_dir/$item_id.func.bash"
+
+
+echo -n $item_id > "$queue_dir/.seq"
+
+
+if [ ! $quiet ]
+then
+	echo "qadd: task $item_id queued in $queue_dir" >&2
+fi

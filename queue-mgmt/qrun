@@ -1,0 +1,94 @@
+#!/bin/bash
+
+usage_help_text="qrun [<OPTIONS>]
+Run next item in the queue.
+OPTIONS:
+  -q, --quiet
+  -qq, --very-quiet
+  -d, --queue-dir
+  -n, --suppress-output"
+
+. qadd-common
+
+qcleanup
+
+
+shopt -s nullglob
+next_item_id=''
+
+
+for itemfile in $(find "$queue_dir" -maxdepth 1 -name '*.comm' -printf '%f\n' | sort -n -t '.')
+do
+	item_id=`basename "$itemfile" .comm`
+	
+	if [ -e "$queue_dir/$item_id.pid" ]
+	then
+		# it's a running task. don't start any more.
+		if [ ! $quiet ]
+		then
+			pid=`cat "$queue_dir/$item_id.pid"`
+			pidns=`cat "$queue_dir/$item_id.pidns"`
+			this_pidns=`readlink /proc/self/ns/pid`
+			if [ "$pidns" = "$this_pidns" ]
+			then
+				pidns_info=''
+			else
+				pidns_info=" pidns=${pidns#*:}"
+			fi
+			task_command=`cat "$queue_dir/$item_id.comm" | { read -r -d $'\0' task_command rest; echo "$task_command"; }`
+			echo "qrun: task $item_id (pid=$pid$pidns_info cmd=$task_command) is running. not starting new one." >&2
+		fi
+		exit -6
+	fi
+	
+	if [ -z "$next_item_id" ]
+	then
+		next_item_id=$item_id
+		break
+	fi
+done
+
+if [ -z "$next_item_id" ]
+then
+	if [ ! $quiet ]
+	then
+		echo "qrun: no next item found to run" >&2
+	fi
+	exit -5
+fi
+
+pwd=`cat "$queue_dir/$next_item_id.pwd"`
+umask=`cat "$queue_dir/$next_item_id.umask"`
+
+readlink /proc/self/ns/pid > "$queue_dir/$next_item_id.pidns"
+declare -a command=()
+exec {fd}<"$queue_dir/$next_item_id.comm"
+while read -r -d $'\0' -u $fd arg
+do
+	command+=("$arg")
+done
+exec {fd}>&-
+
+# task's PID is gonna be ours at the end
+echo $$ > "$queue_dir/$next_item_id.pid"
+if [ ! $very_quiet ]
+then
+	echo "qrun: starting task $next_item_id, pid: $$, command: ${command[*]}" >&2
+fi
+# release lock on queue_dir
+exec {lock_fd}>&-
+
+if [ $qrun_suppress_output ]
+then
+	exec >/dev/null
+	exec 2>/dev/null
+fi
+
+set -e
+
+# now we are turning into a task
+. "$queue_dir/$next_item_id.env.bash"
+. "$queue_dir/$next_item_id.func.bash"
+cd "$pwd"
+umask "$umask"
+exec "${command[@]}"

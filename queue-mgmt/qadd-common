@@ -1,0 +1,117 @@
+#!/bin/bash
+
+qcleanup()
+{
+	# move completed tasks' files to ./completed directory.
+	# a task is considered completed if its PID (in its PID namespace)
+	# is no longer there.
+	
+	shopt -s nullglob
+	
+	local pidfile task_id task_pidns my_pidns task_running
+	
+	for pidfile in "$queue_dir"/*.pid
+	do
+		task_id=`basename "$pidfile" .pid`
+		
+		if [ ! -e "$queue_dir/$task_id".pidns ]
+		then
+			continue
+		fi
+		
+		task_pidns=`cat "$queue_dir/$task_id".pidns`
+		my_pidns=`readlink /proc/self/ns/pid`
+		
+		if [ "$task_pidns" != "$my_pidns" ]
+		then
+			continue
+		fi
+		
+		task_pid=`cat "$queue_dir/$task_id".pid`
+		task_running=1
+		
+		if [ ! -e /proc/$task_pid ]
+		then
+			task_running=''
+		fi
+		
+		if [ ! $task_running ]
+		then
+			rm "$queue_dir/$task_id".pid
+			rm "$queue_dir/$task_id".pidns
+			mkdir -p "$queue_dir/completed/"
+			mv --target-directory="$queue_dir/completed/" "$queue_dir/$task_id".*
+		fi
+	done
+}
+
+queue_dir=${DEFAULT_QUEUE_DIR:-}
+quiet=''
+very_quiet=''
+qls_multiline=1
+qrun_suppress_output=''
+qadd_no_dup=''
+
+while [ $# != 0 ]
+do
+	case "$1" in
+	--help)
+		echo "Usage: $usage_help_text"
+		exit;;
+	-q|--quiet)
+		quiet=1
+		;;
+	-qq|--very-quiet)
+		quiet=1
+		very_quiet=1
+		;;
+	-d|--queue-dir)
+		shift
+		queue_dir=$1
+		;;
+	--multiline)
+		qls_multiline=1
+		;;
+	--no-multiline|--escape-command)
+		qls_multiline=''
+		;;
+	-n|--suppress-output)
+		qrun_suppress_output=1
+		;;
+	-x|--if-not-exists)
+		qadd_no_dup=1
+		;;
+	--)
+		shift
+		break;;
+	-*)
+		echo "$0: unknwon option: $1" >&2
+		exit -1;;
+	*)
+		break;;
+	esac
+	shift
+done
+
+if [ -z "$queue_dir" ]
+then
+	# load default queue dir
+	if [ -e ~/.config/qadd/default-queue-dir ]
+	then
+		queue_dir=`head -n 1 ~/.config/qadd/default-queue-dir`
+	fi
+fi
+
+if [ -z "$queue_dir" ]
+then
+	echo "$0: specify the queue control directory." >&2
+	exit -2
+fi
+
+
+set -e
+set -o pipefail
+set -u
+
+exec {lock_fd}>>"$queue_dir/.lock"
+flock --exclusive $lock_fd

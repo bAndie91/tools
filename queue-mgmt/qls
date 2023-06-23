@@ -1,0 +1,47 @@
+#!/bin/bash
+
+usage_help_text="qls [<OPTIONS>]
+List items in the queue.
+OPTIONS:
+  -q, --quiet
+  --multiline  (default)
+  --no-multiline
+  -d, --queue-dir"
+
+. qadd-common
+
+qcleanup
+
+
+if [ ! $quiet ]
+then
+	echo "qls: $queue_dir" >&2
+fi
+
+echo "ID	CREATED	STATE	COMMAND"
+
+shopt -s nullglob
+
+for itemfile in "$queue_dir"/?.comm "$queue_dir"/??.comm "$queue_dir"/???.comm "$queue_dir"/????.comm "$queue_dir"/?????.comm "$queue_dir"/??????.comm "$queue_dir"/???????.comm 
+do
+	item_id=`basename "$itemfile" .comm`
+	timestamp=`stat -c %Y "$itemfile"`
+	datetime=`date +"%F %T" -d @$timestamp`
+	command=$(cat "$itemfile" | perl -pe 's/\x00/ /g')
+	state=queued
+	
+	if [ -e "$queue_dir/$item_id.pid" ]
+	then
+		state=running
+	fi
+	
+	if [ $qls_multiline ]
+	then
+		command_shown=${command//$'\n'/$'\n\t\t\t'}
+	else
+		command_shown=${command//\\/\\\\}
+		command_shown=${command_shown//$'\n'/\\n}
+	fi
+	
+	echo "$item_id	$datetime	$state	$command_shown"
+done

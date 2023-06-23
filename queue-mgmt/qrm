@@ -1,0 +1,51 @@
+#!/bin/bash
+
+usage_help_text="qrm [<OPTIONS>] <TASK-ID> [<TASK-ID> [...]]
+Remove specified item(s) from the queue.
+OPTIONS:
+  -d, --queue-dir"
+
+. qadd-common
+
+qcleanup
+
+shopt -s nullglob
+
+if [ $# = 0 ]
+then
+	echo "qrm: missing task id." >&2
+	exit -1
+fi
+
+while [ $# -gt 0 ]
+do
+	task_id=$1
+	
+	if [ -z $task_id ]
+	then
+		echo "qrm: empty task ID" >&2
+		exit -3
+	fi
+	
+	if [[ $task_id =~ / ]]
+	then
+		echo "qrm: invalid task ID: $task_id" >&2
+		exit -4
+	fi
+	
+	if [ -e "$queue_dir/$task_id.pid" ]
+	then
+		echo "qrm: task $task_id is running." >&2
+		exit -7
+	fi
+	
+	if [ -e "$queue_dir/$task_id.comm" ]
+	then
+		rm "$queue_dir/$task_id".*
+	else
+		echo "qrm: task $task_id is not found." >&2
+		exit -5
+	fi
+	
+	shift
+done

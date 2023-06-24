@@ -1,9 +1,14 @@
 
-install-basedir-lib:
-	mkdir -p /usr/lib/tool
+/usr/lib/tool:
+	mkdir -p $@
+	@echo remove $@ >> uninstall.sh
 
-install-bc-functions: install-basedir-lib
-	install --compare functions.bc /usr/lib/tool/
-	install --compare bc-functions.sh /etc/profile.d/
+/usr/lib/tool/functions.bc: /usr/lib/tool /etc/profile.d/bc-functions.sh
+	install functions.bc $@
+	@echo remove $@ >> uninstall.sh
 
-install-all: install-bc-functions
+/etc/profile.d/bc-functions.sh:
+	install bc-functions.sh $@
+	@echo remove $@ >> uninstall.sh
+
+install-all: /usr/lib/tool/functions.bc

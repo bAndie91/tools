@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.6
+#!/usr/bin/env python3
 
 """
 =pod
@@ -38,7 +38,7 @@ Additionally it takes these special arguments as well:
 
 =item B<@>SELECTOR
 
-Prefix your selector whit an C<@> at sign to suppress output.
+Prefix your selector with an C<@> at sign to suppress output.
 Mnemonic: Command line echo suppression in DOS batch and in Makefile.
 
 =item B<text{}> or B<::text>
@@ -60,10 +60,10 @@ parsel(1) takes double square brackets to actually output the attribute.
 
 A stand-alone C</> takes the current selection as a base for the rest of the selectors.
 Mnemonic: one directory level deeper.
-So these arg sequence: C<.content / p div> selects only those P and DIV elements
+So this arg sequence: C<.content / p div> selects only those P and DIV elements
 which are inside a "content" class. 
 This is useful because with css only, you can not group P and DIV together here.
-In other words neither C<.content p, div> or C<.content E<gt> p, div> does not provide
+In other words neither C<.content p, div> nor C<.content E<gt> p, div> provides
 the same result.
 
 =item B<..> (double period)

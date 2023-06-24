@@ -1,5 +1,17 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+partial - Show an earlier started long-running command's partial output
+
+=cut
+
+EOF
+
+
 set -e
 set -o pipefail
 set -u

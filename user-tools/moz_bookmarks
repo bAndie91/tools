@@ -1,5 +1,17 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+moz_bookmarks - Read Mozilla bookmarks database and display titles and URLs line-by-line
+
+=cut
+
+EOF
+
+
 set -e
 set -o pipefail
 set -u

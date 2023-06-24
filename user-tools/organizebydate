@@ -1,5 +1,17 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+organizebydate - Rename files based on their date-time
+
+=cut
+
+EOF
+
+
 target_template="%Y/%m/%d/"
 time_field=Y
 verbose_mv=''
@@ -12,8 +24,8 @@ do_touch=''
 overwrite_opt='--no-clobber'
 
 usage() {
-	echo -n "Usage: ./organizebydate [-t <template>] [-c | -m | -a] [-v] [-n] [[-i | -x] <num>] <files, directories>
- --template, -t   Target path name using date(1)-style macros
+	echo -n "Usage: organizebydate [-t <template>] [-c | -m | -a] [-v] [-n] [[-i | -x] <num>] <files, directories>
+ --template, -t   Target path name using strftime(3) macros
                   Default: $target_template
                   Extra macros accepted:
                    %@    File's directory path

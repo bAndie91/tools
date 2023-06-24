@@ -18,3 +18,14 @@ for my $filename (@ARGV)
 	$entity->dump_skeleton;
 }
 
+
+__END__
+
+=pod
+
+=head1 NAME
+
+mime_extract - Extract parts from a MIME multipart file and save them into separate files
+
+=cut
+

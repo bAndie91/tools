@@ -1,5 +1,17 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+fixlogfiledatetime - Set the target files modification time to their respective last log entry's timestamp
+
+=cut
+
+EOF
+
+
 set -e
 
 anytail()

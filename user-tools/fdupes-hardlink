@@ -1,5 +1,16 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+fdupes-hardlink - Make hardlinks from identical files as reported by fdupes(1)
+
+=cut
+
+EOF
+
 
 case "$1" in
 --scan)

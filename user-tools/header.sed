@@ -1,3 +1,16 @@
-#!/bin/sed -f
+#!/bin/sh
 
-/^\r\?$/q
+exec sed -e '/^\r\?$/q' "$@"
+
+
+true <<EOF
+
+=pod
+
+=head1 NAME
+
+header.sed - Echo the input stream up to the first empty line (usual end-of-header marker)
+
+=cut
+
+EOF

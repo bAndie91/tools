@@ -1,5 +1,17 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+list_screens - List all GNU/Screen sessions accessible by the user and all of their inner windows as well
+
+=cut
+
+EOF
+
+
 screen -ls |\
 grep -Evi '^(No Sockets found|[0-9]+ Sockets? in)|^\s*$' |\
 while IFS=$'\n' read -r line

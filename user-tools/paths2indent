@@ -41,3 +41,14 @@ sub output
 }
 
 output(0, \%parsed);
+
+
+__END__
+
+=pod
+
+=head1 NAME
+
+paths2indent - Transform list of filesystem paths on input into an indented list of their leaf elements
+
+=cut

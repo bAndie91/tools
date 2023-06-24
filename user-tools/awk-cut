@@ -25,6 +25,10 @@ Where B<COLUMNS-SPEC> is a variation of these:
 
 =back
 
+=head1 SEE ALSO
+
+cut.awk(1)
+
 =cut
 
 EOF

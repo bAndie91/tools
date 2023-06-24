@@ -14,7 +14,7 @@ cat page.html | parsel <B<SELECTOR>> [<B<SELECTOR>> [...]]
 =head1 DESCRIPTION
 
 This command takes an HTML document in STDIN and some CSS selectors in
-arguments. See 'parsel' and 'cssselector' python modules to see which
+arguments. See 'parsel' and 'cssselect' python modules to see which
 selectors and pseudo selectors are supported.
 
 Each B<SELECTOR> selects a part in the DOM, but unlike CSS, does not
@@ -105,6 +105,20 @@ You likely need C<@> too to suppress output the whole document here.
   1
   Enter your logon details:\r\nDomain:\r\nUsername:\r\nPassword:\r\nClick here to login:\r\n
 
+
+=head1 REFERENCE
+
+=over 4
+
+=item https://www.w3schools.com/cssref/css_selectors.php
+
+=item https://developer.mozilla.org/en-US/docs/Web/CSS/Reference#selectors
+
+=item https://github.com/scrapy/cssselect
+
+=item https://cssselect.readthedocs.io/en/latest/#supported-selectors
+
+=back
 
 =head1 SIMILAR TOOLS
 

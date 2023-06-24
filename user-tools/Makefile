@@ -26,7 +26,8 @@ TOOLS ?=   2opml adr2html asterisk-log-separator awk-cut base58 base64url \
   waitpid whisper-retention-info wikibot xdg-autostart xml2json \
   levenshtein-distance jaro-metric jaro-winkler-metric loggerexec \
   logrotate-counters logto pdfflop pngmetatext set-sys-path subst_sudo_user \
-  terminaltitle timestamper set-xcursor-lock-and-run mkmagnetlink htmlentities
+  terminaltitle timestamper set-xcursor-lock-and-run mkmagnetlink htmlentities \
+  pfx2pem
 
 TOOLS_TARGET_FILES = $(addprefix $(TOOLS_TARGET_DIR)/,$(TOOLS))
 
@@ -115,7 +116,9 @@ $(MANPAGE_FILES): $(MANPAGES_SUBDIR)/%$(MANPAGE_FILE_SUFFIX): %
 	@if podchecker "$<"; then \
 		pod2man --name="$<" --section $(MANPAGE_SECTION_EXT) --utf8 "$<" | xz > "$@.tmp" &&\
 		mv -f "$@.tmp" "$@" ;\
+	else \
+		touch "$@" ;\
 	fi
 
 install-manpages: manpages
-	$(MAKE) -C $(REPO_ROOT)/doc/man
+	$(MAKE) -C $(REPO_ROOT)/doc/man install-manpages

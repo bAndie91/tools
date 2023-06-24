@@ -1,0 +1,16 @@
+#!/bin/bash
+
+true <<EOF
+=pod
+
+=head1 NAME
+
+pfx2pem - Convert PFX (PKCS#12) certificate file to PEM format
+
+=cut
+
+EOF
+
+
+usage="Usage: pfx2pem [<PFX file>] [<PEM file>]"
+openssl pkcs12 -in "${1?$usage}" -out "${2?$usage}" -nodes

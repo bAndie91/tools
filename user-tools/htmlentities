@@ -1,0 +1,44 @@
+#!/usr/bin/env perl
+
+use HTML::Entities;
+use utf8;
+use Getopt::Long;
+
+$unsafe_control = 1;
+$unsafe_meta = 1;
+$unsafe_highbit = 1;
+
+GetOptions(
+ 'control!' => \$unsafe_control,
+ 'meta!' => \$unsafe_meta,
+ 'highbit!' => \$unsafe_highbit,
+) or die "Usage: $0 [--[no-]control] [--[no-]meta] [--[no-]highbit]\n";
+
+$unsafe_chars = '';
+
+if($unsafe_control) {
+	$unsafe_chars .= "\x00-\x08\x11\x12\x14-\x1F";
+}
+if($unsafe_meta) {
+	$unsafe_chars .= "><&\"'";
+}
+if($unsafe_highbit) {
+	$unsafe_chars .= "\x7F-\x{FFFFFFFF}";
+}
+
+binmode STDIN, ":utf8";
+binmode STDOUT, ":utf8";
+while(<>)
+{
+	print encode_entities($_, $unsafe_chars);
+}
+
+__END__
+=pod
+
+=head1 NAME
+
+htmlentities - Convert plain text into HTML-safe text
+
+=cut
+

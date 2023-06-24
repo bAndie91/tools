@@ -1,0 +1,38 @@
+#!/usr/bin/env perl
+
+for my $file (@ARGV)
+{
+	my $hash = '';
+	my $trackers = '';
+	my $trackers_section = 0;
+	
+	open my $pipe, '-|', "transmission-show", $file or warn "transmission-show $file: $!\n";
+	while(<$pipe>)
+	{
+		/^\s*Hash:\s*(\S+)/ and $hash = $1;
+		/^TRACKERS/ and $trackers_section = 1;
+		/^(?!TRACKERS)\S/ and $trackers_section = 0;
+		if($trackers_section and /^\s*Tier/)
+		{
+			my $tracker = <$pipe>;
+			$tracker =~ s/^\s*//;
+			$tracker =~ s/\s*$//;
+			$tracker =~ s/[^a-zA-Z0-9._-]/sprintf "%%%02X", ord $&/ige;
+			$trackers .= '&tr='.$tracker;
+		}
+	}
+	close $pipe;
+	
+	print "magnet:?xt=urn:btih:$hash$trackers\n";
+}
+
+__END__
+
+=pod
+
+=head1 NAME
+
+mkmagnetlink - Create a "magnet:" link out of a torrent file
+
+=cut
+

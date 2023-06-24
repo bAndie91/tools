@@ -1,82 +1,196 @@
 #!/usr/bin/env python3.6
 
 """
-This script takes a html document in STDIN and some CSS selectors in ARGV.
-See 'parsel' and 'cssselector' python modules to see which selectors and
-pseudo selectors are supported.
+=pod
 
-Each ARG selects a new part from the DOM, but does not move the pointer,
-so a sequence of "p" "body" arguments selects the body at the end; in other
-words it is NOT equivalent to the "p body" css selector.
+=head1 NAME
+
+parsel - Select parts of a HTML document based on CSS selectors
+
+=head1 INVOCATION
+
+cat page.html | parsel <B<SELECTOR>> [<B<SELECTOR>> [...]]
+
+=head1 DESCRIPTION
+
+This command takes an HTML document in STDIN and some CSS selectors in
+arguments. See 'parsel' and 'cssselector' python modules to see which
+selectors and pseudo selectors are supported.
+
+Each B<SELECTOR> selects a part in the DOM, but unlike CSS, does not
+narrow the DOM tree considered by subsequent selectors. So a sequence of
+C<div p> arguments (2 arguments) selects all <DIV> and then all <P> in
+the document; in other words it is NOT equivalent to the C<div p> css
+selector which selects only those <P> which are under any <DIV>.
+
+Each B<SELECTOR> also outputs what was matched, in the following format:
+First output an integer how many distinct HTML parts were selected, then
+output the selected parts themself each in its own line.
+CR, LF, and Backslash chars are escaped by one Backslash char. It's
+useful for programmatic consumption, because you only have to fist read
+a line which tells how many subsequent lines to read: each one is a  DOM
+part on its own. Then just unescape Backslash-R, Backslash-N, and double
+Backslashes to get the HTML content.
 
 Additionally it takes these special arguments as well:
 
-'!print' first prints how many distinct html parts are being selected
-currently and then prints the currently selected parts themself each in its
-own line.
-CR, LF, and Backslash chars are escaped by a Backslash char.
-It's useful for programmatic procession, so you only have to fist read a line
-which tells how many subsequent lines to read, each one is a selected DOM part
-on its own; then unescape Backslash-R, Backslash-N, and double Backslashes to
-get the html content.
+=over 4
 
-'!print-text' is the same as '!print' except it removes all html tags and
-leaves text content only.
+=item B<@>SELECTOR
 
-'!print-attr ATTRIB' prints the selected tag's ATTRIB attribute's value.
+Prefix your selector whit an C<@> at sign to suppress output.
+Mnemonic: Command line echo suppression in DOS batch and in Makefile.
 
-A sole '|' (pipe) char takes the current selection as a base for the rest of
-the arguments. So these arg sequence: "content" "|" "p" "div" selects only
-those "p" and "div" tags which are inside a "content" tag. This is useful
-because with css you can not group "p" and "div" together here; in other
-words "content p, div" does not provide the same.
+=item B<text{}> or B<::text>
 
-'!top' rewinds the pointer to the original DOM.
-'!back' rewinds the pointer to the previous place.
+Remove HTML tags and leaves text content only before output.
+C<text{}> syntax is borrowed from pup(1).
+C<::text> form is there for you if curly brackets are magical in your shell and you don't bother escaping.
+Note, C<::text> is not a valid CSS pseudo selector at the moment.
 
-Do not forget to escape shell-meta chars for your shell.
+=item B<attr{ATTRIB}> or B<[[ATTRIB]]>
+
+Output only the value of the uppermost selected element's ATTRIB attribute.
+C<attr{}> syntax is borrowed from pup(1).
+Mnemonic for the C<[[ATTRIB]]> form: in CSS you filter by tag attribute
+with C<[attr]> square brackets, but as it's a valid selector,
+parsel(1) takes double square brackets to actually output the attribute.
+
+=item B</> (forward slash)
+
+A stand-alone C</> takes the current selection as a base for the rest of the selectors.
+Mnemonic: one directory level deeper.
+So these arg sequence: C<.content / p div> selects only those P and DIV elements
+which are inside a "content" class. 
+This is useful because with css only, you can not group P and DIV together here.
+In other words neither C<.content p, div> or C<.content E<gt> p, div> does not provide
+the same result.
+
+=item B<..> (double period)
+
+A stand-alone C<..> rewinds the base DOM selection to the
+previous base selection before the last C</>.
+Mnemonic: parent directory.
+
+=item B<@:root>
+
+Rewind base selection back to the DOM's root.
+Note, C<:root> is also a valid CSS pseudo selector, but in a subtree (entered into by C</>)
+it would yield only that subtree, not the original DOM, so parsel(1) goes back to it at this point.
+You likely need C<@> too to suppress output the whole document here.
+
+=back
+
+=head1 EXAMPLE OUTPUT
+
+  $ parsel input[type=text] < page.html
+  2
+  <input type="text" name="domain" />
+  <input type="text" name="username" />
+
+  $ parsel input[type=text] [[name]] < page.html
+  2
+  <input type="text" name="domain" />
+  <input type="text" name="username" />
+  2
+  domain
+  username
+
+  $ parsel @input[type=text] [[name]] < page.html
+  2
+  domain
+  username
+
+  $ parsel @form ::text < page.html
+  1
+  Enter your logon details:\r\nDomain:\r\nUsername:\r\nPassword:\r\nClick here to login:\r\n
+
+
+=head1 SIMILAR TOOLS
+
+=over 4
+
+=item L<https://github.com/ericchiang/pup>
+
+=back
+
+=cut
+
 """
 
+
 import sys
+import parsel
 from parsel import Selector
 import w3lib.html
+import re
+
+
+def parsel_escape(s):
+	s = s.replace('\\', '\\\\')
+	s = s.replace('\r', '\\r')
+	s = s.replace('\n', '\\n')
+	return s
 
 
 html = ''.join(sys.stdin.readlines())
 whole_selection = Selector(text = html)
 
-selection = whole_selection
-new_selection = selection
+base_selection = parsel.selector.SelectorList([whole_selection])
+curr_selection = base_selection
 prev_selections = []
 
 for arg in sys.argv[1:]:
-	if arg == '|':
-		prev_selections.append(selection)
-		selection = new_selection
+	
+	silenced = False
+	output_text_only = False
+	output_attribute_only = None
+	apply_current_selector = True
+	
+	if arg == '/':
+		prev_selections.append(curr_selection)
+		base_selection = curr_selection
 		continue
 	
-	if arg == '!top':
-		selection = whole_selection
+	if arg == '..':
+		base_selection = prev_selections.pop()
 		continue
+
+	if arg.startswith('@'):
+		silenced = True
+		arg = arg[1:]
 	
-	if arg == '!back':
-		selection = prev_selections.pop()
-		continue
+	if arg == ':root':
+		# cssselector knows this ':root' pseudo selector, but it'd select
+		# only the current scope's root which we have narrowed, so step in
+		# here and rewind to the original DOM.
+		base_selection = parsel.selector.SelectorList([whole_selection])
 	
-	if arg.startswith('!print'):
-		print(len(new_selection))
-		for hit in new_selection:
+	if arg == '::text' or arg == 'text{}':
+		output_text_only = True
+		apply_current_selector = False
+	
+	attr_match = re.search('^attr\{(.+)\}$', arg) or re.search('^\[\[(.+)\]\]$', arg)
+	if attr_match:
+		output_attribute_only = attr_match.group(1)
+		apply_current_selector = False
+	
+	if apply_current_selector:
+		try:
+			curr_selection = base_selection.css(arg)
+		except:
+			sys.stderr.write("CSS selection error at '%s'.\n" % arg)
+			raise
+	
+	if not silenced:
+		print(len(curr_selection))
+		for hit in curr_selection:
 			out = hit.get()
-			if arg == '!print-text':
-				out = w3lib.html.remove_tags(out)
-			if arg.startswith('!print-attr'):
-				attr_name = arg[len('!print-attr '):]
-				out = hit.attrib.get(attr_name, '')
 			
-			out = out.replace('\\', '\\\\')
-			out = out.replace('\r', '\\r')
-			out = out.replace('\n', '\\n')
-			print(out)
-		continue
-	
-	new_selection = selection.css(arg)
+			if output_text_only:
+				out = w3lib.html.remove_tags(out)
+			if output_attribute_only is not None:
+				out = hit.attrib.get(output_attribute_only, '')
+			
+			print(parsel_escape(out))
+

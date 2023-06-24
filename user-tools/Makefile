@@ -26,7 +26,7 @@ TOOLS ?=   2opml adr2html asterisk-log-separator awk-cut base58 base64url \
   waitpid whisper-retention-info wikibot xdg-autostart xml2json \
   levenshtein-distance jaro-metric jaro-winkler-metric loggerexec \
   logrotate-counters logto pdfflop pngmetatext set-sys-path subst_sudo_user \
-  terminaltitle timestamper set-xcursor-lock-and-run
+  terminaltitle timestamper set-xcursor-lock-and-run mkmagnetlink htmlentities
 
 TOOLS_TARGET_FILES = $(addprefix $(TOOLS_TARGET_DIR)/,$(TOOLS))
 
@@ -105,9 +105,9 @@ MANPAGE_FILES = $(foreach toolname,$(TOOLS),$(MANPAGES_SUBDIR)/$(toolname)$(MANP
 
 manpages: $(MANPAGE_FILES)
 
-$(MANPAGES_DIR)/man*/*: | $(MANPAGES_SUBDIR)/
+$(MANPAGE_FILES): | $(MANPAGES_SUBDIR)
 
-$(MANPAGES_DIR)/man*/:
+$(MANPAGES_SUBDIR):
 	mkdir -p $@
 	@echo remove $@ >> uninstall.sh
 

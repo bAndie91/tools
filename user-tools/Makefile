@@ -17,8 +17,8 @@ TOOLS ?=   2opml adr2html asterisk-log-separator awk-cut base58 base64url \
   mysql-fix-orphan-privileges.php noacute nocomment nthash.py ocspverify \
   organizebydate palemoon-current-url parsel partial paths2indent \
   perl-repl pipekill PMbwmon PMdirindex PMhexdiff PMnslist PMpwgen \
-  PMrecdiff psgetchildpids pyzor-files qrwifi regulate renamemanual repeat \
-  reportcmdstatus rfc rsacrypt rsync-semichroot rsysrq screenconsole \
+  PMrecdiff pyzor-files qrwifi pvalve renamemanual repeat \
+  reportcmdstatus rsacrypt rsync-semichroot rsysrq screenconsole \
   screen-notify screenreattach slay slayall sockio ssh-agent-finder \
   straceall strip-ansi-seq swap symlinks2dot tabularize Tail takeown taslis \
   tests text2img-dataurl touchx ttinput uchmod unicodestyle upsidedown \
@@ -79,8 +79,8 @@ $(TOOLS_TARGET_DIR):
 
 install-all: \
   /usr/lib/tool/bash-utils \
-  install-manpages \
-  install-tools
+  install-tools \
+  install-manpages
 
 
 install-tools: $(TOOLS_TARGET_DIR) $(TOOLS_TARGET_FILES)

@@ -1,5 +1,17 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+renamemanual - Interactive file rename tool
+
+=cut
+
+EOF
+
+
 if [ -z "$1" ] || [ ."$1" = .--help ]
 then
 	echo "Usage: $0 [files...]" >&2

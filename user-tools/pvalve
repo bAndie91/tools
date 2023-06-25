@@ -1,0 +1,153 @@
+#!/bin/bash
+
+true <<EOF
+
+=pod
+
+=head1 NAME
+
+pvalve - Control how much a given command should run by an other command's exit code
+
+=head1 SYNOPSIS
+
+pvalve [<B<CONTROL COMMAND>>] -- [<B<LONG RUNNING COMMAND>>]
+
+Controls when B<LONG RUNNING COMMAND> should run, by pause and unpause it
+according to the B<CONTROL COMMAND>'s exit status.
+
+=head1 DESCRIPTION
+
+Pause B<LONG RUNNING COMMAND> process group with STOP signal(7) if B<CONTROL COMMAND> exits non-zero.
+Unpause B<LONG RUNNING COMMAND> process group with CONT signal(7) if B<CONTROL COMMAND> exits zero.
+
+Pvalve takes the last line from B<CONTROL COMMAND>'s stdout, and if looks like a time interval
+(ie. positive number with optional fraction followed by optional "s", "m", or "h" suffix)
+then the next checking of B<CONTROL COMMAND> will start after that much time.
+Otherwise it takes B<PVALVE_INTERVAL> environment variable,
+or start next check immediately if it's not set.
+
+Pvalve won't bombard B<LONG RUNNING COMMAND> with more consecutive STOP or CONT signals.
+
+=head1 USEFULNESS
+
+It's useful eg. for basic load control. Start a CPU-intensive program in B<LONG RUNNING COMMAND>
+and check hardware temperature in B<CONTROL COMMAND>. Make it exit 0 when temperature is below
+a certain value, and exit 1 if above an other, higher value.
+
+=head1 ENVIRONMENT
+
+=over 4
+
+=item B<PVALVE_INTERVAL>
+
+Default interval between two B<CONTROL COMMAND> runs.
+
+=item B<PVALVE_STATUS>
+
+B<PVALVE_STATUS> describes whether B<LONG RUNNING COMMAND> should be in running or in paused state.
+Possible values: RUN, STOP.
+This environment is available by B<CONTROL COMMAND>.
+
+=back
+
+=head1 CAVEATS
+
+Further process groups which are created by B<LONG RUNNING COMMAND> will not be affected.
+
+=cut
+
+EOF
+
+
+
+toolname=pvalve
+declare -a controller_cmd
+declare -a controlled_cmd
+
+while [ $# -gt 0 ]
+do
+	case "$1" in
+	--help|-h)
+		pod2text "$0"
+		exit
+		;;
+	esac
+	
+	if [ "$1" = -- ]
+	then
+		shift
+		break
+	fi
+	controller_cmd+=("$1")
+	shift
+done
+
+while [ $# -gt 0 ]
+do
+	controlled_cmd+=("$1")
+	shift
+done
+
+quit()
+{
+	kill -TERM -$pid
+	if [ "$PVALVE_STATUS" = STOP ]
+	then
+		kill -CONT -$pid
+	fi
+	exit 130
+}
+
+exists()
+{
+	local pid=$1
+	declare -g ancestor_valid
+	if [ "$ancestor_valid" != no ]
+	then
+		kill -0 $pid 2>/dev/null && return 0 || ancestor_valid=no
+	fi
+	kill -0 -$pid 2>/dev/null
+}
+
+
+trap quit TERM INT
+
+setpgrp "${controlled_cmd[@]}" &
+pid=$!
+PVALVE_STATUS=RUN
+export PVALVE_STATUS
+
+echo "$toolname: RUN $pid" >&2
+
+stdout_file=`readlink /proc/self/fd/1`
+exec {stdout_copy_fd}> "$stdout_file"
+
+while exists $pid
+do
+	delay=`command "${controller_cmd[@]}" | tee /dev/fd/$stdout_copy_fd | tail -n1; exit ${PIPESTATUS[0]}`
+	code=$?
+	
+	if [ $code = 0 -a $PVALVE_STATUS != RUN ]
+	then
+		echo "$toolname: CONT -$pid" >&2
+		kill -CONT -$pid
+		PVALVE_STATUS=RUN
+	elif [ $code != 0 -a $PVALVE_STATUS = RUN ]
+	then
+		echo "$toolname: STOP -$pid" >&2
+		kill -STOP -$pid
+		PVALVE_STATUS=STOP
+	fi
+	
+	if [[ $delay =~ ^[0-9]+([.,][0-9]+)?[smh]?$ ]]
+	then
+		true
+	else
+		delay=${PVALVE_INTERVAL:-0}
+	fi
+	
+	echo "$toolname: next check in $delay sec" >&2
+	sleep $delay
+done
+
+wait

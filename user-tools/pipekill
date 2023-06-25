@@ -1,5 +1,16 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+pipekill - Send signal to a process on the other end of the given pipe filedescriptor
+
+=cut
+
+EOF
+
 
 if [ .${1:0:1} = .- ]; then
 	signal=$1
@@ -9,13 +20,14 @@ else
 fi
 
 if [ "$1" -ge 0 ] 2>/dev/null; then
-	fd_my=$1
-	pipe=`readlink -n /proc/$$/fd/$fd_my`
-	pipe=`find /proc -maxdepth 3 -mindepth 3 -lname "pipe:\[${pipe//[!0-9]/}\]" -print -quit 2>/dev/null`
-	pid_her=${pipe:6}
-	pid_her=${pid_her%%/*}
-	if [ -n "$pid_her" ]; then
-		kill $signal "$pid_her"
+	my_fd=$1
+	pipe=`readlink -n /proc/$$/fd/$my_fd`
+	pipe_number=${pipe//[!0-9]/}
+	pipe=`find /proc -maxdepth 3 -mindepth 3 -lname "pipe:\[$pipe_number\]" -print -quit 2>/dev/null`
+	other_pid=${pipe:6}; other_pid=${other_pid%%/*}
+	
+	if [ -n "$other_pid" ]; then
+		kill $signal "$other_pid"
 	else
 		echo "pipekill: piped process not found." >&2
 		exit 1
@@ -24,4 +36,3 @@ else
 	echo "Usage: pipekill [-<signal>] [<fdnum>]" >&2
 	exit 1
 fi
-

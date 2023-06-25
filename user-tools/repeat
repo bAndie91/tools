@@ -1,11 +1,23 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+repeat - Run a give command repeatedly
+
+=cut
+
+EOF
+
+
 . /usr/lib/tool/bash-utils
 
-if [ "$1" = --help ]
+if [ "$1" = --help -o $# = 0 ]
 then
-	echo "Usage: [REPEAT_TIMES=num] [REPEAT_DELAY=sec] repeat <COMMAND> [<ARGS>]"
-	exit 1
+	echo "Usage: [REPEAT_TIMES=num] [REPEAT_DELAY=interval] repeat <COMMAND> [<ARGS>]"
+	exit 0
 fi
 
 REPEAT_TIMES=${REPEAT_TIMES:--1}

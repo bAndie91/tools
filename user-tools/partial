@@ -7,6 +7,68 @@ true <<EOF
 
 partial - Show an earlier started long-running command's partial output
 
+=head1 SYNOPSIS
+
+partial [--restart|--forget|--pid] <B<COMMAND>> [<B<ARGUMENTS>>]
+
+=head1 DESCRIPTION
+
+On first invocation partial(1) starts B<COMMAND> in the background.
+On subsequent invocations, it prints the command's output to stdout which is
+generated so far, including the parts which are shown before too,
+and keep it running in the background.
+Hence the name 'partial', because it shows a command's partial output.
+When the command finished, partial(1) prints the whole output
+and exits with B<COMMAND>'s exit code.
+
+=head1 OPTIONS
+
+=over 4
+
+=item -f, --forget
+
+terminate (SIGTERM) previous instance of the same command
+and clean up status directory
+
+=item -r, --restart
+
+terminate command if running (like -f) and start it again
+
+=item -p, --pid
+
+display PID
+
+=item -q, --quiet
+
+less verbose
+
+=back
+
+=head1 STATUS CODES
+
+=over 4
+
+=item 115
+
+command started
+
+=item 114
+
+partial output shown
+
+=item I<X>
+
+called command returned with this status code I<X>
+
+=back
+
+=head1 LIMITS
+
+If B<COMMAND> does not exit normally, but gets terminated by a signal,
+the exit code is indistinguishable from a normal exit's status code,
+due to bash(1) uses the value of 128+B<N> as the exit status
+when a command terminates on a fatal signal B<N>.
+
 =cut
 
 EOF
@@ -26,32 +88,23 @@ warnx()
 	echo "${0##*/}: $*" >&2
 }
 
+verbose()
+{
+	if [ $opt_quiet = no ]
+	then
+		"$@"
+	fi
+}
+
 help()
 {
-	warnx "Usage: partial [--restart|--forget|--pid] <COMMAND> [<ARGUMENTS>]
-
-Description
-  On first invocation 'partial' starts COMMAND in the background.
-  On subsequest invocations, it outputs everything COMMAND's output so far and
-  keep COMMAND running in the background. Hence the name 'partial', because it
-  shows a command's partial outputs. When COMMAND finished, 'partial' outputs
-  the whole output and exits with COMMAND exit status code.
-
-Options
-  -f,--forget    terminate (kill SIGTERM) previous instance of the same command
-                 and clean up status directory
-  -r,--restart   terminate if running (like -f) and start again
-  -p,--pid       display PID file path
-
-Exit codes
-  115  COMMAND started
-  114  partial output showed
-  *    COMMAND returned with this status code"
+	pod2text "$0"
 }
 
 opt_restart=no
 opt_forget=no
 opt_pid=no
+opt_quiet=no
 
 while [ $# -gt 0 ]
 do
@@ -65,16 +118,19 @@ do
 	--pid|-p)
 		opt_pid=yes
 		;;
+	--quiet|-q)
+		opt_quiet=yes
+		;;
 	--help)
 		help
-		exit
+		exit 0
 		;;
 	--)
 		shift
 		break
 		;;
 	-*)
-		warnx "unknown option '$1'"
+		warnx "unknown option: $1"
 		exit -1
 		;;
 	*)
@@ -98,9 +154,10 @@ dir=~/.cache/partial/$commandhash
 
 if [ $opt_pid = yes ]
 then
-	echo "$dir/pid"
+	cat "$dir/pid"
 	exit
 fi
+
 if [ $opt_forget = yes -o $opt_restart = yes ]
 then
 	if [ -d "$dir" ]
@@ -111,7 +168,13 @@ then
 			kill "$pid"
 			sleep 0.2
 		done
-		rm -r "$dir"
+		remove "$dir/pid"
+		remove "$dir/lock"
+		remove "$dir/stdout"
+		remove "$dir/running.lock"
+		remove "$dir/status"
+		remove "$dir/command.txt"
+		remove "$dir"
 	fi
 	if [ $opt_forget = yes ]
 	then
@@ -125,13 +188,13 @@ exec {lockfd}>>"$dir/lock"
 flock -x $lockfd
 
 exec {runlockfd}>>"$dir/running.lock"
-warnx "state in $dir"
+verbose warnx "state in $dir"
 
 if flock -n -x $runlockfd
 then
 	if [ -e "$dir/status" ]
 	then
-		warnx "command finished: $(stat -c %y "$dir/status")"
+		verbose warnx "command finished: $(stat -c %y "$dir/status")"
 		print_partial
 		exit `cat "$dir/status"`
 	else
@@ -145,13 +208,13 @@ then
 		) &
 		
 		echo $! > "$dir/pid"
-		warnx "command started"
+		verbose warnx "command started"
 		exit 115
 	fi
 else
 	flock -u $runlockfd
 	
-	warnx "command is in progress since $(stat -c %y "$dir/command.txt"), partial output follows."
+	verbose warnx "command is in progress since $(stat -c %y "$dir/command.txt"), partial output follows."
 	print_partial
 	exit 114
 fi

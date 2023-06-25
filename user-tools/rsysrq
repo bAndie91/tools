@@ -1,5 +1,18 @@
 #!/bin/bash
-#
+
+true <<EOF
+=pod
+
+=head1 NAME
+
+rsysrq - Send SysRQ commands remotely over the network
+
+=cut
+
+EOF
+
+
+
 # SysRq Help:
 #   loglevel(0-9)
 #   re(B)oot

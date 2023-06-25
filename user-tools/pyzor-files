@@ -1,5 +1,17 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+pyzor-files - Run a pyzor(1) command on the given files
+
+=cut
+
+EOF
+
+
 if [ $# = 0 ]
 then
 	echo "Usage: pyzor-files [<action>] -- <file-1> [<file-2> [<file-n> ...]]"

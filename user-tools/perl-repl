@@ -1,2 +1,15 @@
 #!/bin/sh
+
+true <<EOF
+=pod
+
+=head1 NAME
+
+perl-repl - Read-Evaluate-Print-Loop wrapper for perl(1)
+
+=cut
+
+EOF
+
+
 exec rlwrap /usr/libexec/perlshell "$@"

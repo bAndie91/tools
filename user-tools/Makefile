@@ -10,7 +10,7 @@ TOOLS ?=   2opml adr2html asterisk-log-separator awk-cut base58 base64url \
   dump_php_session.php eat errorlevel error_reporting.php fcomplete \
   fc-search-codepoint fdupes-hardlink ff fgat find-by-date findnewestfile \
   findoldestfile fixlogfiledatetime fixRFC822filemtime fmtkv foreach \
-  geoip g_filename_to_uri git-checkout-sparse gitdiff grepdatetime Head \
+  g_filename_to_uri git-checkout-sparse gitdiff grepdatetime Head \
   header.sed indent2tree inisort is_gzip jobsel json2bencode json2msgpack \
   kt LevelDB lines list_screens lnto locale-validator lpset ls2html lsata \
   lsenv mime_extract mkdeb moz_bookmarks msg msgpack2json multithrottler \
@@ -27,7 +27,7 @@ TOOLS ?=   2opml adr2html asterisk-log-separator awk-cut base58 base64url \
   levenshtein-distance jaro-metric jaro-winkler-metric loggerexec \
   logrotate-counters logto pdfflop pngmetatext set-sys-path subst_sudo_user \
   terminaltitle timestamper set-xcursor-lock-and-run mkmagnetlink htmlentities \
-  pfx2pem
+  pfx2pem rdfindreport
 
 TOOLS_TARGET_FILES = $(addprefix $(TOOLS_TARGET_DIR)/,$(TOOLS))
 

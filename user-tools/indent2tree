@@ -1,37 +1,10 @@
 #!/usr/bin/env perl
 
-true <<EOF
-=pod
-
-=head1 NAME
-
-indent2tree - Makes TAB-indented text into ascii tree chart
-
-=head1 DESCRIPTION
-
-Input: lines with leading tabs representing the depth in the tree
-
-Output: ascii tree chart with drawing chars
-
-=head1 SEE ALSO
-
-=over 8
-
-=item https://github.com/jez/as-tree
-
-=back
-
-=cut
-
-EOF
-
-
 $spaces_prev = 0;
 $level = 0;
 %level_spaces = (0=>0);
 $Tree = { subtree=>[], };
 $ForkPoint = $Tree;
-
 
 while(<STDIN>)
 {
@@ -112,3 +85,28 @@ sub print_subtree
 }
 
 print_subtree($Tree->{subtree}, 0, '');
+
+
+__END__
+
+=pod
+
+=head1 NAME
+
+indent2tree - Makes TAB-indented text into ascii tree chart
+
+=head1 DESCRIPTION
+
+Input: lines with leading tabs representing the depth in the tree
+
+Output: ascii tree chart with drawing chars
+
+=head1 SEE ALSO
+
+=over 4
+
+=item https://github.com/jez/as-tree
+
+=back
+
+=cut

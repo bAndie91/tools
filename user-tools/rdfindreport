@@ -1,0 +1,81 @@
+#!/bin/bash
+
+set -u
+
+NL=$'\n'
+tmpfile1=`mktemp`
+tmpfile2=`mktemp`
+trap 'rm "$tmpfile1" "$tmpfile2"' SIGINT SIGQUIT SIGTERM EXIT
+
+
+newlinefile=`find "$@" -xdev -name "*${NL}*" -print -quit`
+if [ -n "$newlinefile" ]
+then
+	echo "Invalid filename found:${NL}$newlinefile"
+	exit 1
+fi
+
+set -e
+rdfind -removeidentinode true -xdev true -outputname "$tmpfile1" -checksum sha1 "$@" >&2
+
+sed -e '/^#/d' "$tmpfile1" | sort -k4nr -k2n -k3n >"$tmpfile2"
+
+export tmpfile1
+export tmpfile2
+
+perl -e '
+	use Number::Bytes::Human "format_bytes";
+
+	$reduce_size = $optimal_size = $sets = $duplicated_files = 0;
+
+	sub flush_data
+	{
+		if(@set_data and scalar @set_data > 1)
+		{
+			print {$tmp1} "\n", join("", @set_data);
+		}
+	}
+	
+	open $tmp1, ">", $ENV{"tmpfile1"};
+	open $tmp2, "<", $ENV{"tmpfile2"};
+	
+	while(<$tmp2>)
+	{
+		s/^(\S+\s+)-/$1/;
+		s/[\r\n]*$//;
+		my ($type, $id, $depth, $size, $device, $inode, $prio, $filename) = split /\s+/, $_, 8;
+		
+		if($filename =~ /\/\.Recycler\//) { next; }
+		
+		if($id != $oldid)
+		{
+			$optimal_size += $size;
+			$sets++;
+			flush_data;
+			@set_data = ();
+		}
+		else
+		{
+			$reduce_size += $size;
+			$duplicated_files++;
+		}
+		push @set_data, "$type $size $filename\n";
+		$oldid = $id; 
+	}
+	flush_data;
+	close $tmp1;
+	close $tmp2;
+	
+	open $tmp2, ">", $ENV{"tmpfile2"};
+	$total_size = $reduce_size + $optimal_size;
+	$prcnt = $total_size == 0 ? "inf" : $reduce_size * 100 / $total_size;
+
+	printf {$tmp2} "# duplicated files: %d
+# in %d groups
+# occupying %sB extra space
+# that means %d%% redundancy among duplications
+# Fields: Type Size FilePath
+", $duplicated_files, $sets, format_bytes($reduce_size), $prcnt;
+'
+
+cat "$tmpfile2" "$tmpfile1"

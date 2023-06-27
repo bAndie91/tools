@@ -1,6 +1,19 @@
 #!/usr/bin/env php
 <?php
 
+/*
+
+=pod
+
+=head1 NAME
+
+mysql-fix-orphan-privileges.php - Suggest SQL commands to clean up unused records in system tables which hold permission data
+
+=cut
+
+*/
+
+
 error_reporting(E_ALL & ~E_DEPRECATED);
 ini_set('display_errors', true);
 

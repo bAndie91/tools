@@ -199,3 +199,15 @@ if(defined $Zonefile)
 }
 
 die $Usage;
+
+
+__END__
+
+=pod
+
+=head1 NAME
+
+multithrottler - Run given command if not reached the defined rate limit
+
+=cut
+

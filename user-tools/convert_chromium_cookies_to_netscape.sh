@@ -1,5 +1,17 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+convert_chromium_cookies_to_netscape.sh - Convert Chromium and derivative web browser's cookies to Netscape format (used by wget and curl)
+
+=cut
+
+EOF
+
+
 set -e
 set -u
 

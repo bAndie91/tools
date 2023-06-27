@@ -5,7 +5,9 @@ true <<EOF
 
 =head1 NAME
 
-chattr-nocow - try hard to enable (chattr-cow) or disable (chattr-nocow) Copy-on-Write attribute on files
+chattr-cow - try hard to enable Copy-on-Write attribute on files
+
+chattr-nocow - try hard to disable Copy-on-Write attribute on files
 
 =cut
 

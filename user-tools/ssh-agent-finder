@@ -1,6 +1,20 @@
 #!/bin/bash
-# Usage Example:
-# $ . ssh-agent-finder -Iva
+
+true <<EOF
+=pod
+
+=head1 NAME
+
+ssh-agent-finder - Find a working ssh agent on the system so you get the same in each of your logon sessions
+
+=head1 USAGE EXAMPLE
+
+. ssh-agent-finder -Iva
+
+=cut
+
+EOF
+
 
 interactive=1
 must_have_keys=1

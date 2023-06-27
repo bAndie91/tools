@@ -5,7 +5,11 @@
 
 =head1 NAME
 
-levenshtein-distance, jaro-metric, jaro-winkler-metric - Calculate the levenshtein distance (jaro/-winkler metric) of given strings
+levenshtein-distance - Calculate the Levenshtein distance of given strings
+
+jaro-metric - Calculate the Jaro metric of given strings
+
+jaro-winkler-metric - Calculate the Jaro-Winkler metric of given strings
 
 =cut
 

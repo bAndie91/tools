@@ -1,5 +1,29 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+vidir-sanitize - Helper script to change tricky filenames in a directory
+
+=head1 INVOCATION
+
+Not need to invoke vidir-sanitize directly. vidir(1) calls it internally.
+
+=head1 USAGE
+
+VISUAL=vidir-sanitize vidir
+
+=head1 SEE ALSO
+
+vidir(1)
+
+=cut
+
+EOF
+
+
 set -e
 set -o pipefail
 set -u

@@ -1,2 +1,15 @@
 #!/bin/sh
+
+true <<EOF
+=pod
+
+=head1 NAME
+
+strip-ansi-seq - Dumb script removing more-or-less any ANSI escape sequences from the input stream
+
+=cut
+
+EOF
+
+
 exec sed -e 's/\[[^a-zA-Z]*[a-zA-Z]//g'

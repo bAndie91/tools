@@ -1,5 +1,17 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+palemoon-current-url - Display the webpage's URL which is currently open in Palemoon web browser
+
+=cut
+
+EOF
+
+
 set -e -o pipefail -u
 
 sessionstore=`cat "$HOME/.moonchild productions/pale moon"/*.default/sessionstore.js`

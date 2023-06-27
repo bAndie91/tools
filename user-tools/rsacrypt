@@ -1,5 +1,17 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+rsacrypt - Encrypt/decrypt files with RSA
+
+=cut
+
+EOF
+
+
 say()
 {
 	echo "$*" >&2

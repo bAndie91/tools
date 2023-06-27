@@ -27,3 +27,16 @@ else {
 	print $fgv->($_) while(<STDIN>);
 }
 
+
+__END__
+
+=pod
+
+=head1 NAME
+
+url_encode - Escape URL-unsafe chars in text given either in parameters or in stdin by percent-encoding
+
+url_decode - Unescape percent-encoded sequences given either in parameters or in stdin
+
+=cut
+

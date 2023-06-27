@@ -1,5 +1,17 @@
 #!/bin/bash
 
+true <<EOF
+=pod
+
+=head1 NAME
+
+symlinks2dot - Generate a graph in dot(1) format representing the symlink-target relations among the given files
+
+=cut
+
+EOF
+
+
 opt_mark=1
 
 while [ -n "$1" ]; do
@@ -35,8 +47,8 @@ echo "digraph \"symlinks\" {
 
 declare -a rank_same
 
-for file in "$@"; do
-
+for file in "$@"
+do
 	if [ -L "$file" ]; then
 		target=`readlink -n "$file"`
 		target_absolute=`readlink -nf "$file"`
@@ -47,10 +59,10 @@ for file in "$@"; do
 				mark='@'
 			fi
 		else
-			mark=
+			mark=''
 		fi
 
-		attr=
+		attr=''
 		if [ ! -e "$target_absolute" ]; then
 			attr="$attr,color=red"
 		fi
@@ -64,7 +76,7 @@ for file in "$@"; do
 			if [ -d "$file" ]; then
 				mark='/'
 			else
-				mark=
+				mark=''
 			fi
 		else
 			mark=

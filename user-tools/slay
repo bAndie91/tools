@@ -1,11 +1,24 @@
 #!/bin/bash
 
-usagedie()
+true <<EOF
+=pod
+
+=head1 NAME
+
+slay - Try to kill a process until it exists
+
+slayall - Try to kill a process by name until it exists
+
+=cut
+
+EOF
+
+
+usage()
 {
 	echo "Usage:
  slay [-SIGNAL] <PID>
- slayall [-SIGNAL] <PROCESS-NAME>" >&2
-	exit 1
+ slayall [-SIGNAL] <PROCESS-NAME>"
 }
 
 myname=${0##*/}
@@ -14,7 +27,7 @@ declare -a argv
 while [ -n "$1" ]
 do
 	case "$1" in
-	--help)	usagedie;;
+	--help)	usage; exit;;
 	-*)
 		argv+=("$1")
 		;;
@@ -43,5 +56,6 @@ then
 		sleep 0.1
 	done
 else
-	usagedie
+	usage >&2
+	exit -1
 fi

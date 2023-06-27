@@ -1,1 +1,15 @@
-echo -ne '\033^'$*'\033\\'
+#!/bin/sh
+
+true <<EOF
+=pod
+
+=head1 NAME
+
+screen-notify - Send status-line message to the current GNU/Screen instance
+
+=cut
+
+EOF
+
+
+echo -ne '\033^'"$*"'\033\\'

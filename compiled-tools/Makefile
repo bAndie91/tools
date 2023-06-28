@@ -41,8 +41,8 @@ $(TARGET_DIR)/kill-rogue: /usr/share/man/man1/kill-rogue.1.gz
 	cat ../doc/kill-rogue.1 | gzip > $@
 	@echo remove $@ >> uninstall.sh
 
-logbtmp: logbtmp/logbtmp
-	install logbtmp/logbtmp $@
+logbtmp: logbtmp.d/logbtmp
+	install logbtmp.d/logbtmp $@
 
-logbtmp/logbtmp:
-	$(MAKE) -C ./logbtmp logbtmp
+logbtmp.d/logbtmp:
+	$(MAKE) -C ./logbtmp.d logbtmp

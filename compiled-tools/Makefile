@@ -2,7 +2,7 @@
 TARGET_DIR = /usr/tool
 
 TOOLS = grandparentexe lrurs mksock remove syncfs utmp usbreset \
-  chmod-cheap setgroups kill-rogue xidle logbtmp
+  chmod-cheap setgroups kill-rogue xidle logbtmp lastcsv
 
 SPECIAL_INSTALL_TOOLS = grandparentexe netbulk
 
@@ -41,8 +41,15 @@ $(TARGET_DIR)/kill-rogue: /usr/share/man/man1/kill-rogue.1.gz
 	cat ../doc/kill-rogue.1 | gzip > $@
 	@echo remove $@ >> uninstall.sh
 
+
 logbtmp: logbtmp.d/logbtmp
-	install logbtmp.d/logbtmp $@
+	install $< $@
 
 logbtmp.d/logbtmp:
-	$(MAKE) -C ./logbtmp.d logbtmp
+	$(MAKE) -C $(dir $@) $(notdir $@)
+
+lastcsv: lastcsv.d/lastcsv
+	install $< $@
+
+lastcsv.d/lastcsv:
+	$(MAKE) -C $(dir $@) $(notdir $@)

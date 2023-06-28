@@ -126,6 +126,10 @@ You likely need C<@> too to suppress output the whole document here.
 
 =item L<https://github.com/ericchiang/pup>
 
+=item L<https://github.com/suntong/cascadia>
+
+=item L<https://github.com/mgdm/htmlq>
+
 =back
 
 =cut

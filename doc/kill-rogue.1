@@ -1,0 +1,25 @@
+.TH kill-rogue 1
+.SH NAME
+kill-rogue \- a tool to kill processes went rogue
+.SH SYNOPSIS
+.B kill-rogue
+.I <rogue-uid> <reaper-uid>
+.SH DESCRIPTION
+.B kill-rogue
+lets you kill a process which continuously forks a new one and terminates itself.
+Conventional
+.IR kill (1) 
+can not reliably kill such a chain of processes.
+It uses ticks described in this article 
+.IR <https://lwn.net/Articles/754980/> .
+.SH ARGUMENTS
+.TP
+.BR rogue-uid
+UID of the rougue process
+.TP
+.BR reaper-uid
+An other arbitrary UID (not 0) used to avoid getting killed. Let's say 1.
+.SH AUTHOR
+George Dunlap (gwd)
+.SH SOURCE
+.IR <https://github.com/gwd/runner-reaper/blob/master/reaper.c>

@@ -53,3 +53,9 @@ lastcsv: lastcsv.d/lastcsv
 
 lastcsv.d/lastcsv:
 	$(MAKE) -C $(dir $@) $(notdir $@)
+
+chmod-cheap: coreutils/chmod-cheap
+	install $< $@
+
+coreutils/chmod-cheap:
+	$(MAKE) -C $(dir $@) $(notdir $@)

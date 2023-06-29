@@ -1,62 +1,129 @@
 |   |   |
 |---|---|
-| [user-tools/bardf](user-tools/bardf) | show disk usage (du) by ascii percetange bars
-| [user-tools/chshebang](user-tools/chshebang) | change script interpreter (shebang)
-| [user-tools/corner_time](user-tools/corner_time) | display a digital clock in terminal's upper-right side (run "corner_time &")
-| [user-tools/cut.awk](user-tools/cut.awk) | filter fields by awk
-| [user-tools/digasn](user-tools/digasn) | lookup ASN numbers/names via DNS
-| [user-tools/digwiki](user-tools/digwiki) | lookup Wikipedia article leads via DNS
-| [user-tools/dlnew](user-tools/dlnew) | download web content if local copy is expired according to caching and other HTTP headers
-| [user-tools/dump_php_session.php](user-tools/dump_php_session.php) | 
-| [user-tools/errorlevel](user-tools/errorlevel) | exit with status code teken from parameter
-| [user-tools/error_reporting.php](user-tools/error_reporting.php) | display which error levels are reported in the current php session
-| [user-tools/ff](user-tools/ff) | find files horizontally (you often found files faster this way)
-| [user-tools/fgat](user-tools/fgat) | foreground command scheduler
-| [user-tools/findnewestfile](user-tools/findnewestfile) | search for even newer files and always display the newest one
-| [user-tools/findoldestfile](user-tools/findoldestfile) | same for oldest file
-| [user-tools/grepdatetime](user-tools/grepdatetime) | filter lines from log files between the give dates
-| [user-tools/Head](user-tools/Head) | output only one screen from the beginning of input stream
-| [user-tools/header.sed](user-tools/header.sed) | output until the first double (CR)LF
-| [root-tools/hidedir](root-tools/hidedir) | hide directories by umount or overmount them with an empty dir in a separated namespace
-| [user-tools/inisort](user-tools/inisort) | sort INI file's content according to another one
-| [user-tools/lpset](user-tools/lpset) | setup printers and their options interactively
-| [user-tools/lsata](user-tools/lsata) | list ATA device numbers and corresponding block devices
-| [user-tools/lsenv](user-tools/lsenv) | display a process' environment variables
-| [user-tools/nginx_conftree.pl](user-tools/nginx_conftree.pl) | 
-| [user-tools/organizebydate](user-tools/organizebydate) | copy/move/rename files based on atime/ctime/mtime, exif time, Date email header
-| [user-tools/pipekill](user-tools/pipekill) | signal process piping to/from us
-| [user-tools/PMdirindex](user-tools/PMdirindex) | poor man's directory index, html output
-| [user-tools/PMhexdiff](user-tools/PMhexdiff) | poor man's hex diff
-| [user-tools/PMpwgen](user-tools/PMpwgen) | poor man's password generator
-| [user-tools/PMrecdiff](user-tools/PMrecdiff) | poor man's recursive directory comparator
-| [user-tools/renamemanual](user-tools/renamemanual) | prompt user for filenames to rename files interactively
-| [user-tools/repeat](user-tools/repeat) | repeat running a command (optionally N times)
-| [user-tools/rsacrypt](user-tools/rsacrypt) | encrypt/decrypt streams with RSA keys
-| [xbin/rxvt-inband](xbin/rxvt-inband) | client program for Rxvt Inband Filetransfer plugin
-| [user-tools/screenconsole](user-tools/screenconsole) | open a commandline, send commands to running GNU/screen session
-| [user-tools/slay](user-tools/slay) | continously kill a process unlit it lives
-| [user-tools/slayall](user-tools/slayall) | same but by process name
-| [user-tools/ssh-agent-finder](user-tools/ssh-agent-finder) | search and reuse already started and loaded ssh-agent
-| [root-tools/sshwho](root-tools/sshwho) | display logged-in ssh sessions like who
-| [user-tools/straceall](user-tools/straceall) | strace all processes given by name
-| [user-tools/swap](user-tools/swap) | swap two files in name
-| [user-tools/symlinks2dot](user-tools/symlinks2dot) | output a graph (graphviz) illustrating forwarded symlinks
-| [user-tools/Tail](user-tools/Tail) | output only one screen at the end of input stream
-| [user-tools/takeown](user-tools/takeown) | take ownership on files if the direcotry is writable
-| [user-tools/tests](user-tools/tests) | check files with ``[``'s flags and display them colorized
-| [user-tools/uchmod](user-tools/uchmod) | chmod files to default mode (based on umask)
-| [user-tools/uncomment](user-tools/uncomment) | filter out comments
-| [user-tools/waitpid](user-tools/waitpid) | wait until a given (not mandatory a child) process is alive
-| [user-tools/waybackmachine-dl](user-tools/waybackmachine-dl) | download all copies of an URL from archive.org starting from the latest version
-| [user-tools/xdg-autostart](user-tools/xdg-autostart) | starts programms defined in *.desktop files. useful for DE's not supporting XDG autostart standard
-| [urxvt-extensions/perl/inbandfiletransfer-osc](urxvt-extensions/perl/inbandfiletransfer-osc) | 
-| [lib/bash-utils](lib/bash-utils) | common shell functions, sources by utility scripts
-| [root-tools/swapoff-progress](root-tools/swapoff-progress) | turn off a swap device and display percentage completeness
-| [root-tools/syncifstate](root-tools/syncifstate) | fix inconsistent /run/network/ifstate content
-| [crawler-bin/debuggex](crawler-bin/debuggex) | fetch a regex pattern's flowchart from debuggex.com
-| [crawler-bin/entropay](crawler-bin/entropay) | show your balance on entropay.com virtual credit cards
-| [crawler-bin/githubissues](crawler-bin/githubissues) | display issues on Github of the current git repo
-| [crawler-bin/helyesiras](crawler-bin/helyesiras) | query helyesírás.hu for spellcheking Hungarian words
-| [crawler-bin/huregcheck](crawler-bin/huregcheck) | query .HU domain zone validity and integrity online
-| [crawler-bin/otp-egyenleg](crawler-bin/otp-egyenleg) | query account balance at OTP
-| [crawler-bin/premiumegszsegpenztar](crawler-bin/premiumegszsegpenztar) | query account balance
+| [2opml](user-tools/2opml) | Convert list of URLs to OPML.
+| [adr2html](user-tools/adr2html) | Convert Opera Hostlist 2.0 bookmarks to HTML
+| [asterisk-log-separator](user-tools/asterisk-log-separator) | Split up Asterisk PBX log file into multiple files based on which process wrote each part
+| [awk-cut](user-tools/awk-cut) | Select fields from input stream with awk
+| [base58](user-tools/base58) | Encode to (decode from) Base58
+| [base64url](user-tools/base64url) | Encode to (decode from) Base64-URL encoding
+| [bencode2json](user-tools/bencode2json) | Convert Bencode (BitTorrent's loosely structured data) to JSON
+| [cdexec](user-tools/cdexec) | Run a given command in the given directory
+| [chattr-cow](user-tools/chattr-cow) | try hard to enable Copy-on-Write attribute on files
+| [chattr-cow](user-tools/chattr-nocow) | try hard to enable Copy-on-Write attribute on files
+| [chromium_cookie_decrypt.py](user-tools/chromium_cookie_decrypt.py) | Decrypt Chromium web browser stored cookies and output cleartext
+| [chshebang](user-tools/chshebang) | Change a script's default interpreter
+| [convert_chromium_cookies_to_netscape.sh](user-tools/convert_chromium_cookies_to_netscape.sh) | Convert Chromium and derivative web browser's cookies to Netscape format (used by wget and curl)
+| [corner_time](user-tools/corner_time) | Place a digital clock in the upper right hand corner of the terminal
+| [cut.awk](user-tools/cut.awk) | Output only the selected fields from the input stream, parameters follow awk(1) syntax
+| [daemonctl](user-tools/daemonctl) | Manage preconfigured libslack daemon(1) daemons more conveniently
+| [dataurl2bin](user-tools/dataurl2bin) | Decode "data:..." URLs from input stream and output the raw binary data
+| [debdiff](user-tools/debdiff) | Display differences between 2 Debian package (*.deb files)
+| [descpids](user-tools/descpids) | List all descendant process PIDs of the given process(es)
+| [dfbar](user-tools/dfbar) | Display disk space usage with simple bar chart (as reported by df(1))
+| [digasn](user-tools/digasn) | Query Autonom System Number (ASN) from DNS
+| [diu](user-tools/diu) | Display Inode usage, similar to du(1) for space usage
+| [dlnew](user-tools/dlnew) | Download web rource if local copy is older
+| [eat](user-tools/eat) | Read and echo back input (like cat(1)) until interrupted (ie. ignore end-of-file)
+| [errorlevel](user-tools/errorlevel) | Exit with the given status code
+| [fcomplete](user-tools/fcomplete) | Complete a smaller file with the data from a bigger one
+| [fc-search-codepoint](user-tools/fc-search-codepoint) | Print the names of available X11 fonts containing the given code point(s)
+| [fdupes-hardlink](user-tools/fdupes-hardlink) | Make hardlinks from identical files as reported by fdupes(1)
+| [ff](user-tools/ff) | find files horizontally
+| [fgat](user-tools/fgat) | Execute command in foreground at a given time
+| [findnewestfile](user-tools/findnewestfile) | Search for the newest file in a given path recursively and always show the most recent while scanning
+| [findnewestfile](user-tools/findoldestfile) | Search for the newest file in a given path recursively and always show the most recent while scanning
+| [fixlogfiledatetime](user-tools/fixlogfiledatetime) | Set the target files modification time to their respective last log entry's timestamp
+| [fixRFC822filemtime](user-tools/fixRFC822filemtime) | Set a file's last modification time, which contains an email message in RFC-822 format, to the email's Date
+| [fmtkv](user-tools/fmtkv) | Tranform key=value (each optionally double-quoted) pairs into 1 pair by 1 line on the output
+| [foreach](user-tools/foreach) | Run an OS or shell command on each input line, similar to xargs(1)
+| [g_filename_to_uri](user-tools/g_filename_to_uri) | Mimic g_filename_to_uri() GLib function creating a file:// url from path string
+| [gitdiff](user-tools/gitdiff) | View two files' diff by git-diff(1), even not under git version control
+| [Head](user-tools/Head) | output as many lines from the first part of files as many lines on the terminal currently
+| [header.sed](user-tools/header.sed) | Echo the input stream up to the first empty line (usual end-of-header marker)
+| [htmlentities](user-tools/htmlentities) | Convert plain text into HTML-safe text
+| [indent2tree](user-tools/indent2tree) | Makes TAB-indented text into ascii tree chart
+| [inisort](user-tools/inisort) | Sort keys in an INI file according to the order of keys in an other INI file
+| [is_gzip](user-tools/is_gzip) | Return 0 if the file in argument has gzip signature
+| [levenshtein-distance](user-tools/jaro-metric) | Calculate the Levenshtein distance of given strings
+| [levenshtein-distance](user-tools/jaro-winkler-metric) | Calculate the Levenshtein distance of given strings
+| [json2bencode](user-tools/json2bencode) | Convert JSON to Bencode (BitTorrent's loosely structured data)
+| [kt](user-tools/kt) | Run command in background terminal; keept(1) convenience wrapper
+| [LevelDB](user-tools/LevelDB) | Commandline interface for Google's leveldb key-value storage
+| [levenshtein-distance](user-tools/levenshtein-distance) | Calculate the Levenshtein distance of given strings
+| [lines](user-tools/lines) | Output only the given lines of the input stream
+| [list_screens](user-tools/list_screens) | List all GNU/Screen sessions accessible by the user and all of their inner windows as well
+| [lnto](user-tools/lnto) | ln(1) convenience wrapper; you enter link target paths relative to the current directory
+| [loggerexec](user-tools/loggerexec) | Run a command and send STDOUT and STDERR to syslog
+| [logrotate-counters](user-tools/logrotate-counters) | Increment numbers in file names
+| [logto](user-tools/logto) | Run a command and append its STDOUT and STDERR to a file
+| [lsata](user-tools/lsata) | List ATA devices on the system
+| [lsenv](user-tools/lsenv) | List environment variables of a process
+| [mime_extract](user-tools/mime_extract) | Extract parts from a MIME multipart file and save them into separate files
+| [mkdeb](user-tools/mkdeb) | Create a Debian package (.deb)
+| [mkmagnetlink](user-tools/mkmagnetlink) | Create a "magnet:" link out of a torrent file
+| [moz_bookmarks](user-tools/moz_bookmarks) | Read Mozilla bookmarks database and display titles and URLs line-by-line
+| [msg](user-tools/msg) | Write to given user's open terminals
+| [multithrottler](user-tools/multithrottler) | Run given command if not reached the defined rate limit
+| [mysql-fix-orphan-privileges.php](user-tools/mysql-fix-orphan-privileges.php) | Suggest SQL commands to clean up unused records in system tables which hold permission data
+| [noacute](user-tools/noacute) | Strip diacritics (acute, umlaut, ...) from letters on the input stream
+| [nocomment](user-tools/nocomment) | remove comment lines from input stream
+| [organizebydate](user-tools/organizebydate) | Rename files based on their date-time
+| [palemoon-current-url](user-tools/palemoon-current-url) | Display the webpage's URL which is currently open in Palemoon web browser
+| [parsel](user-tools/parsel) | Select parts of a HTML document based on CSS selectors
+| [partial](user-tools/partial) | Show an earlier started long-running command's partial output
+| [paths2indent](user-tools/paths2indent) | Transform list of filesystem paths on input into an indented list of their leaf elements
+| [pdfflop](user-tools/pdfflop) | Flop a PDF file's pages
+| [perl-repl](user-tools/perl-repl) | Read-Evaluate-Print-Loop wrapper for perl(1)
+| [pfx2pem](user-tools/pfx2pem) | Convert PFX (PKCS#12) certificate file to PEM format
+| [pipekill](user-tools/pipekill) | Send signal to a process on the other end of the given pipe filedescriptor
+| [PMbwmon](user-tools/PMbwmon) | Poor man's bandwidth monitor
+| [PMdirindex](user-tools/PMdirindex) | Poor man's directory index generator, output HTML
+| [PMdirindex](user-tools/PMhexdiff) | Poor man's hex diff viewer
+| [PMnslist](user-tools/PMnslist) | Poor man's namespace list
+| [PMpwgen](user-tools/PMpwgen) | Poor man's password generator
+| [PMrecdiff](user-tools/PMrecdiff) | Poor man's directory tree difference viewer, comparing file names and sizes recursively
+| [pngmetatext](user-tools/pngmetatext) | Put metadata text into PNG file
+| [pvalve](user-tools/pvalve) | Control how much a given command should run by an other command's exit code
+| [pyzor-files](user-tools/pyzor-files) | Run a pyzor(1) command on the given files
+| [qrwifi](user-tools/qrwifi) | Generate a string, used in WiFi-setup QR codes, containing a hotspot name and password
+| [renamemanual](user-tools/renamemanual) | Interactive file rename tool
+| [repeat](user-tools/repeat) | Run a give command repeatedly
+| [reportcmdstatus](user-tools/reportcmdstatus) | Textually shows how a given command finished
+| [rsacrypt](user-tools/rsacrypt) | Encrypt/decrypt files with RSA
+| [rsysrq](user-tools/rsysrq) | Send SysRQ commands remotely over the network
+| [screenconsole](user-tools/screenconsole) | Interactive CLI to run GNU/screen commands against current or specified screen session
+| [screen-notify](user-tools/screen-notify) | Send status-line message to the current GNU/Screen instance
+| [screenreattach](user-tools/screenreattach) | Reattach to GNU/screen and import environment variables
+| [set-sys-path](user-tools/set-sys-path) | Set PATH according to /etc/environment and run a program
+| [set-xcursor-lock-and-run](user-tools/set-xcursor-lock-and-run) | Set X11 cursor to a padlock and run a command
+| [slay](user-tools/slay) | Try to kill a process until it exists
+| [slay](user-tools/slayall) | Try to kill a process until it exists
+| [ssh-agent-finder](user-tools/ssh-agent-finder) | Find a working ssh agent on the system so you get the same in each of your logon sessions
+| [strip-ansi-seq](user-tools/strip-ansi-seq) | Dumb script removing more-or-less any ANSI escape sequences from the input stream
+| [subst_sudo_user](user-tools/subst_sudo_user) | Sudo helper program
+| [swap](user-tools/swap) | swaps two files' names
+| [symlinks2dot](user-tools/symlinks2dot) | Generate a graph in dot(1) format representing the symlink-target relations among the given files
+| [tabularize](user-tools/tabularize) | Takes TAB-delimited lines of text and outputs formatted table.
+| [Tail](user-tools/Tail) | output as many lines from the end of files as many lines on the terminal currently
+| [takeown](user-tools/takeown) | Take ownership on files, even for unprivileged users
+| [taslis](user-tools/taslis) | WM's Window List
+| [terminaltitle](user-tools/terminaltitle) | Set the current terminal's title string
+| [tests](user-tools/tests) | Show all attributes of the given files which can be tested by test(1) with same color ls(1) shows them
+| [text2img-dataurl](user-tools/text2img-dataurl) | Convert text input to image in "data:..." URL representation
+| [timestamper](user-tools/timestamper) | Prepend a timestamp to each input line
+| [touchx](user-tools/touchx) | set execution bit on files and creates them if neccessary
+| [ttinput](user-tools/ttinput) | Inject console input in a terminal as if the user typed
+| [uchmod](user-tools/uchmod) | chmod files according to umask
+| [unicodestyle](user-tools/unicodestyle) | Add font styles to input text using Unicode
+| [upsidedown](user-tools/upsidedown) | Transliterate input stream to text with upsidedown-looking chars
+| [url_encode](user-tools/url_decode) | Escape URL-unsafe chars in text given either in parameters or in stdin by percent-encoding
+| [url_encode](user-tools/url_encode) | Escape URL-unsafe chars in text given either in parameters or in stdin by percent-encoding
+| [url_encode_bf](user-tools/url_encode_bf) | Make all chars given either in parameters or in stdin to percent-encoded sequence
+| [url-parts](user-tools/url-parts) | Extract specified parts from URLs given in input stream
+| [vidir-sanitize](user-tools/vidir-sanitize) | Helper script to change tricky filenames in a directory
+| [vifiles](user-tools/vifiles) | Edit multiple files as one
+| [waitpid](user-tools/waitpid) | Wait for a process to end (even if not child of current shell)
+| [whisper-retention-info](user-tools/whisper-retention-info) | Show data retention policy in Whisper timeseries database file
+| [wikibot](user-tools/wikibot) | Update Wikimedia (Wikipedia) article
+| [xdg-autostart](user-tools/xdg-autostart) | Start XDG autostart programms
+| [xml2json](user-tools/xml2json) | Convert XML input to JSON

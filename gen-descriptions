@@ -1,0 +1,36 @@
+#!/bin/bash
+
+echo "|   |   |"
+echo "|---|---|"
+
+for filepath in `echo admin-tools/* compiled-tools/* crawler-bin/* root-tools/* user-tools/* xwin-tools/* | tr " " "\n" | sort -t/ -k2`
+do
+	if [ -f "$filepath" ]
+	then
+		echo $'=pod\n\n=head1 FILEPATH '"$filepath"$'\n\n=cut\n\n'
+		cat "$filepath"
+	fi
+done |\
+pod2text -w 10000 --utf8 |\
+while IFS=$'\n' read line
+do
+	if [[ $line =~ ^FILEPATH\ (.+) ]]
+	then
+		filepath=${BASH_REMATCH[1]}
+	
+	elif [ "$line" = NAME ]
+	then
+		while IFS=$'\n' read line2
+		do
+			if [[ $line2 =~ ^[\ ]+([^ ]+)[\ ]+-[\ ]+(.+) ]]
+			then
+				name=${BASH_REMATCH[1]}
+				description=${BASH_REMATCH[2]}
+				echo "| [$name]($filepath) | $description"
+			elif [[ $line =~ ^[^\ ] ]]
+			then
+				break
+			fi
+		done
+	fi
+done

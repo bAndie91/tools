@@ -9,7 +9,7 @@
 | [bencode2json](user-tools/bencode2json) | Convert Bencode (BitTorrent's loosely structured data) to JSON
 | [cdexec](user-tools/cdexec) | Run a given command in the given directory
 | [chattr-cow](user-tools/chattr-cow) | try hard to enable Copy-on-Write attribute on files
-| [chattr-cow](user-tools/chattr-nocow) | try hard to enable Copy-on-Write attribute on files
+| [chattr-nocow](user-tools/chattr-nocow) | try hard to disable Copy-on-Write attribute on files
 | [chromium_cookie_decrypt.py](user-tools/chromium_cookie_decrypt.py) | Decrypt Chromium web browser stored cookies and output cleartext
 | [chshebang](user-tools/chshebang) | Change a script's default interpreter
 | [convert_chromium_cookies_to_netscape.sh](user-tools/convert_chromium_cookies_to_netscape.sh) | Convert Chromium and derivative web browser's cookies to Netscape format (used by wget and curl)
@@ -28,24 +28,24 @@
 | [fcomplete](user-tools/fcomplete) | Complete a smaller file with the data from a bigger one
 | [fc-search-codepoint](user-tools/fc-search-codepoint) | Print the names of available X11 fonts containing the given code point(s)
 | [fdupes-hardlink](user-tools/fdupes-hardlink) | Make hardlinks from identical files as reported by fdupes(1)
-| [ff](user-tools/ff) | find files horizontally
+| [ff](user-tools/ff) | Find files horizontally, ie. a whole directory level at a time, across subtrees
 | [fgat](user-tools/fgat) | Execute command in foreground at a given time
 | [findnewestfile](user-tools/findnewestfile) | Search for the newest file in a given path recursively and always show the most recent while scanning
-| [findnewestfile](user-tools/findoldestfile) | Search for the newest file in a given path recursively and always show the most recent while scanning
+| [findoldestfile](user-tools/findoldestfile) | Search for the oldest file in a given path recursively and always show the most older while scanning
 | [fixlogfiledatetime](user-tools/fixlogfiledatetime) | Set the target files modification time to their respective last log entry's timestamp
 | [fixRFC822filemtime](user-tools/fixRFC822filemtime) | Set a file's last modification time, which contains an email message in RFC-822 format, to the email's Date
 | [fmtkv](user-tools/fmtkv) | Tranform key=value (each optionally double-quoted) pairs into 1 pair by 1 line on the output
 | [foreach](user-tools/foreach) | Run an OS or shell command on each input line, similar to xargs(1)
 | [g_filename_to_uri](user-tools/g_filename_to_uri) | Mimic g_filename_to_uri() GLib function creating a file:// url from path string
 | [gitdiff](user-tools/gitdiff) | View two files' diff by git-diff(1), even not under git version control
-| [Head](user-tools/Head) | output as many lines from the first part of files as many lines on the terminal currently
 | [header.sed](user-tools/header.sed) | Echo the input stream up to the first empty line (usual end-of-header marker)
+| [Head](user-tools/Head) | output as many lines from the first part of files as many lines on the terminal currently
 | [htmlentities](user-tools/htmlentities) | Convert plain text into HTML-safe text
 | [indent2tree](user-tools/indent2tree) | Makes TAB-indented text into ascii tree chart
 | [inisort](user-tools/inisort) | Sort keys in an INI file according to the order of keys in an other INI file
 | [is_gzip](user-tools/is_gzip) | Return 0 if the file in argument has gzip signature
-| [levenshtein-distance](user-tools/jaro-metric) | Calculate the Levenshtein distance of given strings
-| [levenshtein-distance](user-tools/jaro-winkler-metric) | Calculate the Levenshtein distance of given strings
+| [jaro-metric](user-tools/jaro-metric) | Calculate the Jaro metric of given strings
+| [jaro-winkler-metric](user-tools/jaro-winkler-metric) | Calculate the Jaro-Winkler metric of given strings
 | [json2bencode](user-tools/json2bencode) | Convert JSON to Bencode (BitTorrent's loosely structured data)
 | [kt](user-tools/kt) | Run command in background terminal; keept(1) convenience wrapper
 | [LevelDB](user-tools/LevelDB) | Commandline interface for Google's leveldb key-value storage
@@ -78,7 +78,7 @@
 | [pipekill](user-tools/pipekill) | Send signal to a process on the other end of the given pipe filedescriptor
 | [PMbwmon](user-tools/PMbwmon) | Poor man's bandwidth monitor
 | [PMdirindex](user-tools/PMdirindex) | Poor man's directory index generator, output HTML
-| [PMdirindex](user-tools/PMhexdiff) | Poor man's hex diff viewer
+| [PMdirindex](user-tools/PMdirindex) | Poor man's hex diff viewer
 | [PMnslist](user-tools/PMnslist) | Poor man's namespace list
 | [PMpwgen](user-tools/PMpwgen) | Poor man's password generator
 | [PMrecdiff](user-tools/PMrecdiff) | Poor man's directory tree difference viewer, comparing file names and sizes recursively
@@ -96,8 +96,8 @@
 | [screenreattach](user-tools/screenreattach) | Reattach to GNU/screen and import environment variables
 | [set-sys-path](user-tools/set-sys-path) | Set PATH according to /etc/environment and run a program
 | [set-xcursor-lock-and-run](user-tools/set-xcursor-lock-and-run) | Set X11 cursor to a padlock and run a command
+| [slayall](user-tools/slayall) | Try to kill a process by name until it exists
 | [slay](user-tools/slay) | Try to kill a process until it exists
-| [slay](user-tools/slayall) | Try to kill a process until it exists
 | [ssh-agent-finder](user-tools/ssh-agent-finder) | Find a working ssh agent on the system so you get the same in each of your logon sessions
 | [strip-ansi-seq](user-tools/strip-ansi-seq) | Dumb script removing more-or-less any ANSI escape sequences from the input stream
 | [subst_sudo_user](user-tools/subst_sudo_user) | Sudo helper program
@@ -116,9 +116,9 @@
 | [uchmod](user-tools/uchmod) | chmod files according to umask
 | [unicodestyle](user-tools/unicodestyle) | Add font styles to input text using Unicode
 | [upsidedown](user-tools/upsidedown) | Transliterate input stream to text with upsidedown-looking chars
-| [url_encode](user-tools/url_decode) | Escape URL-unsafe chars in text given either in parameters or in stdin by percent-encoding
-| [url_encode](user-tools/url_encode) | Escape URL-unsafe chars in text given either in parameters or in stdin by percent-encoding
+| [url_decode](user-tools/url_decode) | Unescape percent-encoded sequences given either in parameters or in stdin
 | [url_encode_bf](user-tools/url_encode_bf) | Make all chars given either in parameters or in stdin to percent-encoded sequence
+| [url_encode](user-tools/url_encode) | Escape URL-unsafe chars in text given either in parameters or in stdin by percent-encoding
 | [url-parts](user-tools/url-parts) | Extract specified parts from URLs given in input stream
 | [vidir-sanitize](user-tools/vidir-sanitize) | Helper script to change tricky filenames in a directory
 | [vifiles](user-tools/vifiles) | Edit multiple files as one

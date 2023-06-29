@@ -61,7 +61,7 @@ true <<EOF
 
 =head1 NAME
 
-ff - find files horizontally
+ff - Find files horizontally, ie. a whole directory level at a time, across subtrees
 
 =head1 SYNOPSIS
 
@@ -69,8 +69,11 @@ ff <B<pattern>> [B<path>-1] [B<path>-2] ... [B<path>-n]
 
 =head1 DESCRIPTION
 
-Search files which name matches to B<pattern> (or path if B<pattern> contains '/'), in B<path>s directories recursively, case-insensitively.
-Searching is done horizontaly, ie. scan the upper-most directory level first completely, then move to the next level down.
+Search files which name matches to B<pattern> in B<path>s directories recursively, case-insensitively.
+The file's path is matched if B<pattern> contains '/'.
+Searching is done horizontaly, ie. scan the upper-most directory level first completely,
+then dive into the next level and scan those directories before moving to the 3rd level deep, and so on.
+This way users usually find what they search for more quickly.
 
 =cut
 

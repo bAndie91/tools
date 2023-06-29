@@ -3,20 +3,21 @@
 echo "|   |   |"
 echo "|---|---|"
 
-for filepath in `echo admin-tools/* compiled-tools/* crawler-bin/* root-tools/* user-tools/* xwin-tools/* | tr " " "\n" | sort -t/ -k2`
+for filepath in admin-tools/* compiled-tools/* crawler-bin/* root-tools/* user-tools/* xwin-tools/*
 do
 	if [ -f "$filepath" ]
 	then
-		echo $'=pod\n\n=head1 FILEPATH '"$filepath"$'\n\n=cut\n\n'
+		path=${filepath%/*}
+		echo $'=pod\n\n=head1 PATH '"$path"$'\n\n=cut\n\n'
 		cat "$filepath"
 	fi
 done |\
 pod2text -w 10000 --utf8 |\
 while IFS=$'\n' read line
 do
-	if [[ $line =~ ^FILEPATH\ (.+) ]]
+	if [[ $line =~ ^PATH\ (.+) ]]
 	then
-		filepath=${BASH_REMATCH[1]}
+		path=${BASH_REMATCH[1]}
 	
 	elif [ "$line" = NAME ]
 	then
@@ -26,11 +27,12 @@ do
 			then
 				name=${BASH_REMATCH[1]}
 				description=${BASH_REMATCH[2]}
-				echo "| [$name]($filepath) | $description"
-			elif [[ $line =~ ^[^\ ] ]]
+				echo "| [$name]($path/$name) | $description"
+			elif [[ $line2 =~ ^[^\ ] ]]
 			then
 				break
 			fi
 		done
 	fi
-done
+done |\
+sort -u

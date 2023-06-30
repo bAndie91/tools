@@ -5,7 +5,7 @@ true <<EOF
 
 =head1 NAME
 
-tests - Show all attributes of the given files which can be tested by test(1) with same color ls(1) shows them
+tests - Show all attributes of the given files which can be tested by test(1) in the same color as ls(1) shows them
 
 =cut
 

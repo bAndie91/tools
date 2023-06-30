@@ -1,20 +1,32 @@
 
 #include <utmp.h>
 #include <stdio.h>
+#include <err.h>
+#include <errno.h>
+#include <string.h>
+#include <paths.h>
 
 int main(int argc, char **argv)
 {
 	struct utmp *utmpptr;
-
-	if(argc == 2 && strcmp(argv[1], "--help")==0)
-	{
-		printf("Display UTMP database line-by-line.\n");
-		return 0;
-	}
-
+	
 	#ifdef DEBUG
 	printf("EMPTY=%u RUN_LVL=%u BOOT_TIME=%u NEW_TIME=%u OLD_TIME=%u INIT_PROCESS=%u LOGIN_PROCESS=%u USER_PROCESS=%u DEAD_PROCESS=%u ACCOUNTING=%u\n", EMPTY, RUN_LVL, BOOT_TIME, NEW_TIME, OLD_TIME, INIT_PROCESS, LOGIN_PROCESS, USER_PROCESS, DEAD_PROCESS, ACCOUNTING);
 	#endif
+	
+	if(argc > 1)
+	{
+		if(strcmp(argv[1], "--help")==0)
+		{
+			printf("Usage: utmp [<FILE>]\nDisplay bare UTMP database line-by-line.\nDefault FILE is "_PATH_UTMP".\n");
+			return(0);
+		}
+		
+		if(utmpname(argv[1]) != 0)
+		{
+			err(errno || -1, "%s: could not set utmp name", argv[1]);
+		}
+	}
 	
 	while((utmpptr = getutent()))
 	{

@@ -3,21 +3,21 @@
 echo "|   |   |"
 echo "|---|---|"
 
-for filepath in admin-tools/* compiled-tools/* crawler-bin/* root-tools/* user-tools/* xwin-tools/*
+for filepath in admin-tools/* compiled-tools/*.pod crawler-bin/* root-tools/* user-tools/* xwin-tools/*
 do
 	if [ -f "$filepath" ]
 	then
-		path=${filepath%/*}
-		echo $'=pod\n\n=head1 PATH '"$path"$'\n\n=cut\n\n'
+		echo $'=pod\n\n=head1 FILEPATH '"$filepath"$'\n\n=cut\n\n'
 		cat "$filepath"
 	fi
 done |\
 pod2text -w 10000 --utf8 |\
 while IFS=$'\n' read line
 do
-	if [[ $line =~ ^PATH\ (.+) ]]
+	if [[ $line =~ ^FILEPATH\ (.+) ]]
 	then
-		path=${BASH_REMATCH[1]}
+		filepath=${BASH_REMATCH[1]}
+		dirpath=${filepath%/*}
 	
 	elif [ "$line" = NAME ]
 	then
@@ -27,7 +27,23 @@ do
 			then
 				name=${BASH_REMATCH[1]}
 				description=${BASH_REMATCH[2]}
-				echo "| [$name]($path/$name) | $description"
+				
+				filelink=$dirpath/$name
+				if [ ${filepath: -4} = .pod ]
+				then
+					filelink=$dirpath/$name.c
+					if [ ! -e "$filelink" ]
+					then
+						filelink=($dirpath/*/$name.*)
+						filelink=${filelink[0]}
+						if [ ! -e "$filelink" ]
+						then
+							filelink=$filepath
+						fi
+					fi
+				fi
+				
+				echo "| [$name]($filelink) | $description"
 			elif [[ $line2 =~ ^[^\ ] ]]
 			then
 				break

@@ -1,0 +1,8 @@
+=pod
+
+=head1 NAME
+
+remove - Remove file and directoy alike
+
+=cut
+

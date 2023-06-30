@@ -1,4 +1,3 @@
-
 /*
   Compile-time config options:
     ONLY_ALLOWED_GID

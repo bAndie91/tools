@@ -1,0 +1,8 @@
+=pod
+
+=head1 NAME
+
+xidle - Display idle time of an X11 screen
+
+=cut
+

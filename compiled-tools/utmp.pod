@@ -1,0 +1,8 @@
+=pod
+
+=head1 NAME
+
+utmp - Display UTMP database like who(1) but machine-parsable
+
+=cut
+

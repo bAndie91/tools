@@ -1,0 +1,8 @@
+=pod
+
+=head1 NAME
+
+mksock - Create a socket type file
+
+=cut
+

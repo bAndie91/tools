@@ -1,11 +1,10 @@
-/* LegRovidebb Utvonal Relativ Symlinkekhez */
 
 #include <strings.h>
 #include <limits.h>
 #include <stdio.h>
 
 #define VERSION 0.5
-#define MYNAME "lrurs"
+#define MYNAME "relpath"
 
 int main(int argc, char *argv[]) {
 

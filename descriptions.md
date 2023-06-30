@@ -17,12 +17,12 @@
 | [cut.awk](user-tools/cut.awk) | Output only the selected fields from the input stream, parameters follow awk(1) syntax
 | [daemonctl](user-tools/daemonctl) | Manage preconfigured libslack daemon(1) daemons more conveniently
 | [dataurl2bin](user-tools/dataurl2bin) | Decode "data:..." URLs from input stream and output the raw binary data
-| [debdiff](user-tools/debdiff) | Display differences between 2 Debian package (*.deb files)
+| [debdiff](user-tools/debdiff) | Display differences between 2 Debian packages (*.deb files)
 | [descpids](user-tools/descpids) | List all descendant process PIDs of the given process(es)
 | [dfbar](user-tools/dfbar) | Display disk space usage with simple bar chart (as reported by df(1))
 | [digasn](user-tools/digasn) | Query Autonom System Number (ASN) from DNS
 | [diu](user-tools/diu) | Display Inode usage, similar to du(1) for space usage
-| [dlnew](user-tools/dlnew) | Download web rource if local copy is older
+| [dlnew](user-tools/dlnew) | Download web resource if local copy is older
 | [eat](user-tools/eat) | Read and echo back input (like cat(1)) until interrupted (ie. ignore end-of-file)
 | [errorlevel](user-tools/errorlevel) | Exit with the given status code
 | [fcomplete](user-tools/fcomplete) | Complete a smaller file with the data from a bigger one
@@ -38,6 +38,7 @@
 | [foreach](user-tools/foreach) | Run an OS or shell command on each input line, similar to xargs(1)
 | [g_filename_to_uri](user-tools/g_filename_to_uri) | Mimic g_filename_to_uri() GLib function creating a file:// url from path string
 | [gitdiff](user-tools/gitdiff) | View two files' diff by git-diff(1), even not under git version control
+| [grandparentexe](compiled-tools/grandparentexe.c) | Display the grandparent process executable path of the current process
 | [header.sed](user-tools/header.sed) | Echo the input stream up to the first empty line (usual end-of-header marker)
 | [Head](user-tools/Head) | output as many lines from the first part of files as many lines on the terminal currently
 | [htmlentities](user-tools/htmlentities) | Convert plain text into HTML-safe text
@@ -48,11 +49,13 @@
 | [jaro-winkler-metric](user-tools/jaro-winkler-metric) | Calculate the Jaro-Winkler metric of given strings
 | [json2bencode](user-tools/json2bencode) | Convert JSON to Bencode (BitTorrent's loosely structured data)
 | [kt](user-tools/kt) | Run command in background terminal; keept(1) convenience wrapper
+| [lastcsv](compiled-tools/lastcsv.d/lastcsv.c) | List of last logged in users in CSV format
 | [LevelDB](user-tools/LevelDB) | Commandline interface for Google's leveldb key-value storage
 | [levenshtein-distance](user-tools/levenshtein-distance) | Calculate the Levenshtein distance of given strings
 | [lines](user-tools/lines) | Output only the given lines of the input stream
 | [list_screens](user-tools/list_screens) | List all GNU/Screen sessions accessible by the user and all of their inner windows as well
 | [lnto](user-tools/lnto) | ln(1) convenience wrapper; you enter link target paths relative to the current directory
+| [logbtmp](compiled-tools/logbtmp.d/logbtmp.c) | Add new entry to the system's bad-login database (btmp)
 | [loggerexec](user-tools/loggerexec) | Run a command and send STDOUT and STDERR to syslog
 | [logrotate-counters](user-tools/logrotate-counters) | Increment numbers in file names
 | [logto](user-tools/logto) | Run a command and append its STDOUT and STDERR to a file
@@ -61,6 +64,7 @@
 | [mime_extract](user-tools/mime_extract) | Extract parts from a MIME multipart file and save them into separate files
 | [mkdeb](user-tools/mkdeb) | Create a Debian package (.deb)
 | [mkmagnetlink](user-tools/mkmagnetlink) | Create a "magnet:" link out of a torrent file
+| [mksock](compiled-tools/mksock.c) | Create a socket type file
 | [moz_bookmarks](user-tools/moz_bookmarks) | Read Mozilla bookmarks database and display titles and URLs line-by-line
 | [msg](user-tools/msg) | Write to given user's open terminals
 | [multithrottler](user-tools/multithrottler) | Run given command if not reached the defined rate limit
@@ -86,6 +90,8 @@
 | [pvalve](user-tools/pvalve) | Control how much a given command should run by an other command's exit code
 | [pyzor-files](user-tools/pyzor-files) | Run a pyzor(1) command on the given files
 | [qrwifi](user-tools/qrwifi) | Generate a string, used in WiFi-setup QR codes, containing a hotspot name and password
+| [relpath](compiled-tools/relpath.c) | Calculate the shortest relative path between directories
+| [remove](compiled-tools/remove.c) | Remove file and directoy alike
 | [renamemanual](user-tools/renamemanual) | Interactive file rename tool
 | [repeat](user-tools/repeat) | Run a give command repeatedly
 | [reportcmdstatus](user-tools/reportcmdstatus) | Textually shows how a given command finished
@@ -94,6 +100,7 @@
 | [screenconsole](user-tools/screenconsole) | Interactive CLI to run GNU/screen commands against current or specified screen session
 | [screen-notify](user-tools/screen-notify) | Send status-line message to the current GNU/Screen instance
 | [screenreattach](user-tools/screenreattach) | Reattach to GNU/screen and import environment variables
+| [setgroups](compiled-tools/setgroups.c) | Start a process with specified set of GIDs
 | [set-sys-path](user-tools/set-sys-path) | Set PATH according to /etc/environment and run a program
 | [set-xcursor-lock-and-run](user-tools/set-xcursor-lock-and-run) | Set X11 cursor to a padlock and run a command
 | [slayall](user-tools/slayall) | Try to kill a process by name until it exists
@@ -103,6 +110,7 @@
 | [subst_sudo_user](user-tools/subst_sudo_user) | Sudo helper program
 | [swap](user-tools/swap) | swaps two files' names
 | [symlinks2dot](user-tools/symlinks2dot) | Generate a graph in dot(1) format representing the symlink-target relations among the given files
+| [syncfs](compiled-tools/syncfs.c) | Request flushing data of the given filesystem to the disk
 | [tabularize](user-tools/tabularize) | Takes TAB-delimited lines of text and outputs formatted table.
 | [Tail](user-tools/Tail) | output as many lines from the end of files as many lines on the terminal currently
 | [takeown](user-tools/takeown) | Take ownership on files, even for unprivileged users
@@ -120,10 +128,12 @@
 | [url_encode_bf](user-tools/url_encode_bf) | Make all chars given either in parameters or in stdin to percent-encoded sequence
 | [url_encode](user-tools/url_encode) | Escape URL-unsafe chars in text given either in parameters or in stdin by percent-encoding
 | [url-parts](user-tools/url-parts) | Extract specified parts from URLs given in input stream
+| [utmp](compiled-tools/utmp.c) | Display UTMP database like who(1) but machine-parsable
 | [vidir-sanitize](user-tools/vidir-sanitize) | Helper script to change tricky filenames in a directory
 | [vifiles](user-tools/vifiles) | Edit multiple files as one
 | [waitpid](user-tools/waitpid) | Wait for a process to end (even if not child of current shell)
 | [whisper-retention-info](user-tools/whisper-retention-info) | Show data retention policy in Whisper timeseries database file
 | [wikibot](user-tools/wikibot) | Update Wikimedia (Wikipedia) article
 | [xdg-autostart](user-tools/xdg-autostart) | Start XDG autostart programms
+| [xidle](compiled-tools/xidle.c) | Display idle time of an X11 screen
 | [xml2json](user-tools/xml2json) | Convert XML input to JSON

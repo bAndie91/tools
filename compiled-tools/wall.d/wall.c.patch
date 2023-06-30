@@ -1,0 +1,58 @@
+--- a/util-linux-2.25.1/term-utils/wall.c	2014-08-26 16:48:45.000000000 +0200
++++ b/util-linux-2.25.1/term-utils/wall.c	2016-03-17 15:52:07.000000000 +0100
+@@ -199,19 +199,20 @@
+ 
+ 	if (print_banner == TRUE) {
+ 		char *hostname = xgethostname();
+-		char *whom, *where, *date;
++		char *whom = NULL, *where, *date;
+ 		struct passwd *pw;
+ 		time_t now;
+ 
+-		if (!(whom = getlogin()) || !*whom)
+-			whom = (pw = getpwuid(getuid())) ? pw->pw_name : "???";
++		if((pw = getpwuid(getuid()))!=NULL)
++			whom = pw->pw_name;
+ 		if (!whom) {
+ 			whom = "someone";
+ 			warn(_("cannot get passwd uid"));
+ 		}
+-		where = ttyname(STDOUT_FILENO);
++		where = ttyname(STDIN_FILENO);
++		if (!where) where = ttyname(STDERR_FILENO);
++		if (!where) where = ttyname(STDOUT_FILENO);
+ 		if (!where) {
+-			where = "somewhere";
+ 			warn(_("cannot get tty name"));
+ 		} else if (strncmp(where, "/dev/", 5) == 0)
+ 			where += 5;
+@@ -230,15 +232,15 @@
+ 		/* snprintf is not always available, but the sprintf's here
+ 		   will not overflow as long as %d takes at most 100 chars */
+ 		fprintf(fp, "\r%*s\r\n", TERM_WIDTH, " ");
+-		sprintf(lbuf, _("Broadcast message from %s@%s (%s) (%s):"),
+-			      whom, hostname, where, date);
+-		fprintf(fp, "%-*.*s\007\007\r\n", TERM_WIDTH, TERM_WIDTH, lbuf);
++		fprintf(fp, _("Broadcast message from %s@%s%s%s%s on %s:"),
++			      whom, hostname, where?" (":"", where?where:"", where?")":"", date);
++		fprintf(fp, "\007\007\r\n");
+ 		free(hostname);
+ 		free(date);
+ 	}
+ 	fprintf(fp, "%*s\r\n", TERM_WIDTH, " ");
+ 
+-	 if (mvec) {
++	if (mvec) {
+ 		/*
+ 		 * Read message from argv[]
+ 		 */
+@@ -252,7 +254,8 @@
+ 		fputc('\r', fp);
+ 		fputc('\n', fp);
+ 
+-	} else {
++	}
++	else {
+ 		/*
+ 		 * read message from <file>
+ 		 */

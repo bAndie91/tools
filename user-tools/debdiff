@@ -5,7 +5,7 @@ true <<EOF
 
 =head1 NAME
 
-debdiff - Display differences between 2 Debian package (*.deb files)
+debdiff - Display differences between 2 Debian packages (*.deb files)
 
 =cut
 

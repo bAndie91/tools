@@ -10,6 +10,7 @@
 | [cdexec](user-tools/cdexec) | Run a given command in the given directory
 | [chattr-cow](user-tools/chattr-cow) | try hard to enable Copy-on-Write attribute on files
 | [chattr-nocow](user-tools/chattr-nocow) | try hard to disable Copy-on-Write attribute on files
+| [chmod-cheap](compiled-tools/coreutils/chmod-cheap.patch) | chmod(1) files only if new mode differs from the old one
 | [chromium_cookie_decrypt.py](user-tools/chromium_cookie_decrypt.py) | Decrypt Chromium web browser stored cookies and output cleartext
 | [chshebang](user-tools/chshebang) | Change a script's default interpreter
 | [convert_chromium_cookies_to_netscape.sh](user-tools/convert_chromium_cookies_to_netscape.sh) | Convert Chromium and derivative web browser's cookies to Netscape format (used by wget and curl)

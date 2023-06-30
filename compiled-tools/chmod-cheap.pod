@@ -1,0 +1,8 @@
+=pod
+
+=head1 NAME
+
+chmod-cheap - chmod(1) files only if new mode differs from the old one
+
+=cut
+

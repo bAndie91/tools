@@ -4,14 +4,14 @@ TARGET_DIR = /usr/tool
 TOOLS = grandparentexe relpath mksock remove syncfs utmp usbreset \
   chmod-cheap setgroups kill-rogue xidle logbtmp lastcsv wall
 
-SPECIAL_INSTALL_TOOLS = grandparentexe netbulk
+SPECIAL_INSTALL_TOOLS = grandparentexe netbulk lastbcsv
 
 NORMAL_TARGET_FILES = $(foreach tool,$(filter-out $(SPECIAL_INSTALL_TOOLS),$(TOOLS)),$(TARGET_DIR)/$(tool))
 SPECIAL_TARGET_FILES = $(foreach tool,$(SPECIAL_INSTALL_TOOLS),$(TARGET_DIR)/$(tool))
 
 
 
-all: $(TOOLS) netbulk
+all: $(TOOLS) netbulk lastbcsv
 install-all: $(NORMAL_TARGET_FILES) $(SPECIAL_TARGET_FILES)
 
 .PHONY: all install-all
@@ -38,6 +38,9 @@ $(TARGET_DIR)/netbulk: netbulk
 	$(install-tool-recipe)
 	setcap cap_setgid+ep $(TARGET_DIR)/netbulk
 
+$(TARGET_DIR)/lastbcsv: $(TARGET_DIR)/lastcsv
+	ln -sfT lastcsv $@
+	@echo remove $@ >> uninstall.sh
 
 $(TARGET_DIR)/kill-rogue: /usr/share/man/man1/kill-rogue.1.gz
 
@@ -48,6 +51,9 @@ $(TARGET_DIR)/kill-rogue: /usr/share/man/man1/kill-rogue.1.gz
 
 netbulk:
 	$(CC) -DONLY_ALLOWED_GID=$(shell getent group netbulk | cut -d: -f3) setgroups.c -o $@
+
+lastbcsv: lastcsv
+	ln -sfT lastcsv $@
 
 xidle: CFLAGS += -lX11 -lXss
 

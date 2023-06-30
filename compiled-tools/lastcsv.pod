@@ -4,5 +4,7 @@
 
 lastcsv - List of last logged in users in CSV format
 
+lastbcsv - List of last bad login attempts in CSV format
+
 =cut
 

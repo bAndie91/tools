@@ -50,6 +50,7 @@
 | [jaro-winkler-metric](user-tools/jaro-winkler-metric) | Calculate the Jaro-Winkler metric of given strings
 | [json2bencode](user-tools/json2bencode) | Convert JSON to Bencode (BitTorrent's loosely structured data)
 | [kt](user-tools/kt) | Run command in background terminal; keept(1) convenience wrapper
+| [lastbcsv](compiled-tools/lastcsv.pod) | List of last bad login attempts in CSV format
 | [lastcsv](compiled-tools/lastcsv.d/lastcsv.c) | List of last logged in users in CSV format
 | [LevelDB](user-tools/LevelDB) | Commandline interface for Google's leveldb key-value storage
 | [levenshtein-distance](user-tools/levenshtein-distance) | Calculate the Levenshtein distance of given strings
@@ -117,7 +118,7 @@
 | [takeown](user-tools/takeown) | Take ownership on files, even for unprivileged users
 | [taslis](user-tools/taslis) | WM's Window List
 | [terminaltitle](user-tools/terminaltitle) | Set the current terminal's title string
-| [tests](user-tools/tests) | Show all attributes of the given files which can be tested by test(1) with same color ls(1) shows them
+| [tests](user-tools/tests) | Show all attributes of the given files which can be tested by test(1) in the same color as ls(1) shows them
 | [text2img-dataurl](user-tools/text2img-dataurl) | Convert text input to image in "data:..." URL representation
 | [timestamper](user-tools/timestamper) | Prepend a timestamp to each input line
 | [touchx](user-tools/touchx) | set execution bit on files and creates them if neccessary

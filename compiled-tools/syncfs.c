@@ -19,7 +19,7 @@ int main(int argc, char** argv)
 	int narg = 1;
 	int fd;
 	
-	if(argc == 2 && strcmp(argv[1], "--help")==0)
+	if(argc > 1 && strcmp(argv[1], "--help")==0)
 	{
 		printf(
 "Usage: syncfs [<PATH>]\n"
@@ -31,12 +31,15 @@ int main(int argc, char** argv)
 	if(argc < 2)
 	{
 		path = strdup(".");
+		goto have_path;
 	}
 	else
 	{
 		while(narg < argc)
 		{
 			path = argv[narg];
+			
+			have_path:
 			fd = open(path, O_RDONLY);
 			if(fd == -1)
 			{

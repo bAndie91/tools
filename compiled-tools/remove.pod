@@ -4,5 +4,9 @@
 
 remove - Remove file and directoy alike
 
+=head1 SEE ALSO
+
+remove(3)
+
 =cut
 

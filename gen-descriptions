@@ -9,12 +9,13 @@ do
 	then
 		echo $'=pod\n\n=head1 FILEPATH '"$filepath"$'\n\n=cut\n\n'
 		cat "$filepath"
+		echo $'=pod\n\n=head1 EOF '"$filepath"$'\n\n=cut\n\n'
 	fi
 done |\
 pod2text -w 10000 --utf8 |\
 while IFS=$'\n' read line
 do
-	if [[ $line =~ ^FILEPATH\ (.+) ]]
+	if [[ $line =~ ^FILEPATH[\ \	]+(.+) ]]
 	then
 		filepath=${BASH_REMATCH[1]}
 		dirpath=${filepath%/*}
@@ -29,22 +30,22 @@ do
 				description=${BASH_REMATCH[2]}
 				
 				filelink=$dirpath/$name
-				if [ ${filepath: -4} = .pod ]
+				if [ "${filepath: -4}" = .pod ]
 				then
 					filelink=$dirpath/$name.c
-					if [ ! -e "$filelink" ]
-					then
-						filelink=($dirpath/*/$name.*)
-						filelink=${filelink[0]}
-						if [ ! -e "$filelink" ]
-						then
-							filelink=$filepath
-						fi
-					fi
+				fi
+				if [ ! -e "$filelink" ]
+				then
+					filelink=($dirpath/*/$name.*)
+					filelink=${filelink[0]}
+				fi
+				if [ ! -e "$filelink" ]
+				then
+					filelink=$filepath
 				fi
 				
 				echo "| [$name]($filelink) | $description"
-			elif [[ $line2 =~ ^[^\ ] ]]
+			elif [[ $line2 =~ ^[^\ \	] ]]
 			then
 				break
 			fi

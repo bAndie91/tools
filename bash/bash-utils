@@ -20,7 +20,8 @@ pipe()
 	myin=`readlink /proc/self/fd/0`
 	myout=`readlink /proc/self/fd/1`
 	
-	sleep inf | sleep inf &
+	# calling sleep(1) via env to avoid bash's built-in sleep which may not know 'inf'.
+	env sleep inf | env sleep inf &
 	pid2=$!
 	pid1=$(jobs -p %+)
 	
@@ -254,4 +255,9 @@ in_list()
 		fi
 	done
 	return 1
+}
+
+bash_scriptdir()
+{
+	dirname "$(readlink -f "$0")"
 }

@@ -38,6 +38,8 @@ int main(int argc, char ** argv)
 	long set_gid;
 	char ** execargs;
 	
+	if(argc < 2) errx(-1, "No command given.");
+	
 	n_removed_groups = 0;
 	sz_gidlist = 4;
 	gidlist = malloc(sz_gidlist * sizeof(gid_t));
@@ -62,12 +64,12 @@ int main(int argc, char ** argv)
 	
 	for(aux1 = 1; aux1 < argc; aux1++)
 	{
-		if(strcmp(argv[aux1], "--") == 0) break;
+		if(strcmp(argv[aux1], "--") == 0) { aux1++; break; }
 		n_set_groups += 1;
 	}
 	
 	if(aux1 >= argc) errx(-1, "No command given.");
-	execargs = &argv[aux1+1];
+	execargs = &argv[aux1];
 #else
 	n_set_groups = 1;
 	execargs = &argv[1];

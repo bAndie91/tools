@@ -49,7 +49,7 @@ $(TARGET_DIR)/kill-rogue: /usr/share/man/man1/kill-rogue.1.gz
 	@echo remove $@ >> uninstall.sh
 
 
-netbulk:
+netbulk: setgroups.c
 	$(CC) -DONLY_ALLOWED_GID=$(shell getent group netbulk | cut -d: -f3) setgroups.c -o $@
 
 lastbcsv: lastcsv

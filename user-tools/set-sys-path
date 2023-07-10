@@ -11,5 +11,5 @@ set-sys-path - Set PATH according to /etc/environment and run a program
 
 EOF
 
-export PATH=`pam_getenv PATH`
+export PATH=`/usr/sbin/pam_getenv PATH`
 exec "$@"

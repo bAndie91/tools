@@ -17,6 +17,6 @@ install-sendmail-cron: /usr/sbin/sendmail.cron
 	update-alternatives --install /usr/sbin/sendmail sendmail /usr/sbin/sendmail.cron 800
 	@echo update-alternatives --remove sendmail /usr/sbin/sendmail.cron >> uninstall.sh
 
-/usr/sbin/sendmail.cron:
+/usr/sbin/sendmail.cron: sendmail.cron
 	install sendmail.cron /usr/sbin/
 	@echo remove $@ >> uninstall.sh

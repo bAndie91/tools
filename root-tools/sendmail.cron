@@ -4,7 +4,7 @@ set -e
 set -o pipefail
 set -u
 
-. /usr/lib/tools/bash-utils
+. /usr/lib/tool/bash-utils
 
 basedir=/var/log/cron/user
 timestamp=`date "+%F %T %z"`

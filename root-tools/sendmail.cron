@@ -8,8 +8,9 @@ set -u
 
 basedir=/var/log/cron/user
 timestamp=`date "+%F %T %z"`
+grandparentexe=`grandparentexe`
 
-if [ "X$(grandparentexe)" = X/usr/sbin/cron ]
+if [ "$grandparentexe" = /usr/sbin/cron ]
 then
 	cron_user=''
 	cron_job=''
@@ -37,10 +38,20 @@ then
 			command_name_noslash=`echo "$cron_job" | sed -e 's@/@⁄@g'`
 			command_name_noslash=${command_name_noslash:0:255}
 			user_name_noslash=`echo "$cron_user" | sed -e 's@/@⁄@g'`
+			
+			set +e
 			if [ ! -d "$basedir/$user_name_noslash" ]
 			then
 				install -o "$cron_user" -m 0750 -d "$basedir/$user_name_noslash"
 			fi
+			if [ ! -d "$basedir/$user_name_noslash" ]
+			then
+				sudo subst_sudo_user /usr/bin/install -o '$SUDO_USER' -m 0750 -d /var/log/cron/user/'$SUDO_USER'
+			fi
+			set -e
+			# if we failed to create the directory,
+			# let's fail when we try to write to a file under it.
+			
 			logfile=$basedir/$user_name_noslash/$command_name_noslash
 			echo "$full_cron_message" | sed -e 's!^!'"$timestamp\t"'!' >> "$logfile"
 		else
@@ -55,5 +66,5 @@ then
 		fi
 	done
 else
-	errx -1 "I only save cron job outputs to $basedir. Call me only within cron."
+	errx -1 "I only save cron job outputs to $basedir. Call me only within cron. Grandparent process seems to be $grandparentexe."
 fi

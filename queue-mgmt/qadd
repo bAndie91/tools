@@ -5,12 +5,13 @@ Add new command to run to the end of the queue.
 OPTIONS:
   -q, --quiet
   -d, --queue-dir
-  -x, --if-not-exists"
+  -x, --if-not-queued
+  -X, --if-not-running"
 
 . qadd-common
 
 
-if [ $qadd_no_dup ]
+if [ "$qadd_no_dup" -o "$qadd_no_duprun" ]
 then
 	qcleanup
 	
@@ -42,11 +43,16 @@ then
 		then
 			same_command=''
 		fi
+		
 		if [ $same_command ]
 		then
 			taskid=`basename "$itemfile" .comm`
-			echo "qadd: not adding, command is equivalent to task $taskid" >&2
-			exit -8
+			state=`qtask_state "$taskid"`
+			if [ \( "$qadd_no_duprun" -a "$state" = running \) -o \( "$qadd_no_dup" -a "$state" = queued \) ]
+			then
+				echo "qadd: not adding, command is equivalent to task $taskid" >&2
+				exit -8
+			fi
 		fi
 	done
 	shopt -u nullglob

@@ -45,12 +45,29 @@ qcleanup()
 	done
 }
 
+qtask_state()
+{
+	local state taskid
+	taskid=$1
+	if [ -e "$queue_dir/$taskid.pid" ]
+	then
+		state=running
+	elif [ -e "$queue_dir/$taskid.exit" ]
+	then
+		state=ended
+	else
+		state=queued
+	fi
+	echo "$state"
+}
+
 queue_dir=${DEFAULT_QUEUE_DIR:-}
 quiet=''
 very_quiet=''
 qls_multiline=1
 qrun_suppress_output=''
 qadd_no_dup=''
+qadd_no_duprun=''
 
 while [ $# != 0 ]
 do
@@ -78,8 +95,11 @@ do
 	-n|--suppress-output)
 		qrun_suppress_output=1
 		;;
-	-x|--if-not-exists)
+	-x|--if-not-queued)
 		qadd_no_dup=1
+		;;
+	-X|--if-not-running)
+		qadd_no_duprun=1
 		;;
 	--)
 		shift

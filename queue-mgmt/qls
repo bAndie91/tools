@@ -28,12 +28,7 @@ do
 	timestamp=`stat -c %Y "$itemfile"`
 	datetime=`date +"%F %T" -d @$timestamp`
 	command=$(cat "$itemfile" | perl -pe 's/\x00/ /g')
-	state=queued
-	
-	if [ -e "$queue_dir/$item_id.pid" ]
-	then
-		state=running
-	fi
+	state=`qtask_state "$item_id"`
 	
 	if [ $qls_multiline ]
 	then

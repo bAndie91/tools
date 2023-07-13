@@ -58,10 +58,14 @@ then
 			partial_cron_message=$partial_cron_message$line$'\n'
 			if [ "${line:0:3}" = To: ]
 			then
+				# assuming a single space before username, ie. "To: USERNAME"
 				cron_user=${line:4}
 			elif [ "${line:0:8}" = Subject: ]
 			then
+				# assuming the header like "Subject: Cron <user@host> command..."
 				cron_job=`echo "$line" | cut -d' ' -f4-`
+				# trim leading spaces and tabs
+				cron_job=${cron_job/#+( |$'\t')}
 			fi
 		fi
 	done

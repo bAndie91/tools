@@ -2,16 +2,23 @@
 
 pipe()
 {
-	# SYNOPSIS
-	#   mimic pipe(2) syscall
-	# INVOCATION
-	#   pipe <variable_name> <variable_name>
-	# EXAMPLE
-	#   pipe read_fd write_fd
-	# DESCRIPTION
-	#   create anonymous pipe
-	#   reader end file descriptor stored in $read_fd
-	#   writer end file descriptor stored in $write_fd
+	if [ "$1" = --help ]
+	then
+		echo "NAME"
+		echo "  pipe - mimic pipe(2) syscall in shell"
+		echo "INVOCATION"
+		echo "  pipe <READER_VAR> <WRITER_VAR>"
+		echo "DESCRIPTION"
+		echo "  Create anonymous pipe."
+		echo "  Reader end's file descriptor stored in variable name in the first argument."
+		echo "  Writer end's file descriptor stored in variable name in the second argument."
+		echo "EXAMPLE"
+		echo "  pipe read_fd write_fd"
+		echo "  echo Lorem ipsum >&\$write_fd"
+		echo "  read -u \$read_fd data"
+		echo "  echo \$data  # => Lorem ipsum"
+		return
+	fi
 	
 	local pid1 pid2 myin myout lnk0 lnk1
 	[ "$1" = rdr ] || local rdr
@@ -46,14 +53,19 @@ pipe()
 
 close()
 {
-	# SYNOPSIS
-	#   mimic close(2) syscall
-	# INVOCATION
-	#   close <fd> [fd_2 [fd_3 [...]]]
-	# EXAMPLE
-	#   close 10
-	# DESCRIPTION
-	#   closes file descriptors given in arguments
+	if [ "$1" = --help ]
+	then
+		echo "NAME"
+		echo "  close - mimic close(2) syscall in shell"
+		echo "INVOCATION"
+		echo "  close <FD_1> [FD_2 [FD_3 [...]]]"
+		echo "DESCRIPTION"
+		echo "  Close file descriptor(s) given in arguments."
+		echo "EXAMPLE"
+		echo "  pipe read_fd write_fd"
+		echo "  close \$write_fd"
+		return
+	fi
 	
 	local fd
 	for fd in "$@"
@@ -65,27 +77,33 @@ close()
 
 capture2()
 {
-	# SYNOPSIS
-	#   store a command's stdout and stderr in separated variables
-	#   without running it twice
-	# INVOCATION
-	#   capture2 <command> [arguments]
-	# EXAMPLE
-	#   capture2 ls -lRA /etc
-	#   echo output was "'$capture2_stdout'"
-	#   echo error was "'$capture2_stderr'"
-	# DESCRIPTION
-	#   use standard bash process substitution to get stdout,
-	#   save it to $capture2_stdout
-	#   use pipe() to get stderr, save it to $capture2_stderr
-	# RETURN VALUE
-	#   command's exit status
-	# VARIABLES
-	#   using the following shell global variables
-	#   - capture2_stdout
-	#   - capture2_stderr
-	# CAVEAT
-	#   maybe does not work on large output, depend on fifo buffer size
+	if [ "$1" = --help ]
+	then
+		echo "NAME"
+		echo "  capture2 - store a command's stdout and stderr in separated variables"
+		echo "INVOCATION"
+		echo "  capture2 <COMMAND> [<ARGS>]"
+		echo "DESCRIPTION"
+		echo "  Capture <COMMAND>'s stdout and stderr in separated shell variables"
+		echo "  without running it twice."
+		echo "  Store stdout and stderr data in script-global variables"
+		echo "  called \$capture2_stdout and \$capture2_stderr respectively."
+		echo "EXAMPLE"
+		echo "  capture2 ls -lRA /etc"
+		echo "  echo output was "'\$capture2_stdout'""
+		echo "  echo error was "'\$capture2_stderr'""
+		echo "RETURN VALUE"
+		echo "  <COMMAND>'s exit status"
+		echo "VARIABLES"
+		echo "  using the following script-global variables"
+		echo "  - capture2_stdout"
+		echo "  - capture2_stderr"
+		echo "CAVEAT"
+		echo "  May not work on large output, depend on fifo buffer size."
+		echo "SEE ALSO"
+		echo "  pipe(1bash) close(1bash)"
+		return
+	fi
 	
 	local x r w
 	pipe r w
@@ -102,7 +120,7 @@ is_digit()
 	[ "$1" = 0 -o "$1" = 1 -o "$1" = 2 -o "$1" = 3 -o "$1" = 4 -o "$1" = 5 -o "$1" = 6 -o "$1" = 7 -o "$1" = 8 -o "$1" = 9 ]
 }
 
-is_integer()
+is_number()
 {
 	[ "$1" -ge 0 -o "$1" -lt 0 ] 2>/dev/null
 }
@@ -114,15 +132,13 @@ is_alpha()
 
 warnx()
 {
-	# SYNOPSIS
-	#   mimic warnx(3)
-	echo "$0: $*" >&2
+	true "warnx - mimic warnx(3) in shell"
+	echo "${0##*/}: $*" >&2
 }
 
 errx()
 {
-	# SYNOPSIS
-	#   mimic errx(3)
+	true "errx - mimic errx(3) in shell"
 	errno=$1
 	shift
 	warnx "$@"

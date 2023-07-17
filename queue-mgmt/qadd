@@ -8,6 +8,9 @@ OPTIONS:
   -x, --if-not-queued
   -X, --if-not-running"
 
+qadd_no_dup=''
+qadd_no_duprun=''
+
 . qadd-common
 
 

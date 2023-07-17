@@ -6,9 +6,12 @@ OPTIONS:
   -q, --quiet
   -qq, --very-quiet
   -d, --queue-dir
-  -n, --suppress-output"
+  -s, --suppress-output
+  -n, --dry-run"
 
 # TODO add --fork option to preserve logs and exit code
+
+qrun_suppress_output=''
 
 . qadd-common
 
@@ -22,8 +25,8 @@ next_item_id=''
 for itemfile in $(find "$queue_dir" -maxdepth 1 -name '*.comm' -printf '%f\n' | sort -n -t '.')
 do
 	item_id=`basename "$itemfile" .comm`
-	
-	if [ -e "$queue_dir/$item_id.pid" ]
+	state=`qtask_state "$item_id"`
+	if [ "$state" = running ]
 	then
 		# it's a running task. don't start any more.
 		if [ ! $quiet ]
@@ -62,22 +65,27 @@ fi
 pwd=`cat "$queue_dir/$next_item_id.pwd"`
 umask=`cat "$queue_dir/$next_item_id.umask"`
 
-declare -a command=()
-exec {fd}<"$queue_dir/$next_item_id.comm"
-while read -r -d $'\0' -u $fd arg
-do
-	command+=("$arg")
-done
-exec {fd}>&-
+load_command_global "$queue_dir/$next_item_id.comm"
 
-# task's PID is gonna be ours at the end
-echo $$ > "$queue_dir/$next_item_id.pid"
-readlink /proc/self/ns/pid > "$queue_dir/$next_item_id.pidns"
+if [ ! $dryrun ]
+then
+	# task's PID is gonna be ours at the end
+	pidfile=$queue_dir/$next_item_id.pid
+	echo $$ > "$pidfile"
+	readlink /proc/self/ns/pid > "${pidfile}ns"
+fi
 if [ ! $very_quiet ]
 then
-	echo "qrun: starting task $next_item_id, pid: $$, command: ${command[*]}" >&2
+	echo "qrun:${dryrun:+ DRYRUN} starting task $next_item_id, pid: $$, command: ${command[*]}" >&2
 fi
-# release lock on queue_dir
+if [ $dryrun ]
+then
+	exit 0
+fi
+
+# lock our pidfile and release the lock on queue_dir
+exec {task_lock_fd}>>"$pidfile"
+flock --exclusive "$task_lock_fd"
 exec {lock_fd}>&-
 
 if [ $qrun_suppress_output ]

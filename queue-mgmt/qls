@@ -1,12 +1,16 @@
 #!/bin/bash
 
-usage_help_text="qls [<OPTIONS>]
+usage_help_text="qls [<OPTIONS>] [<ID>]
 List items in the queue.
 OPTIONS:
   -q, --quiet
   --multiline  (default)
-  --no-multiline
-  -d, --queue-dir"
+  -M, --no-multiline
+  -d, --queue-dir
+  -H, --no-header"
+
+qls_multiline=1
+qls_header=1
 
 . qadd-common
 
@@ -18,7 +22,59 @@ then
 	echo "qls: $queue_dir" >&2
 fi
 
-echo "ID	CREATED	STATE	COMMAND"
+if [ $# -gt 0 ]
+then
+	for item_id in "$@"
+	do
+		load_command_global "$queue_dir/$item_id.comm"
+		echo -n "Command:	"
+		declare -p command | cut -d= -f2-
+		
+		state=`qtask_state "$item_id"`
+		echo "State:	$state"
+		
+		pidfile=$queue_dir/$item_id.pid
+		if [ -e "$pidfile" ]
+		then
+			pid=`cat "$pidfile" 2>/dev/null`
+			echo -n "Pid:	$pid"
+			task_pidns=`cat "$queue_dir/$item_id.pidns" 2>/dev/null`
+			curr_pidns=`readlink /proc/self/ns/pid`
+			if [ "$task_pidns" != "$curr_pidns" ]; then echo " pidns=${task_pidns#*:}"; else echo; fi
+			
+			timestamp=`stat -c %Y "$pidfile"`
+			datetime=`date +"%F %T" -d @$timestamp`
+			echo "Started:	$datetime"
+			
+			if [ -d /proc/$pid ]
+			then
+				load_command_global "/proc/$pid/cmdline"
+				echo -n "Process:	"
+				declare -p command | cut -d= -f2-
+				process_status=`grep "^State:" /proc/$pid/status 2>/dev/null | sed -e 's/^[^:]\+:\s*//'`
+				echo "Process Status:	$process_status"
+			fi
+		fi
+		
+		endfile=$queue_dir/$item_id.end
+		if [ -e "$endfile" ]
+		then
+			timestamp=`stat -c %Y "$endfile"`
+			datetime=`date +"%F %T" -d @$timestamp`
+			echo "Ended:	$datetime"
+			
+			code=`cat "$endfile"`
+			echo "Returned:	$code"
+		fi
+	done
+	
+	exit
+fi
+
+if [ $qls_header ]
+then
+	echo "ID	CREATED	STATE	COMMAND"
+fi
 
 shopt -s nullglob
 
@@ -27,14 +83,15 @@ do
 	item_id=`basename "$itemfile" .comm`
 	timestamp=`stat -c %Y "$itemfile"`
 	datetime=`date +"%F %T" -d @$timestamp`
-	command=$(cat "$itemfile" | perl -pe 's/\x00/ /g')
+	load_command_global "$itemfile"
+	command_str=${command[*]}
 	state=`qtask_state "$item_id"`
 	
 	if [ $qls_multiline ]
 	then
-		command_shown=${command//$'\n'/$'\n\t\t\t'}
+		command_shown=${command_str//$'\n'/$'\n\t\t\t'}
 	else
-		command_shown=${command//\\/\\\\}
+		command_shown=${command_str//\\/\\\\}
 		command_shown=${command_shown//$'\n'/\\n}
 	fi
 	

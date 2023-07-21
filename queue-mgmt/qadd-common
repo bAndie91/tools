@@ -1,50 +1,5 @@
 #!/bin/bash
 
-qcleanup()
-{
-	# move completed tasks' files to ./completed directory.
-	# a task is considered completed if its PID (in its PID namespace)
-	# is no longer there.
-	
-	shopt -s nullglob
-	
-	local pidfile task_id task_pidns my_pidns task_running
-	
-	for pidfile in "$queue_dir"/*.pid
-	do
-		task_id=`basename "$pidfile" .pid`
-		
-		if [ ! -e "$queue_dir/$task_id".pidns ]
-		then
-			continue
-		fi
-		
-		task_pidns=`cat "$queue_dir/$task_id".pidns`
-		my_pidns=`readlink /proc/self/ns/pid`
-		
-		if [ "$task_pidns" != "$my_pidns" ]
-		then
-			continue
-		fi
-		
-		task_pid=`cat "$queue_dir/$task_id".pid`
-		task_running=1
-		
-		if [ ! -e /proc/$task_pid ]
-		then
-			task_running=''
-		fi
-		
-		if [ ! $task_running ]
-		then
-			#rm "$queue_dir/$task_id".pid
-			#rm "$queue_dir/$task_id".pidns
-			mkdir -p "$queue_dir/completed/"
-			mv --target-directory="$queue_dir/completed/" "$queue_dir/$task_id".*
-		fi
-	done
-}
-
 qtask_state()
 {
 	local state taskid
@@ -72,6 +27,9 @@ qtask_state()
 
 load_command_global()
 {
+	# load the NUL-delimited command and its arguments from the given file
+	# and put in bash global $command[@] array.
+	
 	local command_file=$1
 	local fd arg
 	declare -g -a command=()

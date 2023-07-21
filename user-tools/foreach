@@ -14,12 +14,19 @@ EOF
 
 FOREACH_MODE=command
 FOREACH_VERBOSE=''
+unset FOREACH_DELIM
 
 help()
 {
-	echo "Usage: foreach [--sh] [-v | --verbose] <COMMAND> [<ARGS> ...]"
-	echo "Run COMMAND for each stdin input line, adding the input line as last argument."
-	echo "If celled with --sh, COMMAND is run within the shell context and input line is in \$DATA."
+	echo "Usage: foreach [--sh] [-d | --delimiter DELIM] [-v | --verbose] <COMMAND> [<ARGS> ...]"
+	echo "  Take each input line from stdin as DATA, and run COMMAND while appending DATA to the end of arguments list."
+	echo "  Additionally parse DATA into fields and add them to the end of the arguments list too."
+	echo "  So if you have not specified any <ARGS> in the command line, DATA goes into argv[1], and the first field goes into argv[2], and so on."
+	echo "  If called with --sh, COMMAND is run within the shell context; input line goes to \$DATA, individual fields go to \${FIELD[@]}."
+	echo "  Set DELIM (by -d option) if you want to split DATA not by \$IFS but by other delimiter, eg \$'\\t'."
+	echo "EXAMPLES"
+	echo "  ls -l --time-style +%FT%T%z | foreach sh -c 'size: \$5, file: \$7'"
+	echo "  ls -l --time-style +%FT%T%z | foreach --sh 'size: \${FIELD[4]}, file: \${FIELD[6]}'"
 }
 
 while [ $# != 0 ]
@@ -31,6 +38,10 @@ do
 		;;
 	--sh)
 		FOREACH_MODE=sh
+		;;
+	-d|--delimiter)
+		shift
+		FOREACH_DELIM=$1
 		;;
 	-v|--verbose)
 		FOREACH_VERBOSE=1
@@ -62,9 +73,12 @@ do
 		echo "foreach: $DATA" >&2
 	fi
 	
+	declare -a FIELD=()
+	IFS=${FOREACH_DELIM+$FOREACH_DELIM}${FOREACH_DELIM-$IFS} read -r -a FIELD <<< "$DATA"
+	
 	if [ $FOREACH_MODE = command ]
 	then
-		command "${FOREACH_COMMAND[@]}" "$DATA"
+		command "${FOREACH_COMMAND[@]}" "$DATA" "${FIELD[@]}"
 	else
 		eval "${FOREACH_COMMAND[@]}"
 	fi

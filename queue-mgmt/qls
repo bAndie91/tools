@@ -1,7 +1,13 @@
 #!/bin/bash
 
 usage_help_text="qls [<OPTIONS>] [<ID>]
-List items in the queue.
+List items in the queue, or show a particular task's details if <ID> is given.
+Fields:
+  ID       task unique id
+  CREATED  when the task was added
+  STATE    queued, running, ended, gone
+  COMMAND  command to run, shown either in multiple lines (2nd and following lines prepended by TABs)
+           or in a single line with backslash and newline chars escaped by backslash
 OPTIONS:
   -q, --quiet
   --multiline  (default)
@@ -13,8 +19,6 @@ qls_multiline=1
 qls_header=1
 
 . qadd-common
-
-qcleanup
 
 
 if [ ! $quiet ]

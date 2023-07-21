@@ -7,7 +7,6 @@ OPTIONS:
 
 . qadd-common
 
-qcleanup
 
 shopt -s nullglob
 
@@ -33,9 +32,10 @@ do
 		exit -4
 	fi
 	
-	if [ -e "$queue_dir/$task_id.pid" ]
+	state=`qtask_state "$task_id"`
+	if [ "$state" != queued -a "$state" != ended ]
 	then
-		echo "qrm: task $task_id is running." >&2
+		echo "qrm: task $task_id is $state. not removing." >&2
 		exit -7
 	fi
 	

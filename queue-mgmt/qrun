@@ -15,7 +15,6 @@ qrun_suppress_output=''
 
 . qadd-common
 
-qcleanup
 
 
 shopt -s nullglob
@@ -98,7 +97,7 @@ set -e
 
 # now we are turning into a task
 . "$queue_dir/$next_item_id.env.bash"
-. "$queue_dir/$next_item_id.func.bash"
+if [ -e "$queue_dir/$next_item_id.func.bash" ]; then . "$queue_dir/$next_item_id.func.bash"; fi
 cd "$pwd"
 umask "$umask"
 exec -- "${command[@]}"

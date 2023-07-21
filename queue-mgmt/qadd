@@ -1,7 +1,10 @@
 #!/bin/bash
 
 usage_help_text="Usage: qadd [<OPTIONS>] [--] [<COMMAND> <ARGS>]
-Add new command to run to the end of the queue.
+Add new task to the end of the queue.
+A task is a command to run with its environment.
+Qadd tries to preserve as much from the caller's environment as it can,
+including environment variables, exported bash functions, working directoty, umask.
 OPTIONS:
   -q, --quiet
   -d, --queue-dir
@@ -16,8 +19,6 @@ qadd_no_duprun=''
 
 if [ "$qadd_no_dup" -o "$qadd_no_duprun" ]
 then
-	qcleanup
-	
 	declare -a this_command=("$@")
 	
 	shopt -s nullglob
@@ -81,7 +82,11 @@ do
 done > "$queue_item_file"
 
 declare -p -x > "$queue_dir/$item_id.env.bash"
-declare -p -x -f > "$queue_dir/$item_id.func.bash"
+func=`declare -p -x -f`
+if [ -n "$func" ]
+then
+	echo "$func" > "$queue_dir/$item_id.func.bash"
+fi
 
 
 echo -n $item_id > "$queue_dir/.seq"

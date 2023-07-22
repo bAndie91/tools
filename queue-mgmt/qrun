@@ -1,17 +1,17 @@
 #!/bin/bash
 
 usage_help_text="qrun [<OPTIONS>]
-Run next item in the queue.
+Run next task in the queue.
 OPTIONS:
   -q, --quiet
   -qq, --very-quiet
   -d, --queue-dir
   -s, --suppress-output
-  -n, --dry-run"
-
-# TODO add --fork option to preserve logs and exit code
+  -n, --dry-run
+  -E, --no-task-exit-code"
 
 qrun_suppress_output=''
+qrun_return_task_status=yes
 
 . qadd-common
 
@@ -25,6 +25,7 @@ for itemfile in $(find "$queue_dir" -maxdepth 1 -name '*.comm' -printf '%f\n' | 
 do
 	item_id=`basename "$itemfile" .comm`
 	state=`qtask_state "$item_id"`
+	
 	if [ "$state" = running ]
 	then
 		# it's a running task. don't start any more.
@@ -45,10 +46,13 @@ do
 		exit -6
 	fi
 	
-	if [ -z "$next_item_id" ]
+	if [ "$state" = queued ]
 	then
-		next_item_id=$item_id
-		break
+		if [ -z "$next_item_id" ]
+		then
+			next_item_id=$item_id
+			break
+		fi
 	fi
 done
 
@@ -61,44 +65,74 @@ then
 	exit -5
 fi
 
+
 pwd=`cat "$queue_dir/$next_item_id.pwd"`
 umask=`cat "$queue_dir/$next_item_id.umask"`
-
 load_command_global "$queue_dir/$next_item_id.comm"
 
-if [ ! $dryrun ]
-then
-	# task's PID is gonna be ours at the end
+
+{
+	if [ $dryrun ]
+	then
+		exit 0
+	fi
+	
 	pidfile=$queue_dir/$next_item_id.pid
 	echo $$ > "$pidfile"
 	readlink /proc/self/ns/pid > "${pidfile}ns"
-fi
+
+	set -e
+
+	# lock our pidfile and release the lock on queue_dir
+	exec {task_lock_fd}>>"$pidfile"
+	flock --exclusive "$task_lock_fd"
+	exec {lock_fd}>&-
+	
+	if [ $qrun_suppress_output ]
+	then
+		exec >/dev/null
+		exec 2>/dev/null
+	fi
+	
+	# now we are turning into a task
+	. "$queue_dir/$next_item_id.env.bash"
+	if [ -e "$queue_dir/$next_item_id.func.bash" ]; then . "$queue_dir/$next_item_id.func.bash"; fi
+	cd "$pwd"
+	umask "$umask"
+	exec -- "${command[@]}"
+	exit 127
+} &
+
+task_pid=$!
+
 if [ ! $very_quiet ]
 then
-	echo "qrun:${dryrun:+ DRYRUN} starting task $next_item_id, pid: $$, command: ${command[*]}" >&2
+	echo "qrun:${dryrun:+ DRYRUN} starting task $next_item_id, pid: $task_pid, command: ${command[*]}" >&2
 fi
+
+# release the lock on queue_dir, letting other queue management happen while running the task
+exec {lock_fd}>&-
+
+set +e
+wait $task_pid
+task_exit_code=$?
+set -e
+
 if [ $dryrun ]
 then
 	exit 0
 fi
 
-# lock our pidfile and release the lock on queue_dir
-exec {task_lock_fd}>>"$pidfile"
-flock --exclusive "$task_lock_fd"
-exec {lock_fd}>&-
+echo -n $task_exit_code > "$queue_dir/$next_item_id.end"
 
-if [ $qrun_suppress_output ]
+if [ ! $very_quiet ]
 then
-	exec >/dev/null
-	exec 2>/dev/null
+	echo "qrun: task $next_item_id returned $task_exit_code" >&2
 fi
 
-set -e
-
-# now we are turning into a task
-. "$queue_dir/$next_item_id.env.bash"
-if [ -e "$queue_dir/$next_item_id.func.bash" ]; then . "$queue_dir/$next_item_id.func.bash"; fi
-cd "$pwd"
-umask "$umask"
-exec -- "${command[@]}"
-exit 127
+if [ $qrun_return_task_status ]
+then
+	exit $task_exit_code
+else
+	exit 0
+fi

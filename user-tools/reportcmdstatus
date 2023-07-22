@@ -14,13 +14,19 @@ else
 	printf STDERR "command exited with status %d.\n", WEXITSTATUS($status);
 }
 
+exit 0;
+
 __END__
 
 =pod
 
 =head1 NAME
 
-reportcmdstatus - Textually shows how a given command finished
+reportcmdstatus - Textually show how the given command finished (exit status, signal)
+
+=head1 SYNOPSIS
+
+reportcmdstatus <COMMAND> [<ARGS>]
 
 =cut
 

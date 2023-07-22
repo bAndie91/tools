@@ -1,9 +1,11 @@
 #!/bin/bash
 
 usage_help_text="qrm [<OPTIONS>] <TASK-ID> [<TASK-ID> [...]]
-Remove specified item(s) from the queue.
+Remove specified queued or ended task(s) from the queue.
+May force removing gone tasks as well.
 OPTIONS:
-  -d, --queue-dir"
+  -d, --queue-dir
+  -f, --force"
 
 . qadd-common
 
@@ -32,8 +34,21 @@ do
 		exit -4
 	fi
 	
+	allow_rm=yes
 	state=`qtask_state "$task_id"`
 	if [ "$state" != queued -a "$state" != ended ]
+	then
+		allow_rm=''
+		if [ "$state" = gone ]
+		then
+			if [ $force ]
+			then
+				allow_rm=yes
+			fi
+		fi
+	fi
+	
+	if [ ! $allow_rm ]
 	then
 		echo "qrm: task $task_id is $state. not removing." >&2
 		exit -7

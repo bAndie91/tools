@@ -11,12 +11,12 @@ Fields:
 OPTIONS:
   -q, --quiet
   --multiline  (default)
-  -M, --no-multiline
+  -M, --no-multiline, --escape-command
   -d, --queue-dir
   -H, --no-header"
 
-qls_multiline=1
-qls_header=1
+qls_multiline=yes
+qls_header=yes
 
 . qadd-common
 

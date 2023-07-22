@@ -1,0 +1,47 @@
+#!/usr/bin/env perl
+
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
+@Columns = ();
+
+while($arg = shift @ARGV)
+{
+	if($arg =~ /^([^-].*)$/)
+	{
+		push @Columns, $1;
+	}
+	else
+	{
+		die "$0: unknown option: $arg\n";
+	}
+}
+
+process_header(scalar <STDIN>);
+
+# display selected headers
+unless($OptNoHeader)
+{
+	@Output = ();
+	for my $col (@Columns)
+	{
+		push @Output, $Header[$Header{$col}];
+	}
+	print join($IFS, @Output).$/;
+}
+
+
+# display selected data fields
+while($line = <STDIN>)
+{
+	chomp $line;
+	
+	@Input = split $IFS, $line;
+	@Output = ();
+	
+	for my $col (@Columns)
+	{
+		push @Output, $Input[$Header{$col}];
+	}
+	
+	print join($IFS, @Output).$/;
+}

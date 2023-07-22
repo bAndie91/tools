@@ -1,0 +1,47 @@
+#!/usr/bin/env perl
+
+use Data::Dumper;
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
+@Filter = ();
+
+while($arg = shift @ARGV)
+{
+	if($arg =~ /^([^-].*)=(.*)$/)
+	{
+		push @Filter, {'field'=>$1, 'value'=>$2,};
+	}
+	else
+	{
+		die "$0: unknown option: $arg\n";
+	}
+}
+
+process_header(scalar <STDIN>);
+
+unless($OptNoHeader)
+{
+	print $HeaderLine.$/;
+}
+
+while($line = <STDIN>)
+{
+	chomp $line;
+	
+	@Field = split $IFS, $line;
+	
+	$pass = 1;
+	
+	for my $filter (@Filter)
+	{
+		unless($Field[$Header{$filter->{'field'}}] eq $filter->{'value'})
+		{
+			$pass = 0;
+		}
+	}
+	
+	if($pass)
+	{
+		print $line.$/;
+	}
+}

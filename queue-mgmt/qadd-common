@@ -58,6 +58,9 @@ do
 		shift
 		queue_dir=$1
 		;;
+	-e|--show-exit-code)
+		qls_show_exit_status=yes
+		;;
 	-E|--no-task-exit-code)
 		qrun_return_task_status=''
 		;;

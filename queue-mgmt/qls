@@ -13,10 +13,12 @@ OPTIONS:
   --multiline  (default)
   -M, --no-multiline, --escape-command
   -d, --queue-dir
-  -H, --no-header"
+  -H, --no-header
+  -e, --show-exit-code"
 
 qls_multiline=yes
 qls_header=yes
+qls_show_exit_status=''
 
 . qadd-common
 
@@ -30,7 +32,8 @@ if [ $# -gt 0 ]
 then
 	for item_id in "$@"
 	do
-		load_command_global "$queue_dir/$item_id.comm"
+		itemfile=$queue_dir/$item_id.comm
+		load_command_global "$itemfile"
 		echo -n "Command:	"
 		declare -p command | cut -d= -f2-
 		
@@ -45,6 +48,10 @@ then
 			task_pidns=`cat "$queue_dir/$item_id.pidns" 2>/dev/null`
 			curr_pidns=`readlink /proc/self/ns/pid`
 			if [ "$task_pidns" != "$curr_pidns" ]; then echo " pidns=${task_pidns#*:}"; else echo; fi
+			
+			timestamp=`stat -c %Y "$itemfile"`
+			datetime=`date +"%F %T" -d @$timestamp`
+			echo "Added:	$datetime"
 			
 			timestamp=`stat -c %Y "$pidfile"`
 			datetime=`date +"%F %T" -d @$timestamp`
@@ -90,6 +97,17 @@ do
 	load_command_global "$itemfile"
 	command_str=${command[*]}
 	state=`qtask_state "$item_id"`
+	state_shown=$state
+	
+	if [ $qls_show_exit_status ]
+	then
+		if [ "$state" = ended ]
+		then
+			code=`cat "$queue_dir/$item_id.end"`
+			code=${code:-NA}
+			state_shown="$state($code)"
+		fi
+	fi
 	
 	if [ $qls_multiline ]
 	then
@@ -99,5 +117,5 @@ do
 		command_shown=${command_shown//$'\n'/\\n}
 	fi
 	
-	echo "$item_id	$datetime	$state	$command_shown"
+	echo "$item_id	$datetime	$state_shown	$command_shown"
 done

@@ -70,7 +70,6 @@ pwd=`cat "$queue_dir/$next_item_id.pwd"`
 umask=`cat "$queue_dir/$next_item_id.umask"`
 load_command_global "$queue_dir/$next_item_id.comm"
 
-
 {
 	if [ $dryrun ]
 	then
@@ -78,11 +77,11 @@ load_command_global "$queue_dir/$next_item_id.comm"
 	fi
 	
 	pidfile=$queue_dir/$next_item_id.pid
-	echo $$ > "$pidfile"
+	echo $BASHPID > "$pidfile"
 	readlink /proc/self/ns/pid > "${pidfile}ns"
-
+	
 	set -e
-
+	
 	# lock our pidfile and release the lock on queue_dir
 	exec {task_lock_fd}>>"$pidfile"
 	flock --exclusive "$task_lock_fd"
@@ -99,7 +98,9 @@ load_command_global "$queue_dir/$next_item_id.comm"
 	if [ -e "$queue_dir/$next_item_id.func.bash" ]; then . "$queue_dir/$next_item_id.func.bash"; fi
 	cd "$pwd"
 	umask "$umask"
-	exec -- "${command[@]}"
+	
+	# setsid prevents SIGINT to sent to us when the user types ctrl-c on the main foreground process
+	exec -- setsid "${command[@]}"
 	exit 127
 } &
 
@@ -113,10 +114,29 @@ fi
 # release the lock on queue_dir, letting other queue management happen while running the task
 exec {lock_fd}>&-
 
-set +e
-wait $task_pid
-task_exit_code=$?
-set -e
+signal_handler()
+{
+	interrupted=yes
+}
+
+trap signal_handler INT
+
+while true
+do
+	interrupted=''
+	set +e
+	wait $task_pid
+	task_exit_code=$?
+	set -e
+	
+	if [ $interrupted ]
+	then
+		task_exit_code=''
+		kill -s INT $task_pid || true
+	else
+		break
+	fi
+done
 
 if [ $dryrun ]
 then

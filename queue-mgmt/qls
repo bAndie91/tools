@@ -4,8 +4,8 @@ usage_help_text="qls [<OPTIONS>] [<ID>]
 List items in the queue, or show a particular task's details if <ID> is given.
 Fields:
   ID       task unique id
-  CREATED  when the task was added
-  STATE    queued, running, ended, gone
+  ADDED    when the task was added
+  STATE    queued, running, ended, ended(<CODE>), gone
   COMMAND  command to run, shown either in multiple lines (2nd and following lines prepended by TABs)
            or in a single line with backslash and newline chars escaped by backslash
 OPTIONS:
@@ -84,7 +84,7 @@ fi
 
 if [ $qls_header ]
 then
-	echo "ID	CREATED	STATE	COMMAND"
+	echo "ID	ADDED	STATE	COMMAND"
 fi
 
 shopt -s nullglob

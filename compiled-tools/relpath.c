@@ -6,6 +6,23 @@
 #define VERSION 0.5
 #define MYNAME "relpath"
 
+void help(FILE* fd)
+{
+	fprintf(fd, "%s",
+	"Usage: " MYNAME " [-n] <DIR-1> <DIR-2>\n"
+	"  Print a relative path from <DIR-2> to <DIR-1>.\n"
+	"  Useful for creating relative symlinks.\n"
+	"Example:\n"
+	"  This command creates <DIR-2>/symlink.txt pointing to <DIR-1>/link_target.txt:\n"
+	"  ln -s $(" MYNAME " <DIR-1> <DIR-2>)link_target.txt <DIR-2>/symlink.txt\n"
+	"Options:\n"
+	"  -n  do not print newline\n"
+	"Exit codes:\n"
+	"  0   success\n"
+	"  1   a directory does not exist\n"
+	"  2   parameter error\n");
+}
+
 int main(int argc, char *argv[]) {
 
 	unsigned int i = 1;
@@ -23,18 +40,8 @@ int main(int argc, char *argv[]) {
 			newline = 0;
 		}
 		else if(strcmp(argv[i], "--help")==0) {
-			printf("%s",
-				"Usage: " MYNAME " [-n] <DIR-1> <DIR-2>\n"
-				"Print a relative path from <DIR-2> to <DIR-1>. Useful for making relative symlinks.\n"
-				"This command creates <DIR-2>/symlink.txt pointing to <DIR-1>/link_target.txt:\n"
-				"  ln -s $(" MYNAME " <DIR-1> <DIR-2>)link_target.txt <DIR-2>/symlink.txt\n"
-				"Options:\n"
-				"  -n  do not print newline\n"
-				"Exit codes:\n"
-				"  0   success\n"
-				"  1   a directory does not exist\n"
-				"  2   parameter error\n");
-		      exit(0);
+			help(stdout);
+			exit(0);
 		}
 		i++;
 	}
@@ -46,6 +53,7 @@ int main(int argc, char *argv[]) {
 	}
 	else {
 		fprintf(stderr, MYNAME ": Parameter error\n");
+		help(stderr);
 		exit(2);
 	}
 

@@ -33,6 +33,12 @@ TOOLS_TARGET_FILES = $(addprefix $(TOOLS_TARGET_DIR)/,$(TOOLS))
 
 
 
+default:
+	@echo You may be interested in: install-all, install-tools, list-tools, manpages
+	@false
+.PHONY: default
+
+
 $(TOOLS_TARGET_DIR)/msg: /etc/bash_completion.d/msg
 $(TOOLS_TARGET_DIR)/perl-repl: /usr/libexec/perlshell
 $(TOOLS_TARGET_DIR)/rsync-semichroot: /usr/share/doc/tool/rsync-semichroot.txt
@@ -81,9 +87,11 @@ install-all: \
   /usr/lib/tool/bash-utils \
   install-tools \
   install-manpages
+.PHONY: install-all
 
 
 install-tools: $(TOOLS_TARGET_DIR) $(TOOLS_TARGET_FILES)
+.PHONY: install-tools
 
 $(TOOLS_TARGET_FILES): | $(TOOLS_TARGET_DIR)
 
@@ -94,6 +102,7 @@ $(TOOLS_TARGET_FILES): $(TOOLS_TARGET_DIR)/%: %
 
 list-tools:
 	@echo $(TOOLS) | tr " " "\n" | sort
+.PHONY: list-tools
 
 
 
@@ -105,6 +114,7 @@ MANPAGES_SUBDIR = $(MANPAGES_DIR)/man$(MANPAGE_SECTION)
 MANPAGE_FILES = $(foreach toolname,$(TOOLS),$(MANPAGES_SUBDIR)/$(toolname)$(MANPAGE_FILE_SUFFIX))
 
 manpages: $(MANPAGE_FILES)
+.PHONY: manpages
 
 $(MANPAGE_FILES): | $(MANPAGES_SUBDIR)
 
@@ -122,3 +132,4 @@ $(MANPAGE_FILES): $(MANPAGES_SUBDIR)/%$(MANPAGE_FILE_SUFFIX): %
 
 install-manpages: manpages
 	$(MAKE) -C $(REPO_ROOT)/doc/man install-manpages
+.PHONY: install-manpages

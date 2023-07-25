@@ -15,17 +15,27 @@ EOF
 FOREACH_MODE=command
 FOREACH_VERBOSE=''
 unset FOREACH_DELIM
+FOREACH_PASS_DATA=maybe
+FOREACH_PASS_FIELDS=no
 
 help()
 {
-	echo "Usage: foreach [--sh] [-d | --delimiter DELIM] [-v | --verbose] <COMMAND> [<ARGS> ...]"
-	echo "  Take each input line from stdin as DATA, and run COMMAND while appending DATA to the end of arguments list."
-	echo "  Additionally parse DATA into fields and add them to the end of the arguments list too."
-	echo "  So if you have not specified any <ARGS> in the command line, DATA goes into argv[1], and the first field goes into argv[2], and so on."
-	echo "  If called with --sh, COMMAND is run within the shell context; input line goes to \$DATA, individual fields go to \${FIELD[@]}."
+	echo "Usage: foreach [OPTIONS] <COMMAND> [<ARGS> ...]"
+	echo "OPTIONS"
+	echo "  --sh"
+	echo "  -l, --data"
+	echo "  -f, --fields"
+	echo "  -d, --delimiter DELIM"
+	echo "  -v, --verbose"
+	echo "DESCRIPTION"
+	echo "  Take each input line from stdin as DATA, and run COMMAND with DATA appended to the end of <ARGS> as a single argument."
+	echo "  Additionally parse DATA into fields and add them to the end of <ARGS> each if --fields given."
+	echo "  So if you have not specified any <ARGS> in the command line and types both --data and --fields, then"
+	echo "  DATA goes into argv[1], and the first field goes into argv[2], second to argv[3] and so on."
+	echo "  If called with --sh, COMMAND is run within a shell context; input line goes to \$DATA, individual fields go to \${FIELD[@]}."
 	echo "  Set DELIM (by -d option) if you want to split DATA not by \$IFS but by other delimiter, eg \$'\\t'."
 	echo "EXAMPLES"
-	echo "  ls -l --time-style +%FT%T%z | foreach sh -c 'size: \$5, file: \$7'"
+	echo "  ls -l --time-style +%FT%T%z | foreach --data --fields sh -c 'size: \$5, file: \$7'"
 	echo "  ls -l --time-style +%FT%T%z | foreach --sh 'size: \${FIELD[4]}, file: \${FIELD[6]}'"
 }
 
@@ -38,6 +48,12 @@ do
 		;;
 	--sh)
 		FOREACH_MODE=sh
+		;;
+	-l|--data)
+		FOREACH_PASS_DATA=yes
+		;;
+	-f|--fields)
+		FOREACH_PASS_FIELDS=yes
 		;;
 	-d|--delimiter)
 		shift
@@ -64,6 +80,15 @@ then
 	exit -1
 fi
 
+if [ $FOREACH_PASS_FIELDS = yes -a $FOREACH_PASS_DATA != yes ]
+then
+	FOREACH_PASS_DATA=no
+fi
+if [ $FOREACH_PASS_FIELDS != yes ]
+then
+	FOREACH_PASS_DATA=yes
+fi
+
 declare -a FOREACH_COMMAND=("$@")
 
 while read -r DATA
@@ -76,9 +101,12 @@ do
 	declare -a FIELD=()
 	IFS=${FOREACH_DELIM+$FOREACH_DELIM}${FOREACH_DELIM-$IFS} read -r -a FIELD <<< "$DATA"
 	
-	if [ $FOREACH_MODE = command ]
+	if [ "$FOREACH_MODE" = command ]
 	then
-		command "${FOREACH_COMMAND[@]}" "$DATA" "${FIELD[@]}"
+		declare -a cmd_extra_args=()
+		if [ "$FOREACH_PASS_DATA" = yes ]; then cmd_extra_args+=("$DATA"); fi
+		if [ "$FOREACH_PASS_FIELDS" = yes ]; then cmd_extra_args+=("${FIELD[@]}"); fi
+		command "${FOREACH_COMMAND[@]}" "${cmd_extra_args[@]}"
 	else
 		eval "${FOREACH_COMMAND[@]}"
 	fi

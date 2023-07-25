@@ -1,6 +1,5 @@
 #!/usr/bin/env perl
 
-use Data::Dumper;
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 @Filter = ();
@@ -28,7 +27,7 @@ while($line = <STDIN>)
 {
 	chomp $line;
 	
-	@Field = split $IFS, $line;
+	@Field = split $FS, $line;
 	
 	$pass = 1;
 	

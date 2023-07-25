@@ -1,0 +1,65 @@
+#!/usr/bin/env perl
+
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
+$recursive_mode = 0;
+$first_line = <STDIN>;
+if($first_line !~ /^\S+ \d+$/)
+{
+	$recursive_mode = 1;
+	$first_line =~ /^(.+):$/;
+	$current_directory = $1;
+	# skip the "total 123" line
+	<STDIN>;
+}
+
+@Headers = qw/MODE LINKS OWNER GROUP SIZE MAJOR MINOR DATETIME NAME SYMLINKTARGET/;
+push @Headers, 'DIRECTORY' if $recursive_mode;
+
+print join($FS, @Headers).$/;
+
+$mode_links_owner_group = qr/(\S+)\s+(\S+)\s+(\S+)\s+(\S+)/;
+
+# supported --time-style: iso, long-iso, full-iso
+# unsupported --time-style: locale
+$datetime = qr/((?:\d\d\d\d-)?\d\d-\d\d \d\d:\d\d(?::\d\d(?:\.\d+)? [\d+-]+)?)/;
+
+sub parse_error
+{
+	die "can not parse: $_[0]\n";
+}
+
+while(<STDIN>)
+{
+	my @Fields;
+	
+	if($recursive_mode)
+	{
+		if(/^$/)
+		{
+			$_ = <STDIN>;
+			/^(.+):$/ or die "a directory introduction expected, not this: $_\n";
+			$current_directory = $1;
+			# skip the next "total 123" line
+			<STDIN>;
+			next;
+		}
+	}
+	
+	if(/^[cb]/)
+	{
+		@Fields = /^$mode_links_owner_group\s+()([^,]+),\s*(\S+)\s+$datetime\s+(.+)()$/ or parse_error $_;
+	}
+	elsif(/^l/)
+	{
+		@Fields = /^$mode_links_owner_group\s+(\S+)()()\s+$datetime\s+(.+?) -> (.+)$/ or parse_error $_;
+	}
+	else
+	{
+		@Fields = /^$mode_links_owner_group\s+(\S+)()()\s+$datetime\s+(.+)()$/ or parse_error $_;
+	}
+	
+	push @Fields, $current_directory if $recursive_mode;
+	
+	print join($FS, @Fields).$/;
+}

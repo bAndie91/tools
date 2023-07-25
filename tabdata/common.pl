@@ -1,7 +1,7 @@
 
 $0 =~ s/^.*\/([^\/]+)$/$1/;
 
-$IFS = "\t";
+$FS = "\t";
 @Header = ();
 %Header = ();
 $OptNoHeader = 0;
@@ -16,7 +16,7 @@ sub process_header
 {
 	$HeaderLine = @_[0];
 	chomp $HeaderLine;
-	@Header = split $IFS, $HeaderLine;
+	@Header = split $FS, $HeaderLine;
 	%Header = ();
 	for my $idx (0..$#Header)
 	{

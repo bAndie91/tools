@@ -1,0 +1,18 @@
+#!/usr/bin/env perl
+
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
+$header = <STDIN>;
+chomp $header;
+$header =~ s/\s+/$FS/g;
+process_header($header);
+$num_of_fields = scalar @Header;
+
+print $header.$/;
+
+while(my $line = <STDIN>)
+{
+	chomp $line;
+	my @Fields = split /\s+/, $line, $num_of_fields;
+	print join($FS, @Fields).$/;
+}

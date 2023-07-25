@@ -26,7 +26,7 @@ unless($OptNoHeader)
 	{
 		push @Output, $Header[$Header{$col}];
 	}
-	print join($IFS, @Output).$/;
+	print join($FS, @Output).$/;
 }
 
 
@@ -35,7 +35,7 @@ while($line = <STDIN>)
 {
 	chomp $line;
 	
-	@Input = split $IFS, $line;
+	@Input = split $FS, $line;
 	@Output = ();
 	
 	for my $col (@Columns)
@@ -43,5 +43,5 @@ while($line = <STDIN>)
 		push @Output, $Input[$Header{$col}];
 	}
 	
-	print join($IFS, @Output).$/;
+	print join($FS, @Output).$/;
 }

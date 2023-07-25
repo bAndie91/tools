@@ -13,7 +13,7 @@ if($first_line !~ /^\S+ \d+$/)
 	<STDIN>;
 }
 
-@Headers = qw/MODE LINKS OWNER GROUP SIZE MAJOR MINOR DATETIME NAME SYMLINKTARGET/;
+@Headers = qw/INODE MODE LINKS OWNER GROUP SIZE MAJOR MINOR DATETIME NAME SYMLINKTARGET/;
 push @Headers, 'DIRECTORY' if $recursive_mode;
 
 print join($FS, @Headers).$/;
@@ -32,6 +32,7 @@ sub parse_error
 while(<STDIN>)
 {
 	my @Fields;
+	my $inode;
 	
 	if($recursive_mode)
 	{
@@ -44,6 +45,11 @@ while(<STDIN>)
 			<STDIN>;
 			next;
 		}
+	}
+	
+	if(s/^(\d+)\s+//)
+	{
+		$inode = $1;
 	}
 	
 	if(/^[cb]/)
@@ -59,6 +65,7 @@ while(<STDIN>)
 		@Fields = /^$mode_links_owner_group\s+(\S+)()()\s+$datetime\s+(.+)()$/ or parse_error $_;
 	}
 	
+	unshift @Fields, $inode;
 	push @Fields, $current_directory if $recursive_mode;
 	
 	print join($FS, @Fields).$/;

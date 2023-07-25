@@ -35,8 +35,8 @@ help()
 	echo "  If called with --sh, COMMAND is run within a shell context; input line goes to \$DATA, individual fields go to \${FIELD[@]}."
 	echo "  Set DELIM (by -d option) if you want to split DATA not by \$IFS but by other delimiter, eg \$'\\t'."
 	echo "EXAMPLES"
-	echo "  ls -l --time-style +%FT%T%z | foreach --data --fields sh -c 'size: \$5, file: \$7'"
-	echo "  ls -l --time-style +%FT%T%z | foreach --sh 'size: \${FIELD[4]}, file: \${FIELD[6]}'"
+	echo "  ls -l --time-style +%FT%T%z | foreach --data --fields sh -c 'echo size: \$5, file: \$7'"
+	echo "  ls -l --time-style +%FT%T%z | foreach --sh 'echo size: \${FIELD[4]}, file: \${FIELD[6]}'"
 }
 
 while [ $# != 0 ]

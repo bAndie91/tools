@@ -6,9 +6,11 @@ do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 while($arg = shift @ARGV)
 {
-	if($arg =~ /^([^-].*)=(.*)$/)
+	if($arg =~ /^([^-].*)(==|!=|<=|>=|<|>|=~|!~| (?:eq|ne|gt|lt) )(.*)$/)
 	{
-		push @Filter, {'field'=>$1, 'value'=>$2,};
+		my ($field, $operator, $value) = ($1, $2, $3);
+		$operator =~ s/ //g;
+		push @Filter, {'field'=>$field, 'operator'=>$operator, 'value'=>$value,};
 	}
 	else
 	{
@@ -33,9 +35,16 @@ while($line = <STDIN>)
 	
 	for my $filter (@Filter)
 	{
-		unless($Field[$Header{$filter->{'field'}}] eq $filter->{'value'})
+		my $left_data = $Field[$Header{$filter->{'field'}}];
+		my $right_data = $filter->{'value'};
+		my $operator = $filter->{'operator'};
+		my $left_code = "\$left_data";
+		my $right_code = "\$right_data";
+		$right_code = "/$right_code/" if $operator ~~ ['=~', '!~'];
+		unless(eval "$left_code $operator $right_code")
 		{
 			$pass = 0;
+			last;
 		}
 	}
 	

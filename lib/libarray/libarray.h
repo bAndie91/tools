@@ -18,7 +18,10 @@ enum array_loop_control {
 typedef enum array_loop_control array_loop_control;
 
 void array_init(Array**, size_t);
+void array_setitem(Array**, size_t, char*);
 void array_append(Array**, char*);
+void array_insert(Array**, size_t index, char*);
+#define array_prepend(array, item) array_insert(array, 0, item)
 char* array_getitem(Array**, size_t);
 char** array_getarray(Array**);
 void array_delete(Array**, size_t, size_t);

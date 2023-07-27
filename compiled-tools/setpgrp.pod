@@ -1,0 +1,8 @@
+=pod
+
+=head1 NAME
+
+setpgrp - CLI frontend for setpgrp(2) - run a program in a new process group
+
+=cut
+

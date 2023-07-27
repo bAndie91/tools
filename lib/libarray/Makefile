@@ -1,21 +1,30 @@
 
 LIBDIR = /usr/lib/tool
+OLDINCLUDEDIR = /usr/include/tool
 
-override CFLAGS += -I../libmallocab -L../libmallocab -lmallocab -Wl,-rpath=$(LIBDIR)
+override CFLAGS += -lmallocab -Wl,-rpath=$(LIBDIR)
 
 
 libarray.so: libarray.c libarray.h
 	$(CC) $(CFLAGS) -o $@ -shared libarray.c
 
 $(LIBDIR)/libarray.so: libarray.so
-	install $(notdir $@) $(LIBDIR)/
+	install -m 0644 $(notdir $@) $(LIBDIR)/
 	@echo remove $@ >> uninstall.sh
 
-install: $(LIBDIR)/libarray.so
+$(OLDINCLUDEDIR)/libarray.h: libarray.h | $(OLDINCLUDEDIR)
+	install -m 0644 $(notdir $@) $(OLDINCLUDEDIR)/
+	@echo remove $@ >> uninstall.sh
+
+$(OLDINCLUDEDIR):
+	[ -d $(OLDINCLUDEDIR) ] || mkdir $(OLDINCLUDEDIR)
+	@echo remove $@ >> uninstall.sh
+
+install: $(LIBDIR)/libarray.so $(OLDINCLUDEDIR)/libarray.h
 .PHONY: install
 
 clean:
-	@rm libarray.so
+	@rm libarray.so t_libarray
 .PHONY: clean
 
 t_libarray: t_libarray.c

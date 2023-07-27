@@ -4,7 +4,7 @@
 #include <errno.h>
 #include <err.h>
 #include <string.h>
-#include <libarray.h>
+#include <tool/libarray.h>
 
 struct dedupdata {
 	size_t envnamelen;
@@ -13,7 +13,7 @@ struct dedupdata {
 };
 
 array_loop_control
-remove_duplicate(size_t index, char* item, struct dedupdata * dedupdata)
+remove_duplicate(array_index_t index, char* item, struct dedupdata * dedupdata)
 {
 	if(strchr(item, '=')-item == dedupdata->envnamelen && strncmp(item, dedupdata->env, dedupdata->envnamelen) == 0)
 	{
@@ -25,7 +25,7 @@ remove_duplicate(size_t index, char* item, struct dedupdata * dedupdata)
 
 #ifdef DEBUG
 array_loop_control
-pprint(size_t index, char * item, void * x)
+pprint(array_index_t index, char * item, void * x)
 {
 	warnx("index %d item %s", index, item);
 	return ARRAY_LOOP_CONTINUE;
@@ -116,21 +116,21 @@ int main(int argc, char** argv, char** current_env)
 					dedupdata.envnamelen = envsize;
 					dedupdata.env = env;
 					dedupdata.envarray = &envarray;
-					array_foreach(&envarray, (array_loop_control(*)(size_t, char*, void*))remove_duplicate, &dedupdata);
+					array_foreach(&envarray, 0, (array_loop_control(*)(array_index_t, char*, void*))remove_duplicate, &dedupdata);
 				}
 				else
 				{
 					envval++;  // envval point past to the '=' equal sign
 					
 					#ifdef DEBUG
-					array_foreach(&envarray, pprint, NULL);
+					array_foreach(&envarray, 0, pprint, NULL);
 					#endif
 					
 					// deduplicate
 					dedupdata.envnamelen = envval - env - 1;
 					dedupdata.env = env;
 					dedupdata.envarray = &envarray;
-					array_foreach(&envarray, (array_loop_control(*)(size_t, char*, void*))remove_duplicate, &dedupdata);
+					array_foreach(&envarray, 0, (array_loop_control(*)(array_index_t, char*, void*))remove_duplicate, &dedupdata);
 					
 					// add to the env list
 					array_append(&envarray, env);
@@ -149,7 +149,7 @@ int main(int argc, char** argv, char** current_env)
 		}
 		
 		#ifdef DEBUG
-		array_foreach(&envarray, pprint, NULL);
+		array_foreach(&envarray, 0, pprint, NULL);
 		#endif
 		
 		execvpe(argv[argidx+1], &argv[argidx+1], array_getarray(&envarray));

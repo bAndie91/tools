@@ -1,10 +1,11 @@
 
 #include <libmallocab.h>
+
 #include "libarray.h"
 
 #define array_p (*array)
 
-void array_init(Array** array, size_t initial_size)
+void array_init(Array** array, array_index_t initial_size)
 {
 	array_p = mallocab(sizeof(Array));
 	array_p->size = initial_size;
@@ -12,12 +13,12 @@ void array_init(Array** array, size_t initial_size)
 	array_p->length = 0;
 }
 
-static void _array_setitem(Array** array, size_t index, char* item)
+static void _array_setitem(Array** array, array_index_t index, char* item)
 {
 	array_p->item[index] = item == NULL ? NULL : strdupab(item);
 }
 
-void array_setitem(Array** array, size_t index, char* item)
+void array_setitem(Array** array, array_index_t index, char* item)
 {
 	if(index < array_p->length) _array_setitem(array, index, item);
 }
@@ -34,7 +35,7 @@ void array_append(Array** array, char * item)
 	array_p->length ++;
 }
 
-void array_insert(Array** array, size_t index, char * item)
+void array_insert(Array** array, array_index_t index, char * item)
 {
 	if(index >= array_p->length)
 	{
@@ -42,7 +43,7 @@ void array_insert(Array** array, size_t index, char * item)
 		return;
 	}
 	
-	size_t cidx;
+	array_index_t cidx;
 	array_append(array, NULL);
 	for(cidx = array_p->length - 1; cidx > index; cidx--)
 	{
@@ -51,7 +52,7 @@ void array_insert(Array** array, size_t index, char * item)
 	_array_setitem(array, index, item);
 }
 
-char* array_getitem(Array** array, size_t index)
+char* array_getitem(Array** array, array_index_t index)
 {
 	if(index < array_p->length) return array_p->item[index];
 	else return NULL;
@@ -62,10 +63,15 @@ char** array_getarray(Array** array)
 	return array_p->item;
 }
 
-/* remove number of 'gap' items starting from 'index' */
-void array_delete(Array** array, size_t index, size_t gap)
+array_length_t array_length(Array** array)
 {
-	size_t cidx;
+	return array_p->length;
+}
+
+/* remove number of 'gap' items starting from 'index' */
+void array_delete(Array** array, array_index_t index, array_length_t gap)
+{
+	array_index_t cidx;
 	for(cidx = index; cidx < array_p->length - gap; cidx++)
 	{
 		if(cidx - index < gap) free(array_p->item[cidx]);
@@ -74,26 +80,37 @@ void array_delete(Array** array, size_t index, size_t gap)
 	array_p->length -= gap;
 }
 
-/* remove 1 item from 'index' and returning with it */
-/* the caller must free it */
-char* array_pop(Array** array, size_t index)
+/* remove 1 item from 'index' and returning it */
+/* the caller should free it */
+char* array_pick(Array** array, array_index_t index)
 {
-	size_t cidx;
+	array_index_t cidx;
 	char * item;
 	item = NULL;
-	if(index < array_p->length) item = array_p->item[index];
-	for(cidx = index; cidx < array_p->length - 1; cidx++)
+	
+	if(index < array_p->length)
 	{
-		array_p->item[cidx] = array_p->item[cidx + 1];
+		item = array_p->item[index];
+		
+		for(cidx = index; cidx < array_p->length - 1; cidx++)
+		{
+			array_p->item[cidx] = array_p->item[cidx + 1];
+		}
+		
+		array_p->length -= 1;
 	}
-	array_p->length -= 1;
 	return item;
+}
+
+char* array_pop(Array** array)
+{
+	return array_pick(array, array_p->length == 0 ? 0 : array_p->length - 1);
 }
 
 /* remove an item which matches to the given 'item' */
 void array_remove(Array** array, const char * item)
 {
-	size_t cidx;
+	array_index_t cidx;
 	for(cidx = 0; cidx < array_p->length; cidx++)
 	{
 		if(strcmp(array_p->item[cidx], item)==0)
@@ -104,11 +121,10 @@ void array_remove(Array** array, const char * item)
 	}
 }
 
-void array_foreach(Array** array, array_loop_control (*callback) (size_t, char*, void*), void * cb_data)
+void array_foreach(Array** array, array_index_t cidx, array_loop_control (*callback) (array_index_t, char*, void*), void * cb_data)
 {
-	size_t cidx;
 	array_loop_control c;
-	for(cidx = 0; cidx < array_p->length; cidx++)
+	for(; cidx < array_p->length; cidx++)
 	{
 		c = callback(cidx, array_p->item[cidx], cb_data);
 		if(c == ARRAY_LOOP_STOP) break;
@@ -117,7 +133,7 @@ void array_foreach(Array** array, array_loop_control (*callback) (size_t, char*,
 
 void array_empty(Array** array)
 {
-	size_t cidx;
+	array_index_t cidx;
 	for(cidx = 0; cidx < array_p->length; cidx++)
 	{
 		free(array_p->item[cidx]);
@@ -128,5 +144,8 @@ void array_free(Array** array)
 {
 	array_empty(array);
 	free(array_p->item);
+	array_p->item = NULL;
 	free(array_p);
+	array_p = NULL;
 }
+

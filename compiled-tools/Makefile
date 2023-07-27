@@ -1,6 +1,7 @@
 
 TARGET_DIR = /usr/tool
 LIBDIR = /usr/lib/tool
+OLDINCLUDEDIR = /usr/include/tool
 
 TOOLS = grandparentexe relpath mksock remove syncfs utmp usbreset \
   chmod-cheap setgroups kill-rogue xidle logbtmp lastcsv wall \
@@ -59,7 +60,7 @@ lastbcsv: lastcsv
 
 xidle: override CFLAGS += -lX11 -lXss
 
-loadenv: override CFLAGS += -I../lib/libarray -L../lib/libarray -larray -Wl,-rpath=$(LIBDIR)
+loadenv: override CFLAGS += -I$(OLDINCLUDEDIR) -L$(LIBDIR) -larray -Wl,-rpath=$(LIBDIR)
 
 
 

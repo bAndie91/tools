@@ -2,7 +2,8 @@
 TARGET_DIR = /usr/tool
 
 TOOLS = grandparentexe relpath mksock remove syncfs utmp usbreset \
-  chmod-cheap setgroups kill-rogue xidle logbtmp lastcsv wall
+  chmod-cheap setgroups kill-rogue xidle logbtmp lastcsv wall \
+  loadenv setpgrp
 
 SPECIAL_INSTALL_TOOLS = grandparentexe netbulk lastbcsv
 
@@ -50,12 +51,14 @@ $(TARGET_DIR)/kill-rogue: /usr/share/man/man1/kill-rogue.1.gz
 
 
 netbulk: setgroups.c
-	$(CC) -DONLY_ALLOWED_GID=$(shell getent group netbulk | cut -d: -f3) setgroups.c -o $@
+	$(CC) $(CFLAGS) -DONLY_ALLOWED_GID=$(shell getent group netbulk | cut -d: -f3) setgroups.c -o $@
 
 lastbcsv: lastcsv
 	ln -sfT lastcsv $@
 
-xidle: CFLAGS += -lX11 -lXss
+xidle: override CFLAGS += -lX11 -lXss
+
+loadenv: override CFLAGS += -I../lib/libarray -L../lib/libarray -larray
 
 
 

@@ -5,20 +5,16 @@
 typedef size_t array_index_t;
 typedef size_t array_length_t;
 
-struct array {
+typedef struct {
   char ** item;
   array_index_t size;  // size allocated for 'item'
   array_length_t length;  // how many items in 'item'
-};
+} Array;
 
-typedef struct array Array;
-
-enum array_loop_control {
+typedef enum {
   ARRAY_LOOP_CONTINUE = 0,
   ARRAY_LOOP_STOP = 1,
-};
-
-typedef enum array_loop_control array_loop_control;
+} array_loop_control;
 
 void array_init(Array**, array_index_t);
 void array_setitem(Array**, array_index_t, char*);

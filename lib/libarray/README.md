@@ -4,8 +4,8 @@ This is a C library (link your programm to libarray.so) providing primitive arra
 
 - code namespace: `array_*`, `ARRAY_*`
 - types
-  - `array_loop_control` (same as `enum array_loop_control`)
-  - `Array` (same as `struct array`)
+  - `array_loop_control`
+  - `Array`
 
 ## Usage
 

@@ -1,0 +1,127 @@
+#!/bin/bash
+
+true <<EOF
+=pod
+
+=head1 NAME
+
+symlinks-analyze - Discover where symlinks ultimately point at
+
+=cut
+
+EOF
+
+
+set -e
+. /usr/lib/tool/bash-utils
+shopt -s extglob
+unset CDPATH
+set +e
+
+notrailingslash()
+{
+	local x=$1
+	echo ${x/%+(\/)/}
+}
+
+show_abs_path()
+{
+	local path=$1 logical_path=$2
+	if [ $show_abs_path ]
+	then
+		if [ "${path:0:1}" = / ]
+		then
+			return
+		fi
+		echo -n "[$logical_path]"
+	fi
+}
+
+logical_path()
+{
+	local path=$1
+	local dir=$(dirname "$path")
+	local basename=$(basename "$path")
+	set -e
+	(
+		cd "$dir"
+		echo "$(pwd)/$basename"
+	)
+	set +e
+}
+
+
+show_abs_path=''
+skip_non_symlinks=''
+
+
+while [ $# -gt 0 ]
+do
+	case "$1" in
+	--)	shift; break;;
+	--help)
+		echo "Usage: symlinks-analyze [OPTIONS] <PATH> [<PATH> [...]]"
+		echo "OPTIONS:"
+		echo " -p, --show-absolute-path"
+		echo " -s, --skip-non-symlinks"
+		exit;;
+	-p|--show-abs|--show-absolute|--show-abs-path|--show-absolute-path)
+		show_abs_path=1;;
+	-s|--skip-non-symlinks)
+		skip_non_symlinks=1;;
+	-*)	echo "$0: unknown option: $1" >&2
+		exit -1;;
+	*)	break;;
+	esac
+	shift
+done
+
+
+for file in "$@"
+do
+	(
+		declare -a visited=()
+		
+		file=`notrailingslash "$file"`
+		
+		if [ $skip_non_symlinks ]
+		then
+			if [ ! -L "$file" ]
+			then
+				continue
+			fi
+		fi
+		
+		if [ -e "$file" -o -L "$file" ]
+		then
+			echo -n "$file"
+			
+			logical_path=`logical_path "$file"`
+			show_abs_path "$file" "$logical_path"
+			visited+=("$logical_path")
+			
+			while [ -L "$file" ]
+			do
+				target=`readlink "$file"`
+				echo -n " -> $target"
+				
+				dir=`dirname "$file"`
+				set -e
+				cd "$dir"
+				set +e
+				
+				logical_path=`logical_path "$target"`
+				show_abs_path "$target" "$logical_path"
+				if in_list "$logical_path" "${visited[@]}"
+				then
+					break
+				fi
+				visited+=("$logical_path")
+				
+				file=$target
+				file=`notrailingslash "$file"`
+			done
+			echo ";"
+		fi
+	)
+done

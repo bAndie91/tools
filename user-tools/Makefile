@@ -27,7 +27,7 @@ TOOLS ?=   2opml adr2html asterisk-log-separator awk-cut base58 base64url \
   levenshtein-distance jaro-metric jaro-winkler-metric loggerexec \
   logrotate-counters logto pdfflop pngmetatext set-sys-path subst_sudo_user \
   terminaltitle timestamper set-xcursor-lock-and-run mkmagnetlink htmlentities \
-  pfx2pem rdfindreport
+  pfx2pem rdfindreport symlinks-analyze
 
 TOOLS_TARGET_FILES = $(addprefix $(TOOLS_TARGET_DIR)/,$(TOOLS))
 
@@ -65,20 +65,20 @@ $(TOOLS_TARGET_DIR)/multithrottler: /usr/lib/multithrottler/Throttler.pm
 	@echo remove $@ >> uninstall.sh
 
 /usr/lib/multithrottler:
-	mkdir -p $@
+	[ -d $@ ] || mkdir $@
 	@echo remove $@ >> uninstall.sh
 
 
 $(TOOLS_TARGET_DIR):
-	mkdir -p $@
+	[ -d $@ ] || mkdir $@
 	@echo remove $@ >> uninstall.sh
 
 /usr/share/doc/tool:
-	mkdir -p $@
+	[ -d $@ ] || mkdir $@
 	@echo remove $@ >> uninstall.sh
 
 /usr/lib/tool:
-	mkdir -p $@
+	[ -d $@ ] || mkdir $@
 	@echo remove $@ >> uninstall.sh
 
 
@@ -90,14 +90,14 @@ install-all: \
 .PHONY: install-all
 
 
-install-tools: $(TOOLS_TARGET_DIR) $(TOOLS_TARGET_FILES)
+install-tools: $(TOOLS_TARGET_FILES)
 .PHONY: install-tools
 
 $(TOOLS_TARGET_FILES): | $(TOOLS_TARGET_DIR)
 
 $(TOOLS_TARGET_FILES): $(TOOLS_TARGET_DIR)/%: %
 	install $(notdir $@) $(TOOLS_TARGET_DIR)/
-	@echo remove $(TOOLS_TARGET_DIR)/$(notdir $@) >> uninstall.sh
+	@echo remove $@ >> uninstall.sh
 
 
 list-tools:

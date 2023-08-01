@@ -99,7 +99,7 @@ do
 		shift
 		break;;
 	-*)
-		echo "$0: unknwon option: $1" >&2
+		echo "${0##*/}: unknwon option: $1" >&2
 		exit -1;;
 	*)
 		break;;
@@ -120,7 +120,7 @@ fi
 
 if [ -z "$queue_dir" ]
 then
-	echo "$0: specify the queue control directory." >&2
+	echo "${0##*/}: specify the queue control directory." >&2
 	exit -2
 fi
 

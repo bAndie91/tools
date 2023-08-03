@@ -17,6 +17,7 @@ FOREACH_VERBOSE=''
 unset FOREACH_DELIM
 FOREACH_PASS_DATA=maybe
 FOREACH_PASS_FIELDS=no
+FOREACH_REPLACE_PLACEHOLDER=yes
 
 help()
 {
@@ -26,12 +27,18 @@ help()
 	echo "  -l, --data"
 	echo "  -f, --fields"
 	echo "  -d, --delimiter DELIM"
+	echo "  -P, --no-placeholder"
 	echo "  -v, --verbose"
 	echo "DESCRIPTION"
 	echo "  Take each input line from stdin as DATA, and run COMMAND with DATA appended to the end of <ARGS> as a single argument."
-	echo "  Additionally parse DATA into fields and add them to the end of <ARGS> each if --fields given."
-	echo "  So if you have not specified any <ARGS> in the command line and types both --data and --fields, then"
+	echo "  If '{}' is there in <ARGS> then it's substituted with DATA rather than append to the end,"
+	echo "  unless --no-placeholder is given, because then '{}' is read literally."
+	echo "  Additionally parse DATA into fields and add them to the end of <ARGS> each if --fields is given."
+	echo ""
+	echo "  So if you have not specified any <ARGS> in the command line and type both --data and --fields, then"
 	echo "  DATA goes into argv[1], and the first field goes into argv[2], second to argv[3] and so on."
+	echo "  If have not given --data nor --fields, then --data is implied."
+	echo ""
 	echo "  If called with --sh, COMMAND is run within a shell context; input line goes to \$DATA, individual fields go to \${FIELD[@]}."
 	echo "  Set DELIM (by -d option) if you want to split DATA not by \$IFS but by other delimiter, eg \$'\\t'."
 	echo "EXAMPLES"
@@ -58,6 +65,9 @@ do
 	-d|--delimiter)
 		shift
 		FOREACH_DELIM=$1
+		;;
+	-P|--no-placeholder)
+		FOREACH_REPLACE_PLACEHOLDER=no
 		;;
 	-v|--verbose)
 		FOREACH_VERBOSE=1
@@ -103,10 +113,26 @@ do
 	
 	if [ "$FOREACH_MODE" = command ]
 	then
-		declare -a cmd_extra_args=()
-		if [ "$FOREACH_PASS_DATA" = yes ]; then cmd_extra_args+=("$DATA"); fi
-		if [ "$FOREACH_PASS_FIELDS" = yes ]; then cmd_extra_args+=("${FIELD[@]}"); fi
-		command "${FOREACH_COMMAND[@]}" "${cmd_extra_args[@]}"
+		declare -a cmd_and_args=()
+		placeholder_found=no
+		if [ "$FOREACH_REPLACE_PLACEHOLDER" = yes ]
+		then
+			for arg in "${FOREACH_COMMAND[@]}"
+			do
+				if [ "$arg" = '{}' ]
+				then
+					arg=$DATA
+					placeholder_found=yes
+				fi
+				cmd_and_args+=("$arg")
+			done
+		fi
+		if [ "$FOREACH_REPLACE_PLACEHOLDER" != yes -o $placeholder_found = no ]
+		then
+			if [ "$FOREACH_PASS_DATA" = yes ]; then cmd_and_args+=("$DATA"); fi
+			if [ "$FOREACH_PASS_FIELDS" = yes ]; then cmd_and_args+=("${FIELD[@]}"); fi
+		fi
+		command "${cmd_and_args[@]}"
 	else
 		eval "${FOREACH_COMMAND[@]}"
 	fi

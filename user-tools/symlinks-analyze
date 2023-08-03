@@ -13,14 +13,17 @@ EOF
 
 
 set -e
+set -u
 . /usr/lib/tool/bash-utils
 shopt -s extglob
+unset CDPATH
 unset CDPATH
 set +e
 
 notrailingslash()
 {
 	local x=$1
+	if [ "$x" = / ]; then echo /; return; fi
 	echo ${x/%+(\/)/}
 }
 
@@ -33,25 +36,45 @@ show_abs_path()
 		then
 			return
 		fi
-		echo -n "[$logical_path]"
+		echo -n " [$logical_path]"
 	fi
+}
+
+show_realpath()
+{
+	local path=$1
+	if [ $show_realpath ]
+	then
+		local realpath=`readlink -n -f "$path"`
+		if [ "$realpath" != "$path" ]
+		then
+			echo -n " ($realpath)"
+		fi
+	fi
+}
+
+logical_dirname()
+{
+	local path=$1
+	local dir=$(dirname "$path")
+	cd "$dir" && pwd || kill -ABRT $$
+	# kill ourself to prevent bad data at the caller,
+	# so the caller does not need to set errexit
 }
 
 logical_path()
 {
 	local path=$1
-	local dir=$(dirname "$path")
+	local dirname=`logical_dirname "$path"`
+	if [ "$dirname" != / ]; then dirname=$dirname/; fi
 	local basename=$(basename "$path")
-	set -e
-	(
-		cd "$dir"
-		echo "$(pwd)/$basename"
-	)
-	set +e
+	echo "$dirname$basename"
 }
 
 
 show_abs_path=''
+show_realpath=''
+show_parents=''
 skip_non_symlinks=''
 
 
@@ -62,11 +85,17 @@ do
 	--help)
 		echo "Usage: symlinks-analyze [OPTIONS] <PATH> [<PATH> [...]]"
 		echo "OPTIONS:"
-		echo " -p, --show-absolute-path"
+		echo " -a, --absolute-path"
+		echo " -p, --parents"
+		echo " -r, --real-path"
 		echo " -s, --skip-non-symlinks"
 		exit;;
-	-p|--show-abs|--show-absolute|--show-abs-path|--show-absolute-path)
+	-a|--abs|--absolute|--abs-path|--absolute-path)
 		show_abs_path=1;;
+	-p|--parent|--parents)
+		show_parents=1;;
+	-r|--realpath|--real-path)
+		show_realpath=1;;
 	-s|--skip-non-symlinks)
 		skip_non_symlinks=1;;
 	-*)	echo "$0: unknown option: $1" >&2
@@ -77,51 +106,88 @@ do
 done
 
 
-for file in "$@"
+declare -a paths_to_analyze=("$@")
+declare -a paths_analyzed=()
+starting_wd=`pwd`
+
+while [ ${#paths_to_analyze[@]} -gt 0 ]
 do
-	(
-		declare -a visited=()
-		
-		file=`notrailingslash "$file"`
-		
-		if [ $skip_non_symlinks ]
+	declare -a visited=()
+	show_this_analysis=yes
+	
+	path_to_analyze=${paths_to_analyze[0]}
+	path=`notrailingslash "$path_to_analyze"`
+	
+	if [ $skip_non_symlinks ]
+	then
+		if [ ! -L "$path" ]
 		then
-			if [ ! -L "$file" ]
-			then
-				continue
-			fi
+			show_this_analysis=no
 		fi
+	fi
+	
+	if [ ! -e "$path" -a ! -L "$path" ]
+	then
+		# neither an actual existing file nor a broken symlink
+		warnx "$path: not found"
+		show_this_analysis=no
+	fi
+	
+	if [ $show_this_analysis = yes ]
+	then
+		echo -n "$path"
 		
-		if [ -e "$file" -o -L "$file" ]
-		then
-			echo -n "$file"
+		logical_path=`logical_path "$path"`
+		show_abs_path "$path" "$logical_path"
+		show_realpath "$path"
+		visited+=("$logical_path")
+		
+		while true
+		do
+			if [ $show_parents ]
+			then
+				parent=`logical_dirname "$path"`
+				if [ "$parent" != / ]
+				then
+					if ! in_list "$parent" "${paths_to_analyze[@]}" "${paths_analyzed[@]}"
+					then
+						paths_to_analyze+=("$parent")
+					fi
+				fi
+			fi
 			
-			logical_path=`logical_path "$file"`
-			show_abs_path "$file" "$logical_path"
+			if [ ! -L "$path" ]
+			then
+				break
+			fi
+			
+			set -e
+			target=`readlink "$path"`
+			dir=`dirname "$path"`
+			cd "$dir"
+			set +e
+			
+			echo -n " -> $target"
+			logical_path=`logical_path "$target"`
+			show_abs_path "$target" "$logical_path"
+			
+			if in_list "$logical_path" "${visited[@]}"
+			then
+				break
+			fi
 			visited+=("$logical_path")
 			
-			while [ -L "$file" ]
-			do
-				target=`readlink "$file"`
-				echo -n " -> $target"
-				
-				dir=`dirname "$file"`
-				set -e
-				cd "$dir"
-				set +e
-				
-				logical_path=`logical_path "$target"`
-				show_abs_path "$target" "$logical_path"
-				if in_list "$logical_path" "${visited[@]}"
-				then
-					break
-				fi
-				visited+=("$logical_path")
-				
-				file=$target
-				file=`notrailingslash "$file"`
-			done
-			echo ";"
-		fi
-	)
+			path=$target
+			path=`notrailingslash "$path"`
+		done
+		
+		echo ";"
+	fi
+	
+	set -e
+	cd "$starting_wd"
+	set +e
+	
+	array_shift paths_to_analyze
+	paths_analyzed+=("$path_to_analyze")
 done

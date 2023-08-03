@@ -5,7 +5,7 @@ true <<EOF
 
 =head1 NAME
 
-symlinks-analyze - Discover where symlinks ultimately point at
+symlinks-analyze - Discover where symlinks point at, recursively
 
 =cut
 
@@ -85,9 +85,9 @@ do
 	--help)
 		echo "Usage: symlinks-analyze [OPTIONS] <PATH> [<PATH> [...]]"
 		echo "OPTIONS:"
-		echo " -a, --absolute-path"
-		echo " -p, --parents"
-		echo " -r, --real-path"
+		echo " -a, --absolute-path      shown in [ brackets ]"
+		echo " -r, --real-path          shown in ( brackets )"
+		echo " -p, --parents            analyze parent directories of any traversed path too"
 		echo " -s, --skip-non-symlinks"
 		exit;;
 	-a|--abs|--absolute|--abs-path|--absolute-path)

@@ -2,6 +2,13 @@
 
 set -u
 
-curl -sS "http://www.domain.hu/domain/regcheck/?dname=${1?domain in question}&host=${2?nameserver or empty}&dnssec=DNSSEC" |\
-perl -ne 'if(/^\.\.\.\./){if($o){exit}else{$o++}}elsif($o){s/<.*?>//g;if(!/^\s*$/){print}}'
-
+curl -sS "https://info.domain.hu/webregcheck/hu" -d "domain=${1?domain in question}&ns=${2?nameserver or empty}&dnssec=1" |\
+parsel @main / @pre ::text |\
+{
+	read num
+	for x in {1..$num}
+	do
+		read -r escaped
+		echo "$escaped" | sed -e 's/\\n/\n/g; s/\\\\/\\/g'
+	done
+}

@@ -91,7 +91,7 @@ enable)
 	;;
 restart)
 	daemon -n "$daemon" -v --stop
-	status
+	status "$daemon"
 	daemon -n "$daemon" -v
 	;;
 log)

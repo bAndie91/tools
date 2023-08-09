@@ -14,7 +14,7 @@ EOF
 
 target_template="%Y/%m/%d/"
 time_field=Y
-verbose_mv=''
+verbose=''
 dryrun=0
 minlevel=''
 maxlevel=''
@@ -73,7 +73,7 @@ while [ -n "$1" ]; do
 		do_touch=1
 		;;
 	-v|--verbose)
-		verbose_mv=-v
+		verbose=-v
 		;;
 	-n|--dry-run)
 		dryrun=1
@@ -188,9 +188,9 @@ find "$@" ${minlevel:+-mindepth $minlevel} ${maxlevel:+-maxdepth $maxlevel} -typ
 			
 			if [ "$copy" = 1 ]
 			then
-				cp $verbose_mv $overwrite_opt "$file" "$target"
+				cp $verbose $overwrite_opt "$file" "$target"
 			else
-				mv $verbose_mv $overwrite_opt "$file" "$target"
+				mv $verbose $overwrite_opt "$file" "$target"
 			fi
 			if [ "$do_touch" = 1 ]
 			then

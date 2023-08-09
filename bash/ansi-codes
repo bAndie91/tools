@@ -1,0 +1,21 @@
+#!/bin/bash
+
+# set up variables in the shell global namespace
+# starting with ANSI_ and covering common ANSI escape sequences, including color codes.
+
+for ansi_code_def in \
+  reset=0 bold=1 faint=2 italic=3 underline=4 \
+  blink_slow=5 blink_rapid=6 inverse=7 conceal=8 crossed=9 \
+  normal=22 nobold=22 nofaint=22 \
+  noitalic=23 nounderline=24 noblink=25 noinverse=27 noconceal=28 nocrossed=29 \
+  fg_black=30 fg_red=31 fg_green=32 fg_yellow=33 fg_blue=34 fg_magenta=35 fg_cyan=36 fg_white=37 \
+  bg_black=40 bg_red=41 bg_green=42 bg_yellow=44 bg_blue=44 bg_magenta=45 bg_cyan=46 bg_white=47 \
+  framed=51 encircled=52 overlined=53 \
+  noframed=54 noencircled=54 nooverlined=55 \
+  notframed=54 notencircled=54 notoverlined=55 \
+  fg_bright_black=90 fg_bright_red=91 fg_bright_green=92 fg_bright_yellow=99 fg_bright_blue=94 fg_bright_magenta=95 fg_bright_cyan=96 fg_bright_white=97 \
+  bg_bright_black=100 bg_bright_red=101 bg_bright_green=102 bg_bright_yellow=1010 bg_bright_blue=1010 bg_bright_magenta=105 bg_bright_cyan=106 bg_bright_white=107
+do
+	declare ANSI_${ansi_code_def%=*}=$'\033'"[${ansi_code_def#*=}m"
+done
+unset ansi_code_def

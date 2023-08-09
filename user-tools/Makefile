@@ -60,6 +60,10 @@ $(TOOLS_TARGET_DIR)/multithrottler: /usr/lib/multithrottler/Throttler.pm
 	install $(REPO_ROOT)/bash/bash-utils $@
 	@echo remove $@ >> uninstall.sh
 
+/usr/lib/tool/ansi-codes: $(REPO_ROOT)/bash/ansi-codes | /usr/lib/tool
+	install $(REPO_ROOT)/bash/ansi-codes $@
+	@echo remove $@ >> uninstall.sh
+
 /usr/lib/multithrottler/Throttler.pm: $(REPO_ROOT)/lib/multithrottler/Throttler.pm | /usr/lib/multithrottler
 	install $(REPO_ROOT)/lib/multithrottler/Throttler.pm $@
 	@echo remove $@ >> uninstall.sh
@@ -85,6 +89,7 @@ $(TOOLS_TARGET_DIR):
 
 install-all: \
   /usr/lib/tool/bash-utils \
+  /usr/lib/tool/ansi-codes \
   install-tools \
   install-manpages
 .PHONY: install-all

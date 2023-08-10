@@ -29,19 +29,34 @@ set -u
 
 . /usr/lib/tool/bash-utils
 
-status()
+_status()
 {
-	local daemon status pid started
+	local daemon status pid started code
 	daemon=$1
 	
 	status=`daemon -n "$daemon" -v --running 2>&1`
-	if [ $? = 0 ]
+	code=$?
+	if [ $code = 0 ]
 	then
 		pid=`cat /var/run/daemons/$daemon.pid`
 		started=`ps o lstart='' -p $pid`
 		status="$status (running since $started)"
 	fi
 	echo "$status"
+	return $code
+}
+
+status()
+{
+	_status "$@"
+	if [ $? != 0 ]
+	then
+		{
+			echo -n "known daemons: "
+			{ list_pidfile_daemons; list_configured_daemons; } | sort -u | tr "\n" " "
+			echo
+		}>&2
+	fi
 }
 
 list_pidfile_daemons()
@@ -60,7 +75,7 @@ then
 	sort -u |\
 	while read daemon
 	do
-		status "$daemon"
+		_status "$daemon"
 	done
 	exit
 fi

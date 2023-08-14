@@ -138,3 +138,8 @@ $(MANPAGE_FILES): $(MANPAGES_SUBDIR)/%$(MANPAGE_FILE_SUFFIX): %
 install-manpages: manpages
 	$(MAKE) -C $(REPO_ROOT)/doc/man install-manpages
 .PHONY: install-manpages
+
+
+descriptions.txt: $(TOOLS)
+	perl -ne 'if(/^=head1 NAME/){ <>; print while $$_=<>  and !/^\s*$$/; }' -- $(TOOLS) > $@~
+	mv -f $@~ $@

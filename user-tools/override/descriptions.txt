@@ -1,0 +1,3 @@
+chmod - Call system's chmod(1) just warns if one of the files have ACL permissions set.
+write - Wrapper for bsd-write, write(1), write to all terminals of the given user
+xlock, xunlock - Lock (unlock) X11 screen by disable (enable) input devices

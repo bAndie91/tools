@@ -7,7 +7,6 @@ base64url - Encode to (decode from) Base64-URL encoding
 bencode2json - Convert Bencode (BitTorrent's loosely structured data) to JSON
 cdexec - Run a given command in the given directory
 chattr-cow - try hard to enable Copy-on-Write attribute on files
-chattr-cow - try hard to enable Copy-on-Write attribute on files
 chromium_cookie_decrypt.py - Decrypt Chromium web browser stored cookies and output cleartext
 chshebang - Change a script's default interpreter
 convert_chromium_cookies_to_netscape.sh - Convert Chromium and derivative web browser's cookies to Netscape format (used by wget and curl)
@@ -28,7 +27,6 @@ fc-search-codepoint - Print the names of available X11 fonts containing the give
 fdupes-hardlink - Make hardlinks from identical files as reported by fdupes(1)
 ff - Find files horizontally, ie. a whole directory level at a time, across subtrees
 fgat - Execute command in foreground at a given time
-findnewestfile - Search for the newest file in a given path recursively and always show the most recent while scanning
 findnewestfile - Search for the newest file in a given path recursively and always show the most recent while scanning
 fixlogfiledatetime - Set the target files modification time to their respective last log entry's timestamp
 fixRFC822filemtime - Set a file's last modification time, which contains an email message in RFC-822 format, to the email's Date
@@ -83,7 +81,6 @@ screenconsole - Interactive CLI to run GNU/screen commands against current or sp
 screen-notify - Send status-line message to the current GNU/Screen instance
 screenreattach - Reattach to GNU/screen and import environment variables
 slay - Try to kill a process until it exists
-slay - Try to kill a process until it exists
 ssh-agent-finder - Find a working ssh agent on the system so you get the same in each of your logon sessions
 strip-ansi-seq - Dumb script removing more-or-less any ANSI escape sequences from the input stream
 swap - swaps two files' names
@@ -100,7 +97,6 @@ uchmod - chmod files according to umask
 unicodestyle - Add font styles to input text using Unicode
 upsidedown - Transliterate input stream to text with upsidedown-looking chars
 url_encode - Escape URL-unsafe chars in text given either in parameters or in stdin by percent-encoding
-url_encode - Escape URL-unsafe chars in text given either in parameters or in stdin by percent-encoding
 url_encode_bf - Make all chars given either in parameters or in stdin to percent-encoded sequence
 url-parts - Extract specified parts from URLs given in input stream
 vidir-sanitize - Helper script to change tricky filenames in a directory
@@ -110,8 +106,6 @@ whisper-retention-info - Show data retention policy in Whisper timeseries databa
 wikibot - Update Wikimedia (Wikipedia) article
 xdg-autostart - Start XDG autostart programms
 xml2json - Convert XML input to JSON
-levenshtein-distance - Calculate the Levenshtein distance of given strings
-levenshtein-distance - Calculate the Levenshtein distance of given strings
 levenshtein-distance - Calculate the Levenshtein distance of given strings
 loggerexec - Run a command and send STDOUT and STDERR to syslog
 logrotate-counters - Increment numbers in file names

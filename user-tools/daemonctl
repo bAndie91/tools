@@ -106,7 +106,7 @@ enable)
 	;;
 restart)
 	daemon -n "$daemon" -v --stop
-	status "$daemon"
+	_status "$daemon"
 	daemon -n "$daemon" -v
 	;;
 log)
@@ -122,4 +122,4 @@ log)
 	;;
 esac
 
-status "$daemon"
+_status "$daemon"

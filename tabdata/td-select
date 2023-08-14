@@ -1,5 +1,12 @@
 #!/usr/bin/env perl
 
+$HelpText = <<'END';
+USAGE
+  td-select <COLUMN-1> [<COLUMN-2> [...]]
+SYNOPSIS
+  Show only the specified columns from the input tabular data stream.
+END
+
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 @Columns = ();
@@ -24,7 +31,7 @@ unless($OptNoHeader)
 	@Output = ();
 	for my $col (@Columns)
 	{
-		push @Output, $Header[$Header{$col}];
+		push @Output, defined $Header{$col} ? $Header[$Header{$col}] : '';
 	}
 	print join($FS, @Output).$/;
 }
@@ -40,7 +47,7 @@ while($line = <STDIN>)
 	
 	for my $col (@Columns)
 	{
-		push @Output, $Input[$Header{$col}];
+		push @Output, defined $Header{$col} ? $Input[$Header{$col}] : '';
 	}
 	
 	print join($FS, @Output).$/;

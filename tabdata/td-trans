@@ -1,18 +1,17 @@
 #!/usr/bin/env perl
 
+$HelpText = <<'END';
+SYNOPSIS
+  Transform whitespace-delimited into TAB-delimited lines ignoring leading whitespace.
+END
+
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
-
-$header = <STDIN>;
-chomp $header;
-$header =~ s/\s+/$FS/g;
-process_header($header);
-$num_of_fields = scalar @Header;
-
-print $header.$/;
 
 while(my $line = <STDIN>)
 {
 	chomp $line;
+	$line =~ s/^\s*//g;
+	$line =~ s/\s*$//g;
 	my @Fields = split /\s+/, $line, $num_of_fields;
 	print join($FS, @Fields).$/;
 }

@@ -34,7 +34,7 @@ shift $(($OPTIND - 1))
 case "$1" in
 repos)
 	(
-		echo "name	is a fork	created	pushed	updated"
+		echo "name	is-a-fork	created	pushed	updated	description"
 		next_url="https://api.github.com/users/${2?USERNAME is missing.}/repos"
 		while [ -n "$next_url" ]
 		do
@@ -46,10 +46,16 @@ repos)
 			
 			echo "$resp" |\
 			sed -e '1,/^\r*$/d' |\
-			jq -r '.[] | [.name, (.fork|tostring), .created_at, .pushed_at, .updated_at] | join("\t")'
+			jq -r '.[] | [.name, (.fork|tostring), .created_at, .pushed_at, .updated_at, ((.description//"")|gsub("\n";"\\n"))] | join("\t")'
 		done
 	)|\
-	column -s $'\t' -n -t
+	if [ -t 1 ]
+	then
+		column -s $'\t' -n -t
+	else
+		cat
+	fi
+	exit ${PIPESTATUS[0]}
 	;;
 issues)
 	apicall="issues?state=all"

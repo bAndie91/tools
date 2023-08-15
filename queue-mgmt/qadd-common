@@ -67,6 +67,10 @@ do
 	-f|--force)
 		force=yes
 		;;
+	-h|--hide|--side-state)
+		shift
+		qls_hide_states="$qls_hide_states $1"
+		;;
 	-H|--no-header)
 		qls_header=''
 		;;

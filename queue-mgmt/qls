@@ -14,11 +14,13 @@ OPTIONS:
   -M, --no-multiline, --escape-command
   -d, --queue-dir
   -H, --no-header
+  -h, --hide-state {queued,running,gone,ended}
   -e, --show-exit-code"
 
 qls_multiline=yes
 qls_header=yes
 qls_show_exit_status=''
+qls_hide_states=''
 
 . qadd-common
 
@@ -92,12 +94,18 @@ shopt -s nullglob
 for itemfile in "$queue_dir"/?.comm "$queue_dir"/??.comm "$queue_dir"/???.comm "$queue_dir"/????.comm "$queue_dir"/?????.comm "$queue_dir"/??????.comm "$queue_dir"/???????.comm 
 do
 	item_id=`basename "$itemfile" .comm`
+	state=`qtask_state "$item_id"`
+	state_shown=$state
+	
+	if grep -qw "$state" <<< "$qls_hide_states"
+	then
+		continue
+	fi
+	
 	timestamp=`stat -c %Y "$itemfile"`
 	datetime=`date +"%F %T" -d @$timestamp`
 	load_command_global "$itemfile"
 	command_str=${command[*]}
-	state=`qtask_state "$item_id"`
-	state_shown=$state
 	
 	if [ $qls_show_exit_status ]
 	then

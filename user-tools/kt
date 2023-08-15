@@ -46,4 +46,4 @@ mkdir -p ~/.cache/keept
 pwd > ~/.cache/keept/kt-$command_hash.cwd
 echo "$@" > ~/.cache/keept/kt-$command_hash.txt
 
-exec keept bwu ~/.cache/keept/kt-$command_hash "$@"
+exec keept bwut ~/.cache/keept/kt-$command_hash "$@"

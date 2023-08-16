@@ -16,7 +16,11 @@ do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 while($arg = shift @ARGV)
 {
-	if($arg =~ /^([^-].*)(==|!=|<=|>=|<|>|=~|!~| (?:eq|ne|gt|lt) )(.*)$/)
+	if($arg =~ /^-/)
+	{
+		die "$0: unknown option: $arg\n";
+	}
+	elsif($arg =~ /^([^=!<>]+)(==|!=|<=|>=|<|>|=~|!~| (?:eq|ne|gt|lt) )(.*)$/)
 	{
 		my ($field, $operator, $value) = ($1, $2, $3);
 		$operator =~ s/ //g;
@@ -24,7 +28,7 @@ while($arg = shift @ARGV)
 	}
 	else
 	{
-		die "$0: unknown option: $arg\n";
+		die "$0: unknown parameter: $arg\n";
 	}
 }
 
@@ -48,8 +52,8 @@ while($line = <STDIN>)
 		my $left_data = $Field[$Header{$filter->{'field'}}];
 		my $right_data = $filter->{'value'};
 		my $operator = $filter->{'operator'};
-		my $left_code = "\$left_data";
-		my $right_code = "\$right_data";
+		my $left_code = '$left_data';
+		my $right_code = '$right_data';
 		$right_code = "/$right_code/" if $operator ~~ ['=~', '!~'];
 		unless(eval "$left_code $operator $right_code")
 		{

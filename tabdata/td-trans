@@ -2,7 +2,7 @@
 
 $HelpText = <<'END';
 SYNOPSIS
-  Transform whitespace-delimited into TAB-delimited lines ignoring leading whitespace.
+  Transform whitespace-delimited into TAB-delimited lines ignoring sorrounding whitespace and make duplicated header names unique.
 END
 
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
@@ -13,5 +13,24 @@ while(my $line = <STDIN>)
 	$line =~ s/^\s*//g;
 	$line =~ s/\s*$//g;
 	my @Fields = split /\s+/, $line, $num_of_fields;
+	
+	if($. == 1)
+	{
+		# deduplicate header names
+		my @new_Fields = ();
+		for my $field (@Fields)
+		{
+			my @other_Fields = grep {$_ ne $field} @Fields;
+			my $new_field = $field;
+			while($new_field ~~ @new_Fields or $new_field ~~ @other_Fields)
+			{
+				# increment trailing counter
+				$new_field =~ s/(\d*)$/($1 or 1) + 1/e;
+			}
+			push @new_Fields, $new_field;
+		}
+		@Fields = @new_Fields;
+	}
+	
 	print join($FS, @Fields).$/;
 }

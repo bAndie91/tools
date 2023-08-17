@@ -1,10 +1,10 @@
 #!/usr/bin/env perl
 
 $HelpText = <<'END';
-USAGE
-  td-filter <COLUMN><OPERATOR><R-VALUE> [<COLUMN><OPERATOR><R-VALUE> [...]]
 SYNOPSIS
   Show only those records from the input tabular data stream which match to the conditions.
+USAGE
+  td-filter <COLUMN><OPERATOR><R-VALUE> [<COLUMN><OPERATOR><R-VALUE> [...]]
 OPERATORS
   == != <= >= < > =~ !~ eq ne gt lt
   see perlop(1)

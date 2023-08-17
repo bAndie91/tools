@@ -1,0 +1,26 @@
+#!/usr/bin/env perl
+
+$HelpText = <<'END';
+SYNOPSIS
+  Transform tabular data into multi-record key-value (MRKV) format.
+END
+
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
+
+process_header(scalar <STDIN>);
+
+
+while($line = <STDIN>)
+{
+	chomp $line;
+	
+	@Field = split $FS, $line;
+	
+	for my $idx (0..$#Header)
+	{
+		printf "%s\t%s\n", $Header[$idx], $Field[$idx];
+	}
+	
+	print "\n";
+}

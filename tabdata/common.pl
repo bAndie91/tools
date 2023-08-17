@@ -10,7 +10,7 @@ use Getopt::Long qw/:config no_ignore_case/;
 
 GetOptions(
 	'H|no-header' => \$OptNoHeader,
-	'help' => sub { print $HelpText; exit 0; },
+	'help' => sub { print "NAME\n  $0\n"; print $HelpText; exit 0; },
 ) or die "Usage: $0 [-H | --no-header] ...\n";
 
 sub process_header

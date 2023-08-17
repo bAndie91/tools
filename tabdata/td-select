@@ -1,19 +1,44 @@
 #!/usr/bin/env perl
 
 $HelpText = <<'END';
-USAGE
-  td-select <COLUMN-1> [<COLUMN-2> [...]]
 SYNOPSIS
   Show only the specified columns from the input tabular data stream.
+USAGE
+  td-select [<OPTIONS>] [--] [-]<COLUMN-1> [[-]<COLUMN-2> [...]]
+OPTIONS
+  -H, --no--header   do not show headers
+DESCRIPTION
+  <COLUMN> is either a column name, optionally prefixed with hyphen,
+  in which case the given column will not be shown,
+  or one of these special keywords:
+  +ALL    - all columns
+  +REST   - the rest of columns not given yet in the parameter list
+EXAMPLE
+  ls -l | td-trans-ls | td-select -- NAME +REST -INODE -LINKS -MAJOR -MINOR
 END
 
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
+process_header(scalar <STDIN>);
 
 @Columns = ();
 
 while($arg = shift @ARGV)
 {
-	if($arg =~ /^([^-].*)$/)
+	if($arg =~ /^-(.+)$/)
+	{
+		my $except_column = $1;
+		@Columns = grep {$_ ne $except_column} @Columns;
+	}
+	elsif($arg eq '+ALL')
+	{
+		push @Columns, @Header;
+	}
+	elsif($arg eq '+REST')
+	{
+		push @Columns, grep {not $_ ~~ @Columns} @Header;
+	}
+	elsif($arg =~ /^(.+)$/)
 	{
 		push @Columns, $1;
 	}
@@ -22,8 +47,6 @@ while($arg = shift @ARGV)
 		die "$0: unknown option: $arg\n";
 	}
 }
-
-process_header(scalar <STDIN>);
 
 # display selected headers
 unless($OptNoHeader)

@@ -12,6 +12,14 @@ while(my $line = <STDIN>)
 	chomp $line;
 	$line =~ s/^\s*//g;
 	$line =~ s/\s*$//g;
+
+	if($. == 1)
+	{
+		# the first line considered header,
+		# and the number of fields dictates (at most) how many fields are there in the rest of the stream.
+		$num_of_fields = scalar split /\s+/, $line;
+	}
+	
 	my @Fields = split /\s+/, $line, $num_of_fields;
 	
 	if($. == 1)

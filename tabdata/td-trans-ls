@@ -1,22 +1,46 @@
 #!/usr/bin/env perl
 
-$HelpText = <<'END';
-SYNOPSIS
-  Transform ls(1) output into fix number of TAB-delimited columns.
-USAGE
-  ls -l | td-trans-ls
-DETAILS
-  supported ls(1) options which affect its output format:
-    --human-readable
-    --inode
-    --recursive
-    --time-style={iso,long-iso,full-iso}
-  unsupported options:
-    --author
-    -g
-    -o
-    --time-style=locale
-END
+=pod
+
+=head1 NAME
+
+td-trans-ls - Transform ls(1) output into fix number of TAB-delimited columns.
+
+=head1 USAGE
+
+ls -l | td-trans-ls
+
+=head1 DETAILS
+
+supported ls(1) options which affect its output format:
+
+=over 4
+
+=item --human-readable
+
+=item --inode
+
+=item --recursive
+
+=item --time-style={iso,long-iso,full-iso}
+
+=back
+
+unsupported options:
+
+=over 4
+
+=item --author
+
+=item -g
+
+=item -o
+
+=item --time-style=locale
+
+=back
+
+=cut
 
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 

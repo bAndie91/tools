@@ -1,9 +1,12 @@
 #!/usr/bin/env perl
 
-$HelpText = <<'END';
-SYNOPSIS
-  Transform tabular data into multi-record key-value (MRKV) format.
-END
+=pod
+
+=head1 NAME
+
+td2mrkv - Transform tabular data into multi-record key-value (MRKV) format.
+
+=cut
 
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 

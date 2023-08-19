@@ -1,21 +1,38 @@
 #!/usr/bin/env perl
 
-$HelpText = <<'END';
-SYNOPSIS
-  Show only the specified columns from the input tabular data stream.
-USAGE
-  td-select [<OPTIONS>] [--] [-]<COLUMN-1> [[-]<COLUMN-2> [...]]
-OPTIONS
-  -H, --no--header   do not show headers
-DESCRIPTION
-  <COLUMN> is either a column name, optionally prefixed with hyphen,
-  in which case the given column will not be shown,
-  or one of these special keywords:
+=pod
+
+=head1 NAME
+
+td-select - Show only the specified columns from the input tabular data stream.
+
+=head1 USAGE
+
+td-select [<OPTIONS>] [--] [-]<COLUMN-1> [[-]<COLUMN-2> [...]]
+
+=head1 OPTIONS
+
+=over 4
+
+=item -H, --no--header
+
+do not show headers
+
+=back
+
+=head1 DESCRIPTION
+
+<COLUMN> is either a column name, optionally prefixed with hyphen,
+in which case the given column will not be shown,
+or one of these special keywords:
   +ALL    - all columns
   +REST   - the rest of columns not given yet in the parameter list
-EXAMPLE
+
+=head1 EXAMPLE
+
   ls -l | td-trans-ls | td-select -- NAME +REST -INODE -LINKS -MAJOR -MINOR
-END
+
+=cut
 
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 

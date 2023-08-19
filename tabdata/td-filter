@@ -1,26 +1,46 @@
 #!/usr/bin/env perl
 
-$HelpText = <<'END';
-SYNOPSIS
-  Show only those records from the input tabular data stream which match to the conditions.
-USAGE
-  td-filter <COLUMN><OPERATOR><R-VALUE> [<COLUMN><OPERATOR><R-VALUE> [...]]
-OPERATORS
-  == != <= >= < > =~ !~ eq ne gt lt
-  see perlop(1)
-END
+=pod
+
+=head1 NAME
+
+td-filter - Show only those records from the input tabular data stream which match to the conditions.
+
+=head1 USAGE
+
+td-filter [<OPTIONS>] [--] <COLUMN><OPERATOR><R-VALUE> [<COLUMN><OPERATOR><R-VALUE> [...]]
+
+=head1 OPTIONS
+
+=over 4
+
+=item -H, --no--header
+
+do not show headers
+
+=back
+
+=head1 OPERATORS
+
+== != <= >= < > =~ !~ eq ne gt lt
+
+see perlop(1)
+
+=head1 CAVEATS
+
+<R-VALUE> does not need quoting, escaping.
+
+=cut
 
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 @Filter = ();
 
-while($arg = shift @ARGV)
+while(scalar @ARGV)
 {
-	if($arg =~ /^-/)
-	{
-		die "$0: unknown option: $arg\n";
-	}
-	elsif($arg =~ /^([^=!<>]+)(==|!=|<=|>=|<|>|=~|!~| (?:eq|ne|gt|lt) )(.*)$/)
+	my $arg = shift @ARGV;
+	
+	if($arg =~ /^([^=!<>]+)(==|!=|<=|>=|<|>|=~|!~| (?:eq|ne|gt|lt) )(.*)$/)
 	{
 		my ($field, $operator, $value) = ($1, $2, $3);
 		$operator =~ s/ //g;

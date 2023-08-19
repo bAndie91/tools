@@ -1,9 +1,13 @@
 #!/usr/bin/env perl
 
-$HelpText = <<'END';
-SYNOPSIS
-  Transform whitespace-delimited into TAB-delimited lines ignoring sorrounding whitespace and make duplicated header names unique.
-END
+
+=pod
+
+=head1 NAME
+
+td-trans - Transform whitespace-delimited into TAB-delimited lines ignoring sorrounding whitespace and make duplicated header names unique.
+
+=cut
 
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 

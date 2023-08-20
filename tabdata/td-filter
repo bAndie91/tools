@@ -8,7 +8,11 @@ td-filter - Show only those records from the input tabular data stream which mat
 
 =head1 USAGE
 
-td-filter [<OPTIONS>] [--] <COLUMN><OPERATOR><R-VALUE> [<COLUMN><OPERATOR><R-VALUE> [...]]
+td-filter [<OPTIONS>] [--] <COLUMN> <OPERATOR> <R-VALUE> [<COLUMN> <OPERATOR> <R-VALUE> [...]]
+
+=head1 DESCRIPTION
+
+Pass through only those records which match to all of the conditions.
 
 =head1 OPTIONS
 
@@ -22,13 +26,34 @@ do not show headers
 
 =head1 OPERATORS
 
+These operators are supported, semantics are the same as in Perl, see perlop(1).
+
 == != <= >= < > =~ !~ eq ne gt lt
 
-see perlop(1)
+You may also use these operators as alternatives to the canonical ones above:
+
+-eq : numerical equal to
+
+-ne : numerical not equal to
+
+<>  : numerical not equal to
+
+-gt : numerical greater than
+
+-ge : numerical greater or equal
+
+-lt : numerical less than
+
+-le : numerical less or equal
+
+match : regexp match
+
+notmatch : negated regexp match
 
 =head1 CAVEATS
 
-<R-VALUE> does not need quoting, escaping.
+<R-VALUE> does not need quoting or escaping.
+If there is no <COLUMN> column in the input data, it's silently considered empty.
 
 =cut
 
@@ -36,20 +61,33 @@ do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 @Filter = ();
 
+%operator_alias = (
+	'<>', '!=',
+	'-ne', '!=',
+	'-eq', '==',
+	'-gt', '>',
+	'-lt', '<',
+	'-ge', '>=',
+	'-le', '<=',
+	'notmatch', '!~',
+	'match', '=~',
+);
+
 while(scalar @ARGV)
 {
-	my $arg = shift @ARGV;
+	my $column = shift @ARGV;
+	my $operator = shift @ARGV or die "$0: missing operator for: $column\n";
+	my $rvalue = shift @ARGV or die "$0: missing r-value for: $column $operator\n";
 	
-	if($arg =~ /^([^=!<>]+)(==|!=|<=|>=|<|>|=~|!~| (?:eq|ne|gt|lt) )(.*)$/)
+	# operator aliases
+	$operator = $operator_alias{$operator} if exists $operator_alias{$operator};
+	
+	unless($operator ~~ [qw/== != <= >= < > =~ !~ eq ne gt lt/])
 	{
-		my ($field, $operator, $value) = ($1, $2, $3);
-		$operator =~ s/ //g;
-		push @Filter, {'field'=>$field, 'operator'=>$operator, 'value'=>$value,};
+		die "$0: unknown operator: $operator\n";
 	}
-	else
-	{
-		die "$0: unknown parameter: $arg\n";
-	}
+	
+	push @Filter, {'field'=>$column, 'operator'=>$operator, 'value'=>$rvalue,};
 }
 
 process_header(scalar <STDIN>);
@@ -69,7 +107,7 @@ while($line = <STDIN>)
 	
 	for my $filter (@Filter)
 	{
-		my $left_data = $Field[$Header{$filter->{'field'}}];
+		my $left_data = exists $Header{$filter->{'field'}} ? $Field[$Header{$filter->{'field'}}] : '';
 		my $right_data = $filter->{'value'};
 		my $operator = $filter->{'operator'};
 		my $left_code = '$left_data';

@@ -1,0 +1,24 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+td-keepheader - Plug a non header-aware program in the tabular-data processing pipeline
+
+=head1 USAGE
+
+td-keepheader [--] <COMMAND> [<ARGS>]
+
+=cut
+
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
+die "$0: no COMMAND given\n" unless @ARGV;
+
+$header = '';
+$header .= $c while sysread(STDIN, $c, 1) and $c ne $/;
+print $header.$/;
+
+exec @ARGV;
+die "$!: @ARGV\n";

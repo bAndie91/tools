@@ -7,7 +7,7 @@ TOOLS = td-select td-filter td-trans td-trans-ls td2mrkv td-keepheader
 TARGET_TOOLS = $(foreach filename,$(TOOLS),$(BIN_DIR)/$(filename))
 
 
-install-all: $(TARGET_TOOLS) $(LIB_DIR)/common.pl
+install-all: $(TARGET_TOOLS) $(LIB_DIR)/common.pl install-manpages
 
 
 $(TARGET_TOOLS): $(BIN_DIR)/%: %
@@ -21,3 +21,8 @@ $(LIB_DIR)/common.pl: common.pl $(LIB_DIR)
 $(LIB_DIR):
 	mkdir -p $@
 	@echo remove $@ >> uninstall.sh
+
+
+REPO_ROOT = ..
+
+include ../user-tools/Makefile.documentation.mk

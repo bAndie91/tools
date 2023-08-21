@@ -32,7 +32,7 @@ do not show headers
 
 These operators are supported, semantics are the same as in Perl, see perlop(1).
 
-== != <= >= < > =~ !~ eq ne gt lt
+ == != <= >= < > =~ !~ eq ne gt lt
 
 For your convenience, not to bother with escaping, you may also use these operators as alternatives to the canonical ones above:
 

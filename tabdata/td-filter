@@ -10,9 +10,13 @@ td-filter - Show only those records from the input tabular data stream which mat
 
 td-filter [<OPTIONS>] [--] <COLUMN> <OPERATOR> <R-VALUE> [<COLUMN> <OPERATOR> <R-VALUE> [...]]
 
+td-filter [<OPTIONS>] --perl <EXPR>
+
 =head1 DESCRIPTION
 
 Pass through only those records which match to all of the conditions.
+Evaluate the Perl expression in the second form.
+Each field's value is in @F and in %F by column name.
 
 =head1 OPTIONS
 
@@ -30,7 +34,7 @@ These operators are supported, semantics are the same as in Perl, see perlop(1).
 
 == != <= >= < > =~ !~ eq ne gt lt
 
-You may also use these operators as alternatives to the canonical ones above:
+For your convenience, not to bother with escaping, you may also use these operators as alternatives to the canonical ones above:
 
 -eq : numerical equal to
 
@@ -60,6 +64,7 @@ If there is no <COLUMN> column in the input data, it's silently considered empty
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 @Filter = ();
+$Expr = undef;
 
 %operator_alias = (
 	'<>', '!=',
@@ -73,21 +78,29 @@ do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 	'match', '=~',
 );
 
-while(scalar @ARGV)
+if($ARGV[0] eq '--perl')
 {
-	my $column = shift @ARGV;
-	my $operator = shift @ARGV or die "$0: missing operator for: $column\n";
-	my $rvalue = shift @ARGV or die "$0: missing r-value for: $column $operator\n";
-	
-	# operator aliases
-	$operator = $operator_alias{$operator} if exists $operator_alias{$operator};
-	
-	unless($operator ~~ [qw/== != <= >= < > =~ !~ eq ne gt lt/])
+	shift @ARGV;
+	$Expr = join ';', @ARGV;
+}
+else
+{
+	while(scalar @ARGV)
 	{
-		die "$0: unknown operator: $operator\n";
+		my $column = shift @ARGV;
+		my $operator = shift @ARGV or die "$0: missing operator for: $column\n";
+		my $rvalue = shift @ARGV or die "$0: missing r-value for: $column $operator\n";
+		
+		# operator aliases
+		$operator = $operator_alias{$operator} if exists $operator_alias{$operator};
+		
+		unless($operator ~~ [qw/== != <= >= < > =~ !~ eq ne gt lt/])
+		{
+			die "$0: unknown operator: $operator\n";
+		}
+		
+		push @Filter, {'field'=>$column, 'operator'=>$operator, 'value'=>$rvalue,};
 	}
-	
-	push @Filter, {'field'=>$column, 'operator'=>$operator, 'value'=>$rvalue,};
 }
 
 process_header(scalar <STDIN>);
@@ -105,18 +118,27 @@ while($line = <STDIN>)
 	
 	$pass = 1;
 	
-	for my $filter (@Filter)
+	if(defined $Expr)
 	{
-		my $left_data = exists $Header{$filter->{'field'}} ? $Field[$Header{$filter->{'field'}}] : '';
-		my $right_data = $filter->{'value'};
-		my $operator = $filter->{'operator'};
-		my $left_code = '$left_data';
-		my $right_code = '$right_data';
-		$right_code = "/$right_code/" if $operator ~~ ['=~', '!~'];
-		unless(eval "$left_code $operator $right_code")
+		my @F = @Field;
+		my %F = map {$_=>$Field[$Header{$_}]} keys %Header;
+		$pass = eval $Expr;
+	}
+	else
+	{
+		for my $filter (@Filter)
 		{
-			$pass = 0;
-			last;
+			my $left_data = exists $Header{$filter->{'field'}} ? $Field[$Header{$filter->{'field'}}] : '';
+			my $right_data = $filter->{'value'};
+			my $operator = $filter->{'operator'};
+			my $left_code = '$left_data';
+			my $right_code = '$right_data';
+			$right_code = "/$right_code/" if $operator ~~ ['=~', '!~'];
+			unless(eval "$left_code $operator $right_code")
+			{
+				$pass = 0;
+				last;
+			}
 		}
 	}
 	

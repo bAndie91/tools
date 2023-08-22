@@ -1,0 +1,17 @@
+#!/bin/bash
+
+if [ "$1" = --help ]
+then
+	echo "Rename one file, no overwrite:
+  rn [<OLDNAME>] [<NEWNAME>]
+Rename 1 or more than 2 files interactively:
+  rn [<FILENAME-1> [<FILENAME-2> [...]]]"
+	exit
+fi
+
+if [ $# = 2 ]
+then
+	mv -n "$@"
+else
+	renamemanual "$@"
+fi

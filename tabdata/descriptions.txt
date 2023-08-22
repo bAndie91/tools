@@ -1,0 +1,6 @@
+td-select - Show only the specified columns from the input tabular data stream.
+td-filter - Show only those records from the input tabular data stream which match to the conditions.
+td-trans - Transform whitespace-delimited into TAB-delimited lines ignoring sorrounding whitespace and make duplicated header names unique.
+td-trans-ls - Transform ls(1) output into fix number of TAB-delimited columns.
+td2mrkv - Transform tabular data into multi-record key-value (MRKV) format.
+td-keepheader - Plug a non header-aware program in the tabular-data processing pipeline

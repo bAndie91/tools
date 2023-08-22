@@ -11,11 +11,20 @@ renamemanual - Interactive file rename tool
 
 EOF
 
+usage()
+{
+	echo "Usage: $0 <FILE> [<FILE> [...]]"
+}
 
-if [ -z "$1" ] || [ ."$1" = .--help ]
+if [ $# = 0 ]
 then
-	echo "Usage: $0 [files...]" >&2
-	exit 1
+	usage >&2
+	exit -1
+fi
+if [ "$1" = --help ]
+then
+	usage
+	exit 0
 fi
 
 for file in "$@"

@@ -1,3 +1,7 @@
+# Tool Descriptions
+
+[descriptions.txt](descriptions.txt)
+
 # Similar tools/projects
 
 - GNU [datamash](https://www.gnu.org/software/datamash/) ([git](git://git.sv.gnu.org/datamash.git))

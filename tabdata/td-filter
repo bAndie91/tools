@@ -14,9 +14,18 @@ td-filter [<OPTIONS>] --perl <EXPR>
 
 =head1 DESCRIPTION
 
-Pass through only those records which match to all of the conditions.
-Evaluate the Perl expression in the second form.
-Each field's value is in @F and in %F by column name.
+Pass through those records which match at least one of the conditions (inclusive OR).
+You may put together conditions conjunctively (AND) by chaining multiple td-filter commands in the pipe.
+Example:
+
+  td-filter NAME eq john NAME eq jacob | tr-filter AGE -gt 18
+
+This gives the records with either john or jacob, and all of them will be above 18.
+
+td-filter(1) evaluates the Perl expression in the second form and passes through only
+if the result is true-ish in Perl (non zero, non empty string, etc).
+Each field's value is in @F by index, and in %F by column name.
+You can implement more complex conditions in this way.
 
 =head1 OPTIONS
 
@@ -81,6 +90,7 @@ $Expr = undef;
 if($ARGV[0] eq '--perl')
 {
 	shift @ARGV;
+	die "$0: missing Perl expression\n" unless @ARGV;
 	$Expr = join ';', @ARGV;
 }
 else
@@ -116,16 +126,17 @@ while($line = <STDIN>)
 	
 	@Field = split $FS, $line;
 	
-	$pass = 1;
-	
 	if(defined $Expr)
 	{
 		my @F = @Field;
 		my %F = map {$_=>$Field[$Header{$_}]} keys %Header;
 		$pass = eval $Expr;
+		warn $@ if $@;
 	}
 	else
 	{
+		$pass = 0;
+		
 		for my $filter (@Filter)
 		{
 			my $left_data = exists $Header{$filter->{'field'}} ? $Field[$Header{$filter->{'field'}}] : '';
@@ -134,9 +145,9 @@ while($line = <STDIN>)
 			my $left_code = '$left_data';
 			my $right_code = '$right_data';
 			$right_code = "/$right_code/" if $operator ~~ ['=~', '!~'];
-			unless(eval "$left_code $operator $right_code")
+			if(eval "$left_code $operator $right_code")
 			{
-				$pass = 0;
+				$pass = 1;
 				last;
 			}
 		}

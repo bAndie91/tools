@@ -7,9 +7,13 @@ true <<EOF
 
 vifiles - Edit multiple files as one
 
-=head1 LIMITATIONS
+=head1 CAVEATS
 
 If a LF char at the end of any files is missing, it'll be added after edit.
+
+=head1 SEE ALSO
+
+vidir(1) from moreutils
 
 =cut
 

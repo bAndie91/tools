@@ -17,7 +17,7 @@ VISUAL=vidir-sanitize vidir
 
 =head1 SEE ALSO
 
-vidir(1)
+vidir(1) from moreutils
 
 =cut
 

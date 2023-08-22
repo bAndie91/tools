@@ -21,4 +21,19 @@ __END__
 
 timestamper - Prepend a timestamp to each input line
 
+=head1 ENVIRONMENT
+
+=over 4
+
+=item TIMESTAMP_FMT
+
+Timestamp format, see strftime(3).
+Default is "%F %T %z".
+
+=back
+
+=head1 SEE ALSO
+
+ts(1) from moreutils
+
 =cut

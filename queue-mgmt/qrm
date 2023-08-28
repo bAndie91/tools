@@ -4,7 +4,7 @@ usage_help_text="qrm [<OPTIONS>] <TASK-ID> [<TASK-ID> [...]]
 Remove specified queued or ended task(s) from the queue.
 May force removing gone tasks as well.
 OPTIONS:
-  -d, --queue-dir
+  -d, --queue-dir <DIR>
   -f, --force"
 
 . qadd-common

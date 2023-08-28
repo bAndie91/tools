@@ -5,7 +5,7 @@ Run next task in the queue.
 OPTIONS:
   -q, --quiet
   -qq, --very-quiet
-  -d, --queue-dir
+  -d, --queue-dir <DIR>
   -s, --suppress-output
   -n, --dry-run
   -E, --no-task-exit-code"

@@ -7,7 +7,7 @@ Qadd tries to preserve as much from the caller's environment as it can,
 including environment variables, exported bash functions, working directoty, umask.
 OPTIONS:
   -q, --quiet
-  -d, --queue-dir
+  -d, --queue-dir <DIR>
   -x, --if-not-queued
   -X, --if-not-running"
 

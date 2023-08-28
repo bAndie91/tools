@@ -12,9 +12,9 @@ OPTIONS:
   -q, --quiet
   --multiline  (default)
   -M, --no-multiline, --escape-command
-  -d, --queue-dir
+  -d, --queue-dir <DIR>
   -H, --no-header
-  -h, --hide-state {queued,running,gone,ended}
+  -h, --hide-state <STATE>
   -e, --show-exit-code"
 
 qls_multiline=yes

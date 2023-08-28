@@ -1,0 +1,50 @@
+#!/usr/bin/env perl
+
+
+=pod
+
+=head1 NAME
+
+td-trans-mount - Transform mount(1) output to tabular data stream.
+
+=head1 DESCRIPTION
+
+Supported mount(1) options which affect output format:
+
+=over 4
+
+=item -l (show labels)
+
+=back
+
+=head1 EXAMPLES
+
+mount | td-trans-mount
+
+mount -l | td-trans-mount
+
+=cut
+
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
+@Headers = ("DEVICE", "MOUNTPOINT", "TYPE", "OPTIONS", "LABEL");
+unless($OptNoHeader)
+{
+	print join($FS, @Headers).$/;
+}
+
+while(<STDIN>)
+{
+	chomp;
+	
+	# /dev/mapper/pegasus-ambula.d20230827 on /mnt/snap/20230827 type ext4 (ro,relatime,data=ordered) [ambula]
+	if(/^(?<DEVICE>\S+) on (?<MOUNTPOINT>\S+) type (?<TYPE>\S+) \((?<OPTIONS>.*?)\)(?: \[(?<LABEL>.*?)\]|)$/)
+	{
+		@Fields = map {$+{$_}} @Headers;
+		print join($FS, @Fields).$/;
+	}
+	else
+	{
+		die "can not parse: $line\n";
+	}
+}

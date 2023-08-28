@@ -37,7 +37,6 @@ while(<STDIN>)
 {
 	chomp;
 	
-	# /dev/mapper/pegasus-ambula.d20230827 on /mnt/snap/20230827 type ext4 (ro,relatime,data=ordered) [ambula]
 	if(/^(?<DEVICE>\S+) on (?<MOUNTPOINT>\S+) type (?<TYPE>\S+) \((?<OPTIONS>.*?)\)(?: \[(?<LABEL>.*?)\]|)$/)
 	{
 		@Fields = map {$+{$_}} @Headers;

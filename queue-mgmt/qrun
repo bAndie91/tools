@@ -99,7 +99,8 @@ load_command_global "$queue_dir/$next_item_id.comm"
 	cd "$pwd"
 	umask "$umask"
 	
-	# setsid prevents SIGINT to sent to us when the user types ctrl-c on the main foreground process
+	# setsid prevents SIGINT to sent to us when the user types ctrl-c on the main foreground process,
+	# so leaving it to the main qrun process to reape our exit status.
 	exec -- setsid "${command[@]}"
 	exit 127
 } &

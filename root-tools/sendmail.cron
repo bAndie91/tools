@@ -13,27 +13,28 @@ grandparentexe=`grandparentexe`
 if [ "$grandparentexe" = /usr/sbin/cron ]
 then
 	cron_user=''
-	cron_job=''
+	cron_job_cmd=''
+	cron_job_id=''
 	partial_cron_message=''
 	while read -r line
 	do
-		if [ -n "$cron_user" -a -n "$cron_job" ]
+		if [ "$line" = '' -o "$line" = $'\r' ]
 		then
-			full_cron_message=$partial_cron_message$(cat)
-			message_body=`echo "$full_cron_message" |\
-				perl -pe '
-					BEGIN { $in_header=1; }
-					if($in_header)
-					{
-						$in_header=0 if $_ eq "\n";
-						$_="";
-					}
-				'`
-			if [ "$message_body" = "STDIN EOF!"$'\r' -o "$message_body" = "STDIN EOF!"$'\r\n' -o "$message_body" = "" -o "$message_body" = $'\n' ]
+			if [ -z "$cron_user" -o -z "$cron_job_cmd" ]
+			then
+				errx -2 "Missing either 'To' or 'Subject' header."
+			fi
+			
+			message_body=`cat`
+			if [ "$message_body" = "" -o "$message_body" = $'\n' ]
 			then
 				continue
 			fi
+			full_cron_message=$partial_cron_message$line$'\n'$message_body
 			unset message_body
+			
+			cron_job=$cron_job_cmd
+			if [ -n "$cron_job_id" ]; then cron_job=$cron_job_id; fi
 			
 			command_name_noslash=`echo "$cron_job" | sed -e 's@/@⁄@g'`
 			command_name_noslash=${command_name_noslash:0:255}
@@ -63,12 +64,15 @@ then
 			elif [ "${line:0:8}" = Subject: ]
 			then
 				# assuming the header like "Subject: Cron <user@host> command..."
-				cron_job=`echo "$line" | cut -d' ' -f4-`
+				cron_job_cmd=`echo "$line" | cut -d' ' -f4-`
 				# trim leading spaces and tabs
-				cron_job=${cron_job/#+( |$'\t')}
+				cron_job_cmd=${cron_job_cmd/#+( |$'\t')}
+			elif [[ $line =~ X-Cron-Env:\ \<CRONJOBID=(.+?)\> ]]
+			then
+				cron_job_id=${BASH_REMATCH[1]}
 			fi
 		fi
 	done
 else
-	errx -1 "I only save cron job outputs to $basedir. Call me only within cron. Grandparent process seems to be $grandparentexe."
+	errx -1 "I only save cron job outputs to $basedir. Call me only within cron. Grandparent process seems to be '$grandparentexe'."
 fi

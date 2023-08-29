@@ -1,0 +1,8 @@
+#!/bin/bash
+
+if [ -r ~/.bash_cron ]
+then
+	. ~/.bash_cron
+fi
+
+exec sendmail "$@"

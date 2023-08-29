@@ -8,3 +8,5 @@
 - [vnlog](https://github.com/dkogan/vnlog)
 - [tsv-utils](https://github.com/eBay/tsv-utils-dlang)
 - [csvkit](https://github.com/wireservice/csvkit)
+- [q](https://github.com/harelba/q) Run SQL directly on delimited files...
+- [sqawk](https://github.com/dbohdan/sqawk)

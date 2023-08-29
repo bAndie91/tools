@@ -1,0 +1,61 @@
+#!/bin/bash
+
+true <<'EOF'
+
+=pod
+
+=head1 NAME
+
+filterexec - Echo those arguments with which the given command returns zero.
+
+=head1 SYNOPSIS
+
+filterexec <COMMAND> [<ARGS>] -- <DATA-1> [<DATA-2> [... <DATA-n>]]
+
+=head1 DESCRIPTION
+
+Prints each DATA (1 per line) only if command "COMMAND ARGS DATA" exits
+succesfully, ie. with zero exit status.
+
+=head1 EXAMPLE
+
+  filterexec test -d -- $(ls)
+
+Shows only the directories.
+
+=cut
+
+EOF
+
+
+declare -a command=()
+declare -a items=()
+
+if [ "$1" = --help ]
+then
+	pod2text "$0"
+	exit 0
+fi
+
+while [ $# -gt 0 ]
+do
+	case "$1" in
+	--)
+		shift
+		break;;
+	*)
+		command+=("$1")
+		;;
+	esac
+	shift
+done
+
+items=("$@")
+
+for item in "${items[@]}"
+do
+	if "${command[@]}" "$item"
+	then
+		printf '%s\n' "$item"
+	fi
+done

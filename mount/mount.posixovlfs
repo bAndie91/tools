@@ -8,7 +8,7 @@ set -e
 set -o pipefail
 set -u
 
-sourcedir=$1
+sourcestring=$1
 shift
 targetdir=$1
 shift
@@ -28,6 +28,13 @@ do
 	esac
 	shift
 done
+
+if [[ $sourcestring =~ posixovl:(.+) ]]
+then
+	sourcedir=${BASH_REMATCH[1]}
+else
+	sourcedir=$sourcestring
+fi
 
 declare -a opts=()
 fuse_options=''

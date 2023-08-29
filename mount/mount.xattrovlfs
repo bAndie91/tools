@@ -6,7 +6,7 @@ set -e
 set -o pipefail
 set -u
 
-sourcedir=$1
+sourcestring=$1
 shift
 targetdir=$1
 shift
@@ -26,6 +26,13 @@ do
 	esac
 	shift
 done
+
+if [[ $sourcestring =~ xattrovl:(.+) ]]
+then
+	sourcedir=${BASH_REMATCH[1]}
+else
+	sourcedir=$sourcestring
+fi
 
 fsname="xattr-overlay($sourcedir)"
 

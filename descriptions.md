@@ -55,8 +55,8 @@
 | [LevelDB](user-tools/LevelDB) | Commandline interface for Google's leveldb key-value storage
 | [levenshtein-distance](user-tools/levenshtein-distance) | Calculate the Levenshtein distance of given strings
 | [lines](user-tools/lines) | Output only the given lines of the input stream
-| [list_screens](user-tools/list_screens) | List all GNU/Screen sessions accessible by the user and all of their inner windows as well
 | [lnto](user-tools/lnto) | ln(1) convenience wrapper; you enter link target paths relative to the current directory
+| [loadenv](compiled-tools/loadenv.c) | Load environment variables from file and run a program in that environment
 | [logbtmp](compiled-tools/logbtmp.d/logbtmp.c) | Add new entry to the system's bad-login database (btmp)
 | [loggerexec](user-tools/loggerexec) | Run a command and send STDOUT and STDERR to syslog
 | [logrotate-counters](user-tools/logrotate-counters) | Increment numbers in file names
@@ -96,13 +96,15 @@
 | [remove](compiled-tools/remove.c) | Remove file and directoy alike
 | [renamemanual](user-tools/renamemanual) | Interactive file rename tool
 | [repeat](user-tools/repeat) | Run a give command repeatedly
-| [reportcmdstatus](user-tools/reportcmdstatus) | Textually shows how a given command finished
+| [reportcmdstatus](user-tools/reportcmdstatus) | Textually show how the given command finished (exit status, signal)
 | [rsacrypt](user-tools/rsacrypt) | Encrypt/decrypt files with RSA
 | [rsysrq](user-tools/rsysrq) | Send SysRQ commands remotely over the network
 | [screenconsole](user-tools/screenconsole) | Interactive CLI to run GNU/screen commands against current or specified screen session
 | [screen-notify](user-tools/screen-notify) | Send status-line message to the current GNU/Screen instance
 | [screenreattach](user-tools/screenreattach) | Reattach to GNU/screen and import environment variables
+| [screens](user-tools/screens) | List all GNU/Screen sessions accessible by the user and all of their inner windows as well
 | [setgroups](compiled-tools/setgroups.c) | Start a process with specified set of GIDs
+| [setpgrp](compiled-tools/setpgrp.c) | CLI frontend for setpgrp(2) - run a program in a new process group
 | [set-sys-path](user-tools/set-sys-path) | Set PATH according to /etc/environment and run a program
 | [set-xcursor-lock-and-run](user-tools/set-xcursor-lock-and-run) | Set X11 cursor to a padlock and run a command
 | [slayall](user-tools/slayall) | Try to kill a process by name until it exists
@@ -112,6 +114,7 @@
 | [subst_sudo_user](user-tools/subst_sudo_user) | Sudo helper program
 | [swap](user-tools/swap) | swaps two files' names
 | [symlinks2dot](user-tools/symlinks2dot) | Generate a graph in dot(1) format representing the symlink-target relations among the given files
+| [symlinks-analyze](user-tools/symlinks-analyze) | Discover where symlinks point at, recursively
 | [syncfs](compiled-tools/syncfs.c) | Request flushing data of the given filesystem to the disk
 | [tabularize](user-tools/tabularize) | Takes TAB-delimited lines of text and outputs formatted table.
 | [Tail](user-tools/Tail) | output as many lines from the end of files as many lines on the terminal currently

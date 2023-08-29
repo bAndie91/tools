@@ -1,6 +1,15 @@
 #!/usr/bin/env perl
 
 use POSIX;
+use Getopt::Long qw/:config no_ignore_case/;
+use Pod::Usage;
+
+$clone_status = 0;
+
+GetOptions(
+	'c|clone' => \$clone_status,
+	'help|?' => sub{ pod2usage(-exitval=>0, -verbose=>99); },
+) or pod2usage(-exitval=>2, -verbose=>99);
 
 system @ARGV;
 $status = ${^CHILD_ERROR_NATIVE};
@@ -8,12 +17,15 @@ $status = ${^CHILD_ERROR_NATIVE};
 if(WIFSIGNALED($status))
 {
 	printf STDERR "command terminated by signal %d.\n", WTERMSIG($status);
+	$mystatus = 128 + WTERMSIG($status);
 }
 else
 {
 	printf STDERR "command exited with status %d.\n", WEXITSTATUS($status);
+	$mystatus = WEXITSTATUS($status);
 }
 
+exit $mystatus if $clone_status;
 exit 0;
 
 __END__
@@ -22,11 +34,22 @@ __END__
 
 =head1 NAME
 
-reportcmdstatus - Textually show how the given command finished (exit status, signal)
+reportcmdstatus - Textually show how the given command finished (exit status/signal)
 
 =head1 SYNOPSIS
 
-reportcmdstatus <COMMAND> [<ARGS>]
+reportcmdstatus [-c] <COMMAND> [<ARGS>]
+
+=head1 OPTIONS
+
+=over 4
+
+=item -c, --clone
+
+Take COMMAND's status and itself exits with it.
+Default is to exit 0.
+
+=back
 
 =cut
 

@@ -1,0 +1,52 @@
+#!/usr/bin/env perl
+
+#use Data::Dumper;
+
+@extract_headers = @ARGV;
+
+sub getheaders($)
+{
+	my $hname = lc shift;
+	my @return;
+	
+	for my $hdr_ref (@Headers)
+	{
+		if(lc $hdr_ref->{"name"} eq $hname)
+		{
+			push @return, $hdr_ref->{"value"};
+		}
+	}
+	return @return;
+}
+
+@Headers = ();
+
+# read headers
+while(<STDIN>)
+{
+	if(/^\r?\n?$/)
+	{
+		# End of Headers
+		last;
+	}
+	
+	# does not care line ending
+	s/\r?\n?$//;
+	
+	if(my($hdr_name, $content) = /^(\S+?):[ ]?(.*)/)
+	{
+		my $hdr_name_pretty = $hdr_name;
+		$hdr_name_pretty =~ s/[^-]*/\L\u$&/g;
+		
+		my $hdr_hash = { "name" => $hdr_name, "pretty_name" => $hdr_name_pretty, "value" => $content, };
+		push @Headers, $hdr_hash;
+		$last_hdr_ref = $hdr_hash;
+	}
+	elsif(/^\s+(\S.*)/)
+	{
+		# it is a folded header
+		$last_hdr_ref->{"value"} .= $1;
+	}
+}
+
+print join "", map {map {"$_\n"} getheaders($_)} @extract_headers;

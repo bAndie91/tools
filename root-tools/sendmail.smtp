@@ -1,0 +1,99 @@
+#!/bin/bash
+
+# This is a script to mimic sendmail(1) interface, but
+# forward mail to local MTA via sendEmail(1).
+
+. /usr/lib/tool/bash-utils || exit -1
+
+declare -a recipient
+from_header=''
+envelope_sender=''
+get_recipients_from_headers=no
+single_dot_terminates_input=yes
+
+while [ -n "$1" ]
+do
+	case "$1" in
+	-F)	shift
+		from_header=$1;;
+	-f|-r)
+		shift
+		envelope_sender=$1;;
+	-t)	get_recipients_from_headers=yes;;
+	-ti)
+		get_recipients_from_headers=yes
+		single_dot_terminates_input=no
+		;;
+	-i|-oi)
+		single_dot_terminates_input=no;;
+	-o)
+		shift
+		warnx "Ignoring option: -o $1";;
+	-bp|-bs)
+		errx 22 "Option not supported: $1";;
+	-*)	errx 22 "Unknown option: $1";;
+	*)	recipient+=("$1");;
+	esac
+	shift
+done
+
+if [ $get_recipients_from_headers = yes -a ${#recipient[@]} != 0 ]
+then
+	errx 22 "Option -t and specifying recipients are mutually exclusive."
+fi
+
+domainname()
+{
+	cat /etc/domain || cat /etc/mailname
+}
+
+if [ -z "$envelope_sender" ]
+then
+	maildomain=`domainname`
+	envelope_sender=$USER@$maildomain
+fi
+
+auto_qualify_recipients()
+{
+	local hname hcontent
+	local domain=`domainname`
+	
+	while IFS=$'\n' read -r line
+	do
+		if [[ $line =~ ^(To|Cc|Bcc):([^$'\r']+) ]]
+		then
+			hname=${BASH_REMATCH[1]}
+			hcontent=${BASH_REMATCH[2]}
+			if ! [[ $hcontent =~ @ ]]
+			then
+				hcontent="$hcontent@$domain"
+				line="$hname:$hcontent"$'\r'
+			fi
+		fi
+		printf '%s\n' "$line"
+	done
+}
+
+call_sendEmail()
+{
+	sendEmail -f "$envelope_sender" -t "${recipient[@]}" \
+		-o message-format=raw -o message-file=/dev/stdin \
+		-s "${SMTP_SERVER:-localhost:25}" \
+		1>&2
+}
+
+if [ $get_recipients_from_headers = yes ]
+then
+	raw_email=`cat`
+	_IFS=$IFS
+	IFS=$'\n'
+	recipient+=(`echo "$raw_email" | auto_qualify_recipients | mail-extract-raw-headers To Cc Bcc | mail-extract-addresses`)
+	IFS=$_IFS
+	if [ -n "$SENDMAIL_DEBUG" ]
+	then
+		warnx "detected recipients: ${recipient[@]}"
+	fi
+	echo "$raw_email" | call_sendEmail
+else
+	call_sendEmail
+fi

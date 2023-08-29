@@ -6,6 +6,10 @@ SYSTEM_MANPAGES_PATH = /usr/share/man
 SYSTEM_MANPAGES_FILES = $(addprefix $(SYSTEM_MANPAGES_PATH)/,$(MANPAGE_FILES))
 
 
+default:
+	@echo suggestions: install-manpages
+	@false
+
 list-manpages:
 	@echo $(MANPAGE_FILES) | tr " " "\n" | sort
 

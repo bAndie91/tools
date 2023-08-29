@@ -12,7 +12,7 @@ TOOLS ?=   2opml adr2html asterisk-log-separator awk-cut base58 base64url \
   findoldestfile fixlogfiledatetime fixRFC822filemtime fmtkv foreach \
   g_filename_to_uri git-checkout-sparse gitdiff grepdatetime Head \
   header.sed indent2tree inisort is_gzip jobsel json2bencode json2msgpack \
-  kt LevelDB lines list_screens lnto locale-validator lpset ls2html lsata \
+  kt LevelDB lines screens lnto locale-validator lpset ls2html lsata \
   lsenv mime_extract mkdeb moz_bookmarks msg msgpack2json multithrottler \
   mysql-fix-orphan-privileges.php noacute nocomment nthash.py ocspverify \
   organizebydate palemoon-current-url parsel partial paths2indent \

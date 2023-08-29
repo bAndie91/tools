@@ -42,21 +42,36 @@ then
 	errx 22 "Option -t and specifying recipients are mutually exclusive."
 fi
 
-domainname()
+
+maildomain=`cat /etc/domain || cat /etc/mailname`
+
+qualify_address()
 {
-	cat /etc/domain || cat /etc/mailname
+	# add local domain name if there is no domain part in the address
+	local addr=$1
+	if ! [[ $addr =~ @ ]]
+	then
+		addr=$addr@$maildomain
+	fi
+	echo "$addr"
 }
 
 if [ -z "$envelope_sender" ]
 then
-	maildomain=`domainname`
 	envelope_sender=$USER@$maildomain
+else
+	envelope_sender=`qualify_address "$envelope_sender"`
 fi
+
+for idx in ${!recipient[@]}
+do
+	recipient[$idx]=`qualify_address "${recipient[$idx]}"`
+done
+
 
 auto_qualify_recipients()
 {
-	local hname hcontent
-	local domain=`domainname`
+	local line hname hcontent
 	
 	while IFS=$'\n' read -r line
 	do
@@ -64,11 +79,8 @@ auto_qualify_recipients()
 		then
 			hname=${BASH_REMATCH[1]}
 			hcontent=${BASH_REMATCH[2]}
-			if ! [[ $hcontent =~ @ ]]
-			then
-				hcontent="$hcontent@$domain"
-				line="$hname:$hcontent"$'\r'
-			fi
+			hcontent=`qualify_address "$hcontent"`
+			line="$hname:$hcontent"$'\r'
 		fi
 		printf '%s\n' "$line"
 	done
@@ -77,7 +89,7 @@ auto_qualify_recipients()
 call_sendEmail()
 {
 	sendEmail -f "$envelope_sender" -t "${recipient[@]}" \
-		-o message-format=raw -o message-file=/dev/stdin \
+		-o message-format=raw -o message-file=- \
 		-s "${SMTP_SERVER:-localhost:25}" \
 		1>&2
 }

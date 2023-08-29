@@ -5,7 +5,7 @@ true <<EOF
 
 =head1 NAME
 
-list_screens - List all GNU/Screen sessions accessible by the user and all of their inner windows as well
+screens - List all GNU/Screen sessions accessible by the user and all of their inner windows as well
 
 =cut
 
@@ -23,8 +23,10 @@ do
 		for win in `screen -S "$sty" -Q @echo -p %v`
 		do
 			win=${win//[!0-9]/}
+			tty=`screen -S "$sty" -p "$win" -Q @echo -p %T`
 			title=`screen -S "$sty" -p "$win" -Q @echo -p %t`
-			echo $'\t'$'\t'$win$'\t'"$title"
+			echo $'\t'$'\t'"$win"$'\t'"$tty"$'\t'"$title"
+			unset tty
 			unset title
 		done
 		unset win

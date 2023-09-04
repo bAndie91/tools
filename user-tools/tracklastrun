@@ -1,0 +1,143 @@
+#!/bin/bash
+
+set -e
+set -o pipefail
+set -u
+
+
+true <<'EOF'
+
+=pod
+
+=head1 NAME
+
+tracklastrun - Record when the given command starts and expose to it in an environment variable when it was last started and ended.
+
+=head1 SYNOPSIS
+
+tracklastrun [<OPTIONS>] [--] <COMMAND> [<ARGS>]
+
+=head1 OPTIONS
+
+=over 4
+
+=item -f, --full-command
+
+=item -b, --command-basename (default)
+
+=item -n, --name NAME
+
+=item -e, --env-var ENV
+
+=back
+
+=head1 DESCRIPTION
+
+It records when it starts COMMAND and when it ends, identifying COMMAND either by one of 4 options:
+(1) Full command line including ARGS.
+(2) Only the command name, COMMAND.
+(3) By the name given by the user in NAME.
+(4) By the environment variable given by name ENV.
+
+Set B<TRACKLASTRUN_STARTED> and B<TRACKLASTRUN_ENDED> environments for COMMAND to the ISO 8601 representation
+of the date and time when COMMAND was last started and ended respectively.
+Those are left empty if no data yet.
+
+=head1 FILES
+
+Store tracking data in C<~/.tracklastrun> directory.
+
+=head1 LIMITATIONS
+
+Tracklastrun does not do locking. You may take care of it if you need using flock(1), cronrun(1), or similar.
+
+=cut
+
+EOF
+
+
+cmd_id=''
+cmd_id_by=basename
+
+
+while [ $# -gt 0 ]
+do
+	case "$1" in
+	--help)
+		pod2text "$0"
+		exit 0;;
+	-f|--full-command)
+		cmd_id_by=full
+		;;
+	-b|--command-basename)
+		cmd_id_by=basename
+		;;
+	-n|--name)
+		cmd_id_by=name
+		shift
+		cmd_id=$1
+		;;
+	-e|--env-var)
+		cmd_id_by=env
+		shift
+		cmd_id=${!1}
+		;;
+	--)
+		shift
+		break;;
+	-*)
+		echo "$0: unknown option: $1" >&1
+		exit -1;;
+	*)
+		break;;
+	esac
+	shift
+done
+
+
+if [ $# = 0 ]
+then
+	pod2text "$0" >&2
+	exit -1
+fi
+
+
+declare -a cmd_args=("$@")
+
+
+if [ -z "$cmd_id" ]
+then
+	case "$cmd_id_by" in
+	full)
+		cmd_id=${cmd_args[*]}
+		;;
+	basename)
+		cmd_id=`basename "${cmd_args[0]}"`
+		;;
+	esac
+fi
+
+
+track_dir=~/.tracklastrun
+cmd_id_hash=`printf %s "$cmd_id" | md5sum | cut -c 1-32`
+
+mkdir -p "$track_dir"
+date +%FT%T%z > "$track_dir/$cmd_id_hash.start.current"
+
+export TRACKLASTRUN_STARTED=`cat "$track_dir/$cmd_id_hash.start.last" 2>/dev/null`
+export TRACKLASTRUN_ENDED=`cat "$track_dir/$cmd_id_hash.end.last" 2>/dev/null`
+
+
+set +e
+set +o pipefail
+
+${cmd_args[@]}
+status=$?
+
+set -e
+set -o pipefail
+
+date +%FT%T%z > "$track_dir/$cmd_id_hash.end.last"
+mv -f "$track_dir/$cmd_id_hash.start.current" "$track_dir/$cmd_id_hash.start.last"
+
+exit $status

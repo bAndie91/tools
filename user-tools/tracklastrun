@@ -128,16 +128,32 @@ export TRACKLASTRUN_STARTED=`cat "$track_dir/$cmd_id_hash.start.last" 2>/dev/nul
 export TRACKLASTRUN_ENDED=`cat "$track_dir/$cmd_id_hash.end.last" 2>/dev/null`
 
 
-set +e
-set +o pipefail
+{
+	exec -- setsid ${cmd_args[@]}
+	exit 127
+} &
 
-${cmd_args[@]}
-status=$?
+child_pid=$!
+signal_handler() { interrupted=yes; }
+trap signal_handler INT
+while true
+do
+	interrupted=''
+	set +e
+	wait $child_pid
+	exit_code=$?
+	set -e
+	if [ $interrupted ]
+	then
+		exit_code=''
+		kill -s INT $child_pid || true
+	else
+		break
+	fi
+done
 
-set -e
-set -o pipefail
 
 date +%FT%T%z > "$track_dir/$cmd_id_hash.end.last"
 mv -f "$track_dir/$cmd_id_hash.start.current" "$track_dir/$cmd_id_hash.start.last"
 
-exit $status
+exit $exit_code

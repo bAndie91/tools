@@ -11,11 +11,11 @@ true <<'EOF'
 
 =head1 NAME
 
-tracklastrun - Record when the given command starts and expose to it in an environment variable when it was last started and ended.
+trackrun - Record when the given command was started and ended and expose to it in environment variables
 
 =head1 SYNOPSIS
 
-tracklastrun [<OPTIONS>] [--] <COMMAND> [<ARGS>]
+trackrun [<OPTIONS>] [--] <COMMAND> [<ARGS>]
 
 =head1 OPTIONS
 
@@ -39,17 +39,30 @@ It records when it starts COMMAND and when it ends, identifying COMMAND either b
 (3) By the name given by the user in NAME.
 (4) By the environment variable given by name ENV.
 
-Set B<TRACKLASTRUN_STARTED> and B<TRACKLASTRUN_ENDED> environments for COMMAND to the ISO 8601 representation
+Set B<TRACKRUN_LAST_STARTED> and B<TRACKRUN_LAST_ENDED> environments for COMMAND to the ISO 8601 representation
 of the date and time when COMMAND was last started and ended respectively.
+Set B<TRACKRUN_LAST_STATUS> to the status COMMAND last exited with.
 Those are left empty if no data yet.
 
 =head1 FILES
 
-Store tracking data in C<~/.tracklastrun> directory.
+Store tracking data in C<~/.trackrun> directory.
+
+=head1 ENVIRONMENT
+
+=over 4
+
+=item TRACKRUN_LAST_STARTED
+
+=item TRACKRUN_LAST_ENDED
+
+=item TRACKRUN_LAST_STATUS
+
+=back
 
 =head1 LIMITATIONS
 
-Tracklastrun does not do locking. You may take care of it if you need using flock(1), cronrun(1), or similar.
+Trackrun does not do locking. You may take care of it if you need using flock(1), cronrun(1), or similar.
 
 =cut
 
@@ -118,15 +131,29 @@ then
 fi
 
 
-track_dir=~/.tracklastrun
+track_dir=~/.trackrun
 cmd_id_hash=`printf %s "$cmd_id" | md5sum | cut -c 1-32`
+track_file=$track_dir/$cmd_id_hash
+
+lookup()
+{
+	# lookup A B C
+	# return the C-th field of the first line in stdin of which A-th field is B
+	awk -F $'\t' -v field_num="$1" -v field_val="$2" -v field_ret="$3" \
+		'{if($field_num == field_val){ print $field_ret; exit; }}'
+}
 
 mkdir -p "$track_dir"
-date +%FT%T%z > "$track_dir/$cmd_id_hash.start.current"
+export TRACKRUN_LAST_STARTED=`tac "$track_file" 2>/dev/null | lookup 1 start 2`
+export TRACKRUN_LAST_ENDED=`tac "$track_file" 2>/dev/null | lookup 1 end 2`
+export TRACKRUN_LAST_STATUS=`tac "$track_file" 2>/dev/null | lookup 1 end 3`
 
-export TRACKLASTRUN_STARTED=`cat "$track_dir/$cmd_id_hash.start.last" 2>/dev/null`
-export TRACKLASTRUN_ENDED=`cat "$track_dir/$cmd_id_hash.end.last" 2>/dev/null`
+record()
+{
+	printf "%s\t%(%FT%T%z)T\t%s\t%s\n" "$1" -1 "${2:-}" "${cmd_args[*]}" >> "$track_file"
+}
 
+record start
 
 {
 	exec -- setsid ${cmd_args[@]}
@@ -152,8 +179,6 @@ do
 	fi
 done
 
-
-date +%FT%T%z > "$track_dir/$cmd_id_hash.end.last"
-mv -f "$track_dir/$cmd_id_hash.start.current" "$track_dir/$cmd_id_hash.start.last"
+record end $exit_code
 
 exit $exit_code

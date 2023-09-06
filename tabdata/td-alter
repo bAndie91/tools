@@ -1,0 +1,95 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+td-alter - Add new columns and fields to, and modify value of existing ones in the tabular data stream.
+
+=head1 USAGE
+
+td-alter <COLUMN>=<EXPR> [<COLUMN>=<EXPR> [<COLUMN>=<EXPR> [...]]]
+
+=head1 DESCRIPTION
+
+On each data row, sets field in <COLUMN> to the value resulted by <EXPR>
+Perl expression. In <EXPR>, you may refer to other columns by bareword or
+by C<$Field{'COLUMN'}> if you must, where COLUMN is a column name.
+You can use the earlier defined <COLUMN>'s value in a later defined <EXPR>.
+
+=head1 EXAMPLES
+
+ls -l | td-trans-ls | td-alter TYPE='substr MODE,0,1' BIGFILE='SIZE>10000000 && TYPE ne "d" ? "yes" : "no"'
+
+=head1 OPTIONS
+
+=over 4
+
+=item -H, --no--header
+
+do not show headers
+
+=back
+
+=cut
+
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
+process_header(scalar <STDIN>);
+
+@Derives = ();
+
+while(scalar @ARGV)
+{
+	if($ARGV[0] =~ /^([^=]+)=(.*)/)
+	{
+		my $column = $1;
+		my $expr = $2;
+		
+		if(not exists $Header{$column})
+		{
+			push @Header, $column;
+			$Header{$column} = $#Header;
+		}
+		
+		push @Derives, {'column'=>$column, 'expr'=>$expr};
+	}
+	else
+	{
+		pod2usage(-exitval=>2, -verbose=>99, -msg=>"$0: unknown parameter: $ARGV[0]");
+	}
+	shift @ARGV;
+}
+
+unless($OptNoHeader)
+{
+	print join($FS, @Header).$/;
+}
+
+while($line = <STDIN>)
+{
+	chomp $line;
+	
+	@Field = split $FS, $line;
+	%Field = map {$_=>$Field[$Header{$_}]} keys %Header;
+	
+	for my $d (@Derives)
+	{
+		my $cidx = $Header{$d->{'column'}};
+		my $expr = $d->{'expr'};
+		for my $col (@Header)
+		{
+			$expr =~ s/\b($col)\b/\$Field{'$1'}/g;
+		}
+		$Field[$cidx] = $Field{$d->{'column'}} = eval $expr;
+		warn $@ if $@;
+	}
+	
+	# undefined is empty string in tab-data format.
+	for my $idx (0..$#Field)
+	{
+		$Field[$idx] = '' if not defined $Field[$idx];
+	}
+	
+	print join($FS, @Field).$/;
+}

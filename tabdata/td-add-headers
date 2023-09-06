@@ -1,0 +1,46 @@
+#!/usr/bin/env perl
+
+
+=pod
+
+=head1 NAME
+
+td-add-headers - Add headers to the tabular data stream and pass through the rows.
+
+=head1 SYNOPSIS
+
+td-add-headers <COLNAME_1> <COLNAME_2> ...
+
+=head1 DESCRIPTION
+
+Add header row to the tabular data stream. Headers names will be the
+ones specified in the command line arguments, from the left-most 1-by-1.
+If there are more fields in the first data row, then additional columns
+will be added with names like "COL4", "COL5", etc. by the index number
+of the column counting from 1.
+
+=head1 EXAMPLE
+
+some-command | td-add-headers NAME ID AGE CITY
+
+=cut
+
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
+@Headers = @ARGV;
+
+# complete the number of headers to be as many as fields are there in the first row.
+
+$first_line = <STDIN>;
+$num_fields = scalar split $FS, $first_line;
+for my $n ((1 + scalar @Headers)..$num_fields)
+{
+	push @Headers, "COL$n";
+}
+
+print join($FS, @Headers).$/;
+print $first_line;
+while(<STDIN>)
+{
+	print;
+}

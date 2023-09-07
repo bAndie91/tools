@@ -281,6 +281,20 @@ array_shift()
 	eval "$array_name=(\"\${$array_name[@]}\")"
 }
 
+array_reverse()
+{
+	local array_name=$1
+	local i ci len aux
+	eval "len=\${#$array_name[@]}"
+	for ((i=0; i<len/2; i++))
+	do
+		ci=$[len-i-1]
+		eval "aux=\${$array_name[$i]}"
+		eval "$array_name[$i]=\${$array_name[$ci]}"
+		eval "$array_name[$ci]=\$aux"
+	done
+}
+
 bash_scriptdir()
 {
 	dirname "$(readlink -f "$0")"

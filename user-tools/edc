@@ -8,24 +8,34 @@ edc - Edit text files by commands directly in shell
 
 =head1 SYNOPSIS
 
-edc [<OPTIONS>] [--] <EXPR> [<EXPR> [...]]
+ edc [<OPTIONS>] [--] <EXPR> [<EXPR> [...]]
 
 =head1 DESCRIPTION
 
 Each EXPR expression consist of an optional SELECTOR term and a command
 and variable number of arguments depending on the command, like:
 
-<SELECTOR> <COMMAD> [<ARG> [<ARG> [...]]]
+ <SELECTOR> <COMMAD> [<ARG> [<ARG> [...]]]
 
 You may narrow the COMMAND's effect by a SELECTOR term. SELECTOR is
-either a regexp, ie. C</<PATTERN>/[<MODIFIERS>]>, or a line number, or
+either a regexp, ie. C</PATTERN/[MODIFIERS]>, or a line number, or
 starting and ending line numbers, with a trailing colon. Line numbers
 syntax:
 
-<START>[-<END>]:
+ <START>[-<END>]:
 
 Where <END> is a number or the word 'last' which means the last line.
 Line numbers are indexed from 0. So C<0-last> means the whole file.
+
+An EXPR expression can be a group denoted by C<[ ... ]> square brackets,
+in which there are subexpressions like EXPR. This way you can assign a
+SELECTOR to multiple COMMAND commands:
+
+ /^d/ [ ltrim prepend " " ]
+
+Which removes all leading whitespace, if any, from lines starting with
+"d" and inserts a single space at the beginning of all of them.
+See COMMANDS below for all the supported editor commands.
 
 =head1 OPTIONS
 

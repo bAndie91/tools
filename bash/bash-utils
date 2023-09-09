@@ -275,14 +275,34 @@ in_list()
 
 array_shift()
 {
+	if [ "$1" = --help ]
+	then
+		echo "NAME"
+		echo "  array_shift - print and remove the first element from a bash indexed array"
+		echo "INVOCATION"
+		echo "  array_shift <VARNAME>"
+		return
+	fi
+	
 	local array_name=$1
-	declare -a aux_array
+	local aux
+	eval "aux=\${$array_name[0]}"
 	unset $array_name[0]
 	eval "$array_name=(\"\${$array_name[@]}\")"
+	echo "$aux"
 }
 
 array_reverse()
 {
+	if [ "$1" = --help ]
+	then
+		echo "NAME"
+		echo "  array_reverse - reverse a bash array elements"
+		echo "INVOCATION"
+		echo "  array_reverse <VARNAME>"
+		return
+	fi
+	
 	local array_name=$1
 	local i ci len aux
 	eval "len=\${#$array_name[@]}"

@@ -188,6 +188,6 @@ do
 	cd "$starting_wd"
 	set +e
 	
-	array_shift paths_to_analyze
+	array_shift paths_to_analyze >/dev/null
 	paths_analyzed+=("$path_to_analyze")
 done

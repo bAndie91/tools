@@ -1,0 +1,571 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+edc - Edit text files by commands directly in shell
+
+=head1 SYNOPSIS
+
+edc [<OPTIONS>] [--] <EXPR> [<EXPR> [...]]
+
+=head1 DESCRIPTION
+
+Each EXPR expression consist of an optional SELECTOR term and a command
+and variable number of arguments depending on the command, like:
+
+<SELECTOR> <COMMAD> [<ARG> [<ARG> [...]]]
+
+You may narrow the COMMAND's effect by a SELECTOR term. SELECTOR is
+either a regexp, ie. C</<PATTERN>/[<MODIFIERS>]>, or a line number, or
+starting and ending line numbers, with a trailing colon. Line numbers
+syntax:
+
+<START>[-<END>]:
+
+Where <END> is a number or the word 'last' which means the last line.
+Line numbers are indexed from 0. So C<0-last> means the whole file.
+
+=head1 OPTIONS
+
+=over 4
+
+=item -f, --file PATH
+
+File to edit.
+May specify multiple times.
+Files are edited in-place by default, by persisting their Inode,
+ie. buffer the output data and write to the original input file
+when it's all read up.
+If --output option(s) is (are) given, then the file(s) won't be
+modified in-place, rather than saved in output file(s).
+If not given any --file, works on STDIN and print to STDOUT.
+
+=item -o, --output PATH
+
+File to save modified data into.
+May specify multiple times.
+If less --output parameters given than --file, then the input files
+without a corresponding output file will be edited in-place.
+
+=back
+
+=cut
+
+
+use Data::Dumper;
+use Getopt::Long qw/:config no_ignore_case/;
+use feature qw/switch/;
+use Pod::Usage;
+# Term::ReadLine::Gnu is recommended
+use Term::ReadLine;
+
+$OptConfirm = 0;
+@Files = ();
+@Output = ();
+
+GetOptions(
+	'c|confirm' => \$OptConfirm,
+	'f|file=s@' => \@Files,
+	'o|output=s@' => \@Output,
+	'help|?' => sub{ pod2usage(-exitval=>0, -verbose=>99); },
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+
+$readline = Term::ReadLine->new('edc');
+$readline->ornaments(0);
+$readline->add_defun('insert_lf', \&readline_insert_lf);
+$readline->bind_keyseq('\\C-j', 'insert_lf');
+
+sub readline_insert_lf
+{
+	my $pos = $readline->Attribs->{'point'};
+	my $buf = $readline->Attribs->{'line_buffer'};
+	$readline->Attribs->{'line_buffer'} = substr($buf, 0, $pos)."\n".substr($buf, $pos);
+}
+
+sub select_by_match
+{
+	my $state = shift;
+	return ${$state->{'line_ref'}} =~ /(?$_[1])$_[0]/;
+}
+sub select_line_eq
+{
+	my $state = shift;
+	return $state->{'line_num'} == $_[0];
+}
+sub select_line_ge
+{
+	my $state = shift;
+	return $state->{'line_num'} >= $_[0];
+}
+sub select_line_closed_interval
+{
+	my $state = shift;
+	return ($state->{'line_num'} >= $_[0] and $state->{'line_num'} <= $_[1]);
+}
+
+=pod
+
+=head1 COMMANDS
+
+=over 4
+
+=item s/<PATTERN>/<REPLACEMENT>/[<MODIFIERS>]
+
+Regexp substitution. Works just like in perl(1). See perlre(1).
+
+=cut
+
+
+# define how many arguments each edit_* subroutine expects from the CLI
+# by putting eg $NumberOfCliArgs{'xyz'}=2 before "sub edit_xyz".
+# Omit if does not need any CLI argument.
+%NumberOfCliArgs = ();
+
+=pod
+
+=item edit
+
+Edit selected lines interactively by a readline interface.
+Press Ctrl-J to insert newline (LF) at the cursor position,
+as it's not added automaticaly to the end of line.
+
+=cut
+
+sub edit_edit
+{
+	my $state = shift;
+	$state->{'confirm'} = 1;
+}
+
+=pod
+
+=item delete
+
+Delete matching line(s).
+
+=cut
+
+sub edit_delete
+{
+	my $state = shift;
+	${$state->{'line_ref'}} = '';
+}
+
+=pod
+
+=item ltrim, rtrim, trim
+
+Remove leading (ltrim), trailing (rtrim), or leading and trailing (trim) whitespace from the line.
+End-of-line char (LF, \n) is preserved.
+
+=cut
+
+sub edit_trim
+{
+	edit_ltrim(@_);
+	edit_rtrim(@_);
+}
+sub edit_ltrim
+{
+	my $state = shift;
+	${$state->{'line_ref'}} =~ s/^\s*//;
+}
+sub edit_rtrim
+{
+	my $state = shift;
+	my ($eol) = ${$state->{'line_ref'}} =~ /(\n)$/;
+	${$state->{'line_ref'}} =~ s/\s*$//;
+	${$state->{'line_ref'}} .= $eol;
+}
+
+=pod
+
+=item replace STR1 STR2
+
+Replace all STR1 to STR2.
+
+=cut
+
+$NumberOfCliArgs{'replace'} = 2;
+sub edit_replace
+{
+	my $state = shift;
+	${$state->{'line_ref'}} =~ s/\Q$_[0]\E/$_[1]/g;
+}
+
+=pod
+
+=item replaceword STR1 STR2
+
+Replace whole word STR1 to STR2.
+
+=cut
+
+$NumberOfCliArgs{'replaceword'} = 2;
+sub edit_replaceword
+{
+	my $state = shift;
+	${$state->{'line_ref'}} =~ s/\b\Q$_[0]\E\b/$_[1]/g;
+}
+
+=pod
+
+=item replaceline STR
+
+Replace the whole line to STR.
+
+=cut
+
+$NumberOfCliArgs{'replaceline'} = 1;
+sub edit_replaceline
+{
+	my $state = shift;
+	my ($eol) = ${$state->{'line_ref'}} =~ /(\n)$/;
+	${$state->{'line_ref'}} = $_[0];
+	${$state->{'line_ref'}} .= $eol;
+}
+
+=pod
+
+=item prepend STR
+
+Prepend STR to the line.
+
+=cut
+
+$NumberOfCliArgs{'prepend'} = 1;
+sub edit_prepend
+{
+	my $state = shift;
+	${$state->{'line_ref'}} = $_[0] . ${$state->{'line_ref'}};
+}
+
+=pod
+
+=item insertline STR
+
+Insert STR as a whole line before the matching line(s).
+Line numbering is preserved as there was not an inserted line,
+ie. line numbers are not incremented.
+
+=cut
+
+$NumberOfCliArgs{'insertline'} = 1;
+sub edit_insertline
+{
+	my $state = shift;
+	${$state->{'line_ref'}} = $_[0] . "\n" . ${$state->{'line_ref'}};
+}
+
+=pod
+
+=item insertfile PATH
+
+Insert the content of PATH file before the matching line(s).
+Line numbering is preserved as described above.
+
+=cut
+
+$NumberOfCliArgs{'insertfile'} = 1;
+sub edit_insertfile
+{
+	my $state = shift;
+	open my $fh, '<', $_[0] or die "$_[0]: $!\n";
+	local $/ = undef;
+	${$state->{'line_ref'}} = <$fh> . ${$state->{'line_ref'}};
+	close $fh;
+}
+
+=pod
+
+=item append STR
+
+Append STR to the line.
+
+=cut
+
+$NumberOfCliArgs{'append'} = 1;
+sub edit_append
+{
+	my $state = shift;
+	my ($eol) = ${$state->{'line_ref'}} =~ s/(\n)$//;
+	${$state->{'line_ref'}} .= $_[0];
+	${$state->{'line_ref'}} .= $eol;
+}
+
+=pod
+
+=item appendline STR
+
+Append STR as a whole line to the matching line(s).
+Line numbering is preserved as described above.
+
+=cut
+
+$NumberOfCliArgs{'appendline'} = 1;
+sub edit_appendline
+{
+	my $state = shift;
+	${$state->{'line_ref'}} .= $_[0] . "\n";
+}
+
+=pod
+
+=back
+
+=cut
+
+sub edc_eval
+{
+	my $state = shift;
+	eval $_[0];
+}
+
+
+@Commands = ();
+@group_selectors = ();
+
+while(scalar @ARGV)
+{
+	my $ThisCmd = {};
+	my $selector = {};
+	
+	if(my ($regexp, $modifiers) = $ARGV[0] =~ m{^/(.*)/(.*)$})
+	{
+		$selector = {'sub' => \&select_by_match, 'arg' => [$regexp, $modifiers],};
+		shift @ARGV;
+	}
+	elsif(my($start_ln, $end_ln) = $ARGV[0] =~ /^(\d+)(?:-(\d+|last)|):$/)
+	{
+		if($end_ln eq '')
+		{
+			$selector = {'sub' => \&select_line_eq, 'arg' => [$start_ln],};
+		}
+		elsif($end_ln eq 'last')
+		{
+			$selector = {'sub' => \&select_line_ge, 'arg' => [$start_ln],};
+		}
+		else
+		{
+			$selector = {'sub' => \&select_line_closed_interval, 'arg' => [$start_ln, $end_ln],};
+		}
+		shift @ARGV;
+	}
+	
+	if($ARGV[0] ~~ ['[', '(', '{'])
+	{
+		push @group_selectors, $selector if %$selector;
+		shift @ARGV;
+		next;
+	}
+	elsif($ARGV[0] ~~ [']', ')', '}'])
+	{
+		pop @group_selectors;
+		shift @ARGV;
+		last unless @ARGV;
+	}
+	
+	my $editcmd = shift @ARGV;
+	
+	given($editcmd)
+	{
+		if(@group_selectors)
+		{
+			push @{$ThisCmd->{'selectors'}}, @group_selectors;
+		}
+		if(%$selector)
+		{
+			push @{$ThisCmd->{'selectors'}}, $selector;
+		}
+		
+		when(m{^(s/.*/.*/.*)$})
+		{
+			$ThisCmd->{'editor'} = {'sub' => \&edc_eval, 'arg' => [sprintf('${$state->{"line_ref"}} =~ %s',$1)],};
+		}
+		default
+		{
+			my $edit_sub = sprintf 'edit_%s', $editcmd;
+			if(not exists &$edit_sub)
+			{
+				pod2usage(-exitval=>2, -verbose=>99, -msg=>"$0: unknown editor command: $editcmd");
+			}
+			
+			my @cli_args = ();
+			my $num_args = $NumberOfCliArgs{$editcmd};
+			if($num_args)
+			{
+				@cli_args = @ARGV[0..$num_args-1];
+				shift @ARGV for 0..$num_args-1;
+			}
+			
+			$ThisCmd->{'editor'} = {'sub' => \&{$edit_sub}, 'arg' => \@cli_args};
+		}
+	}
+	
+	push @Commands, $ThisCmd;
+}
+
+undef @group_selectors;
+#warn Dumper \@Commands;
+
+
+sub filehandler_write
+{
+	my $event = shift;
+	my $data = shift;
+	my $meta = shift;
+	if($event eq 'append')
+	{
+		return print {$meta->{'fh'}} $data;
+	}
+	return 1;
+}
+
+sub buffered_overwrite
+{
+	my $event = shift;
+	my $data = shift;
+	my $meta = shift;
+	given($event)
+	{
+		when('start')
+		{
+			$meta->{'buffer'} = '';
+		}
+		when('append')
+		{
+			$meta->{'buffer'} .= $data;
+		}
+		when('finish')
+		{
+			print {$meta->{'fh'}} $meta->{'buffer'} or return 0;
+			truncate $meta->{'fh'}, tell $meta->{'fh'} or return 0;
+		}
+	}
+	return 1;
+}
+
+sub process_file
+{
+	my $fh = shift;
+	my $commands_ref = shift;
+	my @commands = @$commands_ref;
+	my $output_cb = shift;
+	my $cb_metadata = shift;
+	
+	my $lnum = 0;
+	my $line;
+	
+	$output_cb->('start', undef, $cb_metadata);
+	
+	while($line = <$fh>)
+	{
+		my $before = $line;
+		my $selected = 1;
+		my $state = {
+			'line_ref' => \$line,
+			'line_num' => $lnum,
+		};
+		
+		for my $cmd (@commands)
+		{
+			$selected = 1;
+			if(defined $cmd->{'selectors'})
+			{
+				for my $selector (@{$cmd->{'selectors'}})
+				{
+					$selected = $selector->{'sub'}->($state, @{$selector->{'arg'}});
+					last if not $selected;
+				}
+			}
+			if($selected)
+			{
+				$cmd->{'editor'}->{'sub'}->($state, @{$cmd->{'editor'}->{'arg'}});
+			}
+		}
+		
+		my $do_confirm = $OptConfirm;
+		$do_confirm = $state->{'confirm'} if exists $state->{'confirm'};
+		
+		if($selected and $do_confirm)
+		{
+			print STDERR "$lnum: $before";
+			
+			my $confirmation = $readline->readline("$lnum: ", $line);
+			if(defined $confirmation)
+			{
+				$line = $confirmation;
+			}
+			else
+			{
+				$line = $before;
+			}
+		}
+		
+		if($line ne '')
+		{
+			$output_cb->('append', $line, $cb_metadata) or return 0;
+		}
+		
+		$lnum++;
+	}
+	
+	$output_cb->('finish', undef, $cb_metadata) or return 0;
+	
+	return 1;
+}
+
+if(@Files)
+{
+	for my $file_idx (0..$#Files)
+	{
+		my $in_path = $Files[$file_idx];
+		my $out_path = $Output[$file_idx];
+		
+		open my $in_fh, '<', $in_path or die "$in_path: $!\n";
+		
+		my $output_handler = \&buffered_overwrite;
+		my $output_handler_meta = {};
+		
+		if(defined $out_path)
+		{
+			open my $out_fh, '>', $out_path or die "$out_path: $!\n";
+			$output_handler = \&filehandler_write;
+			$output_handler_meta->{'fh'} = $out_fh;
+		}
+		else
+		{
+			open my $out_fh, '+<', $in_path or die "$in_path: $!\n";
+			$output_handler_meta->{'fh'} = $out_fh;
+		}
+		
+		my $file_ok = process_file($in_fh, \@Commands, $output_handler, $output_handler_meta);
+		
+		if(not $file_ok)
+		{
+			die "$in_path: $!\n";
+		}
+		
+		close $in_fh;
+		close $out_fh;
+	}
+}
+else
+{
+	process_file(\*STDIN, \@Commands, \&filehandler_write, {'fh'=>\*STDOUT});
+}
+
+=pod
+
+=head1 SIMILAR PROJECTS
+
+=over 4
+
+=item L<https://github.com/andrewbihl/bsed>
+
+=back
+
+=cut

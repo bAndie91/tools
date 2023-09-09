@@ -13,11 +13,12 @@ EOF
 
 
 FOREACH_MODE=command
-FOREACH_VERBOSE=''
+FOREACH_VERBOSE=no
 unset FOREACH_DELIM
 FOREACH_PASS_DATA=maybe
 FOREACH_PASS_FIELDS=no
 FOREACH_REPLACE_PLACEHOLDER=yes
+FOREACH_DRYRUN=no
 
 help()
 {
@@ -29,6 +30,7 @@ help()
 	echo "  -d, --delimiter DELIM"
 	echo "  -P, --no-placeholder"
 	echo "  -v, --verbose"
+	echo "  -n, --dry-run"
 	echo "DESCRIPTION"
 	echo "  Take each input line from stdin as DATA, and run COMMAND with DATA appended to the end of <ARGS> as a single argument."
 	echo "  If '{}' is there in <ARGS> then it's substituted with DATA rather than append to the end,"
@@ -70,7 +72,10 @@ do
 		FOREACH_REPLACE_PLACEHOLDER=no
 		;;
 	-v|--verbose)
-		FOREACH_VERBOSE=1
+		FOREACH_VERBOSE=yes
+		;;
+	-n|--dry-run)
+		FOREACH_DRYRUN=yes
 		;;
 	--)
 		shift
@@ -103,11 +108,6 @@ declare -a FOREACH_COMMAND=("$@")
 
 while read -r DATA
 do
-	if [ $FOREACH_VERBOSE ]
-	then
-		echo "foreach: $DATA" >&2
-	fi
-	
 	declare -a FIELD=()
 	IFS=${FOREACH_DELIM+$FOREACH_DELIM}${FOREACH_DELIM-$IFS} read -r -a FIELD <<< "$DATA"
 	
@@ -119,9 +119,10 @@ do
 		then
 			for arg in "${FOREACH_COMMAND[@]}"
 			do
-				if [ "$arg" = '{}' ]
+				if [[ $arg =~ \{\} ]]
 				then
-					arg=$DATA
+					placeholder='{}'
+					arg=${arg//$placeholder/$DATA}
 					placeholder_found=yes
 				fi
 				cmd_and_args+=("$arg")
@@ -132,8 +133,25 @@ do
 			if [ "$FOREACH_PASS_DATA" = yes ]; then cmd_and_args+=("$DATA"); fi
 			if [ "$FOREACH_PASS_FIELDS" = yes ]; then cmd_and_args+=("${FIELD[@]}"); fi
 		fi
-		command "${cmd_and_args[@]}"
+		
+		if [ "$FOREACH_VERBOSE" = yes ]
+		then
+			echo "foreach: ${cmd_and_args[*]}" >&2
+		fi
+		
+		if [ "$FOREACH_DRYRUN" = no ]
+		then
+			command "${cmd_and_args[@]}"
+		fi
 	else
-		eval "${FOREACH_COMMAND[@]}"
+		if [ "$FOREACH_VERBOSE" = yes ]
+		then
+			echo "foreach: ${FOREACH_COMMAND[*]}" >&2
+		fi
+		
+		if [ "$FOREACH_DRYRUN" = no ]
+		then
+			eval "${FOREACH_COMMAND[@]}"
+		fi
 	fi
 done

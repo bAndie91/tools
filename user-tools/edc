@@ -27,15 +27,20 @@ syntax:
 Where <END> is a number or the word 'last' which means the last line.
 Line numbers are indexed from 0. So C<0-last> means the whole file.
 
-An EXPR expression can be a group denoted by C<[ ... ]> square brackets,
-in which there are subexpressions like EXPR. This way you can assign a
-SELECTOR to multiple COMMAND commands:
+An EXPR expression can be a group denoted by brackets,
+in which there are subexpressions like EXPR.
+This way you can do multiple COMMAND commands, all when the common
+SELECTOR matches to the line in order:
 
  /^d/ [ ltrim prepend " " ]
 
 Which removes all leading whitespace, if any, from lines starting with
 "d" and inserts a single space at the beginning of all of them.
 See COMMANDS below for all the supported editor commands.
+
+Currently 3 type of brackets are supported: C<[ ... ]> square,
+C<{ ... }> curly, and C<( ... )> parenthesis. Use the square one to
+save shell escaping.
 
 =head1 OPTIONS
 
@@ -59,6 +64,23 @@ May specify multiple times.
 If less --output parameters given than --file, then the input files
 without a corresponding output file will be edited in-place.
 
+=item -c, --confirm
+
+Prompt for confirmation for each selected line.
+If a readline module is installed then you may do further changes to the
+lines interactively.
+Term::ReadLine::Gnu(3pm) module is recommended.
+
+Press Ctrl-J to insert newline (LF) at the cursor position,
+as it's not added automaticaly to the end of line.
+
+If no readline module available, press only a single Enter to accept
+changes, and Ctrl-C to revert to the original line, or type in new
+content and press Enter to replace the promped line (newline is added
+to the end in this case).
+Additionally an inverse space char at the end of line indicates if the last
+line is not terminated by a newline.
+
 =back
 
 =cut
@@ -69,7 +91,8 @@ use Getopt::Long qw/:config no_ignore_case/;
 use feature qw/switch/;
 use Pod::Usage;
 # Term::ReadLine::Gnu is recommended
-use Term::ReadLine;
+$readline_support = eval q{ use Term::ReadLine; 1; };
+use POSIX;
 
 $OptConfirm = 0;
 @Files = ();
@@ -83,16 +106,21 @@ GetOptions(
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
 
-$readline = Term::ReadLine->new('edc');
-$readline->ornaments(0);
-$readline->add_defun('insert_lf', \&readline_insert_lf);
-$readline->bind_keyseq('\\C-j', 'insert_lf');
-
 sub readline_insert_lf
 {
 	my $pos = $readline->Attribs->{'point'};
 	my $buf = $readline->Attribs->{'line_buffer'};
 	$readline->Attribs->{'line_buffer'} = substr($buf, 0, $pos)."\n".substr($buf, $pos);
+	$readline->Attribs->{'point'} += 1;
+}
+
+if($readline_support)
+{
+	$readline = Term::ReadLine->new('edc');
+	$readline->ornaments(0);
+	$readline->add_defun('insert_lf', \&readline_insert_lf);
+	$readline->bind_keyseq('\\C-j', 'insert_lf');
+	$readline->variable_bind('echo-control-characters', 0);
 }
 
 sub select_by_match
@@ -139,8 +167,7 @@ Regexp substitution. Works just like in perl(1). See perlre(1).
 =item edit
 
 Edit selected lines interactively by a readline interface.
-Press Ctrl-J to insert newline (LF) at the cursor position,
-as it's not added automaticaly to the end of line.
+See --confirm option in OPTIONS section for details.
 
 =cut
 
@@ -334,6 +361,12 @@ sub edc_eval
 	eval $_[0];
 }
 
+sub signal_int_handler
+{
+	$Ctrl_C_pressed = 1;
+	die "SIGINT\n";
+}
+
 
 @Commands = ();
 @group_selectors = ();
@@ -422,6 +455,14 @@ undef @group_selectors;
 #warn Dumper \@Commands;
 
 
+# if no readline support and --confirm requested or any of the editor commands is 'edit'
+if(not $readline_support and ($OptConfirm or grep {$_->{'editor'}->{'sub'} eq \&edit_edit} @Commands))
+{
+	open $terminal_fh, '<', '/dev/tty' or die "$0: /dev/tty: $!\n";
+}
+
+
+
 sub filehandler_write
 {
 	my $event = shift;
@@ -452,7 +493,7 @@ sub buffered_overwrite
 		when('finish')
 		{
 			print {$meta->{'fh'}} $meta->{'buffer'} or return 0;
-			truncate $meta->{'fh'}, tell $meta->{'fh'} or return 0;
+			truncate($meta->{'fh'}, tell $meta->{'fh'}) or return 0;
 		}
 	}
 	return 1;
@@ -474,7 +515,7 @@ sub process_file
 	while($line = <$fh>)
 	{
 		my $before = $line;
-		my $selected = 1;
+		my $line_selected = 0;
 		my $state = {
 			'line_ref' => \$line,
 			'line_num' => $lnum,
@@ -482,7 +523,7 @@ sub process_file
 		
 		for my $cmd (@commands)
 		{
-			$selected = 1;
+			my $selected = 1;
 			if(defined $cmd->{'selectors'})
 			{
 				for my $selector (@{$cmd->{'selectors'}})
@@ -493,6 +534,7 @@ sub process_file
 			}
 			if($selected)
 			{
+				$line_selected = 1;
 				$cmd->{'editor'}->{'sub'}->($state, @{$cmd->{'editor'}->{'arg'}});
 			}
 		}
@@ -500,17 +542,70 @@ sub process_file
 		my $do_confirm = $OptConfirm;
 		$do_confirm = $state->{'confirm'} if exists $state->{'confirm'};
 		
-		if($selected and $do_confirm)
+		if($line_selected and $do_confirm)
 		{
+			my $confirmation;
 			print STDERR "$lnum: $before";
+			print STDERR "\n" unless $before =~ /\n$/;
+			my $prompt = "$lnum> ";
+			my $old_sigaction = {};
 			
-			my $confirmation = $readline->readline("$lnum: ", $line);
+			eval {
+				if($readline_support)
+				{
+					my $startup_hook = $readline->Attribs->{'startup_hook'};
+					# Perl's signal handlers (%SIG) don't work in readline,
+					# so setup a low-level signal handler to intercept Ctrl-C.
+					sigaction SIGINT, POSIX::SigAction->new(sub {
+						# readline is interrupted so it can not restore the startup_hook
+						# which was modified to "preput" the initial data in the rl buffer.
+						$readline->Attribs->{'startup_hook'} = $startup_hook;
+						die "SIGINT\n";
+					}), $old_sigaction;
+					
+					$confirmation = $readline->readline($prompt, $line);
+				}
+				else
+				{
+					local $SIG{'INT'} = \&signal_int_handler;
+					
+					print STDERR "$prompt$line";
+					# display an inverse-video space to indicate no-EOL.
+					print STDERR "\x1B[7m \x1B[0m\n" unless $line =~ /\n$/;
+					$confirmation = <$terminal_fh>;
+					$confirmation = $line if $confirmation eq "\n";
+				}
+			};
+			
+			if($@)
+			{
+				if($@ eq "SIGINT\n")
+				{
+					# user pressed Ctrl-C
+					if($readline_support)
+					{
+						# show the original line
+						$readline->Attribs->{'line_buffer'} = $before;
+						$readline->Attribs->{'point'} = length $before;
+						$readline->redisplay;
+					}
+					$confirmation = undef;
+				} else {
+					# other exception happened
+					die $@;
+				}
+			}
+			
+			# restore low-level signal handler.
+			if($readline_support and %$old_sigaction)
+			{
+				sigaction SIGINT, POSIX::SigAction->new($old_sigaction->{'HANDLER'});
+			}
+			
 			if(defined $confirmation)
 			{
 				$line = $confirmation;
-			}
-			else
-			{
+			} else {
 				$line = $before;
 			}
 		}
@@ -559,8 +654,8 @@ if(@Files)
 			die "$in_path: $!\n";
 		}
 		
-		close $in_fh;
-		close $out_fh;
+		close $in_fh or die "$in_path: $!\n";
+		close $out_fh or die "$out_path: $!\n";
 	}
 }
 else

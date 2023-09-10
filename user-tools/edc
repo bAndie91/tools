@@ -81,6 +81,10 @@ to the end in this case).
 Additionally an inverse space char at the end of line indicates if the last
 line is not terminated by a newline.
 
+=item -v, --verbose
+
+Print changed lines to STDERR prefixed with line number.
+
 =back
 
 =cut
@@ -95,14 +99,16 @@ $readline_support = eval q{ use Term::ReadLine; 1; };
 use POSIX;
 
 $OptConfirm = 0;
+$OptVerbose = 0;
 @Files = ();
 @Output = ();
 
 GetOptions(
 	'c|confirm' => \$OptConfirm,
 	'f|file=s@' => \@Files,
-	'o|output=s@' => \@Output,
 	'help|?' => sub{ pod2usage(-exitval=>0, -verbose=>99); },
+	'o|output=s@' => \@Output,
+	'v|verbose' => \$OptVerbose,
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
 
@@ -608,6 +614,11 @@ sub process_file
 			} else {
 				$line = $before;
 			}
+		}
+		
+		if($OptVerbose and $line ne $before)
+		{
+			print STDERR "$lnum: $line";
 		}
 		
 		if($line ne '')

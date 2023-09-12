@@ -38,5 +38,5 @@ install-manpages: manpages
 
 
 descriptions.txt: $(TOOLS)
-	perl -ne 'if(/^=head1 NAME/){ <>; print while $$_=<>  and !/^\s*$$/; }' -- $(TOOLS) | uniq > $@~
+	perl -ne 'if(/^=head1 NAME/){ <>; print while $$_=<>  and !/^\s*$$/; }' -- $(sort $(TOOLS)) | uniq > $@~
 	mv -f $@~ $@

@@ -25,12 +25,14 @@
 | [diu](user-tools/diu) | Display Inode usage, similar to du(1) for space usage
 | [dlnew](user-tools/dlnew) | Download web resource if local copy is older
 | [eat](user-tools/eat) | Read and echo back input (like cat(1)) until interrupted (ie. ignore end-of-file)
+| [edc](user-tools/edc) | Edit text files by commands directly in shell
 | [errorlevel](user-tools/errorlevel) | Exit with the given status code
 | [fcomplete](user-tools/fcomplete) | Complete a smaller file with the data from a bigger one
 | [fc-search-codepoint](user-tools/fc-search-codepoint) | Print the names of available X11 fonts containing the given code point(s)
 | [fdupes-hardlink](user-tools/fdupes-hardlink) | Make hardlinks from identical files as reported by fdupes(1)
 | [ff](user-tools/ff) | Find files horizontally, ie. a whole directory level at a time, across subtrees
 | [fgat](user-tools/fgat) | Execute command in foreground at a given time
+| [filterexec](user-tools/filterexec) | Echo those arguments with which the given command returns zero.
 | [findnewestfile](user-tools/findnewestfile) | Search for the newest file in a given path recursively and always show the most recent while scanning
 | [findoldestfile](user-tools/findoldestfile) | Search for the oldest file in a given path recursively and always show the most older while scanning
 | [fixlogfiledatetime](user-tools/fixlogfiledatetime) | Set the target files modification time to their respective last log entry's timestamp
@@ -96,7 +98,7 @@
 | [remove](compiled-tools/remove.c) | Remove file and directoy alike
 | [renamemanual](user-tools/renamemanual) | Interactive file rename tool
 | [repeat](user-tools/repeat) | Run a give command repeatedly
-| [reportcmdstatus](user-tools/reportcmdstatus) | Textually show how the given command finished (exit status, signal)
+| [reportcmdstatus](user-tools/reportcmdstatus) | Textually show how the given command finished (exit status/signal)
 | [rsacrypt](user-tools/rsacrypt) | Encrypt/decrypt files with RSA
 | [rsysrq](user-tools/rsysrq) | Send SysRQ commands remotely over the network
 | [screenconsole](user-tools/screenconsole) | Interactive CLI to run GNU/screen commands against current or specified screen session
@@ -125,6 +127,7 @@
 | [text2img-dataurl](user-tools/text2img-dataurl) | Convert text input to image in "data:..." URL representation
 | [timestamper](user-tools/timestamper) | Prepend a timestamp to each input line
 | [touchx](user-tools/touchx) | set execution bit on files and creates them if neccessary
+| [trackrun](user-tools/trackrun) | Record when the given command was started and ended and expose to it in environment variables
 | [ttinput](user-tools/ttinput) | Inject console input in a terminal as if the user typed
 | [uchmod](user-tools/uchmod) | chmod files according to umask
 | [unicodestyle](user-tools/unicodestyle) | Add font styles to input text using Unicode

@@ -1,4 +1,13 @@
 2opml - Convert list of URLs to OPML.
+Head - output as many lines from the first part of files as many lines on the terminal currently
+LevelDB - Commandline interface for Google's leveldb key-value storage
+PMbwmon - Poor man's bandwidth monitor
+PMdirindex - Poor man's directory index generator, output HTML
+PMdirindex - Poor man's hex diff viewer
+PMnslist - Poor man's namespace list
+PMpwgen - Poor man's password generator
+PMrecdiff - Poor man's directory tree difference viewer, comparing file names and sizes recursively
+Tail - output as many lines from the end of files as many lines on the terminal currently
 adr2html - Convert Opera Hostlist 2.0 bookmarks to HTML
 asterisk-log-separator - Split up Asterisk PBX log file into multiple files based on which process wrote each part
 awk-cut - Select fields from input stream with awk
@@ -21,35 +30,41 @@ digasn - Query Autonom System Number (ASN) from DNS
 diu - Display Inode usage, similar to du(1) for space usage
 dlnew - Download web resource if local copy is older
 eat - Read and echo back input (like cat(1)) until interrupted (ie. ignore end-of-file)
+edc - Edit text files by commands directly in shell
 errorlevel - Exit with the given status code
-fcomplete - Complete a smaller file with the data from a bigger one
 fc-search-codepoint - Print the names of available X11 fonts containing the given code point(s)
+fcomplete - Complete a smaller file with the data from a bigger one
 fdupes-hardlink - Make hardlinks from identical files as reported by fdupes(1)
 ff - Find files horizontally, ie. a whole directory level at a time, across subtrees
 fgat - Execute command in foreground at a given time
+filterexec - Echo those arguments with which the given command returns zero.
 findnewestfile - Search for the newest file in a given path recursively and always show the most recent while scanning
-fixlogfiledatetime - Set the target files modification time to their respective last log entry's timestamp
 fixRFC822filemtime - Set a file's last modification time, which contains an email message in RFC-822 format, to the email's Date
+fixlogfiledatetime - Set the target files modification time to their respective last log entry's timestamp
 fmtkv - Tranform key=value (each optionally double-quoted) pairs into 1 pair by 1 line on the output
 foreach - Run an OS or shell command on each input line, similar to xargs(1)
 g_filename_to_uri - Mimic g_filename_to_uri() GLib function creating a file:// url from path string
 gitdiff - View two files' diff by git-diff(1), even not under git version control
-Head - output as many lines from the first part of files as many lines on the terminal currently
 header.sed - Echo the input stream up to the first empty line (usual end-of-header marker)
+htmlentities - Convert plain text into HTML-safe text
 indent2tree - Makes TAB-indented text into ascii tree chart
 inisort - Sort keys in an INI file according to the order of keys in an other INI file
 is_gzip - Return 0 if the file in argument has gzip signature
+levenshtein-distance - Calculate the Levenshtein distance of given strings
 jobsel
 json2bencode - Convert JSON to Bencode (BitTorrent's loosely structured data)
 kt - Run command in background terminal; keept(1) convenience wrapper
-LevelDB - Commandline interface for Google's leveldb key-value storage
+levenshtein-distance - Calculate the Levenshtein distance of given strings
 lines - Output only the given lines of the input stream
-list_screens - List all GNU/Screen sessions accessible by the user and all of their inner windows as well
 lnto - ln(1) convenience wrapper; you enter link target paths relative to the current directory
+loggerexec - Run a command and send STDOUT and STDERR to syslog
+logrotate-counters - Increment numbers in file names
+logto - Run a command and append its STDOUT and STDERR to a file
 lsata - List ATA devices on the system
 lsenv - List environment variables of a process
 mime_extract - Extract parts from a MIME multipart file and save them into separate files
 mkdeb - Create a Debian package (.deb)
+mkmagnetlink - Create a "magnet:" link out of a torrent file
 moz_bookmarks - Read Mozilla bookmarks database and display titles and URLs line-by-line
 msg - Write to given user's open terminals
 multithrottler - Run given command if not reached the defined rate limit
@@ -61,44 +76,48 @@ palemoon-current-url - Display the webpage's URL which is currently open in Pale
 parsel - Select parts of a HTML document based on CSS selectors
 partial - Show an earlier started long-running command's partial output
 paths2indent - Transform list of filesystem paths on input into an indented list of their leaf elements
+pdfflop - Flop a PDF file's pages
 perl-repl - Read-Evaluate-Print-Loop wrapper for perl(1)
+pfx2pem - Convert PFX (PKCS#12) certificate file to PEM format
 pipekill - Send signal to a process on the other end of the given pipe filedescriptor
-PMbwmon - Poor man's bandwidth monitor
-PMdirindex - Poor man's directory index generator, output HTML
-PMdirindex - Poor man's hex diff viewer
-PMnslist - Poor man's namespace list
-PMpwgen - Poor man's password generator
-PMrecdiff - Poor man's directory tree difference viewer, comparing file names and sizes recursively
+pngmetatext - Put metadata text into PNG file
+pvalve - Control how much a given command should run by an other command's exit code
 pyzor-files - Run a pyzor(1) command on the given files
 qrwifi - Generate a string, used in WiFi-setup QR codes, containing a hotspot name and password
-pvalve - Control how much a given command should run by an other command's exit code
 renamemanual - Interactive file rename tool
 repeat - Run a give command repeatedly
-reportcmdstatus - Textually show how the given command finished (exit status, signal)
+reportcmdstatus - Textually show how the given command finished (exit status/signal)
 rsacrypt - Encrypt/decrypt files with RSA
 rsysrq - Send SysRQ commands remotely over the network
-screenconsole - Interactive CLI to run GNU/screen commands against current or specified screen session
 screen-notify - Send status-line message to the current GNU/Screen instance
+screenconsole - Interactive CLI to run GNU/screen commands against current or specified screen session
 screenreattach - Reattach to GNU/screen and import environment variables
+screens - List all GNU/Screen sessions accessible by the user and all of their inner windows as well
+set-sys-path - Set PATH according to /etc/environment and run a program
+set-xcursor-lock-and-run - Set X11 cursor to a padlock and run a command
 slay - Try to kill a process until it exists
 ssh-agent-finder - Find a working ssh agent on the system so you get the same in each of your logon sessions
 strip-ansi-seq - Dumb script removing more-or-less any ANSI escape sequences from the input stream
+subst_sudo_user - Sudo helper program
 swap - swaps two files' names
+symlinks-analyze - Discover where symlinks point at, recursively
 symlinks2dot - Generate a graph in dot(1) format representing the symlink-target relations among the given files
 tabularize - Takes TAB-delimited lines of text and outputs formatted table.
-Tail - output as many lines from the end of files as many lines on the terminal currently
 takeown - Take ownership on files, even for unprivileged users
 taslis - WM's Window List
+terminaltitle - Set the current terminal's title string
 tests - Show all attributes of the given files which can be tested by test(1) in the same color as ls(1) shows them
 text2img-dataurl - Convert text input to image in "data:..." URL representation
+timestamper - Prepend a timestamp to each input line
 touchx - set execution bit on files and creates them if neccessary
+trackrun - Record when the given command was started and ended and expose to it in environment variables
 ttinput - Inject console input in a terminal as if the user typed
 uchmod - chmod files according to umask
 unicodestyle - Add font styles to input text using Unicode
 upsidedown - Transliterate input stream to text with upsidedown-looking chars
+url-parts - Extract specified parts from URLs given in input stream
 url_encode - Escape URL-unsafe chars in text given either in parameters or in stdin by percent-encoding
 url_encode_bf - Make all chars given either in parameters or in stdin to percent-encoded sequence
-url-parts - Extract specified parts from URLs given in input stream
 vidir-sanitize - Helper script to change tricky filenames in a directory
 vifiles - Edit multiple files as one
 waitpid - Wait for a process to end (even if not child of current shell)
@@ -106,18 +125,3 @@ whisper-retention-info - Show data retention policy in Whisper timeseries databa
 wikibot - Update Wikimedia (Wikipedia) article
 xdg-autostart - Start XDG autostart programms
 xml2json - Convert XML input to JSON
-levenshtein-distance - Calculate the Levenshtein distance of given strings
-loggerexec - Run a command and send STDOUT and STDERR to syslog
-logrotate-counters - Increment numbers in file names
-logto - Run a command and append its STDOUT and STDERR to a file
-pdfflop - Flop a PDF file's pages
-pngmetatext - Put metadata text into PNG file
-set-sys-path - Set PATH according to /etc/environment and run a program
-subst_sudo_user - Sudo helper program
-terminaltitle - Set the current terminal's title string
-timestamper - Prepend a timestamp to each input line
-set-xcursor-lock-and-run - Set X11 cursor to a padlock and run a command
-mkmagnetlink - Create a "magnet:" link out of a torrent file
-htmlentities - Convert plain text into HTML-safe text
-pfx2pem - Convert PFX (PKCS#12) certificate file to PEM format
-symlinks-analyze - Discover where symlinks point at, recursively

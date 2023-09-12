@@ -15,17 +15,25 @@ edc - Edit text files by commands directly in shell
 Each EXPR expression consist of an optional SELECTOR term and a command
 and variable number of arguments depending on the command, like:
 
- <SELECTOR> <COMMAD> [<ARG> [<ARG> [...]]]
+ <SELECTOR>[..<SELECTOR>] <COMMAD> [<ARG> [<ARG> [...]]]
 
-You may narrow the COMMAND's effect by a SELECTOR term. SELECTOR is
-either a regexp, ie. C</PATTERN/[MODIFIERS]>, or a line number, or
-starting and ending line numbers, with a trailing colon. Line numbers
-syntax:
+You may narrow the COMMAND's effect by a SELECTOR term.
+A SELECTOR selects either one line or a closed range of lines.
+For ranges, put C<..> (double dot) between SELECTORs.
+A SELECTOR may be a regexp, ie. C</PATTERN/[MODIFIERS]>,
+or a line number, or the literal word C<last> which means the last line.
+Example:
 
- <START>[-<END>]:
+ 10../lorem/i
 
-Where <END> is a number or the word 'last' which means the last line.
-Line numbers are indexed from 0. So C<0-last> means the whole file.
+Select line 10 and all subsequent lines down to the first one matching
+to case-insensitive "lorem".
+
+The 2nd SELECTOR does not get tested on the same line as the 1st SELECTOR.
+So you can select at least a 2-lines long range by eg. C</begin/../end/>.
+If the 2nd SELECTOR does not match any lines, it selects the rest of the file.
+Line numbers are indexed from 0.
+So C<0..last> means the whole file.
 
 An EXPR expression can be a group denoted by brackets,
 in which there are subexpressions like EXPR.
@@ -83,7 +91,14 @@ line is not terminated by a newline.
 
 =item -v, --verbose
 
-Print changed lines to STDERR prefixed with line number.
+Print edited lines to STDERR.
+Prefixed with line number if option C<-l> is given.
+A line is edited if it's selected by any SELECTOR and not reverted
+thereafter at the interactive prompt.
+
+=item -l
+
+Show line numbers in verbose mode.
 
 =back
 
@@ -91,25 +106,34 @@ Print changed lines to STDERR prefixed with line number.
 
 
 use Data::Dumper;
-use Getopt::Long qw/:config no_ignore_case/;
+use Getopt::Long qw/:config no_ignore_case bundling/;
 use feature qw/switch/;
 use Pod::Usage;
 # Term::ReadLine::Gnu is recommended
 $readline_support = eval q{ use Term::ReadLine; 1; };
 use POSIX;
 
+$0 =~ s/.*\/([^\/]+)$/$1/;
 $OptConfirm = 0;
 $OptVerbose = 0;
+$OptVerboseLnum = 0;
 @Files = ();
 @Output = ();
 
+# Getopt::Long(3perl)
+# When configured for bundling, single-character options are matched
+# case sensitive while long options are matched case insensitive.
+
+$SIG{'__WARN__'} = sub { warn "$0: $_[0]"; };
 GetOptions(
 	'c|confirm' => \$OptConfirm,
 	'f|file=s@' => \@Files,
 	'help|?' => sub{ pod2usage(-exitval=>0, -verbose=>99); },
 	'o|output=s@' => \@Output,
 	'v|verbose' => \$OptVerbose,
-) or pod2usage(-exitval=>2, -verbose=>99);
+	'l' => \$OptVerboseLnum,
+) or exit 2;
+delete $SIG{'__WARN__'};
 
 
 sub readline_insert_lf
@@ -139,16 +163,41 @@ sub select_line_eq
 	my $state = shift;
 	return $state->{'line_num'} == $_[0];
 }
-sub select_line_ge
+sub select_never
 {
-	my $state = shift;
-	return $state->{'line_num'} >= $_[0];
+	return 0;
 }
-sub select_line_closed_interval
+
+sub add_selector
 {
-	my $state = shift;
-	return ($state->{'line_num'} >= $_[0] and $state->{'line_num'} <= $_[1]);
+	my $selector_expr = shift;
+	my $ref = shift;
+	given($selector_expr)
+	{
+		when(/^\d+$/)
+		{
+			$ref->{'sub'} = \&select_line_eq;
+			$ref->{'arg'} = [int $selector_expr];
+		}
+		when('last')
+		{
+			$ref->{'sub'} = \&select_never;
+		}
+		when(m{^/(.*)/([[:alpha:]]*)$})
+		{
+			my ($pattern, $modifiers) = ($1, $2);
+			eval { "" =~ /(?$modifiers)$pattern/; 1; };
+			die "$0: $selector_expr: $@" if $@;
+			$ref->{'sub'} = \&select_by_match;
+			$ref->{'arg'} = [$pattern, $modifiers];
+		}
+		default
+		{
+			die "$0: should not happen.\n";
+		}
+	}
 }
+
 
 =pod
 
@@ -164,7 +213,7 @@ Regexp substitution. Works just like in perl(1). See perlre(1).
 
 
 # define how many arguments each edit_* subroutine expects from the CLI
-# by putting eg $NumberOfCliArgs{'xyz'}=2 before "sub edit_xyz".
+# by putting eg. $NumberOfCliArgs{'xyz'}=2 before "sub edit_xyz".
 # Omit if does not need any CLI argument.
 %NumberOfCliArgs = ();
 
@@ -219,7 +268,8 @@ sub edit_ltrim
 sub edit_rtrim
 {
 	my $state = shift;
-	my ($eol) = ${$state->{'line_ref'}} =~ /(\n)$/;
+	my $eol = '';
+	${$state->{'line_ref'}} =~ /(\n)$/ and $eol = $1;
 	${$state->{'line_ref'}} =~ s/\s*$//;
 	${$state->{'line_ref'}} .= $eol;
 }
@@ -266,7 +316,8 @@ $NumberOfCliArgs{'replaceline'} = 1;
 sub edit_replaceline
 {
 	my $state = shift;
-	my ($eol) = ${$state->{'line_ref'}} =~ /(\n)$/;
+	my $eol = '';
+	${$state->{'line_ref'}} =~ /(\n)$/ and $eol = $1;
 	${$state->{'line_ref'}} = $_[0];
 	${$state->{'line_ref'}} .= $eol;
 }
@@ -334,7 +385,8 @@ $NumberOfCliArgs{'append'} = 1;
 sub edit_append
 {
 	my $state = shift;
-	my ($eol) = ${$state->{'line_ref'}} =~ s/(\n)$//;
+	my $eol = '';
+	${$state->{'line_ref'}} =~ s/(\n)$// and $eol = $1;
 	${$state->{'line_ref'}} .= $_[0];
 	${$state->{'line_ref'}} .= $eol;
 }
@@ -369,7 +421,6 @@ sub edc_eval
 
 sub signal_int_handler
 {
-	$Ctrl_C_pressed = 1;
 	die "SIGINT\n";
 }
 
@@ -377,30 +428,27 @@ sub signal_int_handler
 @Commands = ();
 @group_selectors = ();
 
-while(scalar @ARGV)
+while(@ARGV)
 {
 	my $ThisCmd = {};
 	my $selector = {};
 	
-	if(my ($regexp, $modifiers) = $ARGV[0] =~ m{^/(.*)/(.*)$})
+	if(my ($selector_start, $selector_end) = $ARGV[0] =~ m{^(/.*/[[:alpha:]]*|\d+)\.\.(/.*/[[:alpha:]]*|\d+|last)$})
 	{
-		$selector = {'sub' => \&select_by_match, 'arg' => [$regexp, $modifiers],};
+		$selector->{'repr'} = $ARGV[0];
+		$selector->{'start'} = {};
+		add_selector $selector_start, $selector->{'start'};
+		$selector->{'end'} = {};
+		add_selector $selector_end, $selector->{'end'};
 		shift @ARGV;
 	}
-	elsif(my($start_ln, $end_ln) = $ARGV[0] =~ /^(\d+)(?:-(\d+|last)|):$/)
+	elsif(my ($selector_expr) = $ARGV[0] =~ m{^(/.*/[[:alpha:]]*|\d+)$})
 	{
-		if($end_ln eq '')
-		{
-			$selector = {'sub' => \&select_line_eq, 'arg' => [$start_ln],};
-		}
-		elsif($end_ln eq 'last')
-		{
-			$selector = {'sub' => \&select_line_ge, 'arg' => [$start_ln],};
-		}
-		else
-		{
-			$selector = {'sub' => \&select_line_closed_interval, 'arg' => [$start_ln, $end_ln],};
-		}
+# FIXME: make it possible to select the last line (single selector)
+# TODO: last-N to select the last but Nth line (buffering required)
+		$selector->{'repr'} = $ARGV[0];
+		$selector->{'single'} = {};
+		add_selector $selector_expr, $selector->{'single'};
 		shift @ARGV;
 	}
 	
@@ -412,12 +460,13 @@ while(scalar @ARGV)
 	}
 	elsif($ARGV[0] ~~ [']', ')', '}'])
 	{
+		die "$0: selector without a command: $selector->{'repr'}\n" if %$selector;
 		pop @group_selectors;
 		shift @ARGV;
 		last unless @ARGV;
 	}
 	
-	my $editcmd = shift @ARGV;
+	my $editcmd = shift @ARGV or die "$0: missing command\n";
 	
 	given($editcmd)
 	{
@@ -439,7 +488,7 @@ while(scalar @ARGV)
 			my $edit_sub = sprintf 'edit_%s', $editcmd;
 			if(not exists &$edit_sub)
 			{
-				pod2usage(-exitval=>2, -verbose=>99, -msg=>"$0: unknown editor command: $editcmd");
+				die "$0: unknown editor command: $editcmd\n";
 			}
 			
 			my @cli_args = ();
@@ -522,6 +571,7 @@ sub process_file
 	{
 		my $before = $line;
 		my $line_selected = 0;
+		my $line_edited = 0;
 		my $state = {
 			'line_ref' => \$line,
 			'line_num' => $lnum,
@@ -534,14 +584,40 @@ sub process_file
 			{
 				for my $selector (@{$cmd->{'selectors'}})
 				{
-					$selected = $selector->{'sub'}->($state, @{$selector->{'arg'}});
+					if(exists $selector->{'single'})
+					{
+						$selected = $selector->{'single'}->{'sub'}->($state, @{$selector->{'single'}->{'arg'}});
+					}
+					elsif(exists $selector->{'start'} and exists $selector->{'end'})
+					{
+						if($selector->{'matched'})
+						{
+							# this range selector is in matched state, let's maintain it.
+							$selected = $selector->{'matched'};
+							# check if the range is being closed in this line.
+							my $close_range = $selector->{'end'}->{'sub'}->($state, @{$selector->{'end'}->{'arg'}});
+							$selector->{'matched'} = 0 if $close_range;
+						}
+						else
+						{
+							$selector->{'matched'} = $selector->{'start'}->{'sub'}->($state, @{$selector->{'start'}->{'arg'}});
+							$selected = $selector->{'matched'};
+						}
+					}
+					else
+					{
+						die "$0: should not happen.\n";
+					}
 					last if not $selected;
 				}
 			}
+			
+			# perform the edit command if any group selector or the command's own selector matched
 			if($selected)
 			{
 				$line_selected = 1;
 				$cmd->{'editor'}->{'sub'}->($state, @{$cmd->{'editor'}->{'arg'}});
+				$line_edited = 1;
 			}
 		}
 		
@@ -613,12 +689,14 @@ sub process_file
 				$line = $confirmation;
 			} else {
 				$line = $before;
+				$line_edited = 0;
 			}
 		}
 		
-		if($OptVerbose and $line ne $before)
+		if($OptVerbose and $line_edited)
 		{
-			print STDERR "$lnum: $line";
+			print STDERR "$lnum: " if $OptVerboseLnum;
+			print STDERR $line;
 		}
 		
 		if($line ne '')

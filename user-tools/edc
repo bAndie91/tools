@@ -172,7 +172,8 @@ sub add_selector
 {
 	my $selector_expr = shift;
 	my $ref = shift;
-	given($selector_expr)
+	my ($match_expr, $offset) = $selector_expr =~ /^(.+?)([+-]\d+|)$/;
+	given($match_expr)
 	{
 		when(/^\d+$/)
 		{
@@ -193,9 +194,10 @@ sub add_selector
 		}
 		default
 		{
-			die "$0: should not happen.\n";
+			die "$0: should not happen.";
 		}
 	}
+	$ref->{'offset'} = int($offset || 0);
 }
 
 
@@ -433,7 +435,7 @@ while(@ARGV)
 	my $ThisCmd = {};
 	my $selector = {};
 	
-	if(my ($selector_start, $selector_end) = $ARGV[0] =~ m{^(/.*/[[:alpha:]]*|\d+)\.\.(/.*/[[:alpha:]]*|\d+|last)$})
+	if(my ($selector_start, $selector_end) = $ARGV[0] =~ m{^((?:/.*/[[:alpha:]]*|\d+)(?:[+-]\d+|))\.\.((?:/.*/[[:alpha:]]*|\d+|last)(?:[+-]\d+|))$})
 	{
 		$selector->{'repr'} = $ARGV[0];
 		$selector->{'start'} = {};
@@ -590,6 +592,7 @@ sub process_file
 					}
 					elsif(exists $selector->{'start'} and exists $selector->{'end'})
 					{
+						# TODO: implement negative offset management
 						if($selector->{'matched'})
 						{
 							# this range selector is in matched state, let's maintain it.
@@ -597,22 +600,41 @@ sub process_file
 							# check if the range is being closed in this line.
 							my $close_range = $selector->{'end'}->{'sub'}->($state, @{$selector->{'end'}->{'arg'}});
 							$selector->{'matched'} = 0 if $close_range;
+							
+							# TODO: implement positive offset management
 						}
 						else
 						{
-							$selector->{'matched'} = $selector->{'start'}->{'sub'}->($state, @{$selector->{'start'}->{'arg'}});
-							$selected = $selector->{'matched'};
+							$selected = 0;
+							if(defined $selector->{'will_match_after'})
+							{
+								$selector->{'will_match_after'} -= 1;
+							}
+							else
+							{
+								my $matched = $selector->{'start'}->{'sub'}->($state, @{$selector->{'start'}->{'arg'}});
+								if($matched)
+								{
+									$selector->{'will_match_after'} = $selector->{'start'}->{'offset'};
+								}
+							}
+							if(defined $selector->{'will_match_after'} and $selector->{'will_match_after'} == 0)
+							{
+								$selector->{'matched'} = 1;
+								$selected = 1;
+								delete $selector->{'will_match_after'};
+							}
 						}
 					}
 					else
 					{
-						die "$0: should not happen.\n";
+						die "$0: should not happen.";
 					}
 					last if not $selected;
 				}
 			}
 			
-			# perform the edit command if any group selector or the command's own selector matched
+			# perform this edit command if any group selector or the command's own selector matched
 			if($selected)
 			{
 				$line_selected = 1;

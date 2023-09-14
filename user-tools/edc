@@ -8,12 +8,13 @@ edc - Edit text files by commands directly in shell
 
 =head1 SYNOPSIS
 
- edc [<OPTIONS>] [--] <EXPR> [<EXPR> [...]]
+ edc [<OPTIONS>] <EXPR> [<EXPR> [...]] [-- <FILE> [<FILE> [...]]]
 
 =head1 DESCRIPTION
 
 Each EXPR expression consist of an optional SELECTOR term and a command
-and variable number of arguments depending on the command, like:
+and variable number of arguments depending on the command
+(see COMMANDS section), like:
 
  <SELECTOR>[..<SELECTOR>] <COMMAD> [<ARG> [<ARG> [...]]]
 
@@ -22,18 +23,36 @@ A SELECTOR selects either one line or a closed range of lines.
 For ranges, put C<..> (double dot) between SELECTORs.
 A SELECTOR may be a regexp, ie. C</PATTERN/[MODIFIERS]>,
 or a line number, or the literal word C<last> which means the last line.
-Example:
+SELECTOR syntax:
+
+ [ /<REGEXP>/[<MODIFIERS>][[+ | -]<OFFSET>] | <LINE> | last[-<OFFSET>] ]
+
+Examples:
 
  10../lorem/i
 
 Select line 10 and all subsequent lines down to the first one matching
 to case-insensitive "lorem".
 
-The 2nd SELECTOR does not get tested on the same line as the 1st SELECTOR.
-So you can select at least a 2-lines long range by eg. C</begin/../end/>.
-If the 2nd SELECTOR does not match any lines, it selects the rest of the file.
+ /begin/../end/
+
+Select the lines between /begin/ and /end/ inclusively.
+
+ /begin/+1../end/-1
+
+Select the lines between /begin/ and /end/ exclusively.
+
+The 2nd SELECTOR does not get tested on the same line as the 1st
+SELECTOR.
+So you can select at least a 2-lines long range by eg. C</start/../stop/>.
+If the 2nd SELECTOR is REGEXP and it does not match any lines, then
+practically it's an open-ended range, so the rest of the file is
+selected.
 Line numbers are indexed from 0.
-So C<0..last> means the whole file.
+
+REGEXP and the C<last> SELECTOR have an optional OFFSET: eg. C</begin/+2>
+selects the 2nd line following a line matching to /begin/. The C<last>
+SELECTOR obviously supports only negative OFFSETs.
 
 An EXPR expression can be a group denoted by brackets,
 in which there are subexpressions like EXPR.
@@ -106,7 +125,7 @@ Show line numbers in verbose mode.
 
 
 use Data::Dumper;
-use Getopt::Long qw/:config no_ignore_case bundling/;
+use Getopt::Long qw/:config no_ignore_case bundling pass_through/;
 use feature qw/switch/;
 use Pod::Usage;
 # Term::ReadLine::Gnu is recommended
@@ -163,6 +182,11 @@ sub select_line_eq
 	my $state = shift;
 	return $state->{'line_num'} == $_[0];
 }
+sub select_line_num_cmp
+{
+	my $state = shift;
+	return $state->{'line_num'} <=> $_[0];
+}
 sub select_never
 {
 	return 0;
@@ -178,7 +202,8 @@ sub add_selector
 		when(/^\d+$/)
 		{
 			$ref->{'sub'} = \&select_line_eq;
-			$ref->{'arg'} = [int $selector_expr];
+			$ref->{'relative_sub'} = \&select_line_num_cmp;
+			$ref->{'arg'} = [int $match_expr];
 		}
 		when('last')
 		{
@@ -361,6 +386,8 @@ sub edit_insertline
 =item insertfile PATH
 
 Insert the content of PATH file before the matching line(s).
+The last line of PATH file will be separated from the matched line by a 
+newline (LF) either way.
 Line numbering is preserved as described above.
 
 =cut
@@ -371,8 +398,10 @@ sub edit_insertfile
 	my $state = shift;
 	open my $fh, '<', $_[0] or die "$_[0]: $!\n";
 	local $/ = undef;
-	${$state->{'line_ref'}} = <$fh> . ${$state->{'line_ref'}};
+	my $filecontent = <$fh>;
 	close $fh;
+	my $eol = $filecontent =~ /\n$/ ? '' : "\n";
+	${$state->{'line_ref'}} = $filecontent . $eol . ${$state->{'line_ref'}};
 }
 
 =pod
@@ -435,16 +464,23 @@ while(@ARGV)
 	my $ThisCmd = {};
 	my $selector = {};
 	
-	if(my ($selector_start, $selector_end) = $ARGV[0] =~ m{^((?:/.*/[[:alpha:]]*|\d+)(?:[+-]\d+|))\.\.((?:/.*/[[:alpha:]]*|\d+|last)(?:[+-]\d+|))$})
+	if($ARGV[0] eq '--')
+	{
+		shift @ARGV;
+		push @Files, @ARGV;
+		last;
+	}
+	
+	if(my ($selector_start, $selector_stop) = $ARGV[0] =~ m{^(/.*/[[:alpha:]]*(?:[+-]\d+|)|\d+)\.\.(/.*/[[:alpha:]]*(?:[+-]\d+|)|\d+|last(?:-\d+|))$})
 	{
 		$selector->{'repr'} = $ARGV[0];
 		$selector->{'start'} = {};
 		add_selector $selector_start, $selector->{'start'};
-		$selector->{'end'} = {};
-		add_selector $selector_end, $selector->{'end'};
+		$selector->{'stop'} = {};
+		add_selector $selector_stop, $selector->{'stop'};
 		shift @ARGV;
 	}
-	elsif(my ($selector_expr) = $ARGV[0] =~ m{^(/.*/[[:alpha:]]*|\d+)$})
+	elsif(my ($selector_expr) = $ARGV[0] =~ m{^(/.*/[[:alpha:]]*(?:[+-]\d+|)|\d+)$})
 	{
 # FIXME: make it possible to select the last line (single selector)
 # TODO: last-N to select the last but Nth line (buffering required)
@@ -490,7 +526,7 @@ while(@ARGV)
 			my $edit_sub = sprintf 'edit_%s', $editcmd;
 			if(not exists &$edit_sub)
 			{
-				die "$0: unknown editor command: $editcmd\n";
+				die "$0: unknown editor command or selector: $editcmd\n";
 			}
 			
 			my @cli_args = ();
@@ -582,56 +618,70 @@ sub process_file
 		for my $cmd (@commands)
 		{
 			my $selected = 1;
-			if(defined $cmd->{'selectors'})
+			for my $selector (@{$cmd->{'selectors'}})
 			{
-				for my $selector (@{$cmd->{'selectors'}})
+				if(exists $selector->{'single'})
 				{
-					if(exists $selector->{'single'})
+					$selected = $selector->{'single'}->{'sub'}->($state, @{$selector->{'single'}->{'arg'}});
+				}
+				elsif(exists $selector->{'start'} and exists $selector->{'stop'})
+				{
+					# this is a range selector, let's maintain its state.
+					$selected = $selector->{'matched'};
+					
+					if(defined $selector->{'will_start_after'})
 					{
-						$selected = $selector->{'single'}->{'sub'}->($state, @{$selector->{'single'}->{'arg'}});
-					}
-					elsif(exists $selector->{'start'} and exists $selector->{'end'})
-					{
-						# TODO: implement negative offset management
-						if($selector->{'matched'})
-						{
-							# this range selector is in matched state, let's maintain it.
-							$selected = $selector->{'matched'};
-							# check if the range is being closed in this line.
-							my $close_range = $selector->{'end'}->{'sub'}->($state, @{$selector->{'end'}->{'arg'}});
-							$selector->{'matched'} = 0 if $close_range;
-							
-							# TODO: implement positive offset management
-						}
-						else
-						{
-							$selected = 0;
-							if(defined $selector->{'will_match_after'})
-							{
-								$selector->{'will_match_after'} -= 1;
-							}
-							else
-							{
-								my $matched = $selector->{'start'}->{'sub'}->($state, @{$selector->{'start'}->{'arg'}});
-								if($matched)
-								{
-									$selector->{'will_match_after'} = $selector->{'start'}->{'offset'};
-								}
-							}
-							if(defined $selector->{'will_match_after'} and $selector->{'will_match_after'} == 0)
-							{
-								$selector->{'matched'} = 1;
-								$selected = 1;
-								delete $selector->{'will_match_after'};
-							}
-						}
+						$selector->{'will_start_after'} -= 1;
 					}
 					else
 					{
-						die "$0: should not happen.";
+						my $matched = $selector->{'start'}->{'sub'}->($state, @{$selector->{'start'}->{'arg'}});
+						if($matched)
+						{
+							$selector->{'will_start_after'} = $selector->{'start'}->{'offset'};
+						}
 					}
-					last if not $selected;
+					if(defined $selector->{'will_start_after'} and $selector->{'will_start_after'} == 0)
+					{
+						$selector->{'matched'} = 1;
+						$selected = 1;
+						delete $selector->{'will_start_after'};
+					}
+					
+					if(defined $selector->{'will_stop_after'})
+					{
+						$selector->{'will_stop_after'} -= 1;
+					}
+					else
+					{
+						# check if the range is being closed in this line.
+						my $match_stop = $selector->{'stop'}->{'sub'}->($state, @{$selector->{'stop'}->{'arg'}});
+						if($match_stop)
+						{
+							$selector->{'will_stop_after'} = $selector->{'stop'}->{'offset'};
+						}
+					}
+					if(defined $selector->{'will_stop_after'} and $selector->{'will_stop_after'} == 0)
+					{
+						$selector->{'matched'} = 0;
+						delete $selector->{'will_stop_after'};
+					}
+					
+					if(defined $selector->{'stop'}->{'relative_sub'})
+					{
+						my $cmp = $selector->{'stop'}->{'relative_sub'}->($state, @{$selector->{'stop'}->{'arg'}});
+						if($cmp > 0)
+						{
+							# this range is already closed because we have passed by the line number.
+							$selected = 0;
+						}
+					}
 				}
+				else
+				{
+					die "$0: should not happen.";
+				}
+				last if not $selected;
 			}
 			
 			# perform this edit command if any group selector or the command's own selector matched
@@ -751,11 +801,13 @@ if(@Files)
 			open my $out_fh, '>', $out_path or die "$out_path: $!\n";
 			$output_handler = \&filehandler_write;
 			$output_handler_meta->{'fh'} = $out_fh;
+			$output_handler_meta->{'fname'} = $out_path;
 		}
 		else
 		{
 			open my $out_fh, '+<', $in_path or die "$in_path: $!\n";
 			$output_handler_meta->{'fh'} = $out_fh;
+			$output_handler_meta->{'fname'} = $in_path;
 		}
 		
 		my $file_ok = process_file($in_fh, \@Commands, $output_handler, $output_handler_meta);
@@ -766,7 +818,7 @@ if(@Files)
 		}
 		
 		close $in_fh or die "$in_path: $!\n";
-		close $out_fh or die "$out_path: $!\n";
+		close $output_handler_meta->{'fh'} or die "$output_handler_meta->{'fname'}: $!\n";
 	}
 }
 else

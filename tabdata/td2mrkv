@@ -6,6 +6,10 @@
 
 td2mrkv - Transform tabular data into multi-record key-value (MRKV) format.
 
+=head1 EXAMPLE
+
+getent passwd | tr : "\t" | td-add-headers USER PW UID GID GECOS HOME SHELL | td-select +ALL -PW | td2mrkv
+
 =cut
 
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";

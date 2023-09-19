@@ -8,7 +8,7 @@ td-select - Show only the specified columns from the input tabular data stream.
 
 =head1 USAGE
 
-td-select [<OPTIONS>] [--] [-]<COLUMN-1> [[-]<COLUMN-2> [...]]
+td-select [<OPTIONS>] [--] [-]<COLUMN> [[-]<COLUMN> [...]]
 
 =head1 OPTIONS
 
@@ -18,15 +18,37 @@ td-select [<OPTIONS>] [--] [-]<COLUMN-1> [[-]<COLUMN-2> [...]]
 
 do not show headers
 
+=item -h, --header
+
+show headers (default)
+
+=item -i, --ignore-nonexisting-columns
+
+do not treat non-existing (missing or typo) column names as failure
+
+=item -w, --warn-nonexisting-columns
+
+only show warning on non-existing (missing or type) column names, but don't fail
+
 =back
 
 =head1 DESCRIPTION
 
-<COLUMN> is either a column name, optionally prefixed with hyphen,
+COLUMN is either a column name, optionally prefixed with hyphen,
 in which case the given column will not be shown,
+ie. removed from the shown columns,
 or one of these special keywords:
+
   +ALL    - all columns
   +REST   - the rest of columns not given yet in the parameter list
+
+So if you want to show all columns except one or two:
+
+  td-select +ALL -PASSWD
+
+If you want to put a given column to the first place and left others intact:
+
+  td-select ID +REST
 
 =head1 EXAMPLE
 
@@ -57,7 +79,13 @@ while($arg = shift @ARGV)
 	}
 	elsif($arg =~ /^(.+)$/)
 	{
-		push @Columns, $1;
+		my $colname = $1;
+		if(not exists $Header{$colname})
+		{
+			warn "$0: $colname: no such column\n" if $OptWarnBadColumnNames;
+			exit 3 if $OptFailBadColumnNames;
+		}
+		push @Columns, $colname;
 	}
 	else
 	{
@@ -66,7 +94,7 @@ while($arg = shift @ARGV)
 }
 
 # display selected headers
-unless($OptNoHeader)
+if($OptShowHeader)
 {
 	@Output = ();
 	for my $col (@Columns)

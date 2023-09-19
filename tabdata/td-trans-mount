@@ -28,7 +28,7 @@ mount -l | td-trans-mount
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 @Headers = ("DEVICE", "MOUNTPOINT", "TYPE", "OPTIONS", "LABEL");
-unless($OptNoHeader)
+if($OptShowHeader)
 {
 	print join($FS, @Headers).$/;
 }

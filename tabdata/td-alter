@@ -4,7 +4,7 @@
 
 =head1 NAME
 
-td-alter - Add new columns and fields to, and modify value of existing ones in the tabular data stream.
+td-alter - Add new columns and fields to tabular data stream, and modify value of existing fields.
 
 =head1 USAGE
 
@@ -28,6 +28,10 @@ ls -l | td-trans-ls | td-alter TYPE='substr MODE,0,1' BIGFILE='SIZE>10000000 && 
 =item -H, --no--header
 
 do not show headers
+
+=item -h, --header
+
+show headers (default)
 
 =back
 
@@ -61,7 +65,7 @@ while(scalar @ARGV)
 	shift @ARGV;
 }
 
-unless($OptNoHeader)
+if($OptShowHeader)
 {
 	print join($FS, @Header).$/;
 }

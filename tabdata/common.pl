@@ -4,13 +4,25 @@ $0 =~ s/^.*\/([^\/]+)$/$1/;
 $FS = "\t";
 @Header = ();
 %Header = ();
-$OptNoHeader = 0;
+$OptShowHeader = 1;
+$OptWarnBadColumnNames = 1;
+$OptFailBadColumnNames = 1;
+$OptAddExtraColumns = 1;
 
-use Getopt::Long qw/:config no_ignore_case pass_through require_order no_getopt_compat/;
+use Getopt::Long qw/:config no_ignore_case bundling pass_through require_order no_getopt_compat/;
 use Pod::Usage;
 
 GetOptions(
-	'H|no-header' => \$OptNoHeader,
+	'h|header' => sub { $OptShowHeader = 1; },
+	'H|no-header' => sub { $OptShowHeader = 0; },
+	
+	'i|ignore-nonexisting-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 0; },
+	'w|warn-nonexisting-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 1; },
+	'strict-columns' => sub { $OptWarnBadColumnNames = 1; $OptFailBadColumnNames = 1; },
+	
+	'x|extra-columns' => sub { $OptAddExtraColumns = 1; },
+	'X|no-extra-columns' => sub { $OptAddExtraColumns = 0; },
+	
 	'help|?' => sub{ pod2usage(-exitval=>0, -verbose=>99); },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 

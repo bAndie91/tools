@@ -35,6 +35,18 @@ You can implement more complex conditions in this way.
 
 do not show headers
 
+=item -h, --header
+
+show headers (default)
+
+=item -i, --ignore-nonexisting-columns
+
+do not treat non-existing (missing or typo) column names as failure
+
+=item -w, --warn-nonexisting-columns
+
+only show warning on non-existing (missing or type) column names, but don't fail
+
 =back
 
 =head1 OPERATORS
@@ -76,7 +88,7 @@ do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 $Expr = undef;
 
 %operator_alias = (
-	'<>', '!=',
+	'<>',  '!=',
 	'-ne', '!=',
 	'-eq', '==',
 	'-gt', '>',
@@ -115,7 +127,20 @@ else
 
 process_header(scalar <STDIN>);
 
-unless($OptNoHeader)
+if(not defined $Expr)
+{
+	for my $filter (@Filter)
+	{
+		my $colname = $filter->{'field'};
+		if(not exists $Header{$colname})
+		{
+			warn "$0: $colname: no such column\n" if $OptWarnBadColumnNames;
+			exit 3 if $OptFailBadColumnNames;
+		}
+	}
+}
+
+if($OptShowHeader)
 {
 	print $HeaderLine.$/;
 }

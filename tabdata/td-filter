@@ -45,7 +45,7 @@ do not treat non-existing (missing or typo) column names as failure
 
 =item -w, --warn-nonexisting-columns
 
-only show warning on non-existing (missing or type) column names, but don't fail
+only show warning on non-existing (missing or typo) column names, but don't fail
 
 =back
 

@@ -28,7 +28,14 @@ do not treat non-existing (missing or typo) column names as failure
 
 =item -w, --warn-nonexisting-columns
 
-only show warning on non-existing (missing or type) column names, but don't fail
+only show warning on non-existing (missing or typo) column names, but
+don't fail
+
+=item --strict-columns
+
+warn and fail on non-existing (missing or typo) column names given in
+parameters, even if it's prefixed with hyphen, ie. when the user want to
+remove the named column from the output.
 
 =back
 
@@ -64,9 +71,18 @@ process_header(scalar <STDIN>);
 
 while($arg = shift @ARGV)
 {
-	if($arg =~ /^-(.+)$/)
+	if($arg =~ /^--/)
+	{
+		die "$0: unknown parameter: $arg\n";
+	}
+	elsif($arg =~ /^-(.+)$/)
 	{
 		my $except_column = $1;
+		if(not exists $Header{$except_column})
+		{
+			warn "$0: $except_column: no such column\n" if $OptWarnBadColumnNames;
+			exit 3 if $OptFailBadNegativeColumnNames;
+		}
 		@Columns = grep {$_ ne $except_column} @Columns;
 	}
 	elsif($arg eq '+ALL')
@@ -89,7 +105,7 @@ while($arg = shift @ARGV)
 	}
 	else
 	{
-		die "$0: unknown option: $arg\n";
+		die "$0: unknown parameter: $arg\n";
 	}
 }
 

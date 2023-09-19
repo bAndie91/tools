@@ -7,6 +7,7 @@ $FS = "\t";
 $OptShowHeader = 1;
 $OptWarnBadColumnNames = 1;
 $OptFailBadColumnNames = 1;
+$OptFailBadNegativeColumnNames = 0;
 $OptAddExtraColumns = 1;
 
 use Getopt::Long qw/:config no_ignore_case bundling pass_through require_order no_getopt_compat/;
@@ -18,7 +19,7 @@ GetOptions(
 	
 	'i|ignore-nonexisting-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 0; },
 	'w|warn-nonexisting-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 1; },
-	'strict-columns' => sub { $OptWarnBadColumnNames = 1; $OptFailBadColumnNames = 1; },
+	'strict-columns' => sub { $OptWarnBadColumnNames = 1; $OptFailBadColumnNames = 1; $OptFailBadNegativeColumnNames = 1; },
 	
 	'x|extra-columns' => sub { $OptAddExtraColumns = 1; },
 	'X|no-extra-columns' => sub { $OptAddExtraColumns = 0; },

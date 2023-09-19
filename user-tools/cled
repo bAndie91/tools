@@ -4,11 +4,11 @@
 
 =head1 NAME
 
-edc - Edit text files by commands directly in shell
+cled - Command Line-Editor - Edit text file lines by commands directly from shell
 
 =head1 SYNOPSIS
 
- edc [<OPTIONS>] <EXPR> [<EXPR> [...]] [-- <FILE> [<FILE> [...]]]
+ cled [<OPTIONS>] <EXPR> [<EXPR> [...]] [-- <FILE> [<FILE> [...]]]
 
 =head1 DESCRIPTION
 
@@ -165,7 +165,7 @@ sub readline_insert_lf
 
 if($readline_support)
 {
-	$readline = Term::ReadLine->new('edc');
+	$readline = Term::ReadLine->new('cled');
 	$readline->ornaments(0);
 	$readline->add_defun('insert_lf', \&readline_insert_lf);
 	$readline->bind_keyseq('\\C-j', 'insert_lf');
@@ -190,6 +190,10 @@ sub select_line_num_cmp
 sub select_never
 {
 	return 0;
+}
+sub select_always
+{
+	return 1;
 }
 
 sub add_selector
@@ -219,7 +223,14 @@ sub add_selector
 		}
 		default
 		{
-			die "$0: should not happen.";
+			if($selector_expr eq '')
+			{
+				$ref->{'sub'} = \&select_always;
+			}
+			else
+			{
+				die "$0: should not happen.";
+			}
 		}
 	}
 	$ref->{'offset'} = int($offset || 0);
@@ -444,7 +455,7 @@ sub edit_appendline
 
 =cut
 
-sub edc_eval
+sub cled_eval
 {
 	my $state = shift;
 	eval $_[0];
@@ -459,6 +470,7 @@ sub signal_int_handler
 @Commands = ();
 @group_selectors = ();
 
+ArgumentParsing:
 while(@ARGV)
 {
 	my $ThisCmd = {};
@@ -482,8 +494,8 @@ while(@ARGV)
 	}
 	elsif(my ($selector_expr) = $ARGV[0] =~ m{^(/.*/[[:alpha:]]*(?:[+-]\d+|)|\d+)$})
 	{
-# FIXME: make it possible to select the last line (single selector)
-# TODO: last-N to select the last but Nth line (buffering required)
+		# FIXME: make it possible to select the last line (single selector)
+		# TODO: last-N to select the last but Nth line (buffering required)
 		$selector->{'repr'} = $ARGV[0];
 		$selector->{'single'} = {};
 		add_selector $selector_expr, $selector->{'single'};
@@ -492,16 +504,23 @@ while(@ARGV)
 	
 	if($ARGV[0] ~~ ['[', '(', '{'])
 	{
-		push @group_selectors, $selector if %$selector;
+		if(not %$selector)
+		{
+			$selector->{'repr'} = '';
+			$selector->{'single'} = {};
+			add_selector '', $selector->{'single'};
+		}
+		push @group_selectors, $selector;
 		shift @ARGV;
 		next;
 	}
-	elsif($ARGV[0] ~~ [']', ')', '}'])
+	
+	if($ARGV[0] ~~ [']', ')', '}'])
 	{
 		die "$0: selector without a command: $selector->{'repr'}\n" if %$selector;
-		pop @group_selectors;
+		pop @group_selectors or die "$0: too many closing brackets\n";
 		shift @ARGV;
-		last unless @ARGV;
+		next;
 	}
 	
 	my $editcmd = shift @ARGV or die "$0: missing command\n";
@@ -510,7 +529,13 @@ while(@ARGV)
 	{
 		if(@group_selectors)
 		{
-			push @{$ThisCmd->{'selectors'}}, @group_selectors;
+			my @group_selectors_copy;
+			for my $sel_ref (@group_selectors)
+			{
+				my %sel = %$sel_ref;
+				push @group_selectors_copy, \%sel;
+			}
+			push @{$ThisCmd->{'selectors'}}, @group_selectors_copy;
 		}
 		if(%$selector)
 		{
@@ -519,7 +544,7 @@ while(@ARGV)
 		
 		when(m{^(s/.*/.*/.*)$})
 		{
-			$ThisCmd->{'editor'} = {'sub' => \&edc_eval, 'arg' => [sprintf('${$state->{"line_ref"}} =~ %s',$1)],};
+			$ThisCmd->{'editor'} = {'sub' => \&cled_eval, 'arg' => [sprintf('${$state->{"line_ref"}} =~ %s',$1)],};
 		}
 		default
 		{
@@ -537,7 +562,7 @@ while(@ARGV)
 				shift @ARGV for 0..$num_args-1;
 			}
 			
-			$ThisCmd->{'editor'} = {'sub' => \&{$edit_sub}, 'arg' => \@cli_args};
+			$ThisCmd->{'editor'} = {'name' => $editcmd, 'sub' => \&{$edit_sub}, 'arg' => \@cli_args};
 		}
 	}
 	
@@ -599,30 +624,48 @@ sub process_file
 	my @commands = @$commands_ref;
 	my $output_cb = shift;
 	my $cb_metadata = shift;
-	
 	my $lnum = 0;
-	my $line;
+	
+	# find out the maximum backtrack distance
+	# to set the buffer size which holds the lines' state
+	# which have not been decided to edit yet
+	# due to negative offsets
+	
+	my @linebuffer = ();
+	my $largest_negative_offset = 0;
+	for my $cmd (@commands)
+	{
+		for my $selector (@{$cmd->{'selectors'}})
+		{
+			$largest_negative_offset = $selector->{'start'}->{'offset'} if $selector->{'start'}->{'offset'} < $largest_negative_offset;
+			$largest_negative_offset = $selector->{'stop'}->{'offset'}  if $selector->{'stop'}->{'offset'}  < $largest_negative_offset;
+		}
+	}
 	
 	$output_cb->('start', undef, $cb_metadata);
 	
-	while($line = <$fh>)
+	while(my $line = <$fh>)
 	{
-		my $before = $line;
-		my $line_selected = 0;
-		my $line_edited = 0;
-		my $state = {
-			'line_ref' => \$line,
-			'line_num' => $lnum,
-		};
+		my %buffered_line = (
+			'data_before' => $line,
+			'selected' => 0,
+			'edited' => 0,
+			'state' => {
+				'line_ref' => \$line,
+				'line_num' => $lnum,
+				'confirm' => undef,
+			}
+		);
 		
 		for my $cmd (@commands)
 		{
 			my $selected = 1;
+			
 			for my $selector (@{$cmd->{'selectors'}})
 			{
 				if(exists $selector->{'single'})
 				{
-					$selected = $selector->{'single'}->{'sub'}->($state, @{$selector->{'single'}->{'arg'}});
+					$selected = $selector->{'single'}->{'sub'}->($buffered_line{'state'}, @{$selector->{'single'}->{'arg'}});
 				}
 				elsif(exists $selector->{'start'} and exists $selector->{'stop'})
 				{
@@ -635,7 +678,7 @@ sub process_file
 					}
 					else
 					{
-						my $matched = $selector->{'start'}->{'sub'}->($state, @{$selector->{'start'}->{'arg'}});
+						my $matched = $selector->{'start'}->{'sub'}->($buffered_line{'state'}, @{$selector->{'start'}->{'arg'}});
 						if($matched)
 						{
 							$selector->{'will_start_after'} = $selector->{'start'}->{'offset'};
@@ -655,7 +698,7 @@ sub process_file
 					else
 					{
 						# check if the range is being closed in this line.
-						my $match_stop = $selector->{'stop'}->{'sub'}->($state, @{$selector->{'stop'}->{'arg'}});
+						my $match_stop = $selector->{'stop'}->{'sub'}->($buffered_line{'state'}, @{$selector->{'stop'}->{'arg'}});
 						if($match_stop)
 						{
 							$selector->{'will_stop_after'} = $selector->{'stop'}->{'offset'};
@@ -669,7 +712,7 @@ sub process_file
 					
 					if(defined $selector->{'stop'}->{'relative_sub'})
 					{
-						my $cmp = $selector->{'stop'}->{'relative_sub'}->($state, @{$selector->{'stop'}->{'arg'}});
+						my $cmp = $selector->{'stop'}->{'relative_sub'}->($buffered_line{'state'}, @{$selector->{'stop'}->{'arg'}});
 						if($cmp > 0)
 						{
 							# this range is already closed because we have passed by the line number.
@@ -681,107 +724,149 @@ sub process_file
 				{
 					die "$0: should not happen.";
 				}
+				
 				last if not $selected;
 			}
 			
-			# perform this edit command if any group selector or the command's own selector matched
-			if($selected)
-			{
-				$line_selected = 1;
-				$cmd->{'editor'}->{'sub'}->($state, @{$cmd->{'editor'}->{'arg'}});
-				$line_edited = 1;
-			}
-		}
-		
-		my $do_confirm = $OptConfirm;
-		$do_confirm = $state->{'confirm'} if exists $state->{'confirm'};
-		
-		if($line_selected and $do_confirm)
-		{
-			my $confirmation;
-			print STDERR "$lnum: $before";
-			print STDERR "\n" unless $before =~ /\n$/;
-			my $prompt = "$lnum> ";
-			my $old_sigaction = {};
-			
-			eval {
-				if($readline_support)
-				{
-					my $startup_hook = $readline->Attribs->{'startup_hook'};
-					# Perl's signal handlers (%SIG) don't work in readline,
-					# so setup a low-level signal handler to intercept Ctrl-C.
-					sigaction SIGINT, POSIX::SigAction->new(sub {
-						# readline is interrupted so it can not restore the startup_hook
-						# which was modified to "preput" the initial data in the rl buffer.
-						$readline->Attribs->{'startup_hook'} = $startup_hook;
-						die "SIGINT\n";
-					}), $old_sigaction;
-					
-					$confirmation = $readline->readline($prompt, $line);
-				}
-				else
-				{
-					local $SIG{'INT'} = \&signal_int_handler;
-					
-					print STDERR "$prompt$line";
-					# display an inverse-video space to indicate no-EOL.
-					print STDERR "\x1B[7m \x1B[0m\n" unless $line =~ /\n$/;
-					$confirmation = <$terminal_fh>;
-					$confirmation = $line if $confirmation eq "\n";
-				}
+			push @{$buffered_line{'editors'}}, {
+				'selected' => $selected,
+				'editor' => $cmd->{'editor'},
 			};
 			
-			if($@)
+			if($selected)
 			{
-				if($@ eq "SIGINT\n")
-				{
-					# user pressed Ctrl-C
-					if($readline_support)
-					{
-						# show the original line
-						$readline->Attribs->{'line_buffer'} = $before;
-						$readline->Attribs->{'point'} = length $before;
-						$readline->redisplay;
-					}
-					$confirmation = undef;
-				} else {
-					# other exception happened
-					die $@;
-				}
-			}
-			
-			# restore low-level signal handler.
-			if($readline_support and %$old_sigaction)
-			{
-				sigaction SIGINT, POSIX::SigAction->new($old_sigaction->{'HANDLER'});
-			}
-			
-			if(defined $confirmation)
-			{
-				$line = $confirmation;
-			} else {
-				$line = $before;
-				$line_edited = 0;
+				$buffered_line{'selected'} = 1;
 			}
 		}
 		
-		if($OptVerbose and $line_edited)
-		{
-			print STDERR "$lnum: " if $OptVerboseLnum;
-			print STDERR $line;
-		}
+		push @linebuffer, \%buffered_line;
 		
-		if($line ne '')
-		{
-			$output_cb->('append', $line, $cb_metadata) or return 0;
-		}
+		process_line_buffer(\@linebuffer, $largest_negative_offset, $output_cb, $cb_metadata);
 		
 		$lnum++;
 	}
 	
+	process_line_buffer(\@linebuffer, 0, $output_cb, $cb_metadata);
+	
 	$output_cb->('finish', undef, $cb_metadata) or return 0;
 	
 	return 1;
+}
+
+sub process_line_buffer
+{
+	my $linebuffer_ref = shift;
+	my $largest_negative_offset = shift;
+	my $output_cb = shift;
+	my $cb_metadata = shift;
+	
+		while(scalar @$linebuffer_ref > $largest_negative_offset)
+		{
+			my $processing_line = shift $linebuffer_ref;
+			
+			# perform all edit commands on this line
+			for my $editor (@{$processing_line->{'editors'}})
+			{
+				# perform this edit command if any group selector or the command's own selector matched
+				if($editor->{'selected'})
+				{
+					$processing_line->{'selected'} = 1;
+					$editor->{'editor'}->{'sub'}->($processing_line->{'state'}, @{$editor->{'editor'}->{'arg'}});
+					$processing_line->{'edited'} = 1;
+				}
+			}
+			
+			# prompt user for confirmation if needed
+			my $do_confirm = $OptConfirm;
+			$do_confirm = $processing_line->{'state'}->{'confirm'} if defined $processing_line->{'state'}->{'confirm'};
+			
+			my $before = $processing_line->{'data_before'};
+			my $line = ${$processing_line->{'state'}->{'line_ref'}};
+			my $lnum = $processing_line->{'state'}->{'line_num'};
+			
+			if($processing_line->{'selected'} and $do_confirm)
+			{
+				my $confirmation;
+				print STDERR "$lnum: $before";
+				print STDERR "\n" unless $before =~ /\n$/;
+				my $prompt = "$lnum> ";
+				my $old_sigaction = {};
+				
+				eval {
+					if($readline_support)
+					{
+						my $startup_hook = $readline->Attribs->{'startup_hook'};
+						# Perl's signal handlers (%SIG) don't work in readline,
+						# so setup a low-level signal handler to intercept Ctrl-C.
+						sigaction SIGINT, POSIX::SigAction->new(sub {
+							# readline is interrupted so it can not restore the startup_hook
+							# which was modified to "preput" the initial data in the rl buffer.
+							$readline->Attribs->{'startup_hook'} = $startup_hook;
+							die "SIGINT\n";
+						}),$old_sigaction;
+						
+						$confirmation = $readline->readline($prompt, $line);
+					}
+					else
+					{
+						local $SIG{'INT'} = \&signal_int_handler;
+						
+						print STDERR "$prompt$line";
+						# display an inverse-video space to indicate no-EOL.
+						print STDERR "\x1B[7m \x1B[0m\n" unless $line =~ /\n$/;
+						$confirmation = <$terminal_fh>;
+						$confirmation = $line if $confirmation eq "\n";
+					}
+				};
+				
+				if($@)
+				{
+					if($@ eq "SIGINT\n")
+					{
+						# user pressed Ctrl-C
+						if($readline_support)
+						{
+							# show the original line
+							$readline->Attribs->{'line_buffer'} = $before;
+							$readline->Attribs->{'point'} = length $before;
+							$readline->redisplay;
+						}
+						$confirmation = undef;
+					} else {
+						# other exception happened
+						die $@;
+					}
+				}
+				
+				# restore low-level signal handler.
+				if($readline_support and %$old_sigaction)
+				{
+					sigaction SIGINT, POSIX::SigAction->new($old_sigaction->{'HANDLER'});
+				}
+				
+				# revert the line to the original as it was before,
+				# or apply what the user typed, depending on the confirmation result
+				if(defined $confirmation)
+				{
+					$line = $confirmation;
+				} else {
+					$line = $before;
+					$processing_line->{'edited'} = 0;
+				}
+			}
+			
+			if($OptVerbose and $processing_line->{'edited'})
+			{
+				print STDERR "$lnum: " if $OptVerboseLnum;
+				# TODO: line numbering gets confusing when the newline is removed from or extra newlines added in $line
+				print STDERR $line;
+			}
+			
+			if($line ne '')
+			{
+				$output_cb->('append', $line, $cb_metadata) or return 0;
+			}
+		}
 }
 
 if(@Files)

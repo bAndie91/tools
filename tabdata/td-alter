@@ -83,7 +83,7 @@ while($line = <STDIN>)
 		my $expr = $d->{'expr'};
 		for my $col (@Header)
 		{
-			$expr =~ s/\b($col)\b/\$Field{'$1'}/g;
+			$expr =~ s/\b(\Q$col\E)\b/\$Field{'$1'}/g;
 		}
 		$Field[$cidx] = $Field{$d->{'column'}} = eval $expr;
 		warn $@ if $@;

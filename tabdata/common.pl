@@ -21,6 +21,8 @@ GetOptions(
 	'w|warn-nonexisting-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 1; },
 	'strict-columns' => sub { $OptWarnBadColumnNames = 1; $OptFailBadColumnNames = 1; $OptFailBadNegativeColumnNames = 1; },
 	
+	's|separator=s' => \$OptMRKVSeparator,
+	
 	'x|extra-columns' => sub { $OptAddExtraColumns = 1; },
 	'X|no-extra-columns' => sub { $OptAddExtraColumns = 0; },
 	

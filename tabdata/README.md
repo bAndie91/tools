@@ -12,12 +12,14 @@ lack thereof.
 
 Objective of Tabdata is to provide user-friendly
 (guru/admin/poweruser-friendly) means to do everyday data processing
-complementing (not superseding) well-established toolsets (coreutils,
-moreutils, util-linux).
+complementing (not superseding) well-established toolsets:
+use Tabdata in compination with  coreutils, moreutils, util-linux, ...
+tools.
+
 Focus is on text as being primarily for humans, not machines.
 That's why control chars are not considered meaningful data.
 You still can encode/decode your data stream before/after piping into
-Tabadata tools, to process arbitrary bytestream as well.
+Tabdata tools, to process arbitrary bytestream as well.
 
 # Tool Descriptions
 

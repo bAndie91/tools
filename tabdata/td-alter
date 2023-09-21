@@ -13,9 +13,13 @@ td-alter <COLUMN>=<EXPR> [<COLUMN>=<EXPR> [<COLUMN>=<EXPR> [...]]]
 =head1 DESCRIPTION
 
 On each data row, sets field in <COLUMN> to the value resulted by <EXPR>
-Perl expression. In <EXPR>, you may refer to other columns by bareword or
-by C<$Field{'COLUMN'}> if you must, where COLUMN is a column name.
-You can use the earlier defined <COLUMN>'s value in a later defined <EXPR>.
+Perl expression.
+In <EXPR>, you may refer to other columns by bareword or by
+C<$Field{'COLUMN'}> if you must, where COLUMN is a column name.
+You can create new columns simply by referring a <COLUMN> name not yet
+existing.
+You can use an earlier defined <COLUMN>'s value in a later defined
+<EXPR>.
 
 =head1 EXAMPLES
 

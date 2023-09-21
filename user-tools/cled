@@ -496,6 +496,7 @@ while(@ARGV)
 	{
 		# FIXME: make it possible to select the last line (single selector)
 		# TODO: last-N to select the last but Nth line (buffering required)
+		# FIXME: fix /asd/-1..5 style selectors
 		$selector->{'repr'} = $ARGV[0];
 		$selector->{'single'} = {};
 		add_selector $selector_expr, $selector->{'single'};
@@ -566,6 +567,7 @@ while(@ARGV)
 		}
 	}
 	
+	$ThisCmd->{'n'} = scalar @Commands;
 	push @Commands, $ThisCmd;
 }
 
@@ -648,7 +650,6 @@ sub process_file
 	{
 		my %buffered_line = (
 			'data_before' => $line,
-			'selected' => 0,
 			'edited' => 0,
 			'state' => {
 				'line_ref' => \$line,
@@ -681,7 +682,17 @@ sub process_file
 						my $matched = $selector->{'start'}->{'sub'}->($buffered_line{'state'}, @{$selector->{'start'}->{'arg'}});
 						if($matched)
 						{
-							$selector->{'will_start_after'} = $selector->{'start'}->{'offset'};
+							my $offset = $selector->{'start'}->{'offset'};
+							if($offset < 0)
+							{
+								$linebuffer[$_]->{'editors'}->[$cmd->{'n'}]->{'selected'} = 1 for $offset..-1;
+								$selector->{'matched'} = 1;
+								$selected = 1;
+							}
+							else
+							{
+								$selector->{'will_start_after'} = $offset;
+							}
 						}
 					}
 					if(defined $selector->{'will_start_after'} and $selector->{'will_start_after'} == 0)
@@ -701,7 +712,17 @@ sub process_file
 						my $match_stop = $selector->{'stop'}->{'sub'}->($buffered_line{'state'}, @{$selector->{'stop'}->{'arg'}});
 						if($match_stop)
 						{
-							$selector->{'will_stop_after'} = $selector->{'stop'}->{'offset'};
+							my $offset = $selector->{'stop'}->{'offset'};
+							if($offset < 0)
+							{
+								$linebuffer[$_]->{'editors'}->[$cmd->{'n'}]->{'selected'} = 0 for (($offset+1)..-1);
+								$selector->{'matched'} = 0;
+								$selected = 0;
+							}
+							else
+							{
+								$selector->{'will_stop_after'} = $offset;
+							}
 						}
 					}
 					if(defined $selector->{'will_stop_after'} and $selector->{'will_stop_after'} == 0)
@@ -732,11 +753,6 @@ sub process_file
 				'selected' => $selected,
 				'editor' => $cmd->{'editor'},
 			};
-			
-			if($selected)
-			{
-				$buffered_line{'selected'} = 1;
-			}
 		}
 		
 		push @linebuffer, \%buffered_line;
@@ -760,7 +776,7 @@ sub process_line_buffer
 	my $output_cb = shift;
 	my $cb_metadata = shift;
 	
-		while(scalar @$linebuffer_ref > $largest_negative_offset)
+		while(scalar @$linebuffer_ref > -$largest_negative_offset)
 		{
 			my $processing_line = shift $linebuffer_ref;
 			

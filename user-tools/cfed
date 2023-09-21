@@ -1,0 +1,67 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+cfed - Command File-Editor - Edit text files by commands directly from shell
+
+=head1 SYNOPSIS
+
+ cfed [<OPTIONS>] <EXPR> [<EXPR> [...]] [-- <FILE> [<FILE> [...]]]
+
+=cut
+
+use Data::Dumper;
+use Getopt::Long qw/:config no_ignore_case bundling pass_through/;
+use feature qw/switch/;
+use Pod::Usage;
+# Term::ReadLine::Gnu is recommended
+$readline_support = eval q{ use Term::ReadLine; 1; };
+use POSIX;
+
+$0 =~ s/.*\/([^\/]+)$/$1/;
+$OptConfirm = 0;
+$OptVerbose = 0;
+@Files = ();
+
+
+sub process_instructions
+{
+	my $filehandle = shift;
+	my $instructions = shift;
+	
+	while(1)
+	{
+		$instructions =~ s/^\s*//;
+		if($instructions =~ s/^goto\b//)
+		{
+			my $pos = undef;
+			my $whence = undef;
+			if($instructions =~ s/^start( of file)?\b//)  { $pos = 0; $whence = SEEK_SET; }
+			elsif($instructions =~ s/^end( of file)?\b//) { $pos = 0; $whence = SEEK_END; }
+			elsif($instructions =~ s/^next line\b//)      { <$filehandle>; }
+			else { die "$0: invalid instruction: $instructions\n"; }
+			seek $filehandle, $pos, $whence if defined $pos;
+		}
+		elsif($instructions eq '')
+		{
+			last;
+		}
+		else
+		{
+			die "$0: invalid instruction: $instructions\n";
+		}
+	}
+}
+
+$Instructions = join ' ', @ARGV;
+$Instructions =~ s/\s+/ /;
+$Instructions =~ s/\s*$//;
+
+for my $Filepath (@Files)
+{
+	open my $Filehandle, '+<', $Filepath or die "$0: $Filepath: $!\n";
+	process_instructions $Filehandle, $Instructions;
+	close $Filehandle or die "$0: $Filepath: $!\n";
+}

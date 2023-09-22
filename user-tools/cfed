@@ -84,70 +84,85 @@ sub get_pattern_parameter
 
 sub overwrite_text
 {
-	my $filepath = shift;
-	my $filehandle = shift;
+	my $fdata = shift;
 	my $text = shift;
-	print {$filehandle} $text or die "$0: $filepath: write: $!\n";
+	print {$fdata->{'handle'}} $text or die "$0: $fdata->{'path'}: write: $!\n";
+}
+
+sub seeker
+{
+	my $fdata = shift;
+	my $offset = shift;
+	my $whence = shift;
+	seek $fdata->{'handle'}, $offset, $whence or die "$0: $fdata->{'path'}: seek: $!\n";
+}
+
+sub readblock
+{
+	my $fdata = shift;
+	my $scalar_ref = shift;
+	my $blocksize = shift || $blockio_buffer_size;
+	my $bytes = read $fdata->{'handle'}, $$scalar_ref, $blocksize;
+	die "$0: $fdata->{'path'}: read: $!\n" unless defined $bytes;
+	return $bytes;
 }
 
 sub insert_text
 {
-	my $filepath = shift;
-	my $filehandle = shift;
+	my $fdata = shift;
 	my $text = shift;
 	
-	my $original_pos = tell $filehandle;
+	my $original_pos = tell $fdata->{'handle'};
 	my $buffer;
 	my $tail = $text;
+	# FIXME tail >= length buffer ?
 	my $pos = $original_pos;
-	while(read $filehandle, $buffer, $blockio_buffer_size)
+	while(readblock $fdata, \$buffer)
 	{
-		seek $filehandle, $pos, SEEK_SET or die "$0: $filepath: seek: $!\n";
-		print {$filehandle} $tail or die "$0: $filepath: write: $!\n";
-		print {$filehandle} substr $buffer, 0, -length$tail or die "$0: $filepath: write: $!\n";
+		seeker $fdata, $pos, SEEK_SET;
+		print {$fdata->{'handle'}} $tail or die "$0: $fdata->{'path'}: write: $!\n";
+		print {$fdata->{'handle'}} substr $buffer, 0, -length$tail or die "$0: $fdata->{'path'}: write: $!\n";
 		$tail = substr $buffer, -length$tail;
-		$pos = tell $filehandle;
+		$pos = tell $fdata->{'handle'};
 	}
-	print {$filehandle} $tail or die "$0: $filepath: write: $!\n";
-	seek $filehandle, $original_pos + length($text), SEEK_SET or die "$0: $filepath: seek: $!\n";
+	print {$fdata->{'handle'}} $tail or die "$0: $fdata->{'path'}: write: $!\n";
+	seek $fdata->{'handle'}, $original_pos + length($text), SEEK_SET;
 	# TODO maintain %mark marks
 }
 
 sub delete_chars
 {
-	my $filepath = shift;
-	my $filehandle = shift;
+	my $fdata = shift;
 	my $length = shift;
 	
-	my $original_pos = tell $filehandle;
+	my $original_pos = tell $fdata->{'handle'};
 	my $buffer;
 	my $continue_write_pos = $original_pos;
-	seek $filehandle, $length, SEEK_CUR or die "$0: $filepath: seek: $!\n";
-	while(read $filehandle, $buffer, $blockio_buffer_size)
+	seeker $fdata, $length, SEEK_CUR;
+	while(readblock $fdata, \$buffer)
 	{
-		seek $filehandle, $continue_write_pos, SEEK_SET or die "$0: $filepath: seek: $!\n";
-		print {$filehandle} $buffer or die "$0: $filepath: write: $!\n";
-		$continue_write_pos = tell $filehandle;
-		seek $filehandle, $length, SEEK_CUR or die "$0: $filepath: seek: $!\n";
+		seeker $fdata, $continue_write_pos, SEEK_SET;
+		print {$fdata->{'handle'}} $buffer or die "$0: $fdata->{'path'}: write: $!\n";
+		$continue_write_pos = tell $fdata->{'handle'};
+		seeker $fdata, $length, SEEK_CUR;
 	}
-	truncate $filehandle, $continue_write_pos;
-	seek $filehandle, $original_pos, SEEK_SET or die "$0: $filepath: seek: $!\n";
+	truncate $fdata->{'handle'}, $continue_write_pos;
+	seeker $fdata, $original_pos, SEEK_SET;
 	# TODO maintain %mark marks
 }
 
 sub search_pattern
 {
-	my $filepath = shift;
-	my $filehandle = shift;
+	my $fdata = shift;
 	my $pattern = shift;
 	my $is_regexp = shift;
 	
-	my $original_pos = tell $filehandle;
+	my $original_pos = tell $fdata->{'handle'};
 	my $chunk_start_pos = $original_pos;
 	my $found_pos = undef;
 	my $matched_string;
 	
-	while(my $chunk = <$filehandle>)
+	while(my $chunk = readline $fdata->{'handle'})
 	{
 		if($is_regexp)
 		{
@@ -167,29 +182,32 @@ sub search_pattern
 			}
 		}
 		last if defined $found_pos;
-		$chunk_start_pos = tell $filehandle;
+		$chunk_start_pos = tell $fdata->{'handle'};
 	}
 	
-	seek $filehandle, $original_pos, SEEK_SET or die "$0: $filepath: seek: $!\n";
+	seeker $fdata, $original_pos, SEEK_SET;
 	
 	return ($found_pos, $matched_string);
 }
 
 sub process_instructions
 {
-	my $filepath = shift;
+	my $fdata = {'path' => shift,};
 	my $instructions = shift;
+	
 	my $last_search_pattern = undef;
 	my $last_search_is_regexp = undef;
 	my $last_search_result = undef;
 	my %mark = ();
 	my $clipboard = '';
+	my $selection_start = undef;
+	my $selection_stop = undef;
 	
-	open my $filehandle, '+<', $filepath or die "$0: $filepath: open: $!\n";
+	open $fdata->{'handle'}, '+<', $fdata->{'path'} or die "$0: $fdata->{'path'}: open: $!\n";
 	
 	while(1)
 	{
-		my $position_before_operation = tell $filehandle;
+		my $position_before_operation = tell $fdata->{'handle'};
 		$instructions =~ s/^\s*//;
 =pod
 
@@ -197,44 +215,157 @@ sub process_instructions
 
 =over 4
 
-=item goto start [of [file | line]]
+=cut
+		if($instructions =~ s/^goto$EOIT//)
+		{
+			my $goto_pos = undef;
+			my $whence = SEEK_SET;
+=pod
 
-=item goto end [of [file | line]]
+=item goto end of [last] search result
 
-=item goto [next | previous] line
+=cut
+			if($instructions =~ s/^end of( last)? search result$EOIT//)
+			{
+				my $c = $last_search_is_regexp ? '/' : '"';
+				die "$0: last search ($c$last_search_pattern$c) was not found\n" if not defined $last_search_result;
+				$goto_pos = $last_search_result_pos + 1 + length $last_search_result;
+			}
+=pod
+
+=item goto [start | end] [of file]
+
+=item goto [start | end] of line
+
+=cut
+			elsif($instructions =~ s/^(?<ANCHOR>start|end)( of (?<SCOPE>file|line))?$EOIT//)
+			{
+				if($+{'SCOPE'} eq 'line')
+				{
+					if($+{'ANCHOR'} eq 'end')
+					{
+						my $rest_of_line = readline $fdata->{'handle'};
+						if(substr $rest_of_line, -1 eq "\n")
+						{
+							seeker $fdata, -1, SEEK_CUR;
+						}
+					}
+					else  # start
+					{
+						my $buffer;
+						my $pos = $position_before_operation;
+						while($pos != 0)
+						{
+							if($pos < $blockio_buffer_size)
+							{
+								seeker $fdata, 0, SEEK_SET;
+								readblock $fdata, \$buffer, $pos;
+								$pos = 0;
+							}
+							else
+							{
+								seeker $fdata, $blockio_buffer_size, SEEK_CUR;
+								$pos = tell $fdata->{'handle'};
+								readblock $fdata, \$buffer;
+							}
+							my $idx = rindex $buffer, "\n";
+							if($idx >= 0)
+							{
+								$goto_pos = $pos + $idx + 1;
+								last;
+							}
+							seeker $fdata, $pos, SEEK_SET;
+						}
+					}
+				}
+				else  # file
+				{
+					$goto_pos = 0;
+					$whence = $+{'ANCHOR'} eq 'start' ? SEEK_SET : SEEK_END;
+				}
+			}
+=pod
+
+=item goto [previous | next] line
+
+=cut
+			elsif($instructions =~ s/^(?<DIRECTION>next|previous) line$EOIT//)
+			{
+				if($+{'DIRECTION'} eq 'next')
+				{
+					readline $fdata->{'handle'};
+				}
+				else  # previous
+				{
+					# TODO
+				}
+			}
+=pod
+
+=item goto [back | forward] COUNT line[s]
+
+=cut
+			elsif($instructions =~ s/^(?<DIRECTION>back|forward) (?<COUNT>[1-9]\d*) lines?$EOIT//)
+			{
+				if($+{'DIRECTION'} eq 'forward')
+				{
+					readline $fdata->{'handle'} for 1..$+{'COUNT'};
+				}
+				else  # back
+				{
+					# TODO
+				}
+			}
+=pod
+
+=item goto line NUMBER
+
+Lines are indexed by 0.
 
 =item go [up | down]
+
+=cut
+			elsif($instructions =~ s/^line (?<COUNT>\d*)$EOIT//)
+			{
+				seeker $fdata, 0, SEEK_SET;
+				readline $fdata->{'handle'} for 1..$+{'COUNT'};
+			}
+=pod
+
+=item goto mark NAME
 
 Set cursor position in file.
 
 =cut
-		if($instructions =~ s/^goto$EOIT//)
-		{
-			my $pos = undef;
-			my $whence = undef;
-			if($instructions =~ s/^start( of file)?$EOIT//)  { $pos = 0; $whence = SEEK_SET; }
-			elsif($instructions =~ s/^end( of file)?$EOIT//) { $pos = 0; $whence = SEEK_END; }
-			elsif($instructions =~ s/^next line$EOIT//)      { <$filehandle>; }
-			# TODO implement
-			else { die "$0: invalid instruction: $instructions\n"; }
-			if(defined $pos)
+			elsif($instructions =~ s/^mark (\S+)$EOIT//)
 			{
-				seek $filehandle, $pos, $whence or die "$0: $filepath: seek: $!\n";
+				my $mark = $1;
+				die "$0: $fdata->{'path'}: mark $mark not found\n" if not exists $mark{$mark};
+				$goto_pos = $mark{$mark};
+			}
+			else
+			{
+				die "$0: invalid GOTO: $instructions\n";
+			}
+			
+			if(defined $goto_pos)
+			{
+				seeker $fdata, $goto_pos, $whence;
 			}
 		}
 =pod
 
-=item type in STRING
+=item type STRING
 
 Insert given STRING into the current cursor position.
 
 =cut
-		elsif($instructions =~ s/^type in$EOIT//)
+		elsif($instructions =~ s/^type$EOIT//)
 		{
-			my $text = get_text_parameter(\$instructions);
+			my $text = get_text_parameter \$instructions;
 			die "$0: text not given to type in\n" unless defined $text;
-			insert_text($filepath, $filehandle, $text);
-			verbose sprintf "%s: inserted %d bytes at %d", $filepath, length $text, $position_before_operation;
+			insert_text $fdata, $text;
+			verbose sprintf "%s: inserted %d bytes at %d", $fdata->{'path'}, length $text, $position_before_operation;
 		}
 =pod
 
@@ -247,10 +378,10 @@ Type given STRING into the current cursor position in overwrite mode.
 =cut
 		elsif($instructions =~ s/^over(write|type) with$EOIT//)
 		{
-			my $text = get_text_parameter(\$instructions);
+			my $text = get_text_parameter \$instructions;
 			die "$0: text not given to overwrite with\n" unless defined $text;
-			overwrite_text($filepath, $filehandle, $text);
-			verbose sprintf "%s: written over %d bytes at %d", $filepath, length $text, $position_before_operation;
+			overwrite_text $fdata, $text;
+			verbose sprintf "%s: written over %d bytes at %d", $fdata->{'path'}, length $text, $position_before_operation;
 		}
 =pod
 
@@ -286,7 +417,7 @@ If you want to replace all the occurrences in the whole file,
 			
 			if((not defined $expect_pattern and $instructions !~ /^to$EOIT/) or $expect_pattern eq 1)
 			{
-				($pattern, $is_regexp) = get_pattern_parameter(\$instructions);
+				($pattern, $is_regexp) = get_pattern_parameter \$instructions;
 				die "$0: string/pattern not given what to replace\n" unless length $pattern;
 			}
 			else  # not expecting PATTERN to be given here
@@ -297,7 +428,7 @@ If you want to replace all the occurrences in the whole file,
 			
 			if($instructions =~ s/^to$EOIT//)
 			{
-				$text = get_text_parameter(\$instructions);
+				$text = get_text_parameter \$instructions;
 			}
 			die "$0: string not given to replace pattern to\n" unless defined $text;
 			
@@ -305,23 +436,24 @@ If you want to replace all the occurrences in the whole file,
 			
 			while(not defined $replace_count or $replace_count > 0)
 			{
-				my ($found_pos, $matched_string) = search_pattern($filepath, $filehandle, $pattern, $is_regexp);
+				my ($found_pos, $matched_string) = search_pattern $fdata, $pattern, $is_regexp;
 				
 				if(defined $found_pos)
 				{
-					seek $filehandle, $found_pos, SEEK_SET or die "$0: $filepath: seek: $!\n";
-					my $length_to_delete = length($matched_string) - length($text);
+					seeker $fdata, $found_pos, SEEK_SET;
+					my $found_length = length $matched_string;
+					my $length_to_delete = $found_length - length $text;
 					if($length_to_delete >= 0)
 					{
-						delete_chars($filepath, $filehandle, $length_to_delete) if $length_to_delete > 0;
-						overwrite_text($filepath, $filehandle, $text);
+						delete_chars $fdata, $length_to_delete if $length_to_delete > 0;
+						overwrite_text $fdata, $text;
 					}
 					else
 					{
-						overwrite_text($filepath, $filehandle, substr $text, 0, length $matched_string);
-						insert_text($filepath, $filehandle, substr $text, length $matched_string);
+						overwrite_text $fdata, substr($text, 0, $found_length);
+						insert_text $fdata, substr($text, $found_length);
 					}
-					verbose "$filepath: replaced \"$matched_string\" to \"$text\" at $found_pos";
+					verbose "$fdata->{'path'}: replaced \"$matched_string\" to \"$text\" at $found_pos";
 					$replace_count -= 1 if defined $replace_count;
 					$replacements += 1;
 				}
@@ -331,7 +463,7 @@ If you want to replace all the occurrences in the whole file,
 				}
 			}
 			
-			verbose "$filepath: replaced $replacements occurrences";
+			verbose "$fdata->{'path'}: replaced $replacements occurrences";
 		}
 =pod
 
@@ -345,29 +477,51 @@ PATTERN is not supported to overhang from one line to the next.
 Remove newlines from the text if you must.
 
 =cut
-		if($instructions =~ s/search$EOIT//)
+		elsif($instructions =~ s/^search$EOIT//)
 		{
 			my ($pattern, $is_regexp) = get_pattern_parameter(\$instructions);
 			die "$0: string/pattern not given what to search for\n" unless length $pattern;
 			
 			# TODO search backward
-			my ($found_pos, $matched_string) = search_pattern($filepath, $filehandle, $pattern, $is_regexp);
+			my ($found_pos, $matched_string) = search_pattern $fdata, $pattern, $is_regexp;
 			
 			if(defined $found_pos)
 			{
-				seek $filehandle, $found_pos, SEEK_SET or die "$0: $filepath: seek: $!\n";
+				seeker $fdata, $found_pos, SEEK_SET;
 			}
 			$last_search_pattern = $pattern;
 			$last_search_is_regexp = $is_regexp;
+			$last_search_result_pos = $found_pos;
 			$last_search_result = $matched_string;
 		}
 =pod
 
 =item mark as NAME
 
+=cut
+		elsif($instructions =~ s/^mark as (\S+)$EOIT//)
+		{
+			$mark{$1} = $position_before_operation;
+		}
+=pod
+
 =item select from mark START-MARK to mark END-MARK
 
-=item select [COUNT] [word[s] | line[s]]
+=cut
+		elsif($instructions =~ s/^select from mark (\S+) to mark (\S+)$EOIT//)
+		{
+			$selection_start = undef;
+			$selection_stop = undef;
+			if(not exists $mark{$1}) { verbose "$fdata->{'path'}: mark $1 not found"; }
+			elsif(not exists $mark{$2}) { verbose "$fdata->{'path'}: mark $2 not found"; }
+			else {
+				$selection_start = $mark{$1};
+				$selection_stop  = $mark{$2};
+			}
+		}
+=pod
+
+=item select [COUNT] [char[s] | word[s] | line[s]]
 
 =item copy
 
@@ -383,7 +537,25 @@ Remove newlines from the text if you must.
 
 =item send to COMMAND;
 
+=item uppercase
+
+=item lowercase
+
+=item capitalize
+
 =cut
+		elsif($instructions =~ s/^(uppercase|lowercase|capitalize)$EOIT//)
+		{
+			if($selection_start)
+			{
+				seeker $fdata, $selection_start, SEEK_SET;
+				# TODO
+			}
+			else
+			{
+				verbose "$fdata->{'path'}: there is not any selection";
+			}
+		}
 		elsif($instructions eq '')
 		{
 			last;
@@ -400,7 +572,7 @@ Remove newlines from the text if you must.
 
 =cut
 
-	close $filehandle or die "$0: $filepath: close: $!\n";
+	close $fdata->{'handle'} or die "$0: $fdata->{'path'}: close: $!\n";
 }
 
 

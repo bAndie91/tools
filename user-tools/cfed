@@ -8,7 +8,17 @@ cfed - Command File-Editor - Edit text files by commands directly from shell
 
 =head1 SYNOPSIS
 
- cfed [<OPTIONS>] <EXPR> [<EXPR> [...]] [-- <FILE> [<FILE> [...]]]
+ cfed [<OPTIONS>] <INSTRUCTIONS> [-- <FILE> [<FILE> [...]]]
+
+=head1 OPTIONS
+
+=over 4
+
+=item -c, --confirm
+
+=item -v, --verbose
+
+=back
 
 =cut
 
@@ -23,27 +33,357 @@ use POSIX;
 $0 =~ s/.*\/([^\/]+)$/$1/;
 $OptConfirm = 0;
 $OptVerbose = 0;
-@Files = ();
 
+GetOptions(
+	'c|confirm' => \$OptConfirm,
+	'v|verbose' => \$OptVerbose,
+) or exit 2;
+
+
+# instruction token ending regexp
+my $EOIT = qr/(\s+|$)/;
+my $blockio_buffer_size = 4096;
+
+
+
+sub verbose
+{
+	my $msg = shift;
+	if($OptVerbose)
+	{
+		warn "$0: $msg\n";
+	}
+}
+
+sub get_text_parameter
+{
+	my $params_ref = shift;
+	my $text = undef;
+	if($$params_ref =~ s/^([""''])(.*?)(?<!\\)(?1)$EOIT//)
+	{
+		my ($q, $text) = ($1, $2);
+		$text =~ s/\\($q)/$1/g;
+		# TODO robust escaping
+	}
+	elsif($$params_ref =~ s/^([^""'']\S*)$EOIT//)   { $text = $1; }
+	return $text;
+}
+
+sub get_pattern_parameter
+{
+	my $params_ref = shift;
+	my $pattern = get_text_parameter($params_ref);
+	my $is_regexp = 0;
+	if($pattern =~ m{^/(.*)/([a-zA-Z]*)$})
+	{
+		$pattern = "(?$2)$1";
+		$is_regexp = 1;
+	}
+	return ($pattern, $is_regexp);
+}
+
+sub overwrite_text
+{
+	my $filepath = shift;
+	my $filehandle = shift;
+	my $text = shift;
+	print {$filehandle} $text or die "$0: $filepath: write: $!\n";
+}
+
+sub insert_text
+{
+	my $filepath = shift;
+	my $filehandle = shift;
+	my $text = shift;
+	
+	my $original_pos = tell $filehandle;
+	my $buffer;
+	my $tail = $text;
+	my $pos = $original_pos;
+	while(read $filehandle, $buffer, $blockio_buffer_size)
+	{
+		seek $filehandle, $pos, SEEK_SET or die "$0: $filepath: seek: $!\n";
+		print {$filehandle} $tail or die "$0: $filepath: write: $!\n";
+		print {$filehandle} substr $buffer, 0, -length$tail or die "$0: $filepath: write: $!\n";
+		$tail = substr $buffer, -length$tail;
+		$pos = tell $filehandle;
+	}
+	print {$filehandle} $tail or die "$0: $filepath: write: $!\n";
+	seek $filehandle, $original_pos + length($text), SEEK_SET or die "$0: $filepath: seek: $!\n";
+	# TODO maintain %mark marks
+}
+
+sub delete_chars
+{
+	my $filepath = shift;
+	my $filehandle = shift;
+	my $length = shift;
+	
+	my $original_pos = tell $filehandle;
+	my $buffer;
+	my $continue_write_pos = $original_pos;
+	seek $filehandle, $length, SEEK_CUR or die "$0: $filepath: seek: $!\n";
+	while(read $filehandle, $buffer, $blockio_buffer_size)
+	{
+		seek $filehandle, $continue_write_pos, SEEK_SET or die "$0: $filepath: seek: $!\n";
+		print {$filehandle} $buffer or die "$0: $filepath: write: $!\n";
+		$continue_write_pos = tell $filehandle;
+		seek $filehandle, $length, SEEK_CUR or die "$0: $filepath: seek: $!\n";
+	}
+	truncate $filehandle, $continue_write_pos;
+	seek $filehandle, $original_pos, SEEK_SET or die "$0: $filepath: seek: $!\n";
+	# TODO maintain %mark marks
+}
+
+sub search_pattern
+{
+	my $filepath = shift;
+	my $filehandle = shift;
+	my $pattern = shift;
+	my $is_regexp = shift;
+	
+	my $original_pos = tell $filehandle;
+	my $chunk_start_pos = $original_pos;
+	my $found_pos = undef;
+	my $matched_string;
+	
+	while(my $chunk = <$filehandle>)
+	{
+		if($is_regexp)
+		{
+			if($chunk =~ $pattern)
+			{
+				$found_pos = $chunk_start_pos + length $`;
+				$matched_string = $&;
+			}
+		}
+		else
+		{
+			my $index = index $chunk, $pattern;
+			if($index >= 0)
+			{
+				$found_pos = $chunk_start_pos + $index;
+				$matched_string = $pattern;
+			}
+		}
+		last if defined $found_pos;
+		$chunk_start_pos = tell $filehandle;
+	}
+	
+	seek $filehandle, $original_pos, SEEK_SET or die "$0: $filepath: seek: $!\n";
+	
+	return ($found_pos, $matched_string);
+}
 
 sub process_instructions
 {
-	my $filehandle = shift;
+	my $filepath = shift;
 	my $instructions = shift;
+	my $last_search_pattern = undef;
+	my $last_search_is_regexp = undef;
+	my $last_search_result = undef;
+	my %mark = ();
+	my $clipboard = '';
+	
+	open my $filehandle, '+<', $filepath or die "$0: $filepath: open: $!\n";
 	
 	while(1)
 	{
+		my $position_before_operation = tell $filehandle;
 		$instructions =~ s/^\s*//;
-		if($instructions =~ s/^goto\b//)
+=pod
+
+=head1 EDITOR INSTRUCTIONS
+
+=over 4
+
+=item goto start [of [file | line]]
+
+=item goto end [of [file | line]]
+
+=item goto [next | previous] line
+
+=item go [up | down]
+
+Set cursor position in file.
+
+=cut
+		if($instructions =~ s/^goto$EOIT//)
 		{
 			my $pos = undef;
 			my $whence = undef;
-			if($instructions =~ s/^start( of file)?\b//)  { $pos = 0; $whence = SEEK_SET; }
-			elsif($instructions =~ s/^end( of file)?\b//) { $pos = 0; $whence = SEEK_END; }
-			elsif($instructions =~ s/^next line\b//)      { <$filehandle>; }
+			if($instructions =~ s/^start( of file)?$EOIT//)  { $pos = 0; $whence = SEEK_SET; }
+			elsif($instructions =~ s/^end( of file)?$EOIT//) { $pos = 0; $whence = SEEK_END; }
+			elsif($instructions =~ s/^next line$EOIT//)      { <$filehandle>; }
+			# TODO implement
 			else { die "$0: invalid instruction: $instructions\n"; }
-			seek $filehandle, $pos, $whence if defined $pos;
+			if(defined $pos)
+			{
+				seek $filehandle, $pos, $whence or die "$0: $filepath: seek: $!\n";
+			}
 		}
+=pod
+
+=item type in STRING
+
+Insert given STRING into the current cursor position.
+
+=cut
+		elsif($instructions =~ s/^type in$EOIT//)
+		{
+			my $text = get_text_parameter(\$instructions);
+			die "$0: text not given to type in\n" unless defined $text;
+			insert_text($filepath, $filehandle, $text);
+			verbose sprintf "%s: inserted %d bytes at %d", $filepath, length $text, $position_before_operation;
+		}
+=pod
+
+=item overwrite with STRING
+
+=item overtype with STRING
+
+Type given STRING into the current cursor position in overwrite mode.
+
+=cut
+		elsif($instructions =~ s/^over(write|type) with$EOIT//)
+		{
+			my $text = get_text_parameter(\$instructions);
+			die "$0: text not given to overwrite with\n" unless defined $text;
+			overwrite_text($filepath, $filehandle, $text);
+			verbose sprintf "%s: written over %d bytes at %d", $filepath, length $text, $position_before_operation;
+		}
+=pod
+
+=item replace all [[occurrences of] PATTERN] to STRING
+
+=item replace all [occurrences | PATTERN] to STRING
+
+=item replace [next [COUNT]] [[occurrence[s] of] PATTERN] to STRING
+
+=item replace [next [COUNT]] [occurrence[s] | PATTERN] to STRING
+
+Replace given PATTERN to STRING.
+If PATTERN is not given, then the last search pattern will be used.
+"Replace next" changes only the next COUNT number of occurrences
+starting from the cursor position.
+Default is 1 occurrence, if COUNT is not given.
+"Replace all" changes all the occurrences from the cursor position down
+to the end of file.
+If you want to replace all the occurrences in the whole file,
+"goto start" first.
+
+=cut
+		elsif($instructions =~ s/^replace( (?<LIMIT>all|next( (?<COUNT>[1-9]\d*)|))|)(?<OCCUR> occurrences?(?<OF> of|)|)$EOIT//)
+		{
+			die "$0: don't understand this REPLACE instruction\n" if not $+{'LIMIT'} and $+{'OCCUR'};
+			my $replace_count = $+{'LIMIT'} eq 'all' ? undef : ($+{'COUNT'}||1);
+			my $expect_pattern;
+			$expect_pattern = 1 if $+{'OF'};
+			$expect_pattern = 0 if $+{'OCCUR'} and not $+{'OF'};
+			my $pattern;
+			my $is_regexp = 0;
+			my $text;
+			
+			if((not defined $expect_pattern and $instructions !~ /^to$EOIT/) or $expect_pattern eq 1)
+			{
+				($pattern, $is_regexp) = get_pattern_parameter(\$instructions);
+				die "$0: string/pattern not given what to replace\n" unless length $pattern;
+			}
+			else  # not expecting PATTERN to be given here
+			{
+				$pattern = $last_search_pattern;
+				$is_regexp = $last_search_is_regexp;
+			}
+			
+			if($instructions =~ s/^to$EOIT//)
+			{
+				$text = get_text_parameter(\$instructions);
+			}
+			die "$0: string not given to replace pattern to\n" unless defined $text;
+			
+			my $replacements = 0;
+			
+			while(not defined $replace_count or $replace_count > 0)
+			{
+				my ($found_pos, $matched_string) = search_pattern($filepath, $filehandle, $pattern, $is_regexp);
+				
+				if(defined $found_pos)
+				{
+					seek $filehandle, $found_pos, SEEK_SET or die "$0: $filepath: seek: $!\n";
+					my $length_to_delete = length($matched_string) - length($text);
+					if($length_to_delete >= 0)
+					{
+						delete_chars($filepath, $filehandle, $length_to_delete) if $length_to_delete > 0;
+						overwrite_text($filepath, $filehandle, $text);
+					}
+					else
+					{
+						overwrite_text($filepath, $filehandle, substr $text, 0, length $matched_string);
+						insert_text($filepath, $filehandle, substr $text, length $matched_string);
+					}
+					verbose "$filepath: replaced \"$matched_string\" to \"$text\" at $found_pos";
+					$replace_count -= 1 if defined $replace_count;
+					$replacements += 1;
+				}
+				else
+				{
+					last;
+				}
+			}
+			
+			verbose "$filepath: replaced $replacements occurrences";
+		}
+=pod
+
+=item search PATTERN [backward]
+
+Find next occurrence (or previous one if "backward" is specified) of
+PATTERN and set the cursor to it.
+PATTERN is either a bare word, a string enclosed in quotes, or a regexp
+enclosed in slashes (C</regexp/>).
+PATTERN is not supported to overhang from one line to the next.
+Remove newlines from the text if you must.
+
+=cut
+		if($instructions =~ s/search$EOIT//)
+		{
+			my ($pattern, $is_regexp) = get_pattern_parameter(\$instructions);
+			die "$0: string/pattern not given what to search for\n" unless length $pattern;
+			
+			# TODO search backward
+			my ($found_pos, $matched_string) = search_pattern($filepath, $filehandle, $pattern, $is_regexp);
+			
+			if(defined $found_pos)
+			{
+				seek $filehandle, $found_pos, SEEK_SET or die "$0: $filepath: seek: $!\n";
+			}
+			$last_search_pattern = $pattern;
+			$last_search_is_regexp = $is_regexp;
+			$last_search_result = $matched_string;
+		}
+=pod
+
+=item mark as NAME
+
+=item select from mark START-MARK to mark END-MARK
+
+=item select [COUNT] [word[s] | line[s]]
+
+=item copy
+
+=item cut
+
+=item paste
+
+=item insert file FILE
+
+=item insert output of COMMAND;
+
+=item filter through COMMAND;
+
+=item send to COMMAND;
+
+=cut
 		elsif($instructions eq '')
 		{
 			last;
@@ -53,15 +393,40 @@ sub process_instructions
 			die "$0: invalid instruction: $instructions\n";
 		}
 	}
+
+=pod
+
+=back
+
+=cut
+
+	close $filehandle or die "$0: $filepath: close: $!\n";
 }
 
-$Instructions = join ' ', @ARGV;
+
+while(scalar @ARGV)
+{
+	my $arg = shift @ARGV;
+	if($arg eq '--')
+	{
+		push @Files, @ARGV;
+		last;
+	}
+	push @Instructions, $arg;
+}
+
+$Instructions = join ' ', map { if(/[ ]/ or $_ eq ''){ s/[""]/\\$&/g; $_="\"$_\""; }; $_ } @Instructions;
 $Instructions =~ s/\s+/ /;
 $Instructions =~ s/\s*$//;
 
+die "$0: not any editing instructions given\n" unless $Instructions;
+die "$0: not any files given\n" unless @Files;
+
+#warn Dumper $Instructions;
+
+# TODO optional backup files
+
 for my $Filepath (@Files)
 {
-	open my $Filehandle, '+<', $Filepath or die "$0: $Filepath: $!\n";
-	process_instructions $Filehandle, $Instructions;
-	close $Filehandle or die "$0: $Filepath: $!\n";
+	process_instructions $Filepath, $Instructions;
 }

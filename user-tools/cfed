@@ -31,7 +31,9 @@ You have one clipboard.
 
 =over 4
 
-=item -c, --confirm
+=item -f, --script FILE
+
+Take instructions from FILE, not from parameters.
 
 =item -v, --verbose
 
@@ -51,16 +53,18 @@ use Carp qw/croak/;
 $0 =~ s/.*\/([^\/]+)$/$1/;
 $OptConfirm = 0;
 $OptVerbose = 0;
+$OptEditorScript = undef;
 
 GetOptions(
 	'c|confirm' => \$OptConfirm,
 	'v|verbose' => \$OptVerbose,
+	'f|script=s'  => \$OptEditorScript,
 	'help|?' => sub{ pod2usage(-exitval=>0, -verbose=>99); },
 ) or exit 2;
 
 
 # instruction token ending regexp
-my $EOIT = qr/([ ]+|$)/;
+my $EOIT = qr/([ \r\n]+|$)/;
 my $blockio_buffer_size = 4096;
 
 
@@ -85,7 +89,10 @@ sub get_text_parameter
 		$text =~ s/\\($q)/$1/g;
 		# TODO robust escaping
 	}
-	elsif($$params_ref =~ s/^([^""'']\S*)$EOIT//)   { $text = $1; }
+	elsif($$params_ref =~ s/^([^""'']\S*)$EOIT//)
+	{
+		$text = $1;
+	}
 	return $text;
 }
 
@@ -218,8 +225,8 @@ sub delete_chars
 	my $fdata = shift;
 	my $length = shift;
 	
-	my $original_pos = tell $fdata->{'handle'};
 	my $buffer;
+	my $original_pos = tell $fdata->{'handle'};
 	my $continue_write_pos = $original_pos;
 	seeker $fdata, $length, SEEK_CUR;
 	while(readblock $fdata, \$buffer)
@@ -703,8 +710,10 @@ Remove newlines from the text if you must.
 			if(not exists $curfile->{'mark'}->{$1}) { verbose "$curfile->{'path'}: mark $1 not found"; }
 			elsif(not exists $curfile->{'mark'}->{$2}) { verbose "$curfile->{'path'}: mark $2 not found"; }
 			else {
-				$curfile->{'mark'}->{'SELECTION-START'} = $curfile->{'mark'}->{$1};
-				$curfile->{'mark'}->{'SELECTION-STOP'}  = $curfile->{'mark'}->{$2};
+				my $pos1 = $curfile->{'mark'}->{$1};
+				my $pos2 = $curfile->{'mark'}->{$2};
+				$curfile->{'mark'}->{'SELECTION-START'} = $pos1 < $pos2 ? $pos1 : $pos2;
+				$curfile->{'mark'}->{'SELECTION-STOP'}  = $pos1 > $pos2 ? $pos1 : $pos2;
 			}
 		}
 =pod
@@ -789,9 +798,29 @@ and in case of C<filter>, replace selection with its stdout.
 			
 			if(defined $stream_data->{'handle'})
 			{
-				# TODO replace selection if 'filter'
+				my $overwrite_length;
+				if($cmd eq 'filter')
+				{
+					seeker $curfile, $curfile->{'mark'}->{'SELECTION-START'}, SEEK_SET;
+					$overwrite_length = $curfile->{'mark'}->{'SELECTION-STOP'} - $curfile->{'mark'}->{'SELECTION-START'};
+					my $buf;
+					my $size;
+					while(1)
+					{
+						last if $overwrite_length <= 0;
+						$size = $overwrite_length < $blockio_buffer_size ? $overwrite_length : $blockio_buffer_size;
+						my $nbytes = readblock $stream_data, \$buf, $size;
+						$overwrite_length -= $nbytes;
+						overwrite_text $curfile, $buf;
+						last if $nbytes == 0;
+					}
+				}
 				insert_stream $curfile, $stream_data;
 				close $stream_data->{'handle'};
+				if($cmd eq 'filter' and $overwrite_length > 0)
+				{
+					delete_chars $curfile, $overwrite_length;
+				}
 			}
 		}
 =pod
@@ -843,7 +872,16 @@ and in case of C<filter>, replace selection with its stdout.
 }
 
 
-$Instructions = join ' ', map { if(/[ ""]/ or $_ eq ''){ s/[""]/\\$&/g; $_="\"$_\""; }; $_ } @ARGV;
+if(defined $OptEditorScript)
+{
+	open my $es, '<', $OptEditorScript or croak "$0: $OptEditorScript: open: $!";
+	local $/ = undef;
+	$Instructions = <$es>;
+}
+else
+{
+	$Instructions = join ' ', map { if(/[ \r\n""]/ or $_ eq ''){ s/[""]/\\$&/g; $_="\"$_\""; }; $_ } @ARGV;
+}
 croak "$0: not any editing instruction given" unless $Instructions;
 #warn Dumper $Instructions;
 

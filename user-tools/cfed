@@ -29,6 +29,7 @@ use Pod::Usage;
 # Term::ReadLine::Gnu is recommended
 $readline_support = eval q{ use Term::ReadLine; 1; };
 use POSIX;
+use Carp qw/croak/;
 
 $0 =~ s/.*\/([^\/]+)$/$1/;
 $OptConfirm = 0;
@@ -41,7 +42,7 @@ GetOptions(
 
 
 # instruction token ending regexp
-my $EOIT = qr/(\s+|$)/;
+my $EOIT = qr/([ ]+|$)/;
 my $blockio_buffer_size = 4096;
 
 
@@ -61,7 +62,8 @@ sub get_text_parameter
 	my $text = undef;
 	if($$params_ref =~ s/^([""''])(.*?)(?<!\\)(?1)$EOIT//)
 	{
-		my ($q, $text) = ($1, $2);
+		my $q = $1;
+		$text = $2;
 		$text =~ s/\\($q)/$1/g;
 		# TODO robust escaping
 	}
@@ -87,7 +89,7 @@ sub seeker
 	my $fdata = shift;
 	my $offset = shift;
 	my $whence = shift;
-	seek $fdata->{'handle'}, $offset, $whence or die "$0: $fdata->{'path'}: seek: $!\n";
+	seek $fdata->{'handle'}, $offset, $whence or croak "$0: $fdata->{'path'}: seek: $!";
 }
 
 sub readblock
@@ -96,7 +98,7 @@ sub readblock
 	my $scalar_ref = shift;
 	my $blocksize = shift || $blockio_buffer_size;
 	my $bytes = read $fdata->{'handle'}, $$scalar_ref, $blocksize;
-	die "$0: $fdata->{'path'}: read: $!\n" unless defined $bytes;
+	croak "$0: $fdata->{'path'}: read: $!" unless defined $bytes;
 	return $bytes;
 }
 
@@ -104,30 +106,75 @@ sub overwrite_text
 {
 	my $fdata = shift;
 	my $text = shift;
-	print {$fdata->{'handle'}} $text or die "$0: $fdata->{'path'}: write: $!\n";
+	print {$fdata->{'handle'}} $text or croak "$0: $fdata->{'path'}: write: $!";
+}
+
+sub make_room
+{
+	my $fdata = shift;
+	my $room_size = shift;
+	
+	my $buffer;
+	my $original_pos = tell $fdata->{'handle'};
+	seeker $fdata, 0, SEEK_END;
+	
+	while(1)
+	{
+		my $curpos = tell $fdata->{'handle'};
+		my $chunk_size = $curpos - $original_pos;
+		last if $chunk_size <= 0;
+		$chunk_size = $blockio_buffer_size if $chunk_size > $blockio_buffer_size;
+		seeker $fdata, -$chunk_size, SEEK_CUR;
+		my $bytes = readblock $fdata, \$buffer, $chunk_size;
+		croak sprintf "%s: %s: can not read %d bytes at %d", $0, $fdata->{'path'}, $chunk_size, $curpos-$chunk_size if $bytes != $chunk_size;
+		seeker $fdata, $curpos + $room_size - $chunk_size, SEEK_SET;
+		print {$fdata->{'handle'}} $buffer or croak "$0: $fdata->{'path'}: write: $!";
+		seeker $fdata, $curpos-$chunk_size, SEEK_SET;
+	}
+	seeker $fdata, $original_pos, SEEK_SET;
+	# TODO maintain $fdata->{'mark'} marks
 }
 
 sub insert_text
 {
 	my $fdata = shift;
 	my $text = shift;
+	make_room $fdata, length $text;
+	return overwrite_text $fdata, $text;
+}
+
+sub find_size
+{
+	my $fdata = shift;
+	return if defined $fdata->{'size'};
 	
-	my $original_pos = tell $fdata->{'handle'};
-	my $buffer;
-	my $tail = $text;
-	# FIXME tail >= length buffer ?
-	my $pos = $original_pos;
-	while(readblock $fdata, \$buffer)
+	my $pos = tell $fdata->{'handle'};
+	seek $fdata->{'handle'}, 0, SEEK_END;
+	if($! == 0)
 	{
-		seeker $fdata, $pos, SEEK_SET;
-		print {$fdata->{'handle'}} $tail or die "$0: $fdata->{'path'}: write: $!\n";
-		print {$fdata->{'handle'}} substr $buffer, 0, -length$tail or die "$0: $fdata->{'path'}: write: $!\n";
-		$tail = substr $buffer, -length$tail;
-		$pos = tell $fdata->{'handle'};
+		$fdata->{'size'} = tell $fdata->{'handle'};
 	}
-	print {$fdata->{'handle'}} $tail or die "$0: $fdata->{'path'}: write: $!\n";
-	seek $fdata->{'handle'}, $original_pos + length($text), SEEK_SET;
-	# TODO maintain %mark marks
+	seek $fdata->{'handle'}, $pos, SEEK_SET;
+}
+
+sub insert_stream
+{
+	my $fdata = shift;
+	my $stream_data = shift;
+	find_size $stream_data;
+	
+	my $buffer;
+	my $room_allocated = 0;
+	if(defined $stream_data->{'size'})
+	{
+		make_room $fdata, $stream_data->{'size'};
+		$room_allocated = 1;
+	}
+	while(my $bytes = readblock $stream_data, \$buffer)
+	{
+		if($room_allocated) { overwrite_text $fdata, $buffer; }
+		else                { insert_text $fdata, $buffer; }
+	}
 }
 
 sub delete_chars
@@ -142,13 +189,13 @@ sub delete_chars
 	while(readblock $fdata, \$buffer)
 	{
 		seeker $fdata, $continue_write_pos, SEEK_SET;
-		print {$fdata->{'handle'}} $buffer or die "$0: $fdata->{'path'}: write: $!\n";
+		print {$fdata->{'handle'}} $buffer or croak "$0: $fdata->{'path'}: write: $!";
 		$continue_write_pos = tell $fdata->{'handle'};
 		seeker $fdata, $length, SEEK_CUR;
 	}
 	truncate $fdata->{'handle'}, $continue_write_pos;
 	seeker $fdata, $original_pos, SEEK_SET;
-	# TODO maintain %mark marks
+	# TODO maintain $fdata->{'mark'} marks
 }
 
 sub search_pattern
@@ -201,10 +248,7 @@ sub process_instructions
 	my $last_search_pattern = undef;
 	my $last_search_is_regexp = undef;
 	my $last_search_result = undef;
-	my %mark = ();
 	my $clipboard = '';
-	my $selection_start = undef;
-	my $selection_stop = undef;
 	
 	while(1)
 	{
@@ -243,8 +287,8 @@ You have to open a file before any other operation.
 				$may_create = 1;
 			}
 			
-			my $key = get_text_parameter(\$instructions);
-			die "$0: file path or alias expected to open\n" unless length $key;
+			my $key = get_text_parameter \$instructions;
+			croak "$0: file path or alias expected to open" unless length $key;
 			
 			my $alias;
 			if($instructions =~ s/^as (\S+)$EOIT//)
@@ -274,11 +318,11 @@ You have to open a file before any other operation.
 				if($may_create)
 				{
 					use Fcntl;
-					sysopen $handle, $path, O_RDWR|O_CREAT or die "$0: $path: open: $!\n";
+					sysopen $handle, $path, O_RDWR|O_CREAT or croak "$0: $path: open: $!";
 				}
 				else
 				{
-					open $handle, '+<', $path or die "$0: $path: open: $!\n";
+					open $handle, '+<', $path or croak "$0: $path: open: $!";
 				}
 				$openedfile{$path} = {'handle' => $handle, 'path' => $path};
 				verbose sprintf "%s: opened%s", $path, defined $alias ? " as $alias" : "";
@@ -298,7 +342,7 @@ You have to open a file before any other operation.
 			if($instructions =~ s/^end of( last)? search result$EOIT//)
 			{
 				my $c = $last_search_is_regexp ? '/' : '"';
-				die "$0: last search ($c$last_search_pattern$c) was not found\n" if not defined $last_search_result;
+				croak "$0: last search ($c$last_search_pattern$c) was not found" if not defined $last_search_result;
 				$goto_pos = $last_search_result_pos + 1 + length $last_search_result;
 			}
 =pod
@@ -410,12 +454,12 @@ Set cursor position in file.
 			elsif($instructions =~ s/^mark (\S+)$EOIT//)
 			{
 				my $mark = $1;
-				die "$0: $curfile->{'path'}: mark $mark not found\n" if not exists $mark{$mark};
-				$goto_pos = $mark{$mark};
+				croak "$0: $curfile->{'path'}: mark $mark not found" if not exists $curfile->{'mark'}->{$mark};
+				$goto_pos = $curfile->{'mark'}->{$mark};
 			}
 			else
 			{
-				die "$0: invalid GOTO: $instructions\n";
+				croak "$0: invalid GOTO: $instructions";
 			}
 			
 			if(defined $goto_pos)
@@ -433,7 +477,7 @@ Insert given STRING into the current cursor position.
 		elsif($instructions =~ s/^type$EOIT//)
 		{
 			my $text = get_text_parameter \$instructions;
-			die "$0: text not given to type in\n" unless defined $text;
+			croak "$0: text not given to type in" unless defined $text;
 			insert_text $curfile, $text;
 			verbose sprintf "%s: inserted %d bytes at %d", $curfile->{'path'}, length $text, $position_before_operation;
 		}
@@ -449,7 +493,7 @@ Type given STRING into the current cursor position in overwrite mode.
 		elsif($instructions =~ s/^over(write|type) with$EOIT//)
 		{
 			my $text = get_text_parameter \$instructions;
-			die "$0: text not given to overwrite with\n" unless defined $text;
+			croak "$0: text not given to overwrite with" unless defined $text;
 			overwrite_text $curfile, $text;
 			verbose sprintf "%s: written over %d bytes at %d", $curfile->{'path'}, length $text, $position_before_operation;
 		}
@@ -476,7 +520,7 @@ If you want to replace all the occurrences in the whole file,
 =cut
 		elsif($instructions =~ s/^replace( (?<LIMIT>all|next( (?<COUNT>[1-9]\d*)|))|)(?<OCCUR> occurrences?(?<OF> of|)|)$EOIT//)
 		{
-			die "$0: don't understand this REPLACE instruction\n" if not $+{'LIMIT'} and $+{'OCCUR'};
+			croak "$0: don't understand this REPLACE instruction" if not $+{'LIMIT'} and $+{'OCCUR'};
 			my $replace_count = $+{'LIMIT'} eq 'all' ? undef : ($+{'COUNT'}||1);
 			my $expect_pattern;
 			$expect_pattern = 1 if $+{'OF'};
@@ -488,7 +532,7 @@ If you want to replace all the occurrences in the whole file,
 			if((not defined $expect_pattern and $instructions !~ /^to$EOIT/) or $expect_pattern eq 1)
 			{
 				($pattern, $is_regexp) = get_pattern_parameter \$instructions;
-				die "$0: string/pattern not given what to replace\n" unless length $pattern;
+				croak "$0: string/pattern not given what to replace" unless length $pattern;
 			}
 			else  # not expecting PATTERN to be given here
 			{
@@ -500,7 +544,7 @@ If you want to replace all the occurrences in the whole file,
 			{
 				$text = get_text_parameter \$instructions;
 			}
-			die "$0: string not given to replace pattern to\n" unless defined $text;
+			croak "$0: string not given to replace pattern to" unless defined $text;
 			
 			my $replacements = 0;
 			
@@ -550,7 +594,7 @@ Remove newlines from the text if you must.
 		elsif($instructions =~ s/^search$EOIT//)
 		{
 			my ($pattern, $is_regexp) = get_pattern_parameter(\$instructions);
-			die "$0: string/pattern not given what to search for\n" unless length $pattern;
+			croak "$0: string/pattern not given what to search for" unless length $pattern;
 			
 			# TODO search backward
 			my ($found_pos, $matched_string) = search_pattern $curfile, $pattern, $is_regexp;
@@ -571,22 +615,22 @@ Remove newlines from the text if you must.
 =cut
 		elsif($instructions =~ s/^mark as (\S+)$EOIT//)
 		{
-			$mark{$1} = $position_before_operation;
+			$curfile->{'mark'}->{$1} = $position_before_operation;
 		}
 =pod
 
-=item select from mark START-MARK to mark END-MARK
+=item select from START-MARK to END-MARK
 
 =cut
-		elsif($instructions =~ s/^select from mark (\S+) to mark (\S+)$EOIT//)
+		elsif($instructions =~ s/^select from (\S+) to (\S+)$EOIT//)
 		{
-			$selection_start = undef;
-			$selection_stop = undef;
-			if(not exists $mark{$1}) { verbose "$curfile->{'path'}: mark $1 not found"; }
-			elsif(not exists $mark{$2}) { verbose "$curfile->{'path'}: mark $2 not found"; }
+			$curfile->{'mark'}->{'SELECTION_START'} = undef;
+			$curfile->{'mark'}->{'SELECTION_STOP'}  = undef;
+			if(not exists $curfile->{'mark'}->{$1}) { verbose "$curfile->{'path'}: mark $1 not found"; }
+			elsif(not exists $curfile->{'mark'}->{$2}) { verbose "$curfile->{'path'}: mark $2 not found"; }
 			else {
-				$selection_start = $mark{$1};
-				$selection_stop  = $mark{$2};
+				$curfile->{'mark'}->{'SELECTION_START'} = $1;
+				$curfile->{'mark'}->{'SELECTION_STOP'}  = $2;
 			}
 		}
 =pod
@@ -602,6 +646,30 @@ Remove newlines from the text if you must.
 =item insert file FILE
 
 =item insert output of COMMAND;
+
+=cut
+		elsif($instructions =~ s/insert (?<WHAT>file|output of)$EOIT//)
+		{
+			my $source_type = $+{'WHAT'};
+			my $source = get_text_parameter \$instructions;
+			croak "$0: file/command not given to insert" unless length $source;
+			my $stream_data = {};
+			
+			if($source_type eq 'file')
+			{
+				open $stream_data->{'handle'}, '<', $source or croak "$0: $source: open: $!";
+				$stream_data->{'path'} = $source;
+			}
+			else  # command
+			{
+				open $stream_data->{'handle'}, '-|', $source or croak "$0: open pipe of \"$source\": $!";
+				$stream_data->{'path'} = "|$source";
+			}
+			
+			insert_stream $curfile, $stream_data;
+			close $stream_data->{'handle'};
+		}
+=pod
 
 =item filter through COMMAND;
 
@@ -632,7 +700,7 @@ Remove newlines from the text if you must.
 		}
 		else
 		{
-			die "$0: invalid instruction: $instructions\n";
+			croak "$0: invalid instruction: $instructions";
 		}
 	}
 
@@ -653,10 +721,8 @@ Remove newlines from the text if you must.
 }
 
 
-$Instructions = join ' ', map { if(/[ ]/ or $_ eq ''){ s/[""]/\\$&/g; $_="\"$_\""; }; $_ } @ARGV;
-$Instructions =~ s/\s+/ /;
-$Instructions =~ s/\s*$//;
-die "$0: not any editing instructions given\n" unless $Instructions;
+$Instructions = join ' ', map { if(/[ ""]/ or $_ eq ''){ s/[""]/\\$&/g; $_="\"$_\""; }; $_ } @ARGV;
+croak "$0: not any editing instruction given" unless $Instructions;
 #warn Dumper $Instructions;
 
 

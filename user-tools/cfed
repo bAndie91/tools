@@ -10,6 +10,23 @@ cfed - Command File-Editor - Edit text files by commands directly from shell
 
  cfed [<OPTIONS>] <INSTRUCTIONS>
 
+=head1 DESCRIPTION
+
+Edit files by giving editor commands like shell commands.
+Sematics are similar to well known text editors:
+open file, move cursor, search and replace, select, copy, paste, ...
+
+May open multiple files.
+Always one file is in the foreground.
+All opened files has a cursor position at which most commands are
+applied.
+When a file is opened its cursor set to the start position.
+
+Files also have several marks which you can set or refer to in
+C<select> or C<goto> commands.
+
+You have one clipboard.
+
 =head1 OPTIONS
 
 =over 4
@@ -38,6 +55,7 @@ $OptVerbose = 0;
 GetOptions(
 	'c|confirm' => \$OptConfirm,
 	'v|verbose' => \$OptVerbose,
+	'help|?' => sub{ pod2usage(-exitval=>0, -verbose=>99); },
 ) or exit 2;
 
 
@@ -257,7 +275,7 @@ sub process_instructions
 		$instructions =~ s/^\s*//;
 =pod
 
-=head1 EDITOR INSTRUCTIONS
+=head1 INSTRUCTIONS
 
 =over 4
 

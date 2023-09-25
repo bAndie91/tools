@@ -14,7 +14,8 @@ cfed - Command File-Editor - Edit text files by commands directly from shell
 
 Edit files by giving editor commands like shell commands.
 Sematics are similar to well known text editors:
-open file, move cursor, search and replace, select, copy, paste, ...
+open file, move cursor, type in text, search and replace, select, copy,
+paste, ...
 
 May open multiple files.
 Always one file is in the foreground.
@@ -24,6 +25,8 @@ When a file is opened its cursor set to the start position.
 
 Files also have several marks which you can set or refer to in
 C<select> or C<goto> commands.
+A special pair of marks is SELECTION-START and SELECTION-END which
+pins the currently selected text for you.
 
 You have one clipboard.
 
@@ -33,7 +36,9 @@ You have one clipboard.
 
 =item -f, --script FILE
 
-Take instructions from FILE, not from parameters.
+Take instructions from FILE
+when done processing instructions in parameters.
+May specify multiple times.
 
 =item -v, --verbose
 
@@ -53,12 +58,12 @@ use Carp qw/croak/;
 $0 =~ s/.*\/([^\/]+)$/$1/;
 $OptConfirm = 0;
 $OptVerbose = 0;
-$OptEditorScript = undef;
+@OptEditorScript = ();
 
 GetOptions(
 	'c|confirm' => \$OptConfirm,
 	'v|verbose' => \$OptVerbose,
-	'f|script=s'  => \$OptEditorScript,
+	'f|script=s@' => \@OptEditorScript,
 	'help|?' => sub{ pod2usage(-exitval=>0, -verbose=>99); },
 ) or exit 2;
 
@@ -283,15 +288,6 @@ sub search_pattern
 sub process_instructions
 {
 	my $instructions = shift;
-	
-	my %openedfile = ();
-	my %filepathalias = ();
-	my $curfile;
-	
-	my $last_search_pattern = undef;
-	my $last_search_is_regexp = undef;
-	my $last_search_result = undef;
-	my $clipboard = '';
 	
 	while(1)
 	{
@@ -551,6 +547,7 @@ Set cursor position in file.
 =item enter STRING
 
 Insert given STRING into the current cursor position.
+It does not overwrite current selection.
 Add newline to the end only if called as c<enter>.
 
 =cut
@@ -569,6 +566,8 @@ Add newline to the end only if called as c<enter>.
 =item overtype with STRING
 
 Type given STRING into the current cursor position in overwrite mode.
+It does not overwrite current selection, but the text itself
+let it be currently selected or not.
 
 =cut
 		elsif($instructions =~ s/^over(write|type) with$EOIT//)
@@ -662,6 +661,15 @@ If you want to replace all the occurrences in the whole file,
 		}
 =pod
 
+=item delete COUNT char[s]
+
+=cut
+		elsif($instructions =~ s/^delete ([1-9]\d*) chars?$EOIT//)
+		{
+			delete_chars $curfile, $1;
+		}
+=pod
+
 =item search PATTERN [backward]
 
 Find next occurrence (or previous one if "backward" is specified) of
@@ -720,11 +728,11 @@ Remove newlines from the text if you must.
 
 =item select [COUNT] [char[s] | word[s] | line[s]]
 
-=item copy
+=item copy [selection]
 
-=item cut
+=item cut [selection]
 
-=item paste
+=item paste [selection]
 
 =cut
 =pod
@@ -733,7 +741,7 @@ Remove newlines from the text if you must.
 
 =item insert output of COMMAND
 
-Insert FILE's contents or the output (stdout) of COIMMAND
+Insert FILE's contents or the output (stdout) of COMMAND
 to the current cursor position.
 
 =item filter selection through COMMAND
@@ -845,6 +853,45 @@ and in case of C<filter>, replace selection with its stdout.
 				verbose "$curfile->{'path'}: there is not any selection";
 			}
 		}
+=pod
+
+=item show contents
+
+Show the contents of the file in foreground.
+
+=cut
+		elsif($instructions =~ s/^show contents$EOIT//)
+		{
+			find_size $curfile;
+			shovel_text $curfile, 0, $curfile->{'size'}, \*STDOUT;
+		}
+=pod
+
+=item show cursor
+
+=cut
+		elsif($instructions =~ s/^show cursor$EOIT//)
+		{
+			print $position_before_operation;
+			print "\n";
+		}
+=pod
+
+=item show opened files
+
+=cut
+		elsif($instructions =~ s/^show opened files$EOIT//)
+		{
+			for my $path (keys %openedfile)
+			{
+				print "$path";
+				for my $alias (keys %filepathalias)
+				{
+					print "\t[$alias]" if $filepathalias{$alias} eq $path;
+				}
+				print "\n";
+			}
+		}
 		elsif($instructions eq '')
 		{
 			last;
@@ -854,38 +901,55 @@ and in case of C<filter>, replace selection with its stdout.
 			croak "$0: invalid instruction: $instructions";
 		}
 	}
-
 =pod
 
 =back
 
 =cut
-	
-	my $close_err = 0;
-	for my $curfile (values %openedfile)
-	{
-		close $curfile->{'handle'} and next;
-		$close_err = $!;
-		warn "$0: $curfile->{'path'}: close: $!\n";
-	}
-	return $close_err;
 }
 
-
-if(defined $OptEditorScript)
-{
-	open my $es, '<', $OptEditorScript or croak "$0: $OptEditorScript: open: $!";
-	local $/ = undef;
-	$Instructions = <$es>;
-}
-else
-{
-	$Instructions = join ' ', map { if(/[ \r\n""]/ or $_ eq ''){ s/[""]/\\$&/g; $_="\"$_\""; }; $_ } @ARGV;
-}
-croak "$0: not any editing instruction given" unless $Instructions;
-#warn Dumper $Instructions;
 
 
 # TODO optional backup files
 
-exit process_instructions $Instructions;
+my %openedfile = ();
+my %filepathalias = ();
+my $curfile;
+my $instructions_found = 1;
+
+my $last_search_pattern = undef;
+my $last_search_is_regexp = undef;
+my $last_search_result = undef;
+my $clipboard = '';
+
+
+if(@ARGV)
+{
+	my $Instructions = join ' ', map { if(/[ \r\n""]/ or $_ eq ''){ s/[""]/\\$&/g; $_="\"$_\""; }; $_ } @ARGV;
+	process_instructions $Instructions;
+}
+
+for my $espath (@OptEditorScript)
+{
+	open my $es, '<', $espath or croak "$0: $espath: open: $!";
+	local $/ = undef;
+	my $Instructions = <$es>;
+	process_instructions $Instructions;
+	close $es;
+}
+
+while(my $Instructions = <STDIN>)
+{
+	eval { process_instructions $Instructions; 1; };
+	warn $@ if $@;
+}
+
+
+my $close_err = 0;
+for my $curfile (values %openedfile)
+{
+	close $curfile->{'handle'} and next;
+	$close_err = $!;
+	warn "$0: $curfile->{'path'}: close: $!\n";
+}
+exit $close_err;

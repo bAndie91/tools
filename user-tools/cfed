@@ -164,15 +164,12 @@ sub insert_text
 sub find_size
 {
 	my $fdata = shift;
-	return if defined $fdata->{'size'};
-	
 	my $pos = tell $fdata->{'handle'};
-	seek $fdata->{'handle'}, 0, SEEK_END;
-	if($! == 0)
+	if(seek $fdata->{'handle'}, 0, SEEK_END)
 	{
 		$fdata->{'size'} = tell $fdata->{'handle'};
+		seek $fdata->{'handle'}, $pos, SEEK_SET;
 	}
-	seek $fdata->{'handle'}, $pos, SEEK_SET;
 }
 
 sub insert_stream
@@ -193,6 +190,27 @@ sub insert_stream
 		if($room_allocated) { overwrite_text $fdata, $buffer; }
 		else                { insert_text $fdata, $buffer; }
 	}
+}
+
+sub shovel_text
+{
+	my $src = shift;
+	my $pos_start = shift;
+	my $pos_stop = shift;
+	my $length = $pos_stop - $pos_start;
+	my $dest_fh = shift;
+	
+	my $original_pos = tell $src->{'handle'};
+	seeker $src, $pos_start, SEEK_SET;
+	my $buffer;
+	while(1)
+	{
+		last if $length <= 0;
+		my $size = $length < $blockio_buffer_size ? $length : $blockio_buffer_size;
+		$length -= readblock $src, \$buffer, $size;
+		print {$dest_fh} $buffer;
+	}
+	seeker $src, $original_pos, SEEK_SET;
 }
 
 sub delete_chars
@@ -345,8 +363,14 @@ You have to open a file before any other operation.
 				$openedfile{$path} = {'handle' => $handle, 'path' => $path};
 				verbose sprintf "%s: opened%s", $path, defined $alias ? " as $alias" : "";
 			}
+			
 			$curfile = $openedfile{$path};
 			$filepathalias{$alias} = $path if defined $alias;
+			# seek to the start and set START and END marks
+			seeker $curfile, 0, SEEK_SET;
+			$curfile->{'mark'}->{'START'} = 0;
+			find_size $curfile;
+			$curfile->{'mark'}->{'END'} = $curfile->{'size'};
 		}
 		elsif($instructions =~ s/^goto$EOIT//)
 		{
@@ -489,9 +513,29 @@ Set cursor position in file.
 =item go [up | down | left | right] [COUNT times]
 
 =cut
-		elsif($instructions =~ s/^go (?<WHERE>up|down|left|right)( (?<COUNT>\d*) times|)$EOIT//)
+		elsif($instructions =~ s/^go (?<WHERE>up|down|left|right)( (?<COUNT>[1-9]\d*) times|)$EOIT//)
 		{
-			# TODO
+			my $count = $+{'COUNT'} || 1;
+			given($+{'WHERE'})
+			{
+				when('right') {
+					my $tmp;
+					read $curfile->{'handle'}, $tmp, $count or croak "$0: $curfile->{'path'}: read: $!";
+				}
+				when('left') {
+					$count = $position_before_operation if $count > $position_before_operation;
+					seeker $curfile, -$count, SEEK_CUR if $count;
+				}
+				when('down') {
+					readline $curfile->{'handle'};
+					my $x;
+					read $curfile->{'handle'}, $x, $count or croak "$0: $curfile->{'path'}: read: $!";
+					# FIXME offset in line?
+				}
+				when('up') {
+				}
+				# TODO
+			}
 		}
 =pod
 
@@ -654,13 +698,13 @@ Remove newlines from the text if you must.
 =cut
 		elsif($instructions =~ s/^select from (\S+) to (\S+)$EOIT//)
 		{
-			$curfile->{'mark'}->{'SELECTION_START'} = undef;
-			$curfile->{'mark'}->{'SELECTION_STOP'}  = undef;
+			$curfile->{'mark'}->{'SELECTION-START'} = undef;
+			$curfile->{'mark'}->{'SELECTION-STOP'}  = undef;
 			if(not exists $curfile->{'mark'}->{$1}) { verbose "$curfile->{'path'}: mark $1 not found"; }
 			elsif(not exists $curfile->{'mark'}->{$2}) { verbose "$curfile->{'path'}: mark $2 not found"; }
 			else {
-				$curfile->{'mark'}->{'SELECTION_START'} = $1;
-				$curfile->{'mark'}->{'SELECTION_STOP'}  = $2;
+				$curfile->{'mark'}->{'SELECTION-START'} = $curfile->{'mark'}->{$1};
+				$curfile->{'mark'}->{'SELECTION-STOP'}  = $curfile->{'mark'}->{$2};
 			}
 		}
 =pod
@@ -673,16 +717,31 @@ Remove newlines from the text if you must.
 
 =item paste
 
+=cut
+=pod
+
 =item insert file FILE
 
-=item insert output of COMMAND;
+=item insert output of COMMAND
+
+Insert FILE's contents or the output (stdout) of COIMMAND
+to the current cursor position.
+
+=item filter selection through COMMAND
+
+=item send selection to COMMAND
+
+Send selected text to COMMAND as stdin,
+and in case of C<filter>, replace selection with its stdout.
 
 =cut
-		elsif($instructions =~ s/insert (?<WHAT>file|output of)$EOIT//)
+		elsif($instructions =~ s/^(?<CMD>insert (?<WHAT>file|output of)|filter selection through|send selection to)$EOIT//)
 		{
+			my $cmd = $+{'CMD'};
 			my $source_type = $+{'WHAT'};
+			$cmd =~ s/^(\S+).*/$1/;
 			my $source = get_text_parameter \$instructions;
-			croak "$0: file/command not given to insert" unless length $source;
+			croak "$0: file/command not given to insert/filter/send to" unless length $source;
 			my $stream_data = {};
 			
 			if($source_type eq 'file')
@@ -692,18 +751,50 @@ Remove newlines from the text if you must.
 			}
 			else  # command
 			{
-				open $stream_data->{'handle'}, '-|', $source or croak "$0: open pipe of \"$source\": $!";
-				$stream_data->{'path'} = "|$source";
+				my $filter_pid;
+				my $ext_command_input;
+				
+				given($cmd)
+				{
+					when('insert')
+					{
+						$stream_data->{'path'} = "<($source)";
+						open $stream_data->{'handle'}, '-|', $source or croak "$0: open $stream_data->{'path'}: $!";
+					}
+					when('send')
+					{
+						$stream_data->{'path'} = "|$source";
+						open $ext_command_input, '|-', $source or croak "$0: open $stream_data->{'path'}: $!";
+					}
+					when('filter')
+					{
+						$stream_data->{'path'} = "<(|$source)";
+						use IPC::Open2;
+						$filter_pid = open2($stream_data->{'handle'}, $ext_command_input, $source);
+					}
+				}
+				if(defined $ext_command_input)
+				{
+					if(defined $curfile->{'mark'}->{'SELECTION-START'} and defined $curfile->{'mark'}->{'SELECTION-STOP'})
+					{
+						shovel_text $curfile, $curfile->{'mark'}->{'SELECTION-START'}, $curfile->{'mark'}->{'SELECTION-STOP'}, $ext_command_input;
+					}
+					else
+					{
+						croak "$0: $curfile->{'path'}: there is not any selection to $cmd";
+					}
+					close $ext_command_input or croak "$0: close pipe: $!";
+				}
 			}
 			
-			insert_stream $curfile, $stream_data;
-			close $stream_data->{'handle'};
+			if(defined $stream_data->{'handle'})
+			{
+				# TODO replace selection if 'filter'
+				insert_stream $curfile, $stream_data;
+				close $stream_data->{'handle'};
+			}
 		}
 =pod
-
-=item filter through COMMAND;
-
-=item send to COMMAND;
 
 =item uppercase
 
@@ -714,7 +805,8 @@ Remove newlines from the text if you must.
 =cut
 		elsif($instructions =~ s/^(uppercase|lowercase|capitalize)$EOIT//)
 		{
-			if($selection_start)
+			my $op = $1;
+			if(defined $curfile->{'mark'}->{'SELECTION-START'} and defined $curfile->{'mark'}->{'SELECTION-STOP'})
 			{
 				seeker $curfile, $selection_start, SEEK_SET;
 				# TODO

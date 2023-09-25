@@ -8,7 +8,7 @@ cfed - Command File-Editor - Edit text files by commands directly from shell
 
 =head1 SYNOPSIS
 
- cfed [<OPTIONS>] <INSTRUCTIONS> [-- <FILE> [<FILE> [...]]]
+ cfed [<OPTIONS>] <INSTRUCTIONS>
 
 =head1 OPTIONS
 
@@ -82,13 +82,6 @@ sub get_pattern_parameter
 	return ($pattern, $is_regexp);
 }
 
-sub overwrite_text
-{
-	my $fdata = shift;
-	my $text = shift;
-	print {$fdata->{'handle'}} $text or die "$0: $fdata->{'path'}: write: $!\n";
-}
-
 sub seeker
 {
 	my $fdata = shift;
@@ -105,6 +98,13 @@ sub readblock
 	my $bytes = read $fdata->{'handle'}, $$scalar_ref, $blocksize;
 	die "$0: $fdata->{'path'}: read: $!\n" unless defined $bytes;
 	return $bytes;
+}
+
+sub overwrite_text
+{
+	my $fdata = shift;
+	my $text = shift;
+	print {$fdata->{'handle'}} $text or die "$0: $fdata->{'path'}: write: $!\n";
 }
 
 sub insert_text
@@ -192,8 +192,11 @@ sub search_pattern
 
 sub process_instructions
 {
-	my $fdata = {'path' => shift,};
 	my $instructions = shift;
+	
+	my %openedfile = ();
+	my %filepathalias = ();
+	my $curfile;
 	
 	my $last_search_pattern = undef;
 	my $last_search_is_regexp = undef;
@@ -203,11 +206,10 @@ sub process_instructions
 	my $selection_start = undef;
 	my $selection_stop = undef;
 	
-	open $fdata->{'handle'}, '+<', $fdata->{'path'} or die "$0: $fdata->{'path'}: open: $!\n";
-	
 	while(1)
 	{
-		my $position_before_operation = tell $fdata->{'handle'};
+		my $position_before_operation;
+		$position_before_operation = tell $curfile->{'handle'} if $curfile;
 		$instructions =~ s/^\s*//;
 =pod
 
@@ -215,8 +217,76 @@ sub process_instructions
 
 =over 4
 
+=item open [or create] PATH [as NAME]
+
+=item open NAME
+
+Open PATH file to edit.
+You can switch between multiple opened files by invoking C<open PATH>
+again,
+or C<open NAME> if you opened that file under a certain NAME by
+C<as NAME>.
+You can not open a file on path NAME once you set NAME as an alias for
+an other PATH.
+But you cat always refer to the same path by prepending C<./> (or C</>
+in case of absolute paths) to it.
+Don't worry, it won't open the same PATH multiple time with conflicting
+editor states.
+You have to open a file before any other operation.
+
 =cut
-		if($instructions =~ s/^goto$EOIT//)
+		if($instructions =~ s/^open$EOIT//)
+		{
+			my $may_create = 0;
+			if($instructions =~ s/^or create$EOIT//)
+			{
+				$may_create = 1;
+			}
+			
+			my $key = get_text_parameter(\$instructions);
+			die "$0: file path or alias expected to open\n" unless length $key;
+			
+			my $alias;
+			if($instructions =~ s/^as (\S+)$EOIT//)
+			{
+				$alias = $1;
+			}
+			
+			my $path;
+			if(not defined $alias)
+			{
+				# "open NAME" form -> check aliases
+				if(exists $filepathalias{$key})
+				{
+					$path = $filepathalias{$key};
+				}
+			}
+			if(not defined $path)
+			{
+				# either "open NAME" form and NAME alias is not found,
+				# or "open PATH" or "open PATH as NAME" form
+				$path = $key;
+			}
+			if(not exists $openedfile{$path})
+			{
+				# file is not yet open
+				my $handle;
+				if($may_create)
+				{
+					use Fcntl;
+					sysopen $handle, $path, O_RDWR|O_CREAT or die "$0: $path: open: $!\n";
+				}
+				else
+				{
+					open $handle, '+<', $path or die "$0: $path: open: $!\n";
+				}
+				$openedfile{$path} = {'handle' => $handle, 'path' => $path};
+				verbose sprintf "%s: opened%s", $path, defined $alias ? " as $alias" : "";
+			}
+			$curfile = $openedfile{$path};
+			$filepathalias{$alias} = $path if defined $alias;
+		}
+		elsif($instructions =~ s/^goto$EOIT//)
 		{
 			my $goto_pos = undef;
 			my $whence = SEEK_SET;
@@ -244,10 +314,10 @@ sub process_instructions
 				{
 					if($+{'ANCHOR'} eq 'end')
 					{
-						my $rest_of_line = readline $fdata->{'handle'};
+						my $rest_of_line = readline $curfile->{'handle'};
 						if(substr $rest_of_line, -1 eq "\n")
 						{
-							seeker $fdata, -1, SEEK_CUR;
+							seeker $curfile, -1, SEEK_CUR;
 						}
 					}
 					else  # start
@@ -258,15 +328,15 @@ sub process_instructions
 						{
 							if($pos < $blockio_buffer_size)
 							{
-								seeker $fdata, 0, SEEK_SET;
-								readblock $fdata, \$buffer, $pos;
+								seeker $curfile, 0, SEEK_SET;
+								readblock $curfile, \$buffer, $pos;
 								$pos = 0;
 							}
 							else
 							{
-								seeker $fdata, $blockio_buffer_size, SEEK_CUR;
-								$pos = tell $fdata->{'handle'};
-								readblock $fdata, \$buffer;
+								seeker $curfile, $blockio_buffer_size, SEEK_CUR;
+								$pos = tell $curfile->{'handle'};
+								readblock $curfile, \$buffer;
 							}
 							my $idx = rindex $buffer, "\n";
 							if($idx >= 0)
@@ -274,7 +344,7 @@ sub process_instructions
 								$goto_pos = $pos + $idx + 1;
 								last;
 							}
-							seeker $fdata, $pos, SEEK_SET;
+							seeker $curfile, $pos, SEEK_SET;
 						}
 					}
 				}
@@ -293,7 +363,7 @@ sub process_instructions
 			{
 				if($+{'DIRECTION'} eq 'next')
 				{
-					readline $fdata->{'handle'};
+					readline $curfile->{'handle'};
 				}
 				else  # previous
 				{
@@ -309,7 +379,7 @@ sub process_instructions
 			{
 				if($+{'DIRECTION'} eq 'forward')
 				{
-					readline $fdata->{'handle'} for 1..$+{'COUNT'};
+					readline $curfile->{'handle'} for 1..$+{'COUNT'};
 				}
 				else  # back
 				{
@@ -327,8 +397,8 @@ Lines are indexed by 0.
 =cut
 			elsif($instructions =~ s/^line (?<COUNT>\d*)$EOIT//)
 			{
-				seeker $fdata, 0, SEEK_SET;
-				readline $fdata->{'handle'} for 1..$+{'COUNT'};
+				seeker $curfile, 0, SEEK_SET;
+				readline $curfile->{'handle'} for 1..$+{'COUNT'};
 			}
 =pod
 
@@ -340,7 +410,7 @@ Set cursor position in file.
 			elsif($instructions =~ s/^mark (\S+)$EOIT//)
 			{
 				my $mark = $1;
-				die "$0: $fdata->{'path'}: mark $mark not found\n" if not exists $mark{$mark};
+				die "$0: $curfile->{'path'}: mark $mark not found\n" if not exists $mark{$mark};
 				$goto_pos = $mark{$mark};
 			}
 			else
@@ -350,7 +420,7 @@ Set cursor position in file.
 			
 			if(defined $goto_pos)
 			{
-				seeker $fdata, $goto_pos, $whence;
+				seeker $curfile, $goto_pos, $whence;
 			}
 		}
 =pod
@@ -364,8 +434,8 @@ Insert given STRING into the current cursor position.
 		{
 			my $text = get_text_parameter \$instructions;
 			die "$0: text not given to type in\n" unless defined $text;
-			insert_text $fdata, $text;
-			verbose sprintf "%s: inserted %d bytes at %d", $fdata->{'path'}, length $text, $position_before_operation;
+			insert_text $curfile, $text;
+			verbose sprintf "%s: inserted %d bytes at %d", $curfile->{'path'}, length $text, $position_before_operation;
 		}
 =pod
 
@@ -380,8 +450,8 @@ Type given STRING into the current cursor position in overwrite mode.
 		{
 			my $text = get_text_parameter \$instructions;
 			die "$0: text not given to overwrite with\n" unless defined $text;
-			overwrite_text $fdata, $text;
-			verbose sprintf "%s: written over %d bytes at %d", $fdata->{'path'}, length $text, $position_before_operation;
+			overwrite_text $curfile, $text;
+			verbose sprintf "%s: written over %d bytes at %d", $curfile->{'path'}, length $text, $position_before_operation;
 		}
 =pod
 
@@ -436,24 +506,24 @@ If you want to replace all the occurrences in the whole file,
 			
 			while(not defined $replace_count or $replace_count > 0)
 			{
-				my ($found_pos, $matched_string) = search_pattern $fdata, $pattern, $is_regexp;
+				my ($found_pos, $matched_string) = search_pattern $curfile, $pattern, $is_regexp;
 				
 				if(defined $found_pos)
 				{
-					seeker $fdata, $found_pos, SEEK_SET;
+					seeker $curfile, $found_pos, SEEK_SET;
 					my $found_length = length $matched_string;
 					my $length_to_delete = $found_length - length $text;
 					if($length_to_delete >= 0)
 					{
-						delete_chars $fdata, $length_to_delete if $length_to_delete > 0;
-						overwrite_text $fdata, $text;
+						delete_chars $curfile, $length_to_delete if $length_to_delete > 0;
+						overwrite_text $curfile, $text;
 					}
 					else
 					{
-						overwrite_text $fdata, substr($text, 0, $found_length);
-						insert_text $fdata, substr($text, $found_length);
+						overwrite_text $curfile, substr($text, 0, $found_length);
+						insert_text $curfile, substr($text, $found_length);
 					}
-					verbose "$fdata->{'path'}: replaced \"$matched_string\" to \"$text\" at $found_pos";
+					verbose "$curfile->{'path'}: replaced \"$matched_string\" to \"$text\" at $found_pos";
 					$replace_count -= 1 if defined $replace_count;
 					$replacements += 1;
 				}
@@ -463,7 +533,7 @@ If you want to replace all the occurrences in the whole file,
 				}
 			}
 			
-			verbose "$fdata->{'path'}: replaced $replacements occurrences";
+			verbose "$curfile->{'path'}: replaced $replacements occurrences";
 		}
 =pod
 
@@ -483,11 +553,11 @@ Remove newlines from the text if you must.
 			die "$0: string/pattern not given what to search for\n" unless length $pattern;
 			
 			# TODO search backward
-			my ($found_pos, $matched_string) = search_pattern $fdata, $pattern, $is_regexp;
+			my ($found_pos, $matched_string) = search_pattern $curfile, $pattern, $is_regexp;
 			
 			if(defined $found_pos)
 			{
-				seeker $fdata, $found_pos, SEEK_SET;
+				seeker $curfile, $found_pos, SEEK_SET;
 			}
 			$last_search_pattern = $pattern;
 			$last_search_is_regexp = $is_regexp;
@@ -512,8 +582,8 @@ Remove newlines from the text if you must.
 		{
 			$selection_start = undef;
 			$selection_stop = undef;
-			if(not exists $mark{$1}) { verbose "$fdata->{'path'}: mark $1 not found"; }
-			elsif(not exists $mark{$2}) { verbose "$fdata->{'path'}: mark $2 not found"; }
+			if(not exists $mark{$1}) { verbose "$curfile->{'path'}: mark $1 not found"; }
+			elsif(not exists $mark{$2}) { verbose "$curfile->{'path'}: mark $2 not found"; }
 			else {
 				$selection_start = $mark{$1};
 				$selection_stop  = $mark{$2};
@@ -548,12 +618,12 @@ Remove newlines from the text if you must.
 		{
 			if($selection_start)
 			{
-				seeker $fdata, $selection_start, SEEK_SET;
+				seeker $curfile, $selection_start, SEEK_SET;
 				# TODO
 			}
 			else
 			{
-				verbose "$fdata->{'path'}: there is not any selection";
+				verbose "$curfile->{'path'}: there is not any selection";
 			}
 		}
 		elsif($instructions eq '')
@@ -571,34 +641,25 @@ Remove newlines from the text if you must.
 =back
 
 =cut
-
-	close $fdata->{'handle'} or die "$0: $fdata->{'path'}: close: $!\n";
-}
-
-
-while(scalar @ARGV)
-{
-	my $arg = shift @ARGV;
-	if($arg eq '--')
+	
+	my $close_err = 0;
+	for my $curfile (values %openedfile)
 	{
-		push @Files, @ARGV;
-		last;
+		close $curfile->{'handle'} and next;
+		$close_err = $!;
+		warn "$0: $curfile->{'path'}: close: $!\n";
 	}
-	push @Instructions, $arg;
+	return $close_err;
 }
 
-$Instructions = join ' ', map { if(/[ ]/ or $_ eq ''){ s/[""]/\\$&/g; $_="\"$_\""; }; $_ } @Instructions;
+
+$Instructions = join ' ', map { if(/[ ]/ or $_ eq ''){ s/[""]/\\$&/g; $_="\"$_\""; }; $_ } @ARGV;
 $Instructions =~ s/\s+/ /;
 $Instructions =~ s/\s*$//;
-
 die "$0: not any editing instructions given\n" unless $Instructions;
-die "$0: not any files given\n" unless @Files;
-
 #warn Dumper $Instructions;
+
 
 # TODO optional backup files
 
-for my $Filepath (@Files)
-{
-	process_instructions $Filepath, $Instructions;
-}
+exit process_instructions $Instructions;

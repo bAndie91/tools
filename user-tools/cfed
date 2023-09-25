@@ -432,17 +432,16 @@ You have to open a file before any other operation.
 			}
 =pod
 
-=item goto line NUMBER
+=item goto [line | char] index NUMBER
 
-Lines are indexed by 0.
-
-=item go [up | down]
+Lines and char offsets are indexed by 0.
 
 =cut
-			elsif($instructions =~ s/^line (?<COUNT>\d*)$EOIT//)
+			elsif($instructions =~ s/^(?<WHAT>line|char) index (?<COUNT>\d*)$EOIT//)
 			{
 				seeker $curfile, 0, SEEK_SET;
 				readline $curfile->{'handle'} for 1..$+{'COUNT'};
+				# TODO: char index ...
 			}
 =pod
 
@@ -469,16 +468,29 @@ Set cursor position in file.
 		}
 =pod
 
-=item type STRING
-
-Insert given STRING into the current cursor position.
+=item go [up | down | left | right] [COUNT times]
 
 =cut
-		elsif($instructions =~ s/^type$EOIT//)
+		elsif($instructions =~ s/^go (?<WHERE>up|down|left|right)( (?<COUNT>\d*) times|)$EOIT//)
 		{
+			# TODO
+		}
+=pod
+
+=item type STRING
+
+=item enter STRING
+
+Insert given STRING into the current cursor position.
+Add newline to the end only if called as c<enter>.
+
+=cut
+		elsif($instructions =~ s/^(type|enter)$EOIT//)
+		{
+			my $end = $1 eq 'enter' ? "\n" : "";
 			my $text = get_text_parameter \$instructions;
 			croak "$0: text not given to type in" unless defined $text;
-			insert_text $curfile, $text;
+			insert_text $curfile, $text.$end;
 			verbose sprintf "%s: inserted %d bytes at %d", $curfile->{'path'}, length $text, $position_before_operation;
 		}
 =pod

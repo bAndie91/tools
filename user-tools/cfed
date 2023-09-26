@@ -801,18 +801,27 @@ and very end of the currently opened file respectively.
 
 =item select [last] search result
 
+=item select none
+
 =cut
-		elsif($instructions =~ s/^select( last|) search result$EOIT//)
+		elsif($instructions =~ s/^select( none|( last|) search result)$EOIT//)
 		{
+			my $what = $1;
 			$curfile->{'mark'}->{'SELECTION-START'} = undef;
 			$curfile->{'mark'}->{'SELECTION-END'}   = undef;
-			croak "$0: no last search result to select" if not defined $last_search_result_pos;
-			$curfile->{'mark'}->{'SELECTION-START'} = $last_search_result_pos;
-			$curfile->{'mark'}->{'SELECTION-END'}   = $last_search_result_pos + length $last_search_result;
+			if($what =~ /search result/)
+			{
+				croak "$0: no last search result to select" if not defined $last_search_result_pos;
+				$curfile->{'mark'}->{'SELECTION-START'} = $last_search_result_pos;
+				$curfile->{'mark'}->{'SELECTION-END'}   = $last_search_result_pos + length $last_search_result;
+			}
 		}
 =pod
 
 =item select [COUNT] [char[s] | word[s] | line[s]]
+
+=cut
+=pod
 
 =item copy [selection]
 
@@ -1044,6 +1053,14 @@ Show the contents of the file in foreground.
 							push @inserts, {'where' => $p2-$pos, 'what' => "\x1B[27m"};
 						}
 					}
+					if($extras =~ /cursor/)
+					{
+						if($pos <= $position_before_operation and $position_before_operation < $end)
+						{
+							push @inserts, {'where' => $position_before_operation-$pos,   'what' => "\x1B[4m"};
+							push @inserts, {'where' => $position_before_operation-$pos+1, 'what' => "\x1B[24m"};
+						}
+					}
 					# TODO extras...
 					@inserts = sort {$a->{'where'} <=> $b->{'where'}} @inserts;
 					my $prev_slice_end = 0;
@@ -1055,6 +1072,8 @@ Show the contents of the file in foreground.
 					}
 					print substr($$data_ref, $prev_slice_end);
 				};
+			
+			seeker $curfile, $position_before_operation, SEEK_SET;
 		}
 =pod
 

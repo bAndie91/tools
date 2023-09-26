@@ -55,13 +55,15 @@ use POSIX;
 use Carp qw/croak/;
 
 $0 =~ s/.*\/([^\/]+)$/$1/;
-$OptConfirm = 0;
-$OptVerbose = 0;
+%Opt = (
+	'confirm' => 0,
+	'verbose' => 0,
+);
 @OptEditorScript = ();
 
 GetOptions(
-	'c|confirm' => \$OptConfirm,
-	'v|verbose' => \$OptVerbose,
+	'c|confirm' => \$Opt{'confirm'},
+	'v|verbose' => \$Opt{'verbose'},
 	'f|script=s@' => \@OptEditorScript,
 	'help|?' => sub{ pod2usage(-exitval=>0, -verbose=>99); },
 ) or exit 2;
@@ -76,7 +78,7 @@ my $blockio_buffer_size = 4096;
 sub verbose
 {
 	my $msg = shift;
-	if($OptVerbose)
+	if($Opt{'verbose'})
 	{
 		warn "$0: $msg\n";
 	}
@@ -131,6 +133,16 @@ sub readblock
 	return $bytes;
 }
 
+sub read_exact
+{
+	my $fdata = shift;
+	my $scalar_ref = shift;
+	my $size = shift;
+	my $bytes = readblock $fdata, $scalar_ref, $size;
+	if($bytes != $size) { croak "$0: $fdata->{'path'}: could not read $size bytes, only $bytes"; }
+	return $bytes;
+}
+
 sub overwrite_text
 {
 	my $fdata = shift;
@@ -154,8 +166,7 @@ sub make_room
 		last if $chunk_size <= 0;
 		$chunk_size = $blockio_buffer_size if $chunk_size > $blockio_buffer_size;
 		seeker $fdata, -$chunk_size, SEEK_CUR;
-		my $bytes = readblock $fdata, \$buffer, $chunk_size;
-		croak sprintf "%s: %s: can not read %d bytes at %d", $0, $fdata->{'path'}, $chunk_size, $curpos-$chunk_size if $bytes != $chunk_size;
+		read_exact $fdata, \$buffer, $chunk_size;
 		seeker $fdata, $curpos + $room_size - $chunk_size, SEEK_SET;
 		print {$fdata->{'handle'}} $buffer or croak "$0: $fdata->{'path'}: write: $!";
 		seeker $fdata, $curpos-$chunk_size, SEEK_SET;
@@ -665,7 +676,10 @@ If you want to replace all the occurrences in the whole file,
 				}
 			}
 			
-			verbose "$curfile->{'path'}: replaced $replacements occurrences";
+			if(not defined $replace_count or $replacements == 0)
+			{
+				verbose "$curfile->{'path'}: replaced $replacements occurrences";
+			}
 		}
 =pod
 
@@ -678,7 +692,7 @@ If you want to replace all the occurrences in the whole file,
 		}
 =pod
 
-=item search PATTERN [backward]
+=item search [next] PATTERN [backward]
 
 Find next occurrence (or previous one if "backward" is specified) of
 PATTERN and set the cursor to it.
@@ -688,17 +702,26 @@ PATTERN is not supported to overhang from one line to the next.
 Remove newlines from the text if you must.
 
 =cut
-		elsif($instructions =~ s/^search$EOIT//)
+		elsif($instructions =~ s/^search(?<NEXT> next|)$EOIT//)
 		{
+			my $next = 1 if $+{'NEXT'};
 			my ($pattern, $is_regexp) = get_pattern_parameter(\$instructions);
 			croak "$0: string/pattern not given what to search for" unless length $pattern;
 			
 			# TODO search backward
+			DO_SEARCH:
 			my ($found_pos, $matched_string) = search_pattern $curfile, $pattern, $is_regexp;
+			if($found_pos == $position_before_operation and $next) { seeker $curfile, +1, SEEK_CUR; $next = 0; goto DO_SEARCH; }
 			
 			if(defined $found_pos)
 			{
 				seeker $curfile, $found_pos, SEEK_SET;
+				my $len = length $matched_string;
+				verbose "match found at $found_pos, length $len";
+			}
+			else
+			{
+				verbose "not found";
 			}
 			$last_search_pattern = $pattern;
 			$last_search_is_regexp = $is_regexp;
@@ -718,11 +741,17 @@ Remove newlines from the text if you must.
 
 =item select from START-MARK to END-MARK
 
+Select text from the previously named mark START-MARK to END-MARK.
+Put marks with C<mark as> command.
+You have special marks called C<START> and C<END> which are the very start
+and very end of the currently opened file respectively.
+
 =cut
 		elsif($instructions =~ s/^select from (\S+) to (\S+)$EOIT//)
 		{
 			$curfile->{'mark'}->{'SELECTION-START'} = undef;
 			$curfile->{'mark'}->{'SELECTION-STOP'}  = undef;
+			# TODO make it fatal error?
 			if(not exists $curfile->{'mark'}->{$1}) { verbose "$curfile->{'path'}: mark $1 not found"; }
 			elsif(not exists $curfile->{'mark'}->{$2}) { verbose "$curfile->{'path'}: mark $2 not found"; }
 			else {
@@ -734,13 +763,67 @@ Remove newlines from the text if you must.
 		}
 =pod
 
+=item select [last] search result
+
+=cut
+		elsif($instructions =~ s/^select( last|) search result$EOIT//)
+		{
+			$curfile->{'mark'}->{'SELECTION-START'} = undef;
+			$curfile->{'mark'}->{'SELECTION-STOP'}  = undef;
+			croak "$0: no last search result to select" if not defined $last_search_result_pos;
+			$curfile->{'mark'}->{'SELECTION-START'} = $last_search_result_pos;
+			$curfile->{'mark'}->{'SELECTION-STOP'}  = $last_search_result_pos + length $last_search_result;
+		}
+=pod
+
 =item select [COUNT] [char[s] | word[s] | line[s]]
 
 =item copy [selection]
 
+=item copy [last] search result
+
 =item cut [selection]
 
+=item cut [last] search result
+
+=cut
+		elsif($instructions =~ s/^(?<CMD>copy|cut)(?<WHAT> selection|( last|) search result|)$EOIT//)
+		{
+			my $cmd = $+{'CMD'};
+			my $what = $+{'WHAT'};
+			my $p1;
+			my $p2;
+			if($what =~ /search result/)
+			{
+				croak "$0: no last search result to $cmd" if not defined $last_search_result_pos;
+				$p1 = $last_search_result_pos;
+				$p2 = $p1 + length $last_search_result;
+			}
+			else  # selection
+			{
+				$p1 = $curfile->{'mark'}->{'SELECTION-START'};
+				$p2 = $curfile->{'mark'}->{'SELECTION-STOP'};
+				croak "$0: $curfile->{'path'}: no selection to $cmd" unless defined $p1 and defined $p2;
+			}
+			seeker $curfile, $p1, SEEK_SET;
+			read_exact $curfile, \$Clipboard, $p2-$p1;
+			seeker $curfile, $p1, SEEK_SET;
+			if($cmd eq 'cut')
+			{
+				delete_chars $curfile, $p2-$p1;
+			}
+		}
+=pod
+
 =item paste [selection]
+
+=cut
+		elsif($instructions =~ s/^paste( selection|)$EOIT//)
+		{
+			insert_text $curfile, $Clipboard;
+			verbose sprintf "%s: pasted %d byes at %d", $curfile->{'path'}, length $Clipboard, $position_before_operation;
+		}
+=pod
 
 =item undo
 
@@ -884,13 +967,15 @@ and in case of C<filter>, replace selection with its stdout.
 		}
 =pod
 
-=item show contents
+=item show contents [with cursor] [with selection] [with marks]
 
 Show the contents of the file in foreground.
 
 =cut
-		elsif($instructions =~ s/^show contents$EOIT//)
+		elsif($instructions =~ s/^show contents(?<WITH>( with (cursor|selection|marks))*)$EOIT//)
 		{
+			my $extras = $+{'WITH'};
+			# TODO extras...
 			update_file_size $curfile;
 			shovel_text $curfile, 0, $curfile->{'size'}, \*STDOUT;
 		}
@@ -918,12 +1003,18 @@ Show the contents of the file in foreground.
 		}
 =pod
 
-=item set verbose [on | off]
+=item set OPTION [on | off]
+
+=item unset OPTION
+
+I<OPTION>s: verbose
 
 =cut
-		elsif($instructions =~ s/^set verbose (on|off)$EOIT//)
+		elsif($instructions =~ s/^((?<CMD>set) (?<OPT>\S+)( (?<STATE>on|off)|)|(?<CMD>unset) (?<OPT>\S+))$EOIT//)
 		{
-			$OptVerbose = $1 eq 'on' ? 1 : 0;
+			my $state = ($+{'CMD'} eq 'unset' or $+{'STATE'} eq 'off') ? 0 : 1;
+			croak "$0: unknown option $+{'OPT'}" unless exists $Opt{$+{'OPT'}};
+			$Opt{$+{'OPT'}} = $state;
 		}
 =pod
 
@@ -962,7 +1053,7 @@ my $instructions_found = 1;
 my $last_search_pattern = undef;
 my $last_search_is_regexp = undef;
 my $last_search_result = undef;
-my $clipboard = '';
+my $Clipboard = '';
 
 
 if(@ARGV)

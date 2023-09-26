@@ -229,6 +229,7 @@ sub shovel_text
 	my $pos_stop = shift;
 	my $length = $pos_stop - $pos_start;
 	my $dest_fh = shift;
+	my $callback = shift;
 	
 	my $original_pos = curpos($src);
 	seeker $src, $pos_start, SEEK_SET;
@@ -236,9 +237,17 @@ sub shovel_text
 	while(1)
 	{
 		last if $length <= 0;
+		my $pos = curpos($src);
 		my $size = $length < $blockio_buffer_size ? $length : $blockio_buffer_size;
 		$length -= readblock $src, \$buffer, $size;
-		print {$dest_fh} $buffer;
+		if($callback)
+		{
+			$callback->($pos, \$buffer);
+		}
+		else
+		{
+			print {$dest_fh} $buffer;
+		}
 	}
 	seeker $src, $original_pos, SEEK_SET;
 }
@@ -700,18 +709,44 @@ PATTERN is either a bare word, a string enclosed in quotes, or a regexp
 enclosed in slashes (C</regexp/>).
 PATTERN is not supported to overhang from one line to the next.
 Remove newlines from the text if you must.
+If the cursor is at a matching text, C<search PATTERN> will find the
+very place where we are, while C<search next ...> skips 1 char and
+continues from there.
+
+=item search next [//]
+
+Continue searching the next occurrence of the last search query.
+You may close this instruction with an empty pattern (C<//>) to
+separate it from the next instruction, since the empty search PATTERN
+(both fixed text and regexp) is invalid.
 
 =cut
 		elsif($instructions =~ s/^search(?<NEXT> next|)$EOIT//)
 		{
 			my $next = 1 if $+{'NEXT'};
 			my ($pattern, $is_regexp) = get_pattern_parameter(\$instructions);
+			if($next and length $pattern == 0)
+			{
+				$pattern = $last_search_pattern;
+				$is_regexp = $last_search_is_regexp;
+			}
 			croak "$0: string/pattern not given what to search for" unless length $pattern;
 			
+			my $backward = 0;
+			if($instructions =~ s/^backwards?$EOIT//)
+			{
+				$backward = 1;
+			}
 			# TODO search backward
+			
 			DO_SEARCH:
 			my ($found_pos, $matched_string) = search_pattern $curfile, $pattern, $is_regexp;
-			if($found_pos == $position_before_operation and $next) { seeker $curfile, +1, SEEK_CUR; $next = 0; goto DO_SEARCH; }
+			if($found_pos == $position_before_operation and $next)
+			{
+				seeker $curfile, +1, SEEK_CUR;
+				$next = 0;
+				goto DO_SEARCH;
+			}
 			
 			if(defined $found_pos)
 			{
@@ -722,6 +757,7 @@ Remove newlines from the text if you must.
 			else
 			{
 				verbose "not found";
+				seeker $curfile, $position_before_operation, SEEK_SET;
 			}
 			$last_search_pattern = $pattern;
 			$last_search_is_regexp = $is_regexp;
@@ -750,7 +786,7 @@ and very end of the currently opened file respectively.
 		elsif($instructions =~ s/^select from (\S+) to (\S+)$EOIT//)
 		{
 			$curfile->{'mark'}->{'SELECTION-START'} = undef;
-			$curfile->{'mark'}->{'SELECTION-STOP'}  = undef;
+			$curfile->{'mark'}->{'SELECTION-END'}   = undef;
 			# TODO make it fatal error?
 			if(not exists $curfile->{'mark'}->{$1}) { verbose "mark $1 not found"; }
 			elsif(not exists $curfile->{'mark'}->{$2}) { verbose "mark $2 not found"; }
@@ -758,7 +794,7 @@ and very end of the currently opened file respectively.
 				my $pos1 = $curfile->{'mark'}->{$1};
 				my $pos2 = $curfile->{'mark'}->{$2};
 				$curfile->{'mark'}->{'SELECTION-START'} = $pos1 < $pos2 ? $pos1 : $pos2;
-				$curfile->{'mark'}->{'SELECTION-STOP'}  = $pos1 > $pos2 ? $pos1 : $pos2;
+				$curfile->{'mark'}->{'SELECTION-END'}   = $pos1 > $pos2 ? $pos1 : $pos2;
 			}
 		}
 =pod
@@ -769,10 +805,10 @@ and very end of the currently opened file respectively.
 		elsif($instructions =~ s/^select( last|) search result$EOIT//)
 		{
 			$curfile->{'mark'}->{'SELECTION-START'} = undef;
-			$curfile->{'mark'}->{'SELECTION-STOP'}  = undef;
+			$curfile->{'mark'}->{'SELECTION-END'}   = undef;
 			croak "$0: no last search result to select" if not defined $last_search_result_pos;
 			$curfile->{'mark'}->{'SELECTION-START'} = $last_search_result_pos;
-			$curfile->{'mark'}->{'SELECTION-STOP'}  = $last_search_result_pos + length $last_search_result;
+			$curfile->{'mark'}->{'SELECTION-END'}   = $last_search_result_pos + length $last_search_result;
 		}
 =pod
 
@@ -806,7 +842,7 @@ and very end of the currently opened file respectively.
 			else  # selection
 			{
 				$p1 = $curfile->{'mark'}->{'SELECTION-START'};
-				$p2 = $curfile->{'mark'}->{'SELECTION-STOP'};
+				$p2 = $curfile->{'mark'}->{'SELECTION-END'};
 				croak "$0: $curfile->{'path'}: no selection to $cmd" unless defined $p1 and defined $p2;
 			}
 			if($cmd ~~ qw/copy cut/)
@@ -894,9 +930,9 @@ and in case of C<filter>, replace selection with its stdout.
 				}
 				if(defined $ext_command_input)
 				{
-					if(defined $curfile->{'mark'}->{'SELECTION-START'} and defined $curfile->{'mark'}->{'SELECTION-STOP'})
+					if(defined $curfile->{'mark'}->{'SELECTION-START'} and defined $curfile->{'mark'}->{'SELECTION-END'})
 					{
-						shovel_text $curfile, $curfile->{'mark'}->{'SELECTION-START'}, $curfile->{'mark'}->{'SELECTION-STOP'}, $ext_command_input;
+						shovel_text $curfile, $curfile->{'mark'}->{'SELECTION-START'}, $curfile->{'mark'}->{'SELECTION-END'}, $ext_command_input;
 					}
 					else
 					{
@@ -912,7 +948,7 @@ and in case of C<filter>, replace selection with its stdout.
 				if($cmd eq 'filter')
 				{
 					seeker $curfile, $curfile->{'mark'}->{'SELECTION-START'}, SEEK_SET;
-					$overwrite_length = $curfile->{'mark'}->{'SELECTION-STOP'} - $curfile->{'mark'}->{'SELECTION-START'};
+					$overwrite_length = $curfile->{'mark'}->{'SELECTION-END'} - $curfile->{'mark'}->{'SELECTION-START'};
 					my $buf;
 					my $size;
 					while(1)
@@ -945,7 +981,7 @@ and in case of C<filter>, replace selection with its stdout.
 		elsif($instructions =~ s/^(uppercase|lowercase|capitalize)$EOIT//)
 		{
 			my $op = $1;
-			if(defined $curfile->{'mark'}->{'SELECTION-START'} and defined $curfile->{'mark'}->{'SELECTION-STOP'})
+			if(defined $curfile->{'mark'}->{'SELECTION-START'} and defined $curfile->{'mark'}->{'SELECTION-END'})
 			{
 				seeker $curfile, $selection_start, SEEK_SET;
 				# TODO
@@ -986,9 +1022,39 @@ Show the contents of the file in foreground.
 		elsif($instructions =~ s/^show contents(?<WITH>( with (cursor|selection|marks))*)$EOIT//)
 		{
 			my $extras = $+{'WITH'};
-			# TODO extras...
 			update_file_size $curfile;
-			shovel_text $curfile, 0, $curfile->{'size'}, \*STDOUT;
+			shovel_text $curfile, 0, $curfile->{'size'}, undef, sub
+				{
+					my $pos = shift;
+					my $data_ref = shift;
+					my $end = $pos + length $$data_ref;
+					my @inserts;
+					if($extras =~ /selection/)
+					{
+						my $p1 = $curfile->{'mark'}->{'SELECTION-START'};
+						if(defined $p1 and $pos <= $p1 and $p1 < $end)
+						{
+							# put "selection start" signal in the stream
+							push @inserts, {'where' => $p1-$pos, 'what' => "\x1B[7m"};
+						}
+						my $p2 = $curfile->{'mark'}->{'SELECTION-END'};
+						if(defined $p2 and $pos <= $p2 and $p2 < $end)
+						{
+							# put "selection end" signal in the stream
+							push @inserts, {'where' => $p2-$pos, 'what' => "\x1B[27m"};
+						}
+					}
+					# TODO extras...
+					@inserts = sort {$a->{'where'} <=> $b->{'where'}} @inserts;
+					my $prev_slice_end = 0;
+					for my $ins (@inserts)
+					{
+						print substr($$data_ref, $prev_slice_end, $ins->{'where'} - $prev_slice_end);
+						print $ins->{'what'};
+						$prev_slice_end = $ins->{'where'};
+					}
+					print substr($$data_ref, $prev_slice_end);
+				};
 		}
 =pod
 
@@ -1098,3 +1164,6 @@ for my $curfile (values %openedfile)
 	warn "$0: $curfile->{'path'}: close: $!\n";
 }
 exit $close_err;
+
+
+# TODO positioning and offsets should represent chars, not bytes (multibyte support)

@@ -510,11 +510,17 @@ You have to open a file before any operation.
 Lines and char offsets are indexed by 0.
 
 =cut
-			elsif($instructions =~ s/^(?<WHAT>line|char) index (?<COUNT>\d*)$EOIT//)
+			elsif($instructions =~ s/^(?<WHAT>line|char) index (?<INDEX>\d+)$EOIT//)
 			{
-				seeker $curfile, 0, SEEK_SET;
-				readline $curfile->{'handle'} for 1..$+{'COUNT'};
-				# TODO: char index ...
+				if($+{'WHAT'} eq 'line')
+				{
+					seeker $curfile, 0, SEEK_SET;
+					readline $curfile->{'handle'} for 1..$+{'INDEX'};
+				}
+				else  # goto char index
+				{
+					seeker $curfile, $+{'INDEX'}, SEEK_SET;
+				}
 			}
 =pod
 
@@ -1061,7 +1067,18 @@ Show the contents of the file in foreground.
 							push @inserts, {'where' => $position_before_operation-$pos+1, 'what' => "\x1B[24m"};
 						}
 					}
-					# TODO extras...
+					if($extras =~ /marks/)
+					{
+						for my $mark (keys $curfile->{'mark'})
+						{
+							next if $mark =~ /^(SELECTION-|)(START|END)$/;
+							my $p = $curfile->{'mark'}->{$mark};
+							if($pos <= $p and $p < $end)
+							{
+								push @inserts, {'where' => $p-$pos, 'what' => "\x1B[1m[$mark]\x1B[22m"};
+							}
+						}
+					}
 					@inserts = sort {$a->{'where'} <=> $b->{'where'}} @inserts;
 					my $prev_slice_end = 0;
 					for my $ins (@inserts)
@@ -1092,9 +1109,9 @@ Show the contents of the file in foreground.
 =cut
 		elsif($instructions =~ s/^show marks$EOIT//)
 		{
-			while(my ($mark, $pos) = each $curfile->{'mark'})
+			for my $mark (sort {$curfile->{'mark'}->{$a} <=> $curfile->{'mark'}->{$b}} keys $curfile->{'mark'})
 			{
-				printf "%d\t%s\n", $pos, $mark;
+				printf "%d\t%s\n", $curfile->{'mark'}->{$mark}, $mark;
 			}
 		}
 =pod

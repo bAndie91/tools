@@ -21,7 +21,6 @@ May open multiple files.
 Always one file is in the foreground.
 All opened files has a cursor position at which most commands are
 applied.
-When a file is opened its cursor set to the start position.
 
 Files also have several marks which you can set or refer to in
 C<select> or C<goto> commands.
@@ -145,12 +144,12 @@ sub make_room
 	my $room_size = shift;
 	
 	my $buffer;
-	my $original_pos = tell $fdata->{'handle'};
+	my $original_pos = curpos($fdata);
 	seeker $fdata, 0, SEEK_END;
 	
 	while(1)
 	{
-		my $curpos = tell $fdata->{'handle'};
+		my $curpos = curpos($fdata);
 		my $chunk_size = $curpos - $original_pos;
 		last if $chunk_size <= 0;
 		$chunk_size = $blockio_buffer_size if $chunk_size > $blockio_buffer_size;
@@ -173,22 +172,30 @@ sub insert_text
 	return overwrite_text $fdata, $text;
 }
 
-sub find_size
+sub update_file_size
 {
 	my $fdata = shift;
-	my $pos = tell $fdata->{'handle'};
+	my $pos = curpos($fdata);
 	if(seek $fdata->{'handle'}, 0, SEEK_END)
 	{
-		$fdata->{'size'} = tell $fdata->{'handle'};
+		$fdata->{'size'} = curpos($fdata);
 		seek $fdata->{'handle'}, $pos, SEEK_SET;
+		return $fdata->{'size'};
 	}
+	return undef;
+}
+
+sub curpos
+{
+	my $fdata = shift;
+	return tell $fdata->{'handle'};
 }
 
 sub insert_stream
 {
 	my $fdata = shift;
 	my $stream_data = shift;
-	find_size $stream_data;
+	update_file_size $stream_data;
 	
 	my $buffer;
 	my $room_allocated = 0;
@@ -212,7 +219,7 @@ sub shovel_text
 	my $length = $pos_stop - $pos_start;
 	my $dest_fh = shift;
 	
-	my $original_pos = tell $src->{'handle'};
+	my $original_pos = curpos($src);
 	seeker $src, $pos_start, SEEK_SET;
 	my $buffer;
 	while(1)
@@ -231,14 +238,14 @@ sub delete_chars
 	my $length = shift;
 	
 	my $buffer;
-	my $original_pos = tell $fdata->{'handle'};
+	my $original_pos = curpos($fdata);
 	my $continue_write_pos = $original_pos;
 	seeker $fdata, $length, SEEK_CUR;
 	while(readblock $fdata, \$buffer)
 	{
 		seeker $fdata, $continue_write_pos, SEEK_SET;
 		print {$fdata->{'handle'}} $buffer or croak "$0: $fdata->{'path'}: write: $!";
-		$continue_write_pos = tell $fdata->{'handle'};
+		$continue_write_pos = curpos($fdata);
 		seeker $fdata, $length, SEEK_CUR;
 	}
 	truncate $fdata->{'handle'}, $continue_write_pos;
@@ -252,7 +259,7 @@ sub search_pattern
 	my $pattern = shift;
 	my $is_regexp = shift;
 	
-	my $original_pos = tell $fdata->{'handle'};
+	my $original_pos = curpos($fdata);
 	my $chunk_start_pos = $original_pos;
 	my $found_pos = undef;
 	my $matched_string;
@@ -277,7 +284,7 @@ sub search_pattern
 			}
 		}
 		last if defined $found_pos;
-		$chunk_start_pos = tell $fdata->{'handle'};
+		$chunk_start_pos = curpos($fdata);
 	}
 	
 	seeker $fdata, $original_pos, SEEK_SET;
@@ -292,7 +299,7 @@ sub process_instructions
 	while(1)
 	{
 		my $position_before_operation;
-		$position_before_operation = tell $curfile->{'handle'} if $curfile;
+		$position_before_operation = curpos($curfile) if $curfile;
 		$instructions =~ s/^\s*//;
 =pod
 
@@ -315,7 +322,7 @@ But you cat always refer to the same path by prepending C<./> (or C</>
 in case of absolute paths) to it.
 Don't worry, it won't open the same PATH multiple time with conflicting
 editor states.
-You have to open a file before any other operation.
+You have to open a file before any operation.
 
 =cut
 		if($instructions =~ s/^open$EOIT//)
@@ -363,17 +370,18 @@ You have to open a file before any other operation.
 				{
 					open $handle, '+<', $path or croak "$0: $path: open: $!";
 				}
-				$openedfile{$path} = {'handle' => $handle, 'path' => $path};
-				verbose sprintf "%s: opened%s", $path, defined $alias ? " as $alias" : "";
+				$openedfile{$path} = {
+					'handle' => $handle,
+					'path' => $path,
+				};
+				$openedfile{$path}->{'mark'}->{'START'} = 0;
+				$openedfile{$path}->{'mark'}->{'END'} = update_file_size $openedfile{$path};
 			}
 			
 			$curfile = $openedfile{$path};
 			$filepathalias{$alias} = $path if defined $alias;
-			# seek to the start and set START and END marks
-			seeker $curfile, 0, SEEK_SET;
-			$curfile->{'mark'}->{'START'} = 0;
-			find_size $curfile;
-			$curfile->{'mark'}->{'END'} = $curfile->{'size'};
+			verbose sprintf "%s: opened%s", $path, defined $alias ? " as $alias" : "";
+			verbose sprintf "%s: cursor at %d size %d", $path, curpos($curfile), $curfile->{'size'};
 		}
 		elsif($instructions =~ s/^goto$EOIT//)
 		{
@@ -424,7 +432,7 @@ You have to open a file before any other operation.
 							else
 							{
 								seeker $curfile, $blockio_buffer_size, SEEK_CUR;
-								$pos = tell $curfile->{'handle'};
+								$pos = curpos($curfile);
 								readblock $curfile, \$buffer;
 							}
 							my $idx = rindex $buffer, "\n";
@@ -734,6 +742,10 @@ Remove newlines from the text if you must.
 
 =item paste [selection]
 
+=item undo
+
+=item redo
+
 =cut
 =pod
 
@@ -855,6 +867,23 @@ and in case of C<filter>, replace selection with its stdout.
 		}
 =pod
 
+=item show open files
+
+=cut
+		elsif($instructions =~ s/^show open(ed)? files$EOIT//)
+		{
+			for my $path (keys %openedfile)
+			{
+				print "$path";
+				for my $alias (keys %filepathalias)
+				{
+					print "\t[$alias]" if $filepathalias{$alias} eq $path;
+				}
+				print "\n";
+			}
+		}
+=pod
+
 =item show contents
 
 Show the contents of the file in foreground.
@@ -862,7 +891,7 @@ Show the contents of the file in foreground.
 =cut
 		elsif($instructions =~ s/^show contents$EOIT//)
 		{
-			find_size $curfile;
+			update_file_size $curfile;
 			shovel_text $curfile, 0, $curfile->{'size'}, \*STDOUT;
 		}
 =pod
@@ -877,20 +906,33 @@ Show the contents of the file in foreground.
 		}
 =pod
 
-=item show opened files
+=item show marks
 
 =cut
-		elsif($instructions =~ s/^show opened files$EOIT//)
+		elsif($instructions =~ s/^show marks$EOIT//)
 		{
-			for my $path (keys %openedfile)
+			while(my ($mark, $pos) = each $curfile->{'mark'})
 			{
-				print "$path";
-				for my $alias (keys %filepathalias)
-				{
-					print "\t[$alias]" if $filepathalias{$alias} eq $path;
-				}
-				print "\n";
+				printf "%d\t%s\n", $pos, $mark;
 			}
+		}
+=pod
+
+=item set verbose [on | off]
+
+=cut
+		elsif($instructions =~ s/^set verbose (on|off)$EOIT//)
+		{
+			$OptVerbose = $1 eq 'on' ? 1 : 0;
+		}
+=pod
+
+=item [show] help
+
+=cut
+		elsif($instructions =~ s/^(show |)help$EOIT//)
+		{
+			pod2usage(-exitval=>'NOEXIT', -verbose=>99);
 		}
 		elsif($instructions eq '')
 		{
@@ -938,6 +980,7 @@ for my $espath (@OptEditorScript)
 	close $es;
 }
 
+# TODO readline
 while(my $Instructions = <STDIN>)
 {
 	eval { process_instructions $Instructions; 1; };

@@ -392,7 +392,7 @@ You have to open a file before any operation.
 			$curfile = $openedfile{$path};
 			$filepathalias{$alias} = $path if defined $alias;
 			verbose sprintf "%s: opened%s", $path, defined $alias ? " as $alias" : "";
-			verbose sprintf "%s: cursor at %d size %d", $path, curpos($curfile), $curfile->{'size'};
+			verbose sprintf "cursor at %d size %d", curpos($curfile), $curfile->{'size'};
 		}
 		elsif($instructions =~ s/^goto$EOIT//)
 		{
@@ -576,7 +576,7 @@ Add newline to the end only if called as c<enter>.
 			my $text = get_text_parameter \$instructions;
 			croak "$0: text not given to type in" unless defined $text;
 			insert_text $curfile, $text.$end;
-			verbose sprintf "%s: inserted %d bytes at %d", $curfile->{'path'}, length $text, $position_before_operation;
+			verbose sprintf "inserted %d bytes at %d", length $text.$end, $position_before_operation;
 		}
 =pod
 
@@ -594,7 +594,7 @@ let it be currently selected or not.
 			my $text = get_text_parameter \$instructions;
 			croak "$0: text not given to overwrite with" unless defined $text;
 			overwrite_text $curfile, $text;
-			verbose sprintf "%s: written over %d bytes at %d", $curfile->{'path'}, length $text, $position_before_operation;
+			verbose sprintf "written over %d bytes at %d", length $text, $position_before_operation;
 		}
 =pod
 
@@ -666,7 +666,7 @@ If you want to replace all the occurrences in the whole file,
 						overwrite_text $curfile, substr($text, 0, $found_length);
 						insert_text $curfile, substr($text, $found_length);
 					}
-					verbose "$curfile->{'path'}: replaced \"$matched_string\" to \"$text\" at $found_pos";
+					verbose "replaced \"$matched_string\" to \"$text\" at $found_pos";
 					$replace_count -= 1 if defined $replace_count;
 					$replacements += 1;
 				}
@@ -678,7 +678,7 @@ If you want to replace all the occurrences in the whole file,
 			
 			if(not defined $replace_count or $replacements == 0)
 			{
-				verbose "$curfile->{'path'}: replaced $replacements occurrences";
+				verbose "replaced $replacements occurrences";
 			}
 		}
 =pod
@@ -752,8 +752,8 @@ and very end of the currently opened file respectively.
 			$curfile->{'mark'}->{'SELECTION-START'} = undef;
 			$curfile->{'mark'}->{'SELECTION-STOP'}  = undef;
 			# TODO make it fatal error?
-			if(not exists $curfile->{'mark'}->{$1}) { verbose "$curfile->{'path'}: mark $1 not found"; }
-			elsif(not exists $curfile->{'mark'}->{$2}) { verbose "$curfile->{'path'}: mark $2 not found"; }
+			if(not exists $curfile->{'mark'}->{$1}) { verbose "mark $1 not found"; }
+			elsif(not exists $curfile->{'mark'}->{$2}) { verbose "mark $2 not found"; }
 			else {
 				my $pos1 = $curfile->{'mark'}->{$1};
 				my $pos2 = $curfile->{'mark'}->{$2};
@@ -786,8 +786,12 @@ and very end of the currently opened file respectively.
 
 =item cut [last] search result
 
+=item delete [selection]
+
+=item delete [last] search result
+
 =cut
-		elsif($instructions =~ s/^(?<CMD>copy|cut)(?<WHAT> selection|( last|) search result|)$EOIT//)
+		elsif($instructions =~ s/^(?<CMD>copy|cut|delete)(?<WHAT> selection|( last|) search result|)$EOIT//)
 		{
 			my $cmd = $+{'CMD'};
 			my $what = $+{'WHAT'};
@@ -805,10 +809,13 @@ and very end of the currently opened file respectively.
 				$p2 = $curfile->{'mark'}->{'SELECTION-STOP'};
 				croak "$0: $curfile->{'path'}: no selection to $cmd" unless defined $p1 and defined $p2;
 			}
-			seeker $curfile, $p1, SEEK_SET;
-			read_exact $curfile, \$Clipboard, $p2-$p1;
-			seeker $curfile, $p1, SEEK_SET;
-			if($cmd eq 'cut')
+			if($cmd ~~ qw/copy cut/)
+			{
+				seeker $curfile, $p1, SEEK_SET;
+				read_exact $curfile, \$Clipboard, $p2-$p1;
+				seeker $curfile, $p1, SEEK_SET;
+			}
+			if($cmd ~~ qw/cut delete/)
 			{
 				delete_chars $curfile, $p2-$p1;
 			}
@@ -821,7 +828,7 @@ and very end of the currently opened file respectively.
 		elsif($instructions =~ s/^paste( selection|)$EOIT//)
 		{
 			insert_text $curfile, $Clipboard;
-			verbose sprintf "%s: pasted %d byes at %d", $curfile->{'path'}, length $Clipboard, $position_before_operation;
+			verbose sprintf "pasted %d byes at %d", length $Clipboard, $position_before_operation;
 		}
 =pod
 
@@ -945,19 +952,23 @@ and in case of C<filter>, replace selection with its stdout.
 			}
 			else
 			{
-				verbose "$curfile->{'path'}: there is not any selection";
+				verbose "there is not any selection";
 			}
 		}
 =pod
 
-=item show open files
+=item show open[ed] file[s]
+
+Display a list of file paths which were opened.
+The one in foreground prefixed with an C<*> asterisk.
+If any of them opened by an alias name, it shown after the path in C<[]> brackets.
 
 =cut
-		elsif($instructions =~ s/^show open(ed)? files$EOIT//)
+		elsif($instructions =~ s/^show open(ed)? files?$EOIT//)
 		{
 			for my $path (keys %openedfile)
 			{
-				print "$path";
+				printf "%s %s", ($path eq $curfile->{'path'}) ? '*' : ' ', $path;
 				for my $alias (keys %filepathalias)
 				{
 					print "\t[$alias]" if $filepathalias{$alias} eq $path;

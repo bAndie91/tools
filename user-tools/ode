@@ -4,16 +4,16 @@
 
 =head1 NAME
 
-cfed - Command File-Editor - Edit text files by commands directly from shell
+ode - On-disk editor - edit text files by commands directly from shell
 
 =head1 SYNOPSIS
 
- cfed [<OPTIONS>] <INSTRUCTIONS>
+ ode [<OPTIONS>] <INSTRUCTIONS>
 
 =head1 DESCRIPTION
 
-Edit files by giving editor commands like shell commands.
-Sematics are similar to well known text editors:
+Edit files by issuing editor commands like shell commands,
+but with the paradigm of well-known visual text processors:
 open file, move cursor, type in text, search and replace, select, copy,
 paste, ...
 
@@ -29,6 +29,9 @@ pins the currently selected text for you.
 
 You have one clipboard.
 
+B<Ode> first executes INSTRUCTIONS given in parameters,
+then all the instructions given at C<--script> option(s), if any.
+
 =head1 OPTIONS
 
 =over 4
@@ -36,8 +39,18 @@ You have one clipboard.
 =item -f, --script FILE
 
 Take instructions from FILE
-when done processing instructions in parameters.
+when done processing instructions given in parameters.
 May specify multiple times.
+Exit immediately on unknown command or parse error or if a command fails.
+
+=item --stdin
+
+Take instructions from STDIN line-by-line.
+Contrary to C<--script> scripts, it does not exit on errors,
+just shows what was the exception,
+and continues reading instructions.
+Suitable for interactive mode.
+Same as C<--script ->, except in error handling.
 
 =item -v, --verbose
 
@@ -65,6 +78,7 @@ GetOptions(
 	'c|confirm' => \$Opt{'confirm'},
 	'v|verbose' => \$Opt{'verbose'},
 	'f|script=s@' => \@OptEditorScript,
+	'--stdin' => sub { push @OptEditorScript, '-'; },
 	'help|?' => sub{ pod2usage(-exitval=>0, -verbose=>99); },
 ) or exit 2;
 
@@ -332,13 +346,17 @@ sub search_pattern
 
 sub process_instructions
 {
-	my $instructions = shift;
+	my $instructions_ref = shift;
+	my $cur_instr_offset_ref = shift;
+	
+	my $whole_instr_length = length $$instructions_ref;
 	
 	while(1)
 	{
 		my $position_before_operation;
 		$position_before_operation = curpos($curfile) if $curfile;
-		$instructions =~ s/^\s*//;
+		$$instructions_ref =~ s/^\s*//;
+		$$cur_instr_offset_ref = $whole_instr_length - length $$instructions_ref;
 =pod
 
 =head1 INSTRUCTIONS
@@ -364,7 +382,7 @@ Don't worry, it won't open the same PATH multiple time with conflicting
 editor states.
 However your system may allow accessing the same file (by soft and hard links)
 on different paths.
-Cfed considers only the PATH string when discerning files,
+B<Ode> considers only the PATH string when discerning files,
 so C<x.txt> and C<./x.txt> and C<.//x.txt> are handled separatedly.
 You have to open a file before any operation.
 
@@ -378,25 +396,25 @@ But you can always refer to the same path by prepending C<./> (or C</>
 in case of absolute paths) to it.
 
 =cut
-		if($instructions =~ s/^open$EOIT//)
+		if($$instructions_ref =~ s/^open$EOIT//)
 		{
 			my $may_create = 0;
 			my $must_create = 0;
 			my $must_file = 0;
 			
-			if($instructions =~ s/^or create$EOIT//)
+			if($$instructions_ref =~ s/^or create$EOIT//)
 			{
 				$may_create = 1;
 				$must_file = 1;
 			}
-			elsif($instructions =~ s/^new$EOIT//)
+			elsif($$instructions_ref =~ s/^new$EOIT//)
 			{
 				$must_create = 1;
 				$must_file = 1;
 			}
-			$must_file = 1 if $instructions =~ s/^file$EOIT//;
+			$must_file = 1 if $$instructions_ref =~ s/^file$EOIT//;
 			
-			my $key = get_text_parameter \$instructions;
+			my $key = get_text_parameter $instructions_ref;
 			unless(length $key)
 			{
 				if($must_file or $must_create or $may_create)
@@ -407,7 +425,7 @@ in case of absolute paths) to it.
 			}
 			
 			my $alias;
-			if($instructions =~ s/^as (\S+)$EOIT//)
+			if($$instructions_ref =~ s/^as (\S+)$EOIT//)
 			{
 				$alias = $1;
 				$must_file = 1;
@@ -445,11 +463,12 @@ in case of absolute paths) to it.
 			
 			$curfile = $openedfile{$path};
 			$filepathalias{$alias} = $path if defined $alias;
+			$curfile->{'mark'} = {} unless exists $curfile->{'mark'};
 			verbose sprintf "%s: opened%s", $path, defined $alias ? " as $alias" : "";
 			update_file_size $curfile;
 			verbose sprintf "cursor at %d size %d", curpos($curfile), $curfile->{'size'};
 		}
-		elsif($instructions =~ s/^goto$EOIT//)
+		elsif($$instructions_ref =~ s/^goto$EOIT//)
 		{
 			my $goto_pos = undef;
 			my $whence = SEEK_SET;
@@ -458,7 +477,7 @@ in case of absolute paths) to it.
 =item goto end of [last] search result
 
 =cut
-			if($instructions =~ s/^end of( last)? search result$EOIT//)
+			if($$instructions_ref =~ s/^end of( last)? search result$EOIT//)
 			{
 				my $c = $last_search_is_regexp ? '/' : '"';
 				croak "$0: last search ($c$last_search_pattern$c) was not found" if not defined $last_search_result;
@@ -471,7 +490,7 @@ in case of absolute paths) to it.
 =item goto [start | end] of line
 
 =cut
-			elsif($instructions =~ s/^(?<ANCHOR>start|end)( of (?<SCOPE>file|line))?$EOIT//)
+			elsif($$instructions_ref =~ s/^(?<ANCHOR>start|end)( of (?<SCOPE>file|line))?$EOIT//)
 			{
 				if($+{'SCOPE'} eq 'line')
 				{
@@ -522,7 +541,7 @@ in case of absolute paths) to it.
 =item goto [previous | next] line
 
 =cut
-			elsif($instructions =~ s/^(?<DIRECTION>next|previous) line$EOIT//)
+			elsif($$instructions_ref =~ s/^(?<DIRECTION>next|previous) line$EOIT//)
 			{
 				if($+{'DIRECTION'} eq 'next')
 				{
@@ -538,7 +557,7 @@ in case of absolute paths) to it.
 =item goto [back | forward] COUNT line[s]
 
 =cut
-			elsif($instructions =~ s/^(?<DIRECTION>back|forward) (?<COUNT>[1-9]\d*) lines?$EOIT//)
+			elsif($$instructions_ref =~ s/^(?<DIRECTION>back|forward) (?<COUNT>[1-9]\d*) lines?$EOIT//)
 			{
 				if($+{'DIRECTION'} eq 'forward')
 				{
@@ -556,7 +575,7 @@ in case of absolute paths) to it.
 Lines and char offsets are indexed by 0.
 
 =cut
-			elsif($instructions =~ s/^(?<WHAT>line|char) index (?<INDEX>\d+)$EOIT//)
+			elsif($$instructions_ref =~ s/^(?<WHAT>line|char) index (?<INDEX>\d+)$EOIT//)
 			{
 				if($+{'WHAT'} eq 'line')
 				{
@@ -575,7 +594,7 @@ Lines and char offsets are indexed by 0.
 Set cursor position in file.
 
 =cut
-			elsif($instructions =~ s/^mark (\S+)$EOIT//)
+			elsif($$instructions_ref =~ s/^mark (\S+)$EOIT//)
 			{
 				my $mark = $1;
 				croak "$0: $curfile->{'path'}: mark $mark not found" if not exists $curfile->{'mark'}->{$mark};
@@ -583,7 +602,7 @@ Set cursor position in file.
 			}
 			else
 			{
-				croak "$0: invalid GOTO: $instructions";
+				croak "$0: invalid GOTO: $$instructions_ref";
 			}
 			
 			if(defined $goto_pos)
@@ -596,7 +615,7 @@ Set cursor position in file.
 =item go [up | down | left | right] [COUNT times]
 
 =cut
-		elsif($instructions =~ s/^go (?<WHERE>up|down|left|right)( (?<COUNT>[1-9]\d*) times|)$EOIT//)
+		elsif($$instructions_ref =~ s/^go (?<WHERE>up|down|left|right)( (?<COUNT>[1-9]\d*) times|)$EOIT//)
 		{
 			my $count = $+{'COUNT'} || 1;
 			given($+{'WHERE'})
@@ -631,10 +650,10 @@ It does not overwrite current selection.
 Add newline to the end only if called as c<enter>.
 
 =cut
-		elsif($instructions =~ s/^(type|enter)$EOIT//)
+		elsif($$instructions_ref =~ s/^(type|enter)$EOIT//)
 		{
 			my $end = $1 eq 'enter' ? "\n" : "";
-			my $text = get_text_parameter \$instructions;
+			my $text = get_text_parameter $instructions_ref;
 			croak "$0: text not given to type in" unless defined $text;
 			insert_text $curfile, $text.$end;
 			verbose sprintf "inserted %d bytes at %d", length $text.$end, $position_before_operation;
@@ -650,9 +669,9 @@ It does not overwrite current selection, but the text itself
 let it be currently selected or not.
 
 =cut
-		elsif($instructions =~ s/^over(write|type) with$EOIT//)
+		elsif($$instructions_ref =~ s/^over(write|type) with$EOIT//)
 		{
-			my $text = get_text_parameter \$instructions;
+			my $text = get_text_parameter $instructions_ref;
 			croak "$0: text not given to overwrite with" unless defined $text;
 			overwrite_text $curfile, $text;
 			verbose sprintf "written over %d bytes at %d", length $text, $position_before_operation;
@@ -678,7 +697,7 @@ If you want to replace all the occurrences in the whole file,
 "goto start" first.
 
 =cut
-		elsif($instructions =~ s/^replace( (?<LIMIT>all|next( (?<COUNT>[1-9]\d*)|))|)(?<OCCUR> occurrences?(?<OF> of|)|)$EOIT//)
+		elsif($$instructions_ref =~ s/^replace( (?<LIMIT>all|next( (?<COUNT>[1-9]\d*)|))|)(?<OCCUR> occurrences?(?<OF> of|)|)$EOIT//)
 		{
 			croak "$0: don't understand this REPLACE instruction" if not $+{'LIMIT'} and $+{'OCCUR'};
 			my $replace_count = $+{'LIMIT'} eq 'all' ? undef : ($+{'COUNT'}||1);
@@ -689,9 +708,9 @@ If you want to replace all the occurrences in the whole file,
 			my $is_regexp = 0;
 			my $text;
 			
-			if((not defined $expect_pattern and $instructions !~ /^to$EOIT/) or $expect_pattern eq 1)
+			if((not defined $expect_pattern and $$instructions_ref !~ /^to$EOIT/) or $expect_pattern eq 1)
 			{
-				($pattern, $is_regexp) = get_pattern_parameter \$instructions;
+				($pattern, $is_regexp) = get_pattern_parameter $instructions_ref;
 				croak "$0: string/pattern not given what to replace" unless length $pattern;
 			}
 			else  # not expecting PATTERN to be given here
@@ -700,9 +719,9 @@ If you want to replace all the occurrences in the whole file,
 				$is_regexp = $last_search_is_regexp;
 			}
 			
-			if($instructions =~ s/^to$EOIT//)
+			if($$instructions_ref =~ s/^to$EOIT//)
 			{
-				$text = get_text_parameter \$instructions;
+				$text = get_text_parameter $instructions_ref;
 			}
 			croak "$0: string not given to replace pattern to" unless defined $text;
 			
@@ -747,7 +766,7 @@ If you want to replace all the occurrences in the whole file,
 =item delete COUNT char[s]
 
 =cut
-		elsif($instructions =~ s/^delete ([1-9]\d*) chars?$EOIT//)
+		elsif($$instructions_ref =~ s/^delete ([1-9]\d*) chars?$EOIT//)
 		{
 			delete_chars $curfile, $1;
 		}
@@ -773,10 +792,10 @@ separate it from the next instruction, since the empty search PATTERN
 (both fixed text and regexp) is invalid.
 
 =cut
-		elsif($instructions =~ s/^search(?<NEXT> next|)$EOIT//)
+		elsif($$instructions_ref =~ s/^search(?<NEXT> next|)$EOIT//)
 		{
 			my $next = 1 if $+{'NEXT'};
-			my ($pattern, $is_regexp) = get_pattern_parameter(\$instructions);
+			my ($pattern, $is_regexp) = get_pattern_parameter $instructions_ref;
 			if($next and length $pattern == 0)
 			{
 				$pattern = $last_search_pattern;
@@ -785,7 +804,7 @@ separate it from the next instruction, since the empty search PATTERN
 			croak "$0: string/pattern not given what to search for" unless length $pattern;
 			
 			my $backward = 0;
-			if($instructions =~ s/^backwards?$EOIT//)
+			if($$instructions_ref =~ s/^backwards?$EOIT//)
 			{
 				$backward = 1;
 			}
@@ -821,7 +840,7 @@ separate it from the next instruction, since the empty search PATTERN
 =item mark as NAME
 
 =cut
-		elsif($instructions =~ s/^mark as (\S+)$EOIT//)
+		elsif($$instructions_ref =~ s/^mark as (\S+)$EOIT//)
 		{
 			my $m = $1;
 			$curfile->{'mark'}->{$m} = $position_before_operation;
@@ -849,13 +868,13 @@ You have some special predefined marks:
 =back
 
 =cut
-		elsif($instructions =~ s/^select from (\S+) to (\S+)$EOIT//)
+		elsif($$instructions_ref =~ s/^select from (\S+) to (\S+)$EOIT//)
 		{
 			my ($m1, $m2) = ($1, $2);
 			($m1, $m2) = ($m2, $m1) if $m2 < $m1;
 			
-			$curfile->{'mark'}->{'SELECTION-START'} = undef;
-			$curfile->{'mark'}->{'SELECTION-END'}   = undef;
+			delete $curfile->{'mark'}->{'SELECTION-START'};
+			delete $curfile->{'mark'}->{'SELECTION-END'};
 			
 			$curfile->{'mark'}->{'SELECTION-START'} = resolve_mark $curfile, $m1;
 			$curfile->{'mark'}->{'SELECTION-END'}   = resolve_mark $curfile, $m2;
@@ -867,11 +886,11 @@ You have some special predefined marks:
 =item select none
 
 =cut
-		elsif($instructions =~ s/^select( none|( last|) search result)$EOIT//)
+		elsif($$instructions_ref =~ s/^select( none|( last|) search result)$EOIT//)
 		{
 			my $what = $1;
-			$curfile->{'mark'}->{'SELECTION-START'} = undef;
-			$curfile->{'mark'}->{'SELECTION-END'}   = undef;
+			delete $curfile->{'mark'}->{'SELECTION-START'};
+			delete $curfile->{'mark'}->{'SELECTION-END'};
 			if($what =~ /search result/)
 			{
 				croak "$0: no last search result to select" if not defined $last_search_result_pos;
@@ -899,7 +918,7 @@ You have some special predefined marks:
 =item [copy | cut | delete] to [the] [start | end] of line
 
 =cut
-		elsif($instructions =~ s/^(?<CMD>copy|cut|delete)(?<WHAT> selection|( last|) search result|to( the|) (?<ANCHOR>start|end) of line|)$EOIT//)
+		elsif($$instructions_ref =~ s/^(?<CMD>copy|cut|delete)(?<WHAT> selection|( last|) search result|to( the|) (?<ANCHOR>start|end) of line|)$EOIT//)
 		{
 			my $cmd = $+{'CMD'};
 			my $what = $+{'WHAT'};
@@ -938,7 +957,7 @@ You have some special predefined marks:
 =item paste [selection]
 
 =cut
-		elsif($instructions =~ s/^paste( selection|)$EOIT//)
+		elsif($$instructions_ref =~ s/^paste( selection|)$EOIT//)
 		{
 			insert_text $curfile, $Clipboard;
 			verbose sprintf "pasted %d byes at %d", length $Clipboard, $position_before_operation;
@@ -967,12 +986,12 @@ Send selected text to COMMAND as stdin,
 and in case of C<filter>, replace selection with its stdout.
 
 =cut
-		elsif($instructions =~ s/^(?<CMD>insert (?<WHAT>file|output of)|filter selection through|send selection to)$EOIT//)
+		elsif($$instructions_ref =~ s/^(?<CMD>insert (?<WHAT>file|output of)|filter selection through|send selection to)$EOIT//)
 		{
 			my $cmd = $+{'CMD'};
 			my $source_type = $+{'WHAT'};
 			$cmd =~ s/^(\S+).*/$1/;
-			my $source = get_text_parameter \$instructions;
+			my $source = get_text_parameter $instructions_ref;
 			croak "$0: file/command not given to insert/filter/send to" unless length $source;
 			my $stream_data = {};
 			
@@ -1055,7 +1074,7 @@ and in case of C<filter>, replace selection with its stdout.
 =item capitalize
 
 =cut
-		elsif($instructions =~ s/^(uppercase|lowercase|capitalize)$EOIT//)
+		elsif($$instructions_ref =~ s/^(uppercase|lowercase|capitalize)$EOIT//)
 		{
 			my $op = $1;
 			if(defined $curfile->{'mark'}->{'SELECTION-START'} and defined $curfile->{'mark'}->{'SELECTION-END'})
@@ -1077,7 +1096,7 @@ The one in foreground prefixed with an C<*> asterisk.
 If any of them opened by an alias name, it shown after the path in C<[]> brackets.
 
 =cut
-		elsif($instructions =~ s/^show open(ed)? files?$EOIT//)
+		elsif($$instructions_ref =~ s/^show open(ed)? files?$EOIT//)
 		{
 			for my $path (keys %openedfile)
 			{
@@ -1096,7 +1115,7 @@ If any of them opened by an alias name, it shown after the path in C<[]> bracket
 Show the contents of the file in foreground.
 
 =cut
-		elsif($instructions =~ s/^show contents(?<WITH>( with (cursor|selection|marks))*)$EOIT//)
+		elsif($$instructions_ref =~ s/^show contents(?<WITH>( with (cursor|selection|marks))*)$EOIT//)
 		{
 			my $extras = $+{'WITH'};
 			update_file_size $curfile;
@@ -1160,7 +1179,7 @@ Show the contents of the file in foreground.
 =item show cursor
 
 =cut
-		elsif($instructions =~ s/^show cursor$EOIT//)
+		elsif($$instructions_ref =~ s/^show cursor$EOIT//)
 		{
 			print $position_before_operation;
 			print "\n";
@@ -1170,7 +1189,7 @@ Show the contents of the file in foreground.
 =item show marks
 
 =cut
-		elsif($instructions =~ s/^show marks$EOIT//)
+		elsif($$instructions_ref =~ s/^show marks$EOIT//)
 		{
 			for my $mark (sort {$curfile->{'mark'}->{$a} <=> $curfile->{'mark'}->{$b}} keys $curfile->{'mark'})
 			{
@@ -1186,7 +1205,7 @@ Show the contents of the file in foreground.
 I<OPTION>s: verbose
 
 =cut
-		elsif($instructions =~ s/^((?<CMD>set) (?<OPT>\S+)( (?<STATE>on|off)|)|(?<CMD>unset) (?<OPT>\S+))$EOIT//)
+		elsif($$instructions_ref =~ s/^((?<CMD>set) (?<OPT>\S+)( (?<STATE>on|off)|)|(?<CMD>unset) (?<OPT>\S+))$EOIT//)
 		{
 			my $state = ($+{'CMD'} eq 'unset' or $+{'STATE'} eq 'off') ? 0 : 1;
 			croak "$0: unknown option $+{'OPT'}" unless exists $Opt{$+{'OPT'}};
@@ -1197,17 +1216,21 @@ I<OPTION>s: verbose
 =item [show] help
 
 =cut
-		elsif($instructions =~ s/^(show |)help$EOIT//)
+		elsif($$instructions_ref =~ s/^(show |)help$EOIT//)
 		{
 			pod2usage(-exitval=>'NOEXIT', -verbose=>99);
 		}
-		elsif($instructions eq '')
+		elsif($$instructions_ref eq '')
 		{
 			last;
 		}
 		else
 		{
-			croak "$0: invalid instruction: $instructions";
+			my $instr = $$instructions_ref;
+			$instr =~ s/\n/\n\t/g;
+			$instr =~ s/\n\t$/\n/;
+			# TODO abbrev...
+			croak "$0: invalid instruction: $instr";
 		}
 	}
 =pod
@@ -1221,48 +1244,66 @@ I<OPTION>s: verbose
 
 # TODO optional backup files
 
-my %openedfile = ();
-my %filepathalias = ();
-my $curfile;
-my $instructions_found = 1;
+our %openedfile = ();
+our %filepathalias = ();
+our $curfile;
 
-my $last_search_pattern = undef;
-my $last_search_is_regexp = undef;
-my $last_search_result = undef;
-my $Clipboard = '';
+our $last_search_pattern = undef;
+our $last_search_is_regexp = undef;
+our $last_search_result = undef;
+our $Clipboard = '';
 
 
 if(@ARGV)
 {
 	my $Instructions = join ' ', map { if(/[ \r\n""]/ or $_ eq ''){ s/[""]/\\$&/g; $_="\"$_\""; }; $_ } @ARGV;
-	process_instructions $Instructions;
+	process_instructions \$Instructions;
 }
 
 for my $espath (@OptEditorScript)
 {
-	open my $es, '<', $espath or croak "$0: $espath: open: $!";
-	local $/ = undef;
-	my $Instructions = <$es>;
-	process_instructions $Instructions;
+	my $es;
+	if($espath eq '-')
+	{
+		# TODO readline
+		while(my $Instructions = <STDIN>)
+		{
+			eval { process_instructions \$Instructions; 1; };
+			warn $@ if $@;
+		}
+	}
+	else
+	{
+		open $es, '<', $espath or croak "$0: $espath: open: $!";
+		local $/ = undef;
+		my $Instructions = <$es>;
+		my $instr_length = length $Instructions;
+		my $cur_instr_offset = 0;
+		eval { process_instructions \$Instructions, \$cur_instr_offset; 1; };
+		if($@)
+		{
+			my $o = $instr_length - length $Instructions;
+			my $loc;
+			if($o == $cur_instr_offset) { $loc = "at offset $cur_instr_offset"; }
+			else { $loc = "between offset $cur_instr_offset and $o" ; }
+			warn "$0: exception in script $espath $loc\n";
+			warn "$0: current file: $curfile->{'path'}\n";
+			die $@;
+		}
+	}
 	close $es;
 }
 
-# TODO readline
-while(my $Instructions = <STDIN>)
-{
-	eval { process_instructions $Instructions; 1; };
-	warn $@ if $@;
-}
 
 
-my $close_err = 0;
-for my $curfile (values %openedfile)
+our $close_err = 0;
+for my $fdata (values %openedfile)
 {
-	close $curfile->{'handle'} and next;
+	close $fdata->{'handle'} and next;
 	$close_err = $!;
-	warn "$0: $curfile->{'path'}: close: $!\n";
+	warn "$0: $fdata->{'path'}: close: $!\n";
 }
 exit $close_err;
 
 
-# TODO positioning and offsets should represent chars, not bytes (multibyte support)
+# TODO positioning and offsets should represent chars, not bytes (multibyte/utf8 support)

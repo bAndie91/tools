@@ -237,8 +237,11 @@ sub resolve_mark
 	{
 		when('START') { $p = 0; }
 		when('END')   { update_file_size $fdata; $p = $fdata->{'size'}; }
-		when('SOL')   {}
-		when('EOL')   {}
+		when('SOL')   {} # TODO
+		when('EOL')   {
+			($p, undef) = search_pattern($fdata, "\n", 0);
+			$p = resolve_mark($fdata, 'END') unless defined $p;
+		}
 		when('HERE')  { $p = curpos $fdata; }
 		default       { $p = $fdata->{'mark'}->{$mark}; }
 	}
@@ -608,9 +611,7 @@ Set cursor position in file.
 =cut
 			elsif($$instructions_ref =~ s/^mark (\S+)$EOIT//)
 			{
-				my $mark = $1;
-				croak "$0: $curfile->{'path'}: mark $mark not found" if not exists $curfile->{'mark'}->{$mark};
-				$goto_pos = $curfile->{'mark'}->{$mark};
+				$goto_pos = resolve_mark $curfile, $1;
 			}
 			else
 			{
@@ -775,12 +776,20 @@ If you want to replace all the occurrences in the whole file,
 		}
 =pod
 
-=item delete COUNT char[s]
+=item delete [COUNT char[s]]
+
+=item backspace [COUNT char[s]]
 
 =cut
-		elsif($$instructions_ref =~ s/^delete ([1-9]\d*) chars?$EOIT//)
+		elsif($$instructions_ref =~ s/^(?<CMD>delete(?! selection)|backspace)( (?<COUNT>[1-9]\d*) chars?|)$EOIT//)
 		{
-			delete_chars $curfile, $1;
+			my $count = $+{'COUNT'} || 1;
+			if($+{'CMD'} eq 'backspace')
+			{
+				$count = $position_before_operation if $count > $position_before_operation;
+				seeker $curfile, -$count, SEEK_CUR;
+			}
+			delete_chars $curfile, $count;
 		}
 =pod
 
@@ -801,7 +810,9 @@ continues from there.
 Continue searching the next occurrence of the last search query.
 You may close this instruction with an empty pattern (C<//>) to
 separate it from the next instruction, since the empty search PATTERN
-(both fixed text and regexp) is invalid.
+(both fixed text and regexp) is invalid, thus not searching an other
+pattern but the last one.
+In interactive mode C<search next> is enough.
 
 =cut
 		elsif($$instructions_ref =~ s/^search(?<NEXT> next|)$EOIT//)
@@ -851,11 +862,23 @@ separate it from the next instruction, since the empty search PATTERN
 
 =item mark as NAME
 
+Put a named mark to the current cursor position.
+NAME must not be a reserved mark name: START, END, SOL, EOL, HERE.
+
 =cut
 		elsif($$instructions_ref =~ s/^mark as (\S+)$EOIT//)
 		{
 			my $m = $1;
 			$curfile->{'mark'}->{$m} = $position_before_operation;
+		}
+=pod
+
+=item clear mark NAME
+
+=cut
+		elsif($$instructions_ref =~ s/^clear mark (\S+)$EOIT//)
+		{
+			delete $curfile->{'mark'}->{$1};
 		}
 =pod
 
@@ -879,17 +902,22 @@ You have some special predefined marks:
 
 =back
 
+=item select [from | to] MARK
+
+If either C<from> or C<to> is missing, C<HERE> is implied.
+
 =cut
-		elsif($$instructions_ref =~ s/^select from (\S+) to (\S+)$EOIT//)
+		elsif($$instructions_ref =~ s/^select ((?<FROM>from)|to) (?<M1>\S+)(?('FROM')( to (?<M2>\S+)|))$EOIT//)
 		{
-			my ($m1, $m2) = ($1, $2);
-			($m1, $m2) = ($m2, $m1) if $m2 < $m1;
-			
 			delete $curfile->{'mark'}->{'SELECTION-START'};
 			delete $curfile->{'mark'}->{'SELECTION-END'};
 			
-			$curfile->{'mark'}->{'SELECTION-START'} = resolve_mark $curfile, $m1;
-			$curfile->{'mark'}->{'SELECTION-END'}   = resolve_mark $curfile, $m2;
+			my $p1 = resolve_mark $curfile, $+{'M1'};
+			my $p2 = resolve_mark $curfile, ($+{'M2'} // 'HERE');
+			($p1, $p2) = ($p2, $p1) if $p2 < $p1;
+			
+			$curfile->{'mark'}->{'SELECTION-START'} = $p1;
+			$curfile->{'mark'}->{'SELECTION-END'}   = $p2;
 		}
 =pod
 
@@ -917,13 +945,15 @@ You have some special predefined marks:
 =cut
 =pod
 
-=item copy [selection | [last] search result | to [start | end] of line]
+=item copy [[selection] | [last] search result | to [start | end] of line]
 
-=item cut [selection | [last] search result | to [start | end] of line]
+=item cut [[selection] | [last] search result | to [start | end] of line]
 
 =item delete [selection | [last] search result | to [start | end] of line]
 
-=item [copy | cut | delete] [selection]
+=item [copy | cut] [selection]
+
+=item delete selection
 
 =item [copy | cut | delete] [last] search result
 
@@ -951,15 +981,15 @@ You have some special predefined marks:
 			{
 				$p1 = $curfile->{'mark'}->{'SELECTION-START'};
 				$p2 = $curfile->{'mark'}->{'SELECTION-END'};
-				croak "$0: $curfile->{'path'}: no selection to $cmd" unless defined $p1 and defined $p2;
+				croak "$0: no selection to $cmd" unless defined $p1 and defined $p2;
 			}
-			if($cmd ~~ qw/copy cut/)
+			if($cmd =~ /copy|cut/)
 			{
 				seeker $curfile, $p1, SEEK_SET;
 				read_exact $curfile, \$Clipboard, $p2-$p1;
 				seeker $curfile, $p1, SEEK_SET;
 			}
-			if($cmd ~~ qw/cut delete/)
+			if($cmd =~ /cut|delete/)
 			{
 				delete_chars $curfile, $p2-$p1;
 			}
@@ -1156,8 +1186,17 @@ Show the contents of the file in foreground.
 					{
 						if($pos <= $position_before_operation and $position_before_operation < $end)
 						{
-							push @inserts, {'where' => $position_before_operation-$pos,   'what' => "\x1B[4m"};
-							push @inserts, {'where' => $position_before_operation-$pos+1, 'what' => "\x1B[24m"};
+							my $offset = $position_before_operation - $pos;
+							if(substr($$data_ref, $offset, 1) =~ /[\r\n]/)
+							{
+								push @inserts, {'where' => $offset, 'what' => "\x1B[4m \x1B[24m"};
+							}
+							else
+							{
+								push @inserts,
+									{'where' => $offset,   'what' => "\x1B[4m"},
+									{'where' => $offset+1, 'what' => "\x1B[24m"};
+							}
 						}
 					}
 					if($extras =~ /marks/)
@@ -1207,6 +1246,13 @@ Show the contents of the file in foreground.
 			{
 				printf "%d\t%s\n", $curfile->{'mark'}->{$mark}, $mark;
 			}
+		}
+=item show clipboard
+
+=cut
+		elsif($$instructions_ref =~ s/^show clipboard$EOIT//)
+		{
+			print $Clipboard;
 		}
 =pod
 

@@ -202,6 +202,24 @@ sub curpos
 	return tell $fdata->{'handle'};
 }
 
+sub resolve_mark
+{
+	my $fdata = shift;
+	my $mark = shift;
+	my $p;
+	given($mark)
+	{
+		when('START') { $p = 0; }
+		when('END')   { update_file_size $fdata; $p = $fdata->{'size'}; }
+		when('SOL')   {}
+		when('EOL')   {}
+		when('HERE')  { $p = curpos $fdata; }
+		default       { $p = $fdata->{'mark'}->{$mark}; }
+	}
+	croak "$0: mark $mark not found" if not defined $p;
+	return $p;
+}
+
 sub insert_stream
 {
 	my $fdata = shift;
@@ -327,43 +345,76 @@ sub process_instructions
 
 =over 4
 
-=item open [or create] PATH [as NAME]
+=item open [file] PATH [as NAME]
 
-=item open NAME
+=item open or create [file] PATH [as NAME]
+
+=item open new [file] PATH [as NAME]
 
 Open PATH file to edit.
+C<open file PATH> only opens already existing files,
+C<open or create ...> creates the file if it is not yet there.
+C<open new file ...> opens a file only if it does not exist yet.
+
 You can switch between multiple opened files by invoking C<open PATH>
-again,
-or C<open NAME> if you opened that file under a certain NAME by
-C<as NAME>.
-You can not open a file on path NAME once you set NAME as an alias for
-an other PATH.
-But you cat always refer to the same path by prepending C<./> (or C</>
-in case of absolute paths) to it.
+or C<open file PATH> again, or C<open NAME> if you opened the file
+under a certain NAME by C<as NAME>.
+
 Don't worry, it won't open the same PATH multiple time with conflicting
 editor states.
+However your system may allow accessing the same file (by soft and hard links)
+on different paths.
+Cfed considers only the PATH string when discerning files,
+so C<x.txt> and C<./x.txt> and C<.//x.txt> are handled separatedly.
 You have to open a file before any operation.
+
+=item open [NAME | PATH]
+
+Switch to an already opened file with the given NAME alias or
+PATH path, if NAME alias is not found.
+You can not open a file on path PATH once you set NAME as an alias for
+a file on an other PATH.
+But you can always refer to the same path by prepending C<./> (or C</>
+in case of absolute paths) to it.
 
 =cut
 		if($instructions =~ s/^open$EOIT//)
 		{
 			my $may_create = 0;
+			my $must_create = 0;
+			my $must_file = 0;
+			
 			if($instructions =~ s/^or create$EOIT//)
 			{
 				$may_create = 1;
+				$must_file = 1;
 			}
+			elsif($instructions =~ s/^new$EOIT//)
+			{
+				$must_create = 1;
+				$must_file = 1;
+			}
+			$must_file = 1 if $instructions =~ s/^file$EOIT//;
 			
 			my $key = get_text_parameter \$instructions;
-			croak "$0: file path or alias expected to open" unless length $key;
+			unless(length $key)
+			{
+				if($must_file or $must_create or $may_create)
+				{
+					croak "$0: file path expected to open";
+				}
+				croak "$0: file path or alias expected to open";
+			}
 			
 			my $alias;
 			if($instructions =~ s/^as (\S+)$EOIT//)
 			{
 				$alias = $1;
+				$must_file = 1;
 			}
 			
 			my $path;
-			if(not defined $alias)
+			if(not defined $alias and not $must_file)
 			{
 				# "open NAME" form -> check aliases
 				if(exists $filepathalias{$key})
@@ -374,33 +425,28 @@ You have to open a file before any operation.
 			if(not defined $path)
 			{
 				# either "open NAME" form and NAME alias is not found,
-				# or "open PATH" or "open PATH as NAME" form
+				# or "open file PATH" or "open PATH as NAME" form
 				$path = $key;
 			}
-			if(not exists $openedfile{$path})
+			if($must_create or not exists $openedfile{$path})
 			{
 				# file is not yet open
 				my $handle;
-				if($may_create)
-				{
-					use Fcntl;
-					sysopen $handle, $path, O_RDWR|O_CREAT or croak "$0: $path: open: $!";
-				}
-				else
-				{
-					open $handle, '+<', $path or croak "$0: $path: open: $!";
-				}
+				use Fcntl;
+				my $open_flags = O_RDWR;
+				$open_flags |= O_CREAT if $may_create or $must_create;
+				$open_flags |= O_EXCL if $must_create;
+				sysopen $handle, $path, $open_flags or croak "$0: $path: open: $!";
 				$openedfile{$path} = {
 					'handle' => $handle,
 					'path' => $path,
 				};
-				$openedfile{$path}->{'mark'}->{'START'} = 0;
-				$openedfile{$path}->{'mark'}->{'END'} = update_file_size $openedfile{$path};
 			}
 			
 			$curfile = $openedfile{$path};
 			$filepathalias{$alias} = $path if defined $alias;
 			verbose sprintf "%s: opened%s", $path, defined $alias ? " as $alias" : "";
+			update_file_size $curfile;
 			verbose sprintf "cursor at %d size %d", curpos($curfile), $curfile->{'size'};
 		}
 		elsif($instructions =~ s/^goto$EOIT//)
@@ -777,7 +823,8 @@ separate it from the next instruction, since the empty search PATTERN
 =cut
 		elsif($instructions =~ s/^mark as (\S+)$EOIT//)
 		{
-			$curfile->{'mark'}->{$1} = $position_before_operation;
+			my $m = $1;
+			$curfile->{'mark'}->{$m} = $position_before_operation;
 		}
 =pod
 
@@ -785,23 +832,33 @@ separate it from the next instruction, since the empty search PATTERN
 
 Select text from the previously named mark START-MARK to END-MARK.
 Put marks with C<mark as> command.
-You have special marks called C<START> and C<END> which are the very start
-and very end of the currently opened file respectively.
+You have some special predefined marks:
+
+=over 8
+
+=item C<START> beginning of the file
+
+=item C<END> end of the file
+
+=item C<HERE> current cursor position
+
+=item C<SOL> start of line
+
+=item C<EOL> end of line, excluding the line ending (Newline) char
+
+=back
 
 =cut
 		elsif($instructions =~ s/^select from (\S+) to (\S+)$EOIT//)
 		{
+			my ($m1, $m2) = ($1, $2);
+			($m1, $m2) = ($m2, $m1) if $m2 < $m1;
+			
 			$curfile->{'mark'}->{'SELECTION-START'} = undef;
 			$curfile->{'mark'}->{'SELECTION-END'}   = undef;
-			# TODO make it fatal error?
-			if(not exists $curfile->{'mark'}->{$1}) { verbose "mark $1 not found"; }
-			elsif(not exists $curfile->{'mark'}->{$2}) { verbose "mark $2 not found"; }
-			else {
-				my $pos1 = $curfile->{'mark'}->{$1};
-				my $pos2 = $curfile->{'mark'}->{$2};
-				$curfile->{'mark'}->{'SELECTION-START'} = $pos1 < $pos2 ? $pos1 : $pos2;
-				$curfile->{'mark'}->{'SELECTION-END'}   = $pos1 > $pos2 ? $pos1 : $pos2;
-			}
+			
+			$curfile->{'mark'}->{'SELECTION-START'} = resolve_mark $curfile, $m1;
+			$curfile->{'mark'}->{'SELECTION-END'}   = resolve_mark $curfile, $m2;
 		}
 =pod
 
@@ -829,23 +886,24 @@ and very end of the currently opened file respectively.
 =cut
 =pod
 
-=item copy [selection]
+=item copy [selection | [last] search result | to [start | end] of line]
 
-=item copy [last] search result
+=item cut [selection | [last] search result | to [start | end] of line]
 
-=item cut [selection]
+=item delete [selection | [last] search result | to [start | end] of line]
 
-=item cut [last] search result
+=item [copy | cut | delete] [selection]
 
-=item delete [selection]
+=item [copy | cut | delete] [last] search result
 
-=item delete [last] search result
+=item [copy | cut | delete] to [the] [start | end] of line
 
 =cut
-		elsif($instructions =~ s/^(?<CMD>copy|cut|delete)(?<WHAT> selection|( last|) search result|)$EOIT//)
+		elsif($instructions =~ s/^(?<CMD>copy|cut|delete)(?<WHAT> selection|( last|) search result|to( the|) (?<ANCHOR>start|end) of line|)$EOIT//)
 		{
 			my $cmd = $+{'CMD'};
 			my $what = $+{'WHAT'};
+			my $anchor = $+{'ANCHOR'};
 			my $p1;
 			my $p2;
 			if($what =~ /search result/)
@@ -853,6 +911,10 @@ and very end of the currently opened file respectively.
 				croak "$0: no last search result to $cmd" if not defined $last_search_result_pos;
 				$p1 = $last_search_result_pos;
 				$p2 = $p1 + length $last_search_result;
+			}
+			elsif($what =~ /of line/)
+			{
+				# TODO
 			}
 			else  # selection
 			{
@@ -1079,6 +1141,7 @@ Show the contents of the file in foreground.
 							}
 						}
 					}
+					# TODO close all highlights
 					@inserts = sort {$a->{'where'} <=> $b->{'where'}} @inserts;
 					my $prev_slice_end = 0;
 					for my $ins (@inserts)

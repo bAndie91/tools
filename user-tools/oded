@@ -4,11 +4,11 @@
 
 =head1 NAME
 
-ode - On-disk editor - edit text files by commands directly from shell
+oded - On-disk editor - edit text files by commands directly from shell
 
 =head1 SYNOPSIS
 
- ode [<OPTIONS>] <INSTRUCTIONS>
+ oded [<OPTIONS>] <INSTRUCTIONS>
 
 =head1 DESCRIPTION
 
@@ -29,7 +29,7 @@ pins the currently selected text for you.
 
 You have one clipboard.
 
-B<Ode> first executes INSTRUCTIONS given in parameters,
+B<Oded> first executes INSTRUCTIONS given in parameters,
 then all the instructions given at C<--script> option(s), if any.
 
 =head1 OPTIONS
@@ -394,7 +394,7 @@ Don't worry, it won't open the same PATH multiple time with conflicting
 editor states.
 However your system may allow accessing the same file (by soft and hard links)
 on different paths.
-B<Ode> considers only the PATH string when discerning files,
+B<Oded> considers only the PATH string when discerning files,
 so C<x.txt> and C<./x.txt> and C<.//x.txt> are handled separatedly.
 You have to open a file before any operation.
 

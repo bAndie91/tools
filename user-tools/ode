@@ -54,6 +54,11 @@ Same as C<--script ->, except in error handling.
 
 =item -v, --verbose
 
+=item -b, --successful-prompt-command INSTRUCTIONS
+
+Set what INSTRUCTIONS to run after each successful command in
+interactive mode (ie. C<--stdin>).
+
 =back
 
 =cut
@@ -69,16 +74,23 @@ use Carp qw/croak/;
 
 $0 =~ s/.*\/([^\/]+)$/$1/;
 %Opt = (
-	'confirm' => 0,
-	'verbose' => 0,
+	'confirm' => 'off',
+	'verbose' => 'on',
+	'successful-prompt-command' => 'none',
 );
 @OptEditorScript = ();
 
+sub store_boolean_opt
+{
+	$Opt{$_[0]} = $_[1] ? 'on' : 'off';
+}
+
 GetOptions(
-	'c|confirm' => \$Opt{'confirm'},
-	'v|verbose' => \$Opt{'verbose'},
-	'f|script=s@' => \@OptEditorScript,
+	'successful-prompt-command|b=s' => \$Opt{'successful-prompt-command'},
+	'confirm|c' => \&store_boolean_opt,
+	'script|f=s@' => \@OptEditorScript,
 	'--stdin' => sub { push @OptEditorScript, '-'; },
+	'verbose|v' => \&store_boolean_opt,
 	'help|?' => sub{ pod2usage(-exitval=>0, -verbose=>99); },
 ) or exit 2;
 
@@ -92,7 +104,7 @@ my $blockio_buffer_size = 4096;
 sub verbose
 {
 	my $msg = shift;
-	if($Opt{'verbose'})
+	if($Opt{'verbose'} =~ /^(on|yes|true)$/i)
 	{
 		warn "$0: $msg\n";
 	}
@@ -1198,18 +1210,35 @@ Show the contents of the file in foreground.
 		}
 =pod
 
-=item set OPTION [on | off]
+=item set OPTION [on | off | VALUE]
 
 =item unset OPTION
 
-I<OPTION>s: verbose
+=cut
+		elsif($$instructions_ref =~ s/^((?<CMD>set) (?<OPT>\S+)( (?<VALUE>on|off)|)|(?<CMD>unset) (?<OPT>\S+))$EOIT//)
+		{
+			my $value = $+{'VALUE'};
+			$value = 'off' if $+{'CMD'} eq 'unset';
+			my $opt = $+{'OPT'};
+			croak "$0: unknown option $opt" unless exists $Opt{$opt};
+			if(length $value == 0)
+			{
+				$value = get_text_parameter $instructions_ref;
+				croak "$0: value not given for $opt option" unless defined $value;
+			}
+			$Opt{$opt} = $value;
+		}
+=pod
+
+=item show options
 
 =cut
-		elsif($$instructions_ref =~ s/^((?<CMD>set) (?<OPT>\S+)( (?<STATE>on|off)|)|(?<CMD>unset) (?<OPT>\S+))$EOIT//)
+		elsif($$instructions_ref =~ s/^show options$EOIT//)
 		{
-			my $state = ($+{'CMD'} eq 'unset' or $+{'STATE'} eq 'off') ? 0 : 1;
-			croak "$0: unknown option $+{'OPT'}" unless exists $Opt{$+{'OPT'}};
-			$Opt{$+{'OPT'}} = $state;
+			for my $o (sort keys %Opt)
+			{
+				print "$o\t$Opt{$o}\n";
+			}
 		}
 =pod
 
@@ -1269,7 +1298,16 @@ for my $espath (@OptEditorScript)
 		while(my $Instructions = <STDIN>)
 		{
 			eval { process_instructions \$Instructions; 1; };
-			warn $@ if $@;
+			if($@)
+			{
+				warn $@;
+			}
+			elsif($Opt{'successful-prompt-command'} ne 'none')
+			{
+				my $instr = $Opt{'successful-prompt-command'};
+				eval { process_instructions \$instr; 1; };
+				warn $@ if $@;
+			}
 		}
 	}
 	else

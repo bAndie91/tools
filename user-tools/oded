@@ -96,7 +96,7 @@ GetOptions(
 
 
 # instruction token ending regexp
-my $EOIT = qr/([ \r\n]+|$)/;
+my $EOIT = qr/([ \t]+|(?=[\r\n])|$)/;
 my $blockio_buffer_size = 4096;
 
 

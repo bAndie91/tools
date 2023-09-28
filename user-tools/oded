@@ -121,7 +121,7 @@ sub get_text_parameter
 		$text =~ s/\\($q)/$1/g;
 		# TODO robust escaping
 	}
-	elsif($$params_ref =~ s/^([^""'']\S*)$EOIT//)
+	elsif($$params_ref =~ s/^([^""''\s]\S*)$EOIT//)
 	{
 		$text = $1;
 	}
@@ -470,6 +470,7 @@ in case of absolute paths) to it.
 				$open_flags |= O_CREAT if $may_create or $must_create;
 				$open_flags |= O_EXCL if $must_create;
 				sysopen $handle, $path, $open_flags or croak "$0: $path: open: $!";
+				binmode $handle, ':utf8' or croak "$0: $path: binmode: $!";
 				$openedfile{$path} = {
 					'handle' => $handle,
 					'path' => $path,
@@ -504,12 +505,16 @@ in case of absolute paths) to it.
 
 =item goto [start | end] of line
 
+=item goto [sof | eof | sol | eol]
+
 =cut
-			elsif($$instructions_ref =~ s/^(?<ANCHOR>start|end)( of (?<SCOPE>file|line))?$EOIT//)
+			elsif($$instructions_ref =~ s/^((?<ANCHOR>start|end)( of (?<SCOPE>file|line)|)|(?<ANCHOR>[se])o(?<SCOPE>[fl]))$EOIT//)
 			{
-				if($+{'SCOPE'} eq 'line')
+				my $anchor = substr $+{'ANCHOR'}, 0, 1;
+				my $scope  = substr $+{'SCOPE'}, 0, 1;
+				if($scope eq 'l')  # line
 				{
-					if($+{'ANCHOR'} eq 'end')
+					if($anchor eq 'e')  # end
 					{
 						my $rest_of_line = readline $curfile->{'handle'};
 						if(substr $rest_of_line, -1 eq "\n")
@@ -548,7 +553,7 @@ in case of absolute paths) to it.
 				else  # file
 				{
 					$goto_pos = 0;
-					$whence = $+{'ANCHOR'} eq 'start' ? SEEK_SET : SEEK_END;
+					$whence = $anchor eq 's' ? SEEK_SET : SEEK_END;
 				}
 			}
 =pod
@@ -569,35 +574,19 @@ in case of absolute paths) to it.
 			}
 =pod
 
-=item goto [back | forward] COUNT line[s]
+=item goto [line | offset] NUMBER
+
+Lines and byte offsets are indexed by 0.
 
 =cut
-			elsif($$instructions_ref =~ s/^(?<DIRECTION>back|forward) (?<COUNT>[1-9]\d*) lines?$EOIT//)
-			{
-				if($+{'DIRECTION'} eq 'forward')
-				{
-					readline $curfile->{'handle'} for 1..$+{'COUNT'};
-				}
-				else  # back
-				{
-					# TODO
-				}
-			}
-=pod
-
-=item goto [line | char] index NUMBER
-
-Lines and char offsets are indexed by 0.
-
-=cut
-			elsif($$instructions_ref =~ s/^(?<WHAT>line|char) index (?<INDEX>\d+)$EOIT//)
+			elsif($$instructions_ref =~ s/^(?<WHAT>line|offset) (?<INDEX>\d+)$EOIT//)
 			{
 				if($+{'WHAT'} eq 'line')
 				{
 					seeker $curfile, 0, SEEK_SET;
 					readline $curfile->{'handle'} for 1..$+{'INDEX'};
 				}
-				else  # goto char index
+				else  # goto offset
 				{
 					seeker $curfile, $+{'INDEX'}, SEEK_SET;
 				}
@@ -625,10 +614,26 @@ Set cursor position in file.
 		}
 =pod
 
-=item go [up | down | left | right] [COUNT times]
+=item go [back | forward] COUNT line[s]
 
 =cut
-		elsif($$instructions_ref =~ s/^go (?<WHERE>up|down|left|right)( (?<COUNT>[1-9]\d*) times|)$EOIT//)
+		elsif($$instructions_ref =~ s/^go (?<DIRECTION>back|forward) (?<COUNT>[1-9]\d*) lines?$EOIT//)
+		{
+			if($+{'DIRECTION'} eq 'forward')
+			{
+				readline $curfile->{'handle'} for 1..$+{'COUNT'};
+			}
+			else  # back
+			{
+				# TODO
+			}
+		}
+=pod
+
+=item [go] [up | down | left | right] [COUNT times]
+
+=cut
+		elsif($$instructions_ref =~ s/^(go |)(?<WHERE>up|down|left|right)( (?<COUNT>[1-9]\d*) times|)$EOIT//)
 		{
 			my $count = $+{'COUNT'} || 1;
 			given($+{'WHERE'})
@@ -656,17 +661,19 @@ Set cursor position in file.
 
 =item type STRING
 
-=item enter STRING
+=item enter [STRING]
 
 Insert given STRING into the current cursor position.
 It does not overwrite current selection.
 Add newline to the end only if called as c<enter>.
 
 =cut
-		elsif($$instructions_ref =~ s/^(type|enter)$EOIT//)
+		elsif($$instructions_ref =~ s/^(?<CMD>type|enter)$EOIT//)
 		{
-			my $end = $1 eq 'enter' ? "\n" : "";
+			my $cmd = $+{'CMD'};
+			my $end = $cmd eq 'enter' ? "\n" : "";
 			my $text = get_text_parameter $instructions_ref;
+			$text = '' if not defined $text and $cmd eq 'enter';
 			croak "$0: text not given to type in" unless defined $text;
 			insert_text $curfile, $text.$end;
 			verbose sprintf "inserted %d bytes at %d", length $text.$end, $position_before_operation;

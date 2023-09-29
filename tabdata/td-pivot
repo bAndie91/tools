@@ -1,0 +1,39 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+td-pivot - Switch columns for rows in tabular data
+
+=head1 SYNOPSIS
+
+td-pivot
+
+=head1 CAVEAT
+
+Must read and buffer the whole STDIN before output any data,
+so inpractical on large data.
+
+=cut
+
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
+
+@data = ();
+$max_col = 0;
+
+while(<STDIN>)
+{
+	chomp;
+	my @row = split $FS, $_;
+	my $cols = scalar @row - 1;
+	$max_col = $cols if $cols > $max_col;
+	push @data, [@row];
+}
+
+for my $cnum (0..$max_col)
+{
+	print join $FS, map {$_->[$cnum]} @data;
+	print "\n";
+}

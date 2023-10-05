@@ -110,14 +110,14 @@ restart)
 	daemon -n "$daemon" -v
 	;;
 log)
-	tail "$@" -f /syslog/daemon/daemon.$daemon/today.log
+	tail "$@" -f /syslog/daemon/daemon.$daemon/`date +%F`.log
 	;;
 '')
 	exit
 	;;
 *)
 	warnx "unknown verb '$verb'"
-	warnx "valid verbs: start restart stop log"
+	warnx "valid verbs: start, restart, stop, log, disable, enable"
 	false
 	;;
 esac

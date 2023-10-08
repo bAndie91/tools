@@ -109,5 +109,5 @@ while(<STDIN>)
 	unshift @Fields, $inode;
 	push @Fields, $current_directory if $recursive_mode;
 	
-	print join($FS, @Fields).$/;
+	print join($FS, @Fields).$RS;
 }

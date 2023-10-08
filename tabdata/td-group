@@ -1,0 +1,48 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+td-group - Collapse sorted tabular data stream's rows with the same first column into one row.
+
+=head1 SYNOPSIS
+
+td-group
+
+=head1 OPTIONS
+
+=over 4
+
+=item -s, --separator STR
+
+=back
+
+=cut
+
+
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
+# pass through header
+print scalar <STDIN>;
+
+
+sub output_last_group
+{
+	print $prev_group_key . $FS . join($OptSeparator, @group_members) . $RS;
+	@group_members = ();
+}
+
+$group_key = undef;
+$prev_group_key = undef;
+@group_members = ();
+
+while(my @record = read_record(\*STDIN))
+{
+	$group_key = $record[0];
+	output_last_group if $group_key ne $prev_group_key and defined $prev_group_key;
+	push @group_members, @record[1..$#record];
+	$prev_group_key = $group_key;
+}
+
+END { output_last_group; }

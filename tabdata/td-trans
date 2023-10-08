@@ -44,5 +44,5 @@ while(my $line = <STDIN>)
 		@Fields = @new_Fields;
 	}
 	
-	print join($FS, @Fields).$/;
+	print join($FS, @Fields).$RS;
 }

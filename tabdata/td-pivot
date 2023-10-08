@@ -23,10 +23,8 @@ do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 @data = ();
 $max_col = 0;
 
-while(<STDIN>)
+while(my @row = read_record(\*STDIN))
 {
-	chomp;
-	my @row = split $FS, $_;
 	my $cols = scalar @row - 1;
 	$max_col = $cols if $cols > $max_col;
 	push @data, [@row];
@@ -35,5 +33,5 @@ while(<STDIN>)
 for my $cnum (0..$max_col)
 {
 	print join $FS, map {$_->[$cnum]} @data;
-	print "\n";
+	print $RS;
 }

@@ -30,7 +30,7 @@ do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 @Headers = ("DEVICE", "MOUNTPOINT", "TYPE", "OPTIONS", "LABEL");
 if($OptShowHeader)
 {
-	print join($FS, @Headers).$/;
+	print join($FS, @Headers).$RS;
 }
 
 while(<STDIN>)

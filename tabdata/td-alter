@@ -71,7 +71,7 @@ while(scalar @ARGV)
 
 if($OptShowHeader)
 {
-	print join($FS, @Header).$/;
+	print join($FS, @Header).$RS;
 }
 
 while($line = <STDIN>)
@@ -99,5 +99,5 @@ while($line = <STDIN>)
 		$Field[$idx] = '' if not defined $Field[$idx];
 	}
 	
-	print join($FS, @Field).$/;
+	print join($FS, @Field).$RS;
 }

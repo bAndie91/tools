@@ -1,6 +1,5 @@
 #!/usr/bin/env perl
 
-
 =pod
 
 =head1 NAME
@@ -50,6 +49,7 @@ if($OptAddExtraColumns)
 	# complete the number of headers to be as many as fields are there in the first row.
 	
 	$first_line = <STDIN>;
+	chomp $first_line;
 	$num_fields = scalar split $FS, $first_line;
 	for my $n ((1 + scalar @Headers)..$num_fields)
 	{
@@ -61,8 +61,8 @@ else
 	$first_line = '';
 }
 
-print join($FS, @Headers).$/;
-print $first_line;
+print join($FS, @Headers).$RS;
+print $first_line.$RS;
 while(<STDIN>)
 {
 	print;

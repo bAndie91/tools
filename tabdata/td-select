@@ -122,11 +122,8 @@ if($OptShowHeader)
 
 
 # display selected data fields
-while($line = <STDIN>)
+while(my @Input = read_record(\*STDIN))
 {
-	chomp $line;
-	
-	@Input = split $FS, $line;
 	@Output = ();
 	
 	for my $col (@Columns)

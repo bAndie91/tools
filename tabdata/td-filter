@@ -57,11 +57,15 @@ These operators are supported, semantics are the same as in Perl, see perlop(1).
 
 For your convenience, not to bother with escaping, you may also use these operators as alternatives to the canonical ones above:
 
--eq : numerical equal to
+is : string equality
 
--ne : numerical not equal to
+is not, isnt, isnot : string inequality
 
-<>  : numerical not equal to
+-eq : numerical equality
+
+-ne : numerical inequality
+
+<>  : numerical inequality
 
 -gt : numerical greater than
 
@@ -75,28 +79,36 @@ match : regexp match
 
 notmatch : negated regexp match
 
+have, has : substring match
+
 =head1 CAVEATS
 
-<R-VALUE> does not need quoting or escaping.
 If there is no <COLUMN> column in the input data, it's silently considered empty.
+<R-VALUE> does not need quoting or escaping.
 
 =cut
 
+use feature qw/switch/;
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 @Filter = ();
 $Expr = undef;
 
 %operator_alias = (
+	'-eq', '==',
+	'is',  'eq',
 	'<>',  '!=',
 	'-ne', '!=',
-	'-eq', '==',
+	'isnt',   'ne',
+	'isnot',  'ne',
+	'is not', 'ne',
 	'-gt', '>',
 	'-lt', '<',
 	'-ge', '>=',
 	'-le', '<=',
 	'notmatch', '!~',
 	'match', '=~',
+	'have', 'has',
 );
 
 if($ARGV[0] eq '--perl')
@@ -110,18 +122,25 @@ else
 	while(scalar @ARGV)
 	{
 		my $column = shift @ARGV;
+		
+		my $negation = 0;
+		if($ARGV[0] eq 'not') { $negation = 1; shift @ARGV; }
+		
 		my $operator = shift @ARGV or die "$0: missing operator for: $column\n";
+		$operator .= ' ' . shift @ARGV if $operator eq 'is' and $ARGV[0] eq 'not';
+		
 		my $rvalue = shift @ARGV or die "$0: missing r-value for: $column $operator\n";
+		
 		
 		# operator aliases
 		$operator = $operator_alias{$operator} if exists $operator_alias{$operator};
 		
-		unless($operator ~~ [qw/== != <= >= < > =~ !~ eq ne gt lt/])
+		unless($operator ~~ [qw/== != <= >= < > =~ !~ eq ne gt lt has/])
 		{
 			die "$0: unknown operator: $operator\n";
 		}
 		
-		push @Filter, {'field'=>$column, 'operator'=>$operator, 'value'=>$rvalue,};
+		push @Filter, {'field'=>$column, 'operator'=>$operator, 'negation'=>$negation, 'value'=>$rvalue,};
 	}
 }
 
@@ -142,15 +161,11 @@ if(not defined $Expr)
 
 if($OptShowHeader)
 {
-	print $HeaderLine.$/;
+	print $HeaderLine.$RS;
 }
 
-while($line = <STDIN>)
+while(my @Field = read_record(\*STDIN))
 {
-	chomp $line;
-	
-	@Field = split $FS, $line;
-	
 	if(defined $Expr)
 	{
 		my @F = @Field;
@@ -167,10 +182,26 @@ while($line = <STDIN>)
 			my $left_data = exists $Header{$filter->{'field'}} ? $Field[$Header{$filter->{'field'}}] : '';
 			my $right_data = $filter->{'value'};
 			my $operator = $filter->{'operator'};
-			my $left_code = '$left_data';
-			my $right_code = '$right_data';
-			$right_code = "/$right_code/" if $operator ~~ ['=~', '!~'];
-			if(eval "$left_code $operator $right_code")
+			my $result;
+			
+			given($operator)
+			{
+				when('has')
+				{
+					$result = 1 + index $left_data, $right_data;
+				}
+				default
+				{
+					my $left_code = '$left_data';
+					my $right_code = '$right_data';
+					$right_code = "/$right_code/" if $operator ~~ ['=~', '!~'];
+					$result = eval "$left_code $operator $right_code";
+				}
+			}
+			
+			$result = !$result if $filter->{'negation'};
+			
+			if($result)
 			{
 				$pass = 1;
 				last;
@@ -180,6 +211,6 @@ while($line = <STDIN>)
 	
 	if($pass)
 	{
-		print $line.$/;
+		print join($FS, @Field).$RS;
 	}
 }

@@ -640,7 +640,7 @@ Set cursor position in file.
 			{
 				when('right') {
 					my $tmp;
-					read $curfile->{'handle'}, $tmp, $count or croak "$0: $curfile->{'path'}: read: $!";
+					read $curfile->{'handle'}, $tmp, $count or croak "$0: read: $!";
 				}
 				when('left') {
 					$count = $position_before_operation if $count > $position_before_operation;
@@ -648,8 +648,8 @@ Set cursor position in file.
 				}
 				when('down') {
 					readline $curfile->{'handle'};
-					my $x;
-					read $curfile->{'handle'}, $x, $count or croak "$0: $curfile->{'path'}: read: $!";
+					my $tmp;
+					read $curfile->{'handle'}, $tmp, $count or croak "$0: read: $!";
 					# FIXME offset in line?
 				}
 				when('up') {

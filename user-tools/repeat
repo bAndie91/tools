@@ -7,6 +7,32 @@ true <<EOF
 
 repeat - Run a give command repeatedly
 
+=head1 SYNOPSIS
+
+repeat <COMMAND> [<ARGS>]
+
+=head1 ENVIRONMENT
+
+=over 4
+
+=item REPEAT_TIMES
+
+How many times to repeat the given command.
+Default is infinite.
+
+=item REPEAT_COUNT
+
+How many time the command has been ran.
+The command itself can access this variable to read.
+
+=item REPEAT_DELAY
+
+Sleep interval between invocations.
+In seconds, by default.
+See sleep(1) for valid parameters.
+
+=back
+
 =cut
 
 EOF

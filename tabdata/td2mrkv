@@ -23,7 +23,7 @@ getent passwd | tr : "\t" | td-add-headers USER PW UID GID GECOS HOME SHELL | td
 
 =cut
 
-$OptMRKVSeparator = "\t";
+$OptSeparator = "\t";
 
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
@@ -31,16 +31,12 @@ do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 process_header(scalar <STDIN>);
 
 
-while($line = <STDIN>)
+while(my @Field = read_record(\*STDIN))
 {
-	chomp $line;
-	
-	@Field = split $FS, $line;
-	
 	for my $idx (0..$#Header)
 	{
-		printf "%s%s%s\n", $Header[$idx], $OptMRKVSeparator, $Field[$idx];
+		printf "%s%s%s\n", $Header[$idx], $OptSeparator, $Field[$idx];
 	}
 	
-	print "\n";
+	print $RS;
 }

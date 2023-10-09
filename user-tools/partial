@@ -9,7 +9,7 @@ partial - Show an earlier started long-running command's partial output
 
 =head1 SYNOPSIS
 
-partial [--restart|--forget|--pid] <B<COMMAND>> [<B<ARGUMENTS>>]
+partial [--restart|--forget|--wait|--pid] <B<COMMAND>> [<B<ARGUMENTS>>]
 
 =head1 DESCRIPTION
 
@@ -27,12 +27,16 @@ and exits with B<COMMAND>'s exit code.
 
 =item -f, --forget
 
-terminate (SIGTERM) previous instance of the same command
-and clean up status directory
+Terminate (SIGTERM) previous instance of the same command
+and clean up status directory, even if it's running.
 
 =item -r, --restart
 
-terminate command if running (like -f) and start it again
+Terminate command if running (like with --forget) and start it again.
+
+=item -w, --wait
+
+On first run, wait for the complete output.
 
 =item -p, --pid
 
@@ -56,9 +60,9 @@ command started
 
 partial output shown
 
-=item I<X>
+=item I<nnn>
 
-called command returned with this status code I<X>
+called command returned with this status code I<nnn>
 
 =back
 
@@ -101,8 +105,14 @@ help()
 	pod2text "$0"
 }
 
-opt_restart=no
+remove()
+{
+	[ ! -e "$1" ] || command remove "$1"
+}
+
+opt_start=yes
 opt_forget=no
+opt_wait=no
 opt_pid=no
 opt_quiet=no
 
@@ -110,10 +120,15 @@ while [ $# -gt 0 ]
 do
 	case "${1:-}" in
 	--restart|-r)
-		opt_restart=yes
+		opt_start=yes
+		opt_forget=yes
 		;;
 	--forget|-f)
 		opt_forget=yes
+		opt_start=no
+		;;
+	--wait|-w)
+		opt_wait=yes
 		;;
 	--pid|-p)
 		opt_pid=yes
@@ -158,16 +173,19 @@ then
 	exit
 fi
 
-if [ $opt_forget = yes -o $opt_restart = yes ]
+if [ $opt_forget = yes ]
 then
 	if [ -d "$dir" ]
 	then
-		pid=`cat "$dir/pid"`
-		while kill -0 "$pid"
-		do
-			kill "$pid"
-			sleep 0.2
-		done
+		pid=`cat "$dir/pid" 2>/dev/null || true`
+		if [ -n "$pid" ]
+		then
+			while kill -0 "$pid"
+			do
+				kill "$pid"
+				sleep 0.2
+			done
+		fi
 		remove "$dir/pid"
 		remove "$dir/lock"
 		remove "$dir/stdout"
@@ -176,10 +194,11 @@ then
 		remove "$dir/command.txt"
 		remove "$dir"
 	fi
-	if [ $opt_forget = yes ]
-	then
-		exit
-	fi
+fi
+
+if [ $opt_start = no ]
+then
+	exit
 fi
 
 mkdir -p "$dir"
@@ -196,20 +215,32 @@ then
 	then
 		verbose warnx "command finished: $(stat -c %y "$dir/status")"
 		print_partial
-		exit `cat "$dir/status"`
+		status=`cat "$dir/status"`
+		exit $status
 	else
 		echo "$command_str" > "$dir/command.txt"
 		
-		(
-			flock -u $lockfd
+		if [ $opt_wait = yes ]
+		then
 			set +e
-			command "${command[@]}" > "$dir/stdout"
-			echo -n $? >"$dir/status"
-		) &
-		
-		echo $! > "$dir/pid"
-		verbose warnx "command started"
-		exit 115
+			command "${command[@]}" | tee "$dir/stdout"
+			status=${PIPESTATUS[0]}
+			echo -n $status >"$dir/status"
+			
+			exit $status
+		else
+			(
+				flock -u $lockfd
+				set +e
+				command "${command[@]}" > "$dir/stdout"
+				echo -n $? >"$dir/status"
+			) &
+			
+			echo $! > "$dir/pid"
+			verbose warnx "command started"
+			
+			exit 115
+		fi
 	fi
 else
 	flock -u $runlockfd

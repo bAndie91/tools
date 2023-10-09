@@ -1,0 +1,67 @@
+#!/bin/bash
+
+inode=$1
+#file=$2
+#file=${file%% -> *}
+#path=${FZF_PREVIEW_DIRECTORY:+$FZF_PREVIEW_PATH/}$file
+# TODO FIXME hardlinks in the same directory
+path=`find "$FZF_PREVIEW_DIRECTORY" -maxdepth 1 -inum $inode -print -quit`
+mime=`file -bLi "$path"`
+
+
+ornate_per_line()
+{
+	local ansi_codes=$1
+	local ansi_reset=`tput sgr0`
+	local line
+	while read -r line
+	do
+		echo -n "$ansi_codes$line$ansi_reset"
+	done
+}
+
+
+xattrs=`getfattr --physical --dump "$path" 2>/dev/null`
+if [ -n "$xattrs" ]
+then
+	ansi_codes=`tput bold; tput setaf 5`
+	echo "$xattrs" | ornate_per_line "$ansi_codes"
+fi
+
+acls=`getfacl --physical --omit-header --skip-base --absolute-names "$path" 2>/dev/null`
+if [ -n "$acls" ]
+then
+	ansi_codes=`tput bold; tput setaf 3`
+	echo "$acls" | ornate_per_line "$ansi_codes"
+fi
+
+
+case "$mime" in
+application/pdf)
+	pdftotext -layout "$path" -
+	;;
+application/*)
+	echo $mime
+	file -bL "$path"
+	;;
+image/*)
+	;;
+video/*)
+	;;
+audio/*)
+	;;
+*)
+	if [ -d "$path" ]
+	then
+		ls -lA --time-style=long-iso --quoting-style=escape --indicator-style=slash --color=always "$path/" |\
+		sed -e 1d |\
+		sed -e "s/\(\S\+\(\s\+\S\+\)\{3\}\)\(\s\+\S\+\)\(\s\+\S\+\s\+\S\+\)/\4\3/" |\
+		head -n $FZF_PREVIEW_LINES
+	elif [ -c "$path" -o -p "$path" ]
+	then
+		true
+	else
+		head -n $FZF_PREVIEW_LINES "$path" | cat -v
+	fi
+	;;
+esac

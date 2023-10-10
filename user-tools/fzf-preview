@@ -61,7 +61,8 @@ audio/*)
 	then
 		true
 	else
-		head -n $FZF_PREVIEW_LINES "$path" | cat -v
+		head -n $FZF_PREVIEW_LINES "$path" |\
+		sed -e 's/\[\x00-\x1F\x7F\]//g'
 	fi
 	;;
 esac

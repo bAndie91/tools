@@ -110,7 +110,7 @@ remove()
 	[ ! -e "$1" ] || command remove "$1"
 }
 
-opt_start=yes
+opt_restart=no
 opt_forget=no
 opt_wait=no
 opt_pid=no
@@ -120,12 +120,11 @@ while [ $# -gt 0 ]
 do
 	case "${1:-}" in
 	--restart|-r)
-		opt_start=yes
+		opt_restart=yes
 		opt_forget=yes
 		;;
 	--forget|-f)
 		opt_forget=yes
-		opt_start=no
 		;;
 	--wait|-w)
 		opt_wait=yes
@@ -194,11 +193,11 @@ then
 		remove "$dir/command.txt"
 		remove "$dir"
 	fi
-fi
-
-if [ $opt_start = no ]
-then
-	exit
+	
+	if [ $opt_restart = no ]
+	then
+		exit
+	fi
 fi
 
 mkdir -p "$dir"

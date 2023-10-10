@@ -4,7 +4,7 @@
 
 =head1 NAME
 
-td-group - Collapse sorted tabular data stream's rows with the same first column into one row.
+td-group - Collapse sorted tabular data stream's rows with the same first field into one row.
 
 =head1 SYNOPSIS
 

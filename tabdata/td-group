@@ -4,11 +4,21 @@
 
 =head1 NAME
 
-td-group - Collapse sorted tabular data stream's rows with the same first field into one row.
+td-group - Collapse sorted tabular data stream's rows with equivalent first fields into one row.
 
 =head1 SYNOPSIS
 
-td-group
+td-group [<OPTIONS>]
+
+=head1 DESCRIPTION
+
+It goes row-by-row and if 2 or more subsequent rows first (key) cell are
+the same then collapse them into one row.
+This is done by joining corresponding cells' data from each row into one
+cell, effectively keeping every column's data in the same column.
+
+If you want to group by an other column, not the first one, then first
+reorder the columns by td-select(1). Eg. C<td-select OTHERCOLUMN +REST>.
 
 =head1 OPTIONS
 
@@ -16,10 +26,37 @@ td-group
 
 =item -s, --separator STR
 
+Separator character or string between joined cell data.
+Default is space.
+
 =back
+
+=head1 EXAMPLES
+
+This pipeline shows which users are using each of the configured default
+shells, grouped by shell path.
+
+  # get the list of users
+  getent passwd |\
+  
+  # transform into tabular data stream
+  tr : "\t" |\
+  td-add-headers USER X UID GID GECOS HOME SHELL |\
+  
+  # put the shell in the first column, and sort, then group
+  td-select SHELL USER | td-keepheader sort | td-group -s ' ' |\
+  
+  # change header name "USER" to "USERS"
+  td-alter USERS=USER | td-select +ALL -USER
+
+=head1 CAVEATS
+
+Have to sort input data first.
 
 =cut
 
+
+$OptSeparator = " ";
 
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
@@ -29,7 +66,7 @@ print scalar <STDIN>;
 
 sub output_last_group
 {
-	print $prev_group_key . $FS . join($OptSeparator, @group_members) . $RS;
+	print $prev_group_key . $FS . join($FS, map { join $OptSeparator, @$_ } @group_members) . $RS;
 	@group_members = ();
 }
 
@@ -37,11 +74,14 @@ $group_key = undef;
 $prev_group_key = undef;
 @group_members = ();
 
-while(my @record = read_record(\*STDIN))
+while(my @row = read_record(\*STDIN))
 {
-	$group_key = $record[0];
-	output_last_group if $group_key ne $prev_group_key and defined $prev_group_key;
-	push @group_members, @record[1..$#record];
+	$group_key = $row[0];
+	output_last_group if defined $prev_group_key and $group_key ne $prev_group_key;
+	for my $cell_num (1..$#row)
+	{
+		push @{$group_members[$cell_num-1]}, $row[$cell_num];
+	}
 	$prev_group_key = $group_key;
 }
 

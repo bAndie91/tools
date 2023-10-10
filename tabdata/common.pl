@@ -10,7 +10,6 @@ $OptWarnBadColumnNames = 1;
 $OptFailBadColumnNames = 1;
 $OptFailBadNegativeColumnNames = 0;
 $OptAddExtraColumns = 1;
-$OptSeparator = "\t";
 
 use Getopt::Long qw/:config no_ignore_case bundling pass_through require_order no_getopt_compat/;
 use Pod::Usage;

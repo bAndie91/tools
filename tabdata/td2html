@@ -1,0 +1,44 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+td2html - Transform tabular data stream into a HTML table.
+
+=head1 SYNOPSIS
+
+td2html
+
+=head1 DESCRIPTION
+
+Takes a tabular data stream on STDIN and outputs a HTML table
+enclosed in C<< <table>...</table> >> tags.
+
+=cut
+
+
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
+
+print "<table>\n";
+
+print "<tr>";
+print "<th>";
+$header = <STDIN>;
+chomp $header;
+print join "</th><th>", split $FS, $header;
+print "</th>";
+print "</tr>\n";
+
+print "<tr>";
+print "<td>";
+while($row = <STDIN>)
+{
+	chomp $row;
+	print join "</th><th>", split $FS, $header;
+}
+print "</td>";
+print "</tr>\n";
+
+print "</table>";

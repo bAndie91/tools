@@ -2,7 +2,8 @@
 BIN_DIR = /usr/tool
 LIB_DIR = /usr/lib/tool/perl5/tabdata
 
-TOOLS = td-select td-filter td-trans td-trans-ls td2mrkv td-keepheader td-trans-mount td-alter td-add-headers td-pivot td-group
+TOOLS = td-select td-filter td-trans td-trans-ls td2mrkv td-keepheader \
+  td-trans-mount td-alter td-add-headers td-pivot td-group td2html
 
 TARGET_TOOLS = $(foreach filename,$(TOOLS),$(BIN_DIR)/$(filename))
 

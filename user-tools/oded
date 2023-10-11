@@ -398,7 +398,7 @@ editor states.
 However your system may allow accessing the same file (by soft and hard links)
 on different paths.
 B<Oded> considers only the PATH string when discerning files,
-so C<x.txt> and C<./x.txt> and C<.//x.txt> are handled separatedly.
+so F<x.txt> and F<./x.txt> and F<.//x.txt> are handled separatedly.
 You have to open a file before any operation.
 
 =item open [NAME | PATH]

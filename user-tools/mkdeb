@@ -13,13 +13,13 @@ mkdeb [-m | --multiarch]
 
 =head1 DESCRIPTION
 
-Create a *.deb file according to the package name and version info found in C<./deb/DEBIAN/control> file
-and include all file in the package found in C<./deb> folder. Update some of C<control> file's fields, eg.
+Create a *.deb file according to the package name and version info found in F<./deb/DEBIAN/control> file
+and include all file in the package found in F<./deb> folder. Update some of C<control> file's fields, eg.
 C<Version> (increase by 1 if there is any file in the package newer than C<control> file), C<Installed-Size>...
 
-In I<multiarch> mode, instead of C<./deb> folder, it takes data from all folders in the current working
+In I<multiarch> mode, instead of F<./deb> folder, it takes data from all folders in the current working
 directory which name is a valid Debian architecture name (eg. amd64, i386, ...), and stores temporary
-files in C<./deb> for building each architecture's package.
+files in F<./deb> for building each architecture's package.
 
 Mkdeb also considers C<mkdeb-perms.txt> file in the current working directory to set
 some file attributes in the package, otherwise all file attributes are gonna be the same as on the original.
@@ -45,7 +45,7 @@ GID or name of the owner group
 
 =item <B<PATH>>
 
-the file's path itself to which the attributes are applied, relative to C<./deb> directory.
+the file's path itself to which the attributes are applied, relative to F<./deb> directory.
 
 =back
 

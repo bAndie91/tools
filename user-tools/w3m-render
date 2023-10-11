@@ -1,0 +1,3 @@
+#!/bin/sh
+
+exec w3m -graph -X -dump -T text/html -F -r -O UTF-8 "$@"

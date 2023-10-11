@@ -46,7 +46,7 @@ Those are left empty if no data yet.
 
 =head1 FILES
 
-Store tracking data in C<~/.trackrun> directory.
+Store tracking data in F<~/.trackrun> directory.
 
 =head1 ENVIRONMENT
 

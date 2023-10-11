@@ -28,7 +28,7 @@ TOOLS ?=   2opml adr2html asterisk-log-separator awk-cut base58 base64url \
   logrotate-counters logto pdfflop pngmetatext set-sys-path subst_sudo_user \
   terminaltitle timestamper set-xcursor-lock-and-run mkmagnetlink htmlentities \
   pfx2pem rdfindreport symlinks-analyze rn filterexec trackrun oded cled \
-  mail-extract-addresses mail-extract-raw-headers fzf-preview
+  mail-extract-addresses mail-extract-raw-headers fzf-preview w3m-render
 
 TOOLS_TARGET_FILES = $(addprefix $(TOOLS_TARGET_DIR)/,$(TOOLS))
 

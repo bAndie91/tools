@@ -1,0 +1,44 @@
+#!/bin/bash
+
+true <<'EOF'
+
+=pod
+
+=head1 NAME
+
+randstr - Generate random string from a given set of characters and with a given length.
+
+=head1 SYNOPSIS
+
+randstr <LENGTH> [<CHARS>]
+
+=head1 DESCRIPTION
+
+B<CHARS> is a character set expression, see tr(1).
+Default B<CHARS> is C<[a-zA-Z0-9_]>
+
+=cut
+
+EOF
+
+set -e
+set -o pipefail
+set -u
+
+
+if [ "$1" = --help ]
+then
+	pod2text "$0"
+	exit 0
+fi
+
+
+length=$1
+charset='[a-zA-Z0-9_]'
+if [ $# -gt 1 ]
+then
+	charset=$2
+fi
+
+cat /dev/urandom | tr --delete --complement "$charset" | { read -r -n $length str ; printf %s "$str"; }
+

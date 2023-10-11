@@ -18,6 +18,7 @@ cdexec - Run a given command in the given directory
 chattr-cow - try hard to enable Copy-on-Write attribute on files
 chromium_cookie_decrypt.py - Decrypt Chromium web browser stored cookies and output cleartext
 chshebang - Change a script's default interpreter
+cled - Command Line-Editor - Edit text file lines by commands directly from shell
 convert_chromium_cookies_to_netscape.sh - Convert Chromium and derivative web browser's cookies to Netscape format (used by wget and curl)
 corner_time - Place a digital clock in the upper right hand corner of the terminal
 cut.awk - Output only the selected fields from the input stream, parameters follow awk(1) syntax
@@ -30,7 +31,6 @@ digasn - Query Autonom System Number (ASN) from DNS
 diu - Display Inode usage, similar to du(1) for space usage
 dlnew - Download web resource if local copy is older
 eat - Read and echo back input (like cat(1)) until interrupted (ie. ignore end-of-file)
-edc - Edit text files by commands directly in shell
 errorlevel - Exit with the given status code
 fc-search-codepoint - Print the names of available X11 fonts containing the given code point(s)
 fcomplete - Complete a smaller file with the data from a bigger one
@@ -71,6 +71,7 @@ multithrottler - Run given command if not reached the defined rate limit
 mysql-fix-orphan-privileges.php - Suggest SQL commands to clean up unused records in system tables which hold permission data
 noacute - Strip diacritics (acute, umlaut, ...) from letters on the input stream
 nocomment - remove comment lines from input stream
+oded - On-disk editor - edit text files by commands directly from shell
 organizebydate - Rename files based on their date-time
 palemoon-current-url - Display the webpage's URL which is currently open in Palemoon web browser
 parsel - Select parts of a HTML document based on CSS selectors
@@ -84,6 +85,7 @@ pngmetatext - Put metadata text into PNG file
 pvalve - Control how much a given command should run by an other command's exit code
 pyzor-files - Run a pyzor(1) command on the given files
 qrwifi - Generate a string, used in WiFi-setup QR codes, containing a hotspot name and password
+randstr - Generate random string from a given set of characters and with a given length.
 renamemanual - Interactive file rename tool
 repeat - Run a give command repeatedly
 reportcmdstatus - Textually show how the given command finished (exit status/signal)

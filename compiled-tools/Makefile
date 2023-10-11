@@ -11,13 +11,18 @@ SPECIAL_INSTALL_TOOLS = grandparentexe netbulk lastbcsv
 
 NORMAL_TARGET_FILES = $(foreach tool,$(filter-out $(SPECIAL_INSTALL_TOOLS),$(TOOLS)),$(TARGET_DIR)/$(tool))
 SPECIAL_TARGET_FILES = $(foreach tool,$(SPECIAL_INSTALL_TOOLS),$(TARGET_DIR)/$(tool))
+POD_FILES = $(filter $(wildcard *.pod),$(foreach tool,$(TOOLS),$(tool).pod))
 
 
+
+default:
+	@echo may be interested in: all install-all install-manpages
+	@false
 
 all: $(TOOLS) netbulk lastbcsv
-install-all: $(NORMAL_TARGET_FILES) $(SPECIAL_TARGET_FILES)
+install-all: $(NORMAL_TARGET_FILES) $(SPECIAL_TARGET_FILES) install-manpages
 
-.PHONY: all install-all
+.PHONY: default all install-all
 
 define install-tool-recipe
 	install $< $@
@@ -83,3 +88,32 @@ wall: wall.d/wall
 	install $< $@
 wall.d/wall:
 	$(make-subdir-tool-recipe)
+
+
+
+
+
+MANPAGE_SECTION = 1
+COMPRESSOR = xz
+COMPRESSOR_EXT = xz
+MANPAGE_FILE_SUFFIX = .$(MANPAGE_SECTION).$(COMPRESSOR_EXT)
+SYSTEM_MANPAGES_PATH = /usr/share/man/man$(MANPAGE_SECTION)
+SPECIAL_MANPAGES = relpath
+MANPAGE_FILES = $(foreach podfile,$(filter-out $(SPECIAL_MANPAGES),$(POD_FILES)),$(SYSTEM_MANPAGES_PATH)/$(basename $(podfile))$(MANPAGE_FILE_SUFFIX))
+
+$(MANPAGE_FILES): $(SYSTEM_MANPAGES_PATH)/%$(MANPAGE_FILE_SUFFIX): %.pod
+	pod2man --name="$(basename $<)" --section $(MANPAGE_SECTION) --utf8 "$<" | $(COMPRESSOR) > "$@~" && mv "$@~" "$@"
+	@echo remove $@ >> uninstall.sh
+
+$(SYSTEM_MANPAGES_PATH)/lastbcsv$(MANPAGE_FILE_SUFFIX): lastcsv.pod
+	ln -sfn lastcsv "$@"
+	@echo remove $@ >> uninstall.sh
+
+$(SYSTEM_MANPAGES_PATH)/relpath.1tool.$(COMPRESSOR_EXT): relpath.pod
+	pod2man --name="$(basename $<)" --section $(MANPAGE_SECTION) --utf8 "$<" | $(COMPRESSOR) > "$@~" && mv "$@~" "$@"
+	@echo remove $@ >> uninstall.sh
+
+install-manpages: $(MANPAGE_FILES) $(SYSTEM_MANPAGES_PATH)/lastbcsv$(MANPAGE_FILE_SUFFIX) $(SYSTEM_MANPAGES_PATH)/relpath.1tool.$(COMPRESSOR_EXT)
+	/etc/cron.daily/man-db
+
+.PHONY: install-manpages

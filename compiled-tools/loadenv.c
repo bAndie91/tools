@@ -7,20 +7,8 @@
 #include <tool/libarray.h>
 
 static char* helptext =
-"Usage: loadenv [OPTIONS] <FILE> <COMMAND> [<ARG> [...]]\n"
-"OPTIONS\n"
-"  -0   read NUL-terminated strings from <FILE>\n"
-"  -c   copy current environment, then process <FILE>\n"
-"FILE FORMAT\n"
-"  There is a series of NUL- or LF-delimited environment variable\n"
-"  declarations in <FILE> in a format like: <NAME>[=<VALUE>].\n"
-"  If only <NAME> is given (no '=' part), then it will be removed\n"
-"  from the environment. <VALUE> may be empty, but quoting is not\n"
-"  needed. <NAME> can not have '=' equal sign in it. If the delimiter\n"
-"  is LF (newline, '\\n') which is the default, then lines starting\n"
-"  with '#' hash mark are ignored. Empty <NAME> is also ignored.\n"
-"  Later instances of the same <NAME> overwrite previous ones and also\n"
-"  the inherited ones.\n"
+"Usage: loadenv [-0c] <FILE> <COMMAND> [<ARG> [...]]\n"
+"See loadenv(1).\n"
 ;
 
 

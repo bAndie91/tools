@@ -4,5 +4,46 @@
 
 loadenv - Load environment variables from file and run a program in that environment
 
-=cut
+=head1 SYNOPSIS
 
+loadenv [OPTIONS] <FILE> <COMMAND> [<ARG> [...]]
+
+=head1 OPTIONS
+
+=over 4
+
+=item -0
+
+Read NUL-terminated strings from B<FILE>.
+Default is to read newline-terminated strings.
+
+=item -c
+
+Copy current environment, then process B<FILE>.
+
+=back
+
+=head1 FILE FORMAT
+
+There is a series of NUL- or LF-delimited environment variable
+declarations in B<FILE> in a format like:
+B<NAME>[=B<VALUE>]
+
+If only B<NAME> is given (ie. no '=' part), then variable B<NAME> will
+be removed from the environment.
+B<NAME> can not have C<=> equal sign in it.
+
+Everything after the C<=> equal sign up to the delimiter char, is part
+of B<VALUE>, including an other C<=> equal sign.
+B<VALUE> may be empty, and quoting is not needed, not for empty
+B<VALUE>, not for spaces.
+It's a raw string; no shell-interpolation.
+
+If the delimiter is LF (newline, C<\n>) which is the default, then lines
+starting with C<#> hash mark are ignored.
+Empty B<NAME> is also ignored.
+
+Later instances of the same B<NAME> overwrite previous ones and also the
+inherited ones.
+
+=cut

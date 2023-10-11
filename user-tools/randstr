@@ -22,7 +22,7 @@ Default B<CHARS> is C<[a-zA-Z0-9_]>
 EOF
 
 set -e
-set -o pipefail
+set +o pipefail
 set -u
 
 
@@ -42,3 +42,4 @@ fi
 
 cat /dev/urandom | tr --delete --complement "$charset" | { read -r -n $length str ; printf %s "$str"; }
 
+exit ${PIPESTATUS[2]}

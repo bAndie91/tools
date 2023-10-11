@@ -21,7 +21,9 @@ enclosed in C<< <table>...</table> >> tags.
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 
-print "<table>\n";
+$td_attr = "valign=\"top\"";
+
+print "<table border=\"1\">\n";
 
 print "<tr>";
 print "<th>";
@@ -31,14 +33,14 @@ print join "</th><th>", split $FS, $header;
 print "</th>";
 print "</tr>\n";
 
-print "<tr>";
-print "<td>";
 while($row = <STDIN>)
 {
 	chomp $row;
-	print join "</th><th>", split $FS, $header;
+	print "<tr>";
+	print "<td $td_attr>";
+	print join("</td><td $td_attr>", split $FS, $row);
+	print "</td>";
+	print "</tr>\n";
 }
-print "</td>";
-print "</tr>\n";
 
 print "</table>";

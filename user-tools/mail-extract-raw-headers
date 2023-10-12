@@ -1,8 +1,52 @@
 #!/usr/bin/env perl
 
+=pod
+
+=head1 NAME
+
+mail-extract-raw-headers - Get named headers from RFC822-format input.
+
+=head1 SYNOPSIS
+
+mail-extract-raw-headers [OPTIONS] <NAME> [<NAME> [...]]
+
+=head1 OPTIONS
+
+=over 4
+
+=item -k, --keep-newlines, --keep-linefeeds
+
+Keep linefeeds in multiline text.
+
+=item -n, --header-names
+
+Output the header name(s) too, not only the contents.
+
+=back
+
+=cut
+
+
+use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat/;
+use Pod::Usage;
 #use Data::Dumper;
 
-@extract_headers = @ARGV;
+$OptKeepLF = 0;
+$OptNames = 0;
+
+GetOptions(
+	'k|keep-newlines|keep-linefeeds' => \$OptKeepLF,
+	'n|header-names' => \$OptNames,
+	'help|?' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+if(not @ARGV)
+{
+	pod2usage(-exitval=>2, -verbose=>99);
+}
+
+@asked_headers = map {lc} @ARGV;
+
 
 sub getheaders($)
 {
@@ -13,13 +57,13 @@ sub getheaders($)
 	{
 		if(lc $hdr_ref->{"name"} eq $hname)
 		{
-			push @return, $hdr_ref->{"value"};
+			push @return, $hdr_ref->{"content"};
 		}
 	}
 	return @return;
 }
 
-@Headers = ();
+@found_headers = ();
 
 # read headers
 while(<STDIN>)
@@ -35,18 +79,35 @@ while(<STDIN>)
 	
 	if(my($hdr_name, $content) = /^(\S+?):[ ]?(.*)/)
 	{
-		my $hdr_name_pretty = $hdr_name;
-		$hdr_name_pretty =~ s/[^-]*/\L\u$&/g;
-		
-		my $hdr_hash = { "name" => $hdr_name, "pretty_name" => $hdr_name_pretty, "value" => $content, };
-		push @Headers, $hdr_hash;
-		$last_hdr_ref = $hdr_hash;
+		if(lc $hdr_name ~~ @asked_headers)
+		{
+			my $hdr_name_pretty = $hdr_name;
+			$hdr_name_pretty =~ s/[^-]*/\L\u$&/g;
+			
+			my $hdr_hash = { "name" => $hdr_name, "pretty_name" => $hdr_name_pretty, "content" => $content, };
+			push @found_headers, $hdr_hash;
+			$last_hdr_ref = $hdr_hash;
+		}
+		else
+		{
+			$last_hdr_ref = undef;
+		}
 	}
-	elsif(/^\s+(\S.*)/)
+	elsif(/^\s+(.*)/ and defined $last_hdr_ref)
 	{
 		# it is a folded header
-		$last_hdr_ref->{"value"} .= $1;
+		$last_hdr_ref->{"content"} .= "\n" if $OptKeepLF;
+		$last_hdr_ref->{"content"} .= $1;
 	}
 }
 
-print join "", map {map {"$_\n"} getheaders($_)} @extract_headers;
+print join "", map {
+	if($OptNames)
+	{
+		sprintf "%s: %s\n", $_->{'pretty_name'}, $_->{'content'};
+	}
+	else
+	{
+		sprintf "%s\n", $_->{'content'};
+	}
+} @found_headers;

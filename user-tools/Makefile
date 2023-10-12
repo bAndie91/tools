@@ -19,7 +19,7 @@ TOOLS ?=   2opml adr2html asterisk-log-separator awk-cut base58 base64url \
   perl-repl pipekill PMbwmon PMdirindex PMhexdiff PMnslist PMpwgen \
   PMrecdiff pyzor-files qrwifi pvalve renamemanual repeat \
   reportcmdstatus rsacrypt rsync-semichroot rsysrq screenconsole \
-  screen-notify screenreattach slay slayall sockio ssh-agent-finder \
+  screen-notify screenreattach sockio ssh-agent-finder \
   straceall strip-ansi-seq swap symlinks2dot tabularize Tail takeown taslis \
   tests text2img-dataurl touchx ttinput uchmod unicodestyle upsidedown \
   url_decode url_encode url_encode_bf url-parts vidir-sanitize vifiles \
@@ -29,7 +29,7 @@ TOOLS ?=   2opml adr2html asterisk-log-separator awk-cut base58 base64url \
   terminaltitle timestamper set-xcursor-lock-and-run mkmagnetlink htmlentities \
   pfx2pem rdfindreport symlinks-analyze rn filterexec trackrun oded cled \
   mail-extract-addresses mail-extract-raw-headers fzf-preview w3m-render \
-  randstr
+  randstr rcmod killp killpgrp killcmd killexe
 
 TOOLS_TARGET_FILES = $(addprefix $(TOOLS_TARGET_DIR)/,$(TOOLS))
 

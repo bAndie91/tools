@@ -1,0 +1,57 @@
+#!/usr/bin/env perl
+
+=pod
+
+TODO
+
+=cut
+
+use POSIX;
+use Pod::Usage;
+
+%RCmap = ();
+
+while(@ARGV)
+{
+	if($ARGV[0] =~ /^(\d+|any)=(\d+)$/)
+	{
+		$RCmap{$1} = $2;
+		shift @ARGV;
+	}
+	else
+	{
+		last;
+	}
+}
+
+system @ARGV;
+$status = ${^CHILD_ERROR_NATIVE};
+
+if(WIFSIGNALED($status))
+{
+	$mystatus = 128 + WTERMSIG($status);
+}
+else
+{
+	$mystatus = WEXITSTATUS($status);
+}
+
+
+$status_changed = 0;
+
+for my $rc (keys %RCmap)
+{
+	if($rc eq $mystatus)
+	{
+		$mystatus = $RCmap{$rc};
+		$status_changed = 1;
+		last;
+	}
+}
+
+if(not $status_changed and exists $RCmap{'any'})
+{
+	$mystatus = $RCmap{'any'};
+}
+
+exit $mystatus;

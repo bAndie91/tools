@@ -31,10 +31,10 @@ for file in "$@"
 do
 	while true
 	do
-		read -e -i "$file" -p "old: $file"$'\n'"new: "
-		if [ "$REPLY" != "$file" -a -n "$REPLY" ]
+		read -e -i "$file" -p "old: $file"$'\n'"new: " newname
+		if [ "$newname" != "$file" -a -n "$newname" ]
 		then
-			if mv -i -v "$file" "$REPLY"
+			if mv -i -v "$file" "$newname"
 			then
 				break
 			fi

@@ -1,0 +1,241 @@
+#!/bin/bash
+
+true <<'EOF'
+
+=pod
+
+=head1 NAME
+
+killp - Send signal to processes (kill, terminate, ...) by PID until they end
+
+killpgrp - Send signal to processes (kill, terminate, ...) by PGID until they end
+
+killcmd - Send signal to processes (kill, terminate, ...) by name until they end
+
+killexe - Send signal to processes (kill, terminate, ...) by their executable path until they end
+
+=head1 SYNOPSIS
+
+killp [OPTIONS] <PID> [<PID> [...]]
+
+=head1 OPTIONS
+
+The following options control how B<killcmd> finds processes.
+Semantics is the same as in grep(1):
+
+  -E --extended-regexp
+  -F --fixed-strings
+  -G --basic-regexp
+  -P --perl-regexp
+  -i --ignore-case
+  -w --word-regexp
+  -x --line-regexp
+
+Other options:
+
+=over 4
+
+=item signal=I<SIG>
+
+Which signal to send.
+See kill(1) and signal(7) for valid I<SIG> signal names and numbers.
+
+=item interval=I<IVAL>
+
+How much to wait between attempts.
+See sleep(1) for valid I<IVAL> intervals.
+
+=item -D, --debug
+
+=back
+
+=cut
+
+EOF
+
+
+
+set -e
+set -o pipefail
+
+. /usr/lib/tool/bash-utils
+
+
+
+case "${0##*/}" in
+killp)
+	mode=pid
+	;;
+killpgrp)
+	mode=pgid
+	;;
+killcmd)
+	mode=cmd
+	;;
+killexe)
+	mode=exe
+	;;
+*)
+	errx -2 "Call by either of these names: killp, killpgrp, killcmd, killexe"
+	;;
+esac
+
+
+opt_debug=''
+Signal=TERM
+Interval=0.2
+declare -A processes_left
+declare -a grep_opts=()
+
+
+for arg in "$@"
+do
+	case "$arg" in
+	signal=*|sig=*|--sig=*|--signal=*)
+		Signal=${arg#*=}
+		;;
+	interval=*|--interval=*)
+		Interval=${arg#*=}
+		;;
+	--help)
+		pod2text "$0"
+		exit 0
+		;;
+	-E|--extended-regexp|-F|--fixed-strings|-G|--basic-regexp|-P|--perl-regexp|-i|--ignore-case|-w|--word-regexp|-x|--line-regexp)
+		grep_opts+=("$arg")
+		;;
+	-D|--debug)
+		opt_debug=1
+		;;
+	-*|*=*)
+		pod2text "$0" >&2
+		exit 2
+		;;
+	*)
+		processes_left[$arg]=''
+		;;
+	esac
+done
+
+
+find_processes()
+{
+	# fill global $processes and $ps_label arrays
+	
+	declare -g -a processes
+	
+	case "$mode" in
+	pid|pgid)
+		processes=("${!processes_left[@]}")
+		;;
+	cmd)
+		proclist=`ps -e o pid:1=,cmd= ww`
+		;;
+	exe)
+		proclist=`rcmod any=0 find /proc -mindepth 2 -maxdepth 2 -name exe -printf '%h %l\n' 2>/dev/null | cut -b7-`
+		;;
+	esac
+	
+	
+	case "$mode" in
+	cmd|exe)
+		grep_params=()
+		for cmd in "${!processes_left[@]}"
+		do
+			grep_params+=(-e "$cmd")
+		done
+		lines=`echo "$proclist" | cut -d' ' -f2- | rcmod 1=0 grep --line-number "${grep_opts[@]}" "${grep_params[@]}" | cut -d: -f1`
+		
+		declare -g -A ps_label=()
+		while read -r pid label
+		do
+			ps_label[$pid]=$label
+		done < <(echo "$proclist" | lines $lines)
+		
+		processes=("${!ps_label[@]}")
+		;;
+	esac
+}
+
+
+
+# don't use bash built-in kill command
+enable -n kill
+
+
+attempt=0
+
+while [ ${#processes_left[@]} -gt 0 ]
+do
+	if [ $attempt -gt 0 -a \( $mode = cmd -o $mode = exe \) ]
+	then
+		# leave some time for the processes to exit.
+		# it's usually faster to wait here a bit,
+		# than rush here and find processes, then wait a longer time below.
+		sleep 0.1
+	fi
+	
+	find_processes
+	
+	if [ ${#processes[@]} = 0 ]
+	then
+		# did not found any more of the named commands
+		break
+	fi
+	
+	
+	if [ $attempt -gt 0 ]
+	then
+		sleep $Interval
+	fi
+	
+	
+	find_processes
+
+	if [ ${#processes[@]} = 0 ]
+	then
+		# did not found any more of the named commands
+		break
+	fi
+	
+	
+	for proc in "${processes[@]}"
+	do
+		case "$mode" in
+		pid|cmd|exe)
+			id=$proc
+			what="process"
+			;;
+		pgid)
+			id=-$proc
+			what="process group"
+			;;
+		esac
+		
+		if kill -- -0 "$id"
+		then
+			if [ $opt_debug ]
+			then
+				case "$mode" in
+				cmd|exe)
+					warnx "kill: $id: ${ps_label[$proc]}"
+					;;
+				esac
+			fi
+			kill -- -$Signal "$id"
+		else
+			case "$mode" in
+			pid|pgid)
+				warnx "$what $proc terminated"
+				unset processes_left[$proc]
+				;;
+			cmd|exe)
+				warnx "$what $proc terminated: ${ps_label[$proc]}"
+				;;
+			esac
+		fi
+	done
+	
+	
+	attempt=$[attempt + 1]
+done

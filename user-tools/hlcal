@@ -17,9 +17,14 @@ use feature qw/switch/;
 use Pod::Usage;
 use Carp qw/croak/;
 use List::MoreUtils qw/all any none/;
-use POSIX qw/strftime/;
+
+use POSIX qw/strftime setlocale LC_TIME/;
 use DateTime;
 use DateTime::Duration;
+use DateTime::Format::Strptime;
+use DateTime::Locale;
+use locale;
+
 
 # take the basename of the command as procname.
 $0 =~ s/.*\/([^\/]+)$/$1/;
@@ -76,7 +81,7 @@ sub get_ansi_codes
 	for my $word (split /[\s-]+/, $str)
 	{
 		my $code = 0;
-		if($word =~ /^(?'BRIGHT'bright_|)(?'COLOR'.+)(?'BG'_bg|)$/ and any {$_ eq $+{'COLOR'}} (keys %ANSIcolor))
+		if($word =~ /^(?'BRIGHT'bright_|)(?'COLOR'.+?)(?'BG'_bg|)$/ and any {$_ eq $+{'COLOR'}} (keys %ANSIcolor))
 		{
 			$code += 10 if $+{'BG'};
 			$code += 60 if $+{'BRIGHT'};
@@ -93,6 +98,7 @@ sub ansicode
 	my @codes = grep {length} get_ansi_codes join " ", @_;
 	return '' if not @codes;
 	return sprintf "\x1B[%sm", join(';', @codes);
+	#return join '', map { sprintf "\x1B[%sm", $_ } @codes;
 }
 
 
@@ -112,9 +118,9 @@ while(@ARGV)
 	
 	if(my ($date, $color) = $arg =~ /^(today|yesterday|tomorrow)=(.+)$/i)
 	{
-		$date = DateTime->now()->strftime('%F') if $date eq 'today';
-		$date = (DateTime->now() - DateTime::Duration->new(days=>1))->strftime('%F') if $date eq 'yesterday';
-		$date = (DateTime->now() + DateTime::Duration->new(days=>1))->strftime('%F') if $date eq 'tomorrow';
+		$date = DateTime->now(time_zone=>'local')->strftime('%F') if $date eq 'today';
+		$date = (DateTime->now(time_zone=>'local') - DateTime::Duration->new(days=>1))->strftime('%F') if $date eq 'yesterday';
+		$date = (DateTime->now(time_zone=>'local') + DateTime::Duration->new(days=>1))->strftime('%F') if $date eq 'tomorrow';
 		$arg = "$date=$color";
 	}
 	
@@ -123,13 +129,13 @@ while(@ARGV)
 		$Highlight->{'days-of-week'}->{eval $day} = $color;
 		warn "$0: no ANSI code: $color\n" unless all {length} get_ansi_codes $color;
 	}
-	elsif($arg =~ /^((?'YEAR'\d\d\d\d)-|)(?'MON'\d{1,2}|$re_months)-(?'DOM'\d{1,2})=(?'COLOR'.+)$/i)
+	elsif($arg =~ /^((?'YEAR'\d\d\d\d)-|)((?'MON'\d\d?|$re_months)-|)(?'DOM'\d{1,2})=(?'COLOR'.+)$/i)
 	{
 		my $year = $+{'YEAR'} || 'ALL';
-		my $mon = $+{'MON'};
+		my $mon = $+{'MON'} || 'ALL';
 		my $dom = $+{'DOM'};
 		my $color = $+{'COLOR'};
-		$mon = $Months{$mon} unless $mon =~ /^\d+$/;
+		$mon = $Months{$mon} if exists $Months{$mon};
 		$Highlight->{'date'}->{$year}->{$mon}->{$dom} = $color;
 	}
 	else
@@ -168,21 +174,44 @@ if(not defined $layout)
 }
 
 
+my $month_parser = new DateTime::Format::Strptime(pattern=>'%Y %b', on_error=>'croak', locale=>setlocale(LC_TIME));
+
+
+
 # prevent cal to highlight today. we will do it.
 unshift @cal_args, "-h";
 
 
-open my $pipe, '-|', $calcmd, @cal_args or croak "$0: popen: $calcmd: $!";
+open my $pipe, '-|:utf8', $calcmd, @cal_args or croak "$0: popen: $calcmd: $!";
+binmode STDOUT, ':utf8';
 
 $title_passed = 0;
 
 while(<$pipe>)
 {
-	my $visible_line = $_;
-	$visible_line =~ s/\x1B\[.*m//g;  # remove ANSI coloring escape sequences
-	1 while $visible_line =~ s/[^\x08]\x08//;  # remove backspaced chars
-
 	my $is_week_row = 0;
+	
+	if(/(\d\d\d\d)/)
+	{
+		$year = $1;
+	}
+	
+	my @words = /([^\d\s]+)/g;
+	if(scalar @words >= 1 and scalar @words <= 3 and (not /\d/ or /\d\d\d\d/))
+	{
+		# seems to be 1, 2, or 3 month names
+		@month_column = ();
+		for my $word (@words)
+		{
+			push @month_column, int $month_parser->parse_datetime("$year $word")->strftime('%m');
+		}
+	}
+	
+	my @years = /(\d\d\d\d)/g;
+	if(@years)
+	{
+		@year_column = @years;
+	}
 	
 	if(/([^\d\s]+\s+){7}/)
 	{
@@ -199,13 +228,13 @@ while(<$pipe>)
 		
 		%dow_bgn = ();
 		%dow_end = ();
-		my $spacing = 1;
+		my $day_spacing = 1;
 		for my $dow ($week_start_on, MON..SUN)
 		{
-			my $rep = ($dow - $week_start_on) % 7 + 1;
-			/^(\s*[^\d\s]+){$rep}/;
+			my $repeats = ($dow - $week_start_on) % 7 + 1;
+			/^(\s*[^\d\s]+){$repeats}/;
 			$dow_end{$dow} = length $&;
-			$dow_bgn{$dow} = $dow eq $week_start_on ? 0 : $dow_end{($dow-1)%7} + $spacing;
+			$dow_bgn{$dow} = $dow eq $week_start_on ? 0 : $dow_end{($dow-1)%7} + $day_spacing;
 		}
 	}
 	
@@ -229,24 +258,41 @@ while(<$pipe>)
 			{
 				my $week_start_offset = $month_column * ($where_last_dow_column_ends + $month_spacing);
 				
+				my %hldow = map {$_=>$Highlight->{'days-of-week'}->{$_}} keys $Highlight->{'days-of-week'};
+				my $cur_year = $year_column[$month_column] || $year;
+				my $cur_month = $month_column[$month_column];
+				my %dates = ();
+				$dates{$d} = $c while ($d, $c) = each %{$Highlight->{'date'}->{'ALL'}->{'ALL'}};
+				$dates{$d} = $c while ($d, $c) = each %{$Highlight->{'date'}->{'ALL'}->{$cur_month}};
+				$dates{$d} = $c while ($d, $c) = each %{$Highlight->{'date'}->{$cur_year}->{$cur_month}};
+				for my $date (keys %dates)
+				{
+					my $dow = int strftime('%u', 0, 0, 0, $date, $cur_month-1, $cur_year-1900) - 1;
+					my $date_at_dow_location = substr($_, $dow_bgn{$dow} + $week_start_offset + $accum_shift, $dow_end{$dow}-$dow_bgn{$dow});
+					$hldow{$dow} .= " " . $dates{$date} if $date == $date_at_dow_location;
+				}
+				
 				for my $dow ( $week_start_on .. SUN, MON .. ($week_start_on-1) )
 				{
-					next if not exists $Highlight->{'days-of-week'}->{$dow};
-					my $color = $Highlight->{'days-of-week'}->{$dow};
-					my $insert1 = ansicode($color);
-					my $insert2 = ansicode('reset');
-					my $bgn = $dow_bgn{$dow} + $week_start_offset + $accum_shift;
-					my $end = $dow_end{$dow} + $week_start_offset + $accum_shift;
-					
-					$_ = substr($_, 0, $bgn) . $insert1 . substr($_, $bgn, $end-$bgn) . $insert2 . substr($_, $end);
-					$accum_shift += length($insert1) + length($insert2);
+					if(exists $hldow{$dow})
+					{
+						my $color = $hldow{$dow};
+						my $insert1 = ansicode($color);
+						my $insert2 = ansicode('reset');
+						my $bgn = $dow_bgn{$dow} + $week_start_offset + $accum_shift;
+						my $end = $dow_end{$dow} + $week_start_offset + $accum_shift;
+						
+						$_ = substr($_, 0, $bgn) . $insert1 . substr($_, $bgn, $end-$bgn) . $insert2 . substr($_, $end);
+						$accum_shift += length($insert1) + length($insert2);
+					}
 				}
+				
 			}
 		}
 	}
 	else  # $layout eq VERTICAL
 	{
-		if($visible_line !~ /\b\d\d?\b/)
+		if(not /\b\d\d?\b/)
 		{
 			# no 1 or 2 digit numbers, assuming month name(s) header.
 			# TODO: any locale setting in which month names have numbers?
@@ -255,15 +301,17 @@ while(<$pipe>)
 			$is_date_row = 0;
 		}
 		
-		if($visible_line =~ /(\d+\s+){4}/)
+		if(/(\d+\s+){4}/)
 		{
-			# at least 4 consecutive numbers -> it's a new row of days
+			# at least 4 numbers -> it's a new row of days
 			$day_of_week = ($day_of_week + 1) % 7;
 			$is_date_row = 1;
 		}
 		
 		if($is_date_row)
 		{
+			# TODO: hilight dates
+			
 			while (my ($hldow, $color) = each $Highlight->{'days-of-week'})
 			{
 				if($day_of_week == $hldow)

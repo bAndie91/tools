@@ -1,0 +1,177 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+highlight-bsd-cal [OPTIONS] -- [n]cal [CAL-OPTIONS]
+
+=cut
+
+
+use Data::Dumper;
+use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat/;
+use feature qw/switch/;
+use Pod::Usage;
+use Carp qw/croak/;
+use List::MoreUtils qw/all any none/;
+
+# take the basename of the command as procname.
+$0 =~ s/.*\/([^\/]+)$/$1/;
+
+use constant {
+	VERTICAL => 'v',
+	HORIZONTAL => 'h',
+};
+
+use constant {
+	MON => 0,
+	TUE => 1,
+	WED => 2,
+	THU => 3,
+	FRI => 4,
+	SAT => 5,
+	SUN => 6,
+};
+
+my %ANSIcolor = (
+	black=>30, red=>31, green=>32, yellow=>33, blue=>34, magenta=>35, cyan=>36, white=>37,
+);
+my %ANSIcode = (
+	'reset'=>0, bold=>1, faint=>2, italic=>3, underline=>4,
+	blink_slow=>5, blink_rapid=>6, inverse=>7, conceal=>8, crossed=>9,
+	normal=>22,
+	noitalic=>23, nounderline=>24, noblink=>25, noinverse=>27, noconceal=>28, nocrossed=>29,
+	%ANSIcolor,
+	default=>39,
+);
+sub get_ansi_codes
+{
+	my $str = shift;
+	my @codes = ();
+	$str =~ s/[- ]bg/_bg/g;
+	$str =~ s/bright[- ]/bright_/g;
+	for my $word (split /[\s-]+/, $str)
+	{
+		my $code = 0;
+		if($word =~ /^(?'BRIGHT'bright_|)(?'COLOR'.+)(?'BG'_bg|)$/ and any {$_ eq $+{'COLOR'}} (keys %ANSIcolor))
+		{
+			$code += 10 if $+{'BG'};
+			$code += 60 if $+{'BRIGHT'};
+			$word = $+{'COLOR'};
+		}
+		if(exists $ANSIcode{$word}) { $code += $ANSIcode{$word}; }
+		else { $code = ''; }
+		push @codes, $code;
+	}
+	return @codes;
+}
+sub ansicode
+{
+	my @codes = grep {length} get_ansi_codes join " ", @_;
+	return '' if not @codes;
+	return sprintf "\x1B[%sm", join(';', @codes);
+}
+
+
+@my_args = ();
+@cal_args = ();
+
+if('--' ~~ @ARGV)
+{
+	while($ARGV[0] ne '--')
+	{
+		push @my_args, scalar shift @ARGV;
+	}
+	shift @ARGV;
+}
+
+@cal_args = @ARGV;
+@ARGV = @my_args;
+
+
+# weeks starts on Sunday by default in BSD cal
+$week_start_on = SUN;
+if(@cal_args ~~ /^-.*M/)
+{
+	$week_start_on = MON;
+}
+$layout = VERTICAL;
+
+
+GetOptions(
+	'help|?' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+while(@ARGV)
+{
+	my $arg = shift @ARGV;
+	if(my ($day, $color) = $arg =~ /^(MON|TUE|WED|THU|FRI|SAT|SUN)=(.+)$/i)
+	{
+		push @{$Highlight->{'days-of-week'}}, {'day' => eval $day, 'color' => $color};
+		warn "$0: no ANSI code: $color\n" unless all {length} get_ansi_codes $color;
+	}
+}
+
+
+open my $pipe, '-|', @cal_args or croak "$0: popen: @cal_args: $!";
+
+$title_passed = 0;
+
+while(<$pipe>)
+{
+	my $visible_line = $_;
+	$visible_line =~ s/\x1B\[.*m//g;  # remove ANSI coloring escape sequences
+	1 while $visible_line =~ s/[^\x08]\x08//;  # remove backspaced chars
+	
+	if(/([^\d\s]+\s+){7}/)
+	{
+		# at least 7 groups of letters (not space or digit),
+		# it's probably day of week names;
+		# assuming horizontal layout.
+		
+		# TODO: any locale setting in which month names have space?
+		
+		$layout = HORIZONTAL;
+		$title_passed = 1;
+		$week_of_month = 0;
+	}
+	
+	if($layout eq HORIZONTAL)
+	{
+		if(/\d/ and $title_passed)
+		{
+			# at least 1 number -> a row of a week
+			$week_of_month++;
+		}
+	}
+	else  # $layout eq VERTICAL
+	{
+		if($visible_line !~ /\b\d\d?\b/)
+		{
+			# no 1 or 2 digit numbers, assuming month name(s) header.
+			# TODO: any locale setting in which month names have numbers?
+			
+			$day_of_week = $week_start_on - 1;
+		}
+		
+		if($visible_line =~ /(\d+\s+){4}/)
+		{
+			# at least 4 consecutive numbers -> it's a new row of days
+			$day_of_week = ($day_of_week + 1) % 7;
+		}
+		
+		for my $hilight (@{$Highlight->{'days-of-week'}})
+		{
+			if($day_of_week == $hilight->{'day'})
+			{
+				s/^/ansicode($hilight->{'color'})/e;
+				s/$/ansicode('reset')/e;
+			}
+		}
+	}
+	
+	print;
+}
+
+close $pipe;

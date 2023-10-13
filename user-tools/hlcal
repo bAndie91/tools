@@ -1,0 +1,277 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+hlcal [OPTIONS] [CAL-OPTIONS]
+
+hlncal [OPTIONS] [NCAL-OPTIONS]
+
+=cut
+
+
+use Data::Dumper;
+use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat pass_through/;
+use feature qw/switch/;
+use Pod::Usage;
+use Carp qw/croak/;
+use List::MoreUtils qw/all any none/;
+use POSIX qw/strftime/;
+use DateTime;
+use DateTime::Duration;
+
+# take the basename of the command as procname.
+$0 =~ s/.*\/([^\/]+)$/$1/;
+
+use constant {
+	VERTICAL => 'v',
+	HORIZONTAL => 'h',
+};
+
+use constant {
+	MON => 0,
+	TUE => 1,
+	WED => 2,
+	THU => 3,
+	FRI => 4,
+	SAT => 5,
+	SUN => 6,
+};
+
+my %Months = (
+	jan=>1,
+	feb=>2,
+	mar=>3,
+	apr=>4,
+	may=>5,
+	jun=>6,
+	jul=>7,
+	aug=>8,
+	sep=>9,
+	'oct'=>10,
+	nov=>11,
+	dec=>12,
+);
+my $re_months = join '|', keys %Months;
+
+
+my %ANSIcolor = (
+	black=>30, red=>31, green=>32, yellow=>33, blue=>34, magenta=>35, cyan=>36, white=>37,
+);
+my %ANSIcode = (
+	'reset'=>0, bold=>1, faint=>2, italic=>3, underline=>4,
+	blink_slow=>5, blink_rapid=>6, inverse=>7, conceal=>8, crossed=>9,
+	normal=>22,
+	noitalic=>23, nounderline=>24, noblink=>25, noinverse=>27, noconceal=>28, nocrossed=>29,
+	%ANSIcolor,
+	default=>39,
+);
+sub get_ansi_codes
+{
+	my $str = shift;
+	my @codes = ();
+	$str =~ s/[- ]bg/_bg/g;
+	$str =~ s/bright[- ]/bright_/g;
+	for my $word (split /[\s-]+/, $str)
+	{
+		my $code = 0;
+		if($word =~ /^(?'BRIGHT'bright_|)(?'COLOR'.+)(?'BG'_bg|)$/ and any {$_ eq $+{'COLOR'}} (keys %ANSIcolor))
+		{
+			$code += 10 if $+{'BG'};
+			$code += 60 if $+{'BRIGHT'};
+			$word = $+{'COLOR'};
+		}
+		if(exists $ANSIcode{$word}) { $code += $ANSIcode{$word}; }
+		else { $code = ''; }
+		push @codes, $code;
+	}
+	return @codes;
+}
+sub ansicode
+{
+	my @codes = grep {length} get_ansi_codes join " ", @_;
+	return '' if not @codes;
+	return sprintf "\x1B[%sm", join(';', @codes);
+}
+
+
+
+$OptNoHighlightToday = 0;
+# weeks starts on Sunday by default in BSD cal
+$week_start_on = SUN;
+$calcmd = 'cal';
+$calcmd = 'ncal' if $0 =~ /ncal/;
+
+
+while(@ARGV)
+{
+	my $arg = shift @ARGV;
+	
+	if(my ($date, $color) = $arg =~ /^(today|yesterday|tomorrow)=(.+)$/i)
+	{
+		$date = DateTime->now()->strftime('%F') if $date eq 'today';
+		$date = (DateTime->now() - DateTime::Duration->new(days=>1))->strftime('%F') if $date eq 'yesterday';
+		$date = (DateTime->now() + DateTime::Duration->new(days=>1))->strftime('%F') if $date eq 'tomorrow';
+		$arg = "$date=$color";
+	}
+	
+	if(my ($day, $color) = $arg =~ /^(MON|TUE|WED|THU|FRI|SAT|SUN)=(.+)$/i)
+	{
+		$Highlight->{'days-of-week'}->{eval $day} = $color;
+		warn "$0: no ANSI code: $color\n" unless all {length} get_ansi_codes $color;
+	}
+	elsif($arg =~ /^((?'YEAR'\d\d\d\d)-|)(?'MON'\d{1,2}|$re_months)-(?'DOM'\d{1,2})=(?'COLOR'.+)$/i)
+	{
+		my $year = $+{'YEAR'} || 'ALL';
+		my $mon = $+{'MON'};
+		my $dom = $+{'DOM'};
+		my $color = $+{'COLOR'};
+		$mon = $Months{$mon} unless $mon =~ /^\d+$/;
+		$Highlight->{'date'}->{$year}->{$mon}->{$dom} = $color;
+	}
+	else
+	{
+		# unknown parameter.
+		# give it back to BSD cal/ncal.
+		unshift @ARGV, $arg;
+		last;
+	}
+}
+
+warn Dumper $Highlight;
+
+
+@cal_args = @ARGV;
+
+GetOptions(
+	'M' => sub { $week_start_on = MON; },
+	'S' => sub { $week_start_on = SUN; },
+	'C' => sub { $calcmd = 'cal'; },
+	'N' => sub { $calcmd = 'ncal'; },
+	'b' => sub { $layout = HORIZONTAL; },
+	'h' => \$OptNoHighlightToday,  # TODO
+	'help|?' => sub {
+		pod2usage(-exitval=>'NOEXIT', -verbose=>99);
+		system("sh", "-c", "cal --help 2>&1");
+		exit 0;
+	},
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+
+if(not defined $layout)
+{
+	$layout = HORIZONTAL;
+	$layout = VERTICAL if $calcmd eq 'ncal';
+}
+
+
+# prevent cal to highlight today. we will do it.
+unshift @cal_args, "-h";
+
+
+open my $pipe, '-|', $calcmd, @cal_args or croak "$0: popen: $calcmd: $!";
+
+$title_passed = 0;
+
+while(<$pipe>)
+{
+	my $visible_line = $_;
+	$visible_line =~ s/\x1B\[.*m//g;  # remove ANSI coloring escape sequences
+	1 while $visible_line =~ s/[^\x08]\x08//;  # remove backspaced chars
+
+	my $is_week_row = 0;
+	
+	if(/([^\d\s]+\s+){7}/)
+	{
+		# at least 7 groups of letters (not space or digit),
+		# it's probably day of week names;
+		# assuming horizontal layout.
+		
+		# TODO: any locale setting in which month names have space?
+		
+		$layout = HORIZONTAL;
+		$title_passed = 1;
+		$week_of_month = 0;
+		$is_week_row = 1;
+		
+		%dow_bgn = ();
+		%dow_end = ();
+		my $spacing = 1;
+		for my $dow ($week_start_on, MON..SUN)
+		{
+			my $rep = ($dow - $week_start_on) % 7 + 1;
+			/^(\s*[^\d\s]+){$rep}/;
+			$dow_end{$dow} = length $&;
+			$dow_bgn{$dow} = $dow eq $week_start_on ? 0 : $dow_end{($dow-1)%7} + $spacing;
+		}
+	}
+	
+	if($layout eq HORIZONTAL)
+	{
+		if(/\d/ and $title_passed)
+		{
+			# at least 1 number -> a row of a week
+			$week_of_month++;
+			$is_week_row = 1;
+		}
+		
+		if($is_week_row)
+		{
+			my %mod_dow_bgn = %dow_bgn;
+			my %mod_dow_end = %dow_end;
+			while (my ($hldow, $color) = each $Highlight->{'days-of-week'})
+			{
+				my $insert1 = ansicode($color);
+				my $insert2 = ansicode('reset');
+				my $bgn = $mod_dow_bgn{$hldow};
+				my $end = $mod_dow_end{$hldow};
+				
+				$_ = substr($_, 0, $bgn) . $insert1 . substr($_, $bgn, $end-$bgn) . $insert2 . substr($_, $end);
+				$mod_dow_end{$hldow} += length($insert1) + length($insert2);
+				
+				my $shifted_dow = ($hldow + 1) % 7;
+				while($shifted_dow != $week_start_on)
+				{
+					$mod_dow_bgn{$shifted_dow} += length($insert1) + length($insert2);
+					$mod_dow_end{$shifted_dow} += length($insert1) + length($insert2);
+					$shifted_dow = ($shifted_dow + 1) % 7;
+				}
+			}
+		}
+	}
+	else  # $layout eq VERTICAL
+	{
+		if($visible_line !~ /\b\d\d?\b/)
+		{
+			# no 1 or 2 digit numbers, assuming month name(s) header.
+			# TODO: any locale setting in which month names have numbers?
+			
+			$day_of_week = $week_start_on - 1;
+			$is_date_row = 0;
+		}
+		
+		if($visible_line =~ /(\d+\s+){4}/)
+		{
+			# at least 4 consecutive numbers -> it's a new row of days
+			$day_of_week = ($day_of_week + 1) % 7;
+			$is_date_row = 1;
+		}
+		
+		if($is_date_row)
+		{
+			while (my ($hldow, $color) = each $Highlight->{'days-of-week'})
+			{
+				if($day_of_week == $hldow)
+				{
+					s/^/ansicode($color)/e;
+					s/$/ansicode('reset')/e;
+				}
+			}
+		}
+	}
+	
+	print;
+}
+
+close $pipe;

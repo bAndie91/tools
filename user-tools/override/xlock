@@ -5,7 +5,9 @@ true <<EOF
 
 =head1 NAME
 
-xlock, xunlock - Lock (unlock) X11 screen by disable (enable) input devices
+xlock - Lock X11 screen by disable (enable) input devices
+
+xunlock - Unlock X11 screen by disable (enable) input devices
 
 =cut
 

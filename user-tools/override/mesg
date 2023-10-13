@@ -1,0 +1,25 @@
+#!/bin/bash
+
+set -e
+set -o pipefail
+
+
+if [ -n "$STY" -a -n "$GNUSCREEN_WINDOWID" ]
+then
+	pty=`screen -S "$STY" -p "$GNUSCREEN_WINDOWID" -Q @echo -p %T`
+	
+	if ! expr + "$*" : '.*\(-q\|--quiet\)' >/dev/null
+	then
+		echo "mesg: screen tty is $pty" >&2
+	fi
+	
+	mesg "$@" < "/dev/$pty"
+	
+	if [ -n "$1" ]
+	then
+		[ "$1" = y ] && login=on || login=off
+		screen -S "$STY" -p "$GNUSCREEN_WINDOWID" -X @login $login
+	fi
+else
+	exec /usr/bin/mesg "$@"
+fi

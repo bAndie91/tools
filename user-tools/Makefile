@@ -112,4 +112,4 @@ list-tools:
 .PHONY: list-tools
 
 
-include Makefile.documentation.mk
+include $(dir $(lastword $(MAKEFILE_LIST)))/Makefile.documentation.mk

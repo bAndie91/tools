@@ -98,7 +98,7 @@ sub ansicode
 
 
 $OptNoHighlightToday = 0;
-# weeks starts on Sunday by default in BSD cal
+# weeks starts on Sunday by default in cal
 $week_start_on = SUN;
 $calcmd = 'cal';
 $calcmd = 'ncal' if $0 =~ /ncal/;
@@ -107,6 +107,8 @@ $calcmd = 'ncal' if $0 =~ /ncal/;
 while(@ARGV)
 {
 	my $arg = shift @ARGV;
+	
+	# TODO: get highlight parameters from config files
 	
 	if(my ($date, $color) = $arg =~ /^(today|yesterday|tomorrow)=(.+)$/i)
 	{
@@ -133,13 +135,13 @@ while(@ARGV)
 	else
 	{
 		# unknown parameter.
-		# give it back to BSD cal/ncal.
+		# give it back to cal/ncal.
 		unshift @ARGV, $arg;
 		last;
 	}
 }
 
-warn Dumper $Highlight;
+#warn Dumper $Highlight;
 
 
 @cal_args = @ARGV;
@@ -218,24 +220,26 @@ while(<$pipe>)
 		
 		if($is_week_row)
 		{
-			my %mod_dow_bgn = %dow_bgn;
-			my %mod_dow_end = %dow_end;
-			while (my ($hldow, $color) = each $Highlight->{'days-of-week'})
+			my $month_spacing = 2;
+			my $where_last_dow_column_ends = $dow_end{($week_start_on-1)%7};
+			my $how_many_month_columns = int(length($_) / $where_last_dow_column_ends);
+			my $accum_shift = 0;
+			
+			for my $month_column (0..$how_many_month_columns-1)
 			{
-				my $insert1 = ansicode($color);
-				my $insert2 = ansicode('reset');
-				my $bgn = $mod_dow_bgn{$hldow};
-				my $end = $mod_dow_end{$hldow};
+				my $week_start_offset = $month_column * ($where_last_dow_column_ends + $month_spacing);
 				
-				$_ = substr($_, 0, $bgn) . $insert1 . substr($_, $bgn, $end-$bgn) . $insert2 . substr($_, $end);
-				$mod_dow_end{$hldow} += length($insert1) + length($insert2);
-				
-				my $shifted_dow = ($hldow + 1) % 7;
-				while($shifted_dow != $week_start_on)
+				for my $dow ( $week_start_on .. SUN, MON .. ($week_start_on-1) )
 				{
-					$mod_dow_bgn{$shifted_dow} += length($insert1) + length($insert2);
-					$mod_dow_end{$shifted_dow} += length($insert1) + length($insert2);
-					$shifted_dow = ($shifted_dow + 1) % 7;
+					next if not exists $Highlight->{'days-of-week'}->{$dow};
+					my $color = $Highlight->{'days-of-week'}->{$dow};
+					my $insert1 = ansicode($color);
+					my $insert2 = ansicode('reset');
+					my $bgn = $dow_bgn{$dow} + $week_start_offset + $accum_shift;
+					my $end = $dow_end{$dow} + $week_start_offset + $accum_shift;
+					
+					$_ = substr($_, 0, $bgn) . $insert1 . substr($_, $bgn, $end-$bgn) . $insert2 . substr($_, $end);
+					$accum_shift += length($insert1) + length($insert2);
 				}
 			}
 		}

@@ -18,10 +18,17 @@ killexe - Send signal to processes (kill, terminate, ...) by their executable pa
 
 killp [OPTIONS] <PID> [<PID> [...]]
 
+=head1 DESCRIPTION
+
+Send signal to process(es) by PID, PGID (process group ID), command name, or by executable path
+until the selected process(es) exists.
+Ie. in usuall invocation, eg. C<killcmd java> tries to SIGTERM all java processes until at
+least 1 exists, and returns only afterwards.
+
 =head1 OPTIONS
 
-The following options control how B<killcmd> finds processes.
-Semantics is the same as in grep(1):
+The following options control how B<killcmd> and B<killexe> finds processes.
+Semantics are the same as in grep(1):
 
   -E --extended-regexp
   -F --fixed-strings
@@ -35,12 +42,12 @@ Other options:
 
 =over 4
 
-=item signal=I<SIG>
+=item [--]signal=I<SIG>
 
 Which signal to send.
 See kill(1) and signal(7) for valid I<SIG> signal names and numbers.
 
-=item interval=I<IVAL>
+=item [--]interval=I<IVAL>
 
 How much to wait between attempts.
 See sleep(1) for valid I<IVAL> intervals.
@@ -48,6 +55,10 @@ See sleep(1) for valid I<IVAL> intervals.
 =item -D, --debug
 
 =back
+
+=head1 SEE ALSO
+
+kill(1), pkill(1), killall(1), signal(7)
 
 =cut
 

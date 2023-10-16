@@ -26,16 +26,19 @@ command_not_found_handle()
 	}\
 	| levenshtein-distance "$badcmd" \
 	| env badcmd=$badcmd perl -ne '
-		use List::Util qw/min/;
+		BEGIN {
+			use List::Util qw/min/;
+			$\ = "\n";
+			$, = "\t";
+			$worst_score = 999;
+		}
 		chomp;
-		$\ = "\n";
-		$, = "\t";
 		s/^(\d+)\s//;
 		$distance = $1;
 		$len = length;
-		$spos = index $_,  $ENV{badcmd}; $spos = 999 if $spos == -1;
+		$spos = index $_,  $ENV{badcmd}; $spos = $worst_score if $spos == -1;
 		$rpos = rindex $_, $ENV{badcmd};
-			if($rpos == -1) { $epos = 999; } else { $epos = $len - ($rpos + length($ENV{badcmd})); }
+			if($rpos == -1) { $epos = $worst_score; } else { $epos = $len - ($rpos + length($ENV{badcmd})); }
 		print $spos, $epos, $distance, $len, $_;' \
 	| perl -ne '
 		use List::Util qw/min/;
@@ -58,8 +61,6 @@ command_not_found_handle()
 		$last_score = $score;' \
 	| column \
 	  >&2
-
-# TODO dont show too few/many suggestions
 	
 	return 127
 }

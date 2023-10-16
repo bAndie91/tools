@@ -19,6 +19,18 @@ command_not_found_handle()
 	local endswith_threshold=0
 	local min_suggestions=20
 	
+	# 1. list every commands in all the PATH directories and bash functions
+	#    and aliases.
+	# 2. measure Levenshtein between the typed word and each commands.
+	# 3. find exact matches of typed word in each commands and score them
+	#    according to how close is it to the start or end of the command name.
+	# 4. calc the lowest score (the lower the better), ie. overall score.
+	# 5. sort the commands first by the lowest score, then length.
+	# 6. pass through commands, scores of which are below threshold.
+	# 7. worse-score commands are passed through too, in groups, to show at
+	#    least a given number of suggestions.
+	#    they are groupd by the overall score.
+	
 	{
 		find ${PATH//:/ } -maxdepth 1 -type f -executable -printf '%f\n' 2>/dev/null
 		declare -p -F | cut -d' ' -f3-
@@ -39,13 +51,7 @@ command_not_found_handle()
 		$spos = index $_,  $ENV{badcmd}; $spos = $worst_score if $spos == -1;
 		$rpos = rindex $_, $ENV{badcmd};
 			if($rpos == -1) { $epos = $worst_score; } else { $epos = $len - ($rpos + length($ENV{badcmd})); }
-		print $spos, $epos, $distance, $len, $_;' \
-	| perl -ne '
-		use List::Util qw/min/;
-		$, = "\t";
-		s/(\S+)\s(\S+)\s(\S+)\s//;
-		@scores = ($1, $2, $3);
-		print min(@scores), @scores, $_;' \
+		print min($spos, $epos, $distance), $spos, $epos, $distance, $len, $_;' \
 	| sort -k1n -k5n \
 	| env min_suggestions=$min_suggestions startswith_threshold=$startswith_threshold endswith_threshold=$endswith_threshold distance_threshold=$distance_threshold\
 		perl -ne '

@@ -2,14 +2,14 @@
 
 command_not_found_handle()
 {
-	local command=$1
+	local badcmd=$1
 	#shift
 	#declare -a args=("$@")
 	
-	echo "$command: command not found. similar commands: " >&2
+	echo "$badcmd: command not found. similar commands: " >&2
 	
 	local distance_threshold
-	if [ ${#command} -le 3 ]
+	if [ ${#badcmd} -le 4 ]
 	then
 		distance_threshold=1
 	else
@@ -17,37 +17,45 @@ command_not_found_handle()
 	fi
 	local startswith_threshold=3
 	local endswith_threshold=0
+	local min_suggestions=20
 	
 	{
 		find ${PATH//:/ } -maxdepth 1 -type f -executable -printf '%f\n' 2>/dev/null
 		declare -p -F | cut -d' ' -f3-
 		alias -p | cut -d' ' -f2- | cut -d= -f1
 	}\
-	| levenshtein-distance "$command" \
-	| env command=$command perl -ne '
+	| levenshtein-distance "$badcmd" \
+	| env badcmd=$badcmd perl -ne '
 		use List::Util qw/min/;
 		chomp;
 		$\ = "\n";
 		$, = "\t";
 		s/^(\d+)\s//;
 		$distance = $1;
-		$lpos = index $_,  $ENV{command}; $lpos = 999 if $lpos == -1;
-		$rpos = rindex $_, $ENV{command}; $rpos = 999 if $rpos == -1;
-		print $lpos, $rpos, $distance, length($_), $_;' \
-	| env startswith_threshold=$startswith_threshold endswith_threshold=$endswith_threshold distance_threshold=$distance_threshold \
-		perl -ne '
-		/(\S+)\s(\S+)\s(\S+)/;
-		if($1 > $ENV{startswith_threshold} and $2 > $ENV{endswith_threshold} and $3 > $ENV{distance_threshold}) {}
-		else { print; }
-		' \
+		$len = length;
+		$spos = index $_,  $ENV{badcmd}; $spos = 999 if $spos == -1;
+		$rpos = rindex $_, $ENV{badcmd};
+			if($rpos == -1) { $epos = 999; } else { $epos = $len - ($rpos + length($ENV{badcmd})); }
+		print $spos, $epos, $distance, $len, $_;' \
 	| perl -ne '
 		use List::Util qw/min/;
 		$, = "\t";
 		s/(\S+)\s(\S+)\s(\S+)\s//;
 		@scores = ($1, $2, $3);
-		print min(@scores), $_;' \
-	| sort -k1n -k2n \
-	| cut -d$'\t' -f3- \
+		print min(@scores), @scores, $_;' \
+	| sort -k1n -k5n \
+	| env min_suggestions=$min_suggestions startswith_threshold=$startswith_threshold endswith_threshold=$endswith_threshold distance_threshold=$distance_threshold\
+		perl -ne '
+		$, = "\t";
+		s/(\S+)\s(\S+)\s(\S+)\s(\S+)\s(\S+)\s//;
+		($score, $spos, $epos, $distance, $len) = ($1, $2, $3, $4, $5);
+		if($spos > $ENV{startswith_threshold} and $epos > $ENV{endswith_threshold} and $distance > $ENV{distance_threshold})
+		{
+			if($printed >= $ENV{min_suggestions} and $score ne $last_score) { exit; }
+		}
+		print "$_";
+		$printed++;
+		$last_score = $score;' \
 	| column \
 	  >&2
 

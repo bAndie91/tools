@@ -136,9 +136,6 @@ find_processes()
 	declare -g -a processes
 	
 	case "$mode" in
-	pid|pgid)
-		processes=("${!processes_left[@]}")
-		;;
 	cmd)
 		proclist=`ps -e o pid:1=,cmd= ww`
 		;;
@@ -149,6 +146,9 @@ find_processes()
 	
 	
 	case "$mode" in
+	pid|pgid)
+		processes=("${!processes_left[@]}")
+		;;
 	cmd|exe)
 		grep_params=()
 		for cmd in "${!processes_left[@]}"
@@ -160,6 +160,7 @@ find_processes()
 		declare -g -A ps_label=()
 		while read -r pid label
 		do
+			if [ $pid = $$ ]; then continue; fi  # except ourself
 			ps_label[$pid]=$label
 		done < <(echo "$proclist" | lines $lines)
 		

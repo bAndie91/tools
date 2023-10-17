@@ -2,9 +2,31 @@
 
 =pod
 
-TODO
+=head1 NAME
+
+rcmod - Run a given command and modify its Return Code according to the rules given by the user
+
+=head1 SYNOPSIS
+
+rcmod [<FROM>=<TO> [<FROM>=<TO> [...]]] <COMMAND> [<ARGS>]
+
+=head1 DESCRIPTION
+
+If I<COMMAND> returned with code I<FROM> then rcmod(1) returns with I<TO>.
+I<FROM> may be a comma-delimited list.
+Keyword B<any> means any return code not specified in I<FROM> parameters.
+Keyword B<same> makes the listed exit codes to be preserved.
+
+  rcmod any=0 1=13 2,3=same user-command
+
+It runs I<user-command>, then exits with status 13 if I<user-command> exited
+with 1, 2 if 2, 3 if 3, and 0 for any other return value.
+
+If I<COMMAND> was terminated by a signal, rcmod(1) exits with 128 + signal number
+like bash(1) does.
 
 =cut
+
 
 use POSIX;
 use Pod::Usage;
@@ -13,10 +35,16 @@ use Pod::Usage;
 
 while(@ARGV)
 {
-	if($ARGV[0] =~ /^(\d+|any)=(\d+)$/)
+	if(my ($from, $to) = $ARGV[0] =~ /^([\d,]+|any)=(\d+|same)$/)
 	{
-		$RCmap{$1} = $2;
 		shift @ARGV;
+		
+		for my $inner_rc (split /,/, $from)
+		{
+			my $outer_rc = $to;
+			$outer_rc = $inner_rc if $to eq 'same';
+			$RCmap{$inner_rc} = $outer_rc;
+		}
 	}
 	else
 	{
@@ -37,19 +65,11 @@ else
 }
 
 
-$status_changed = 0;
-
-for my $rc (keys %RCmap)
+if(exists $RCmap{$mystatus})
 {
-	if($rc eq $mystatus)
-	{
-		$mystatus = $RCmap{$rc};
-		$status_changed = 1;
-		last;
-	}
+	$mystatus = $RCmap{$mystatus};
 }
-
-if(not $status_changed and exists $RCmap{'any'})
+elsif(exists $RCmap{'any'})
 {
 	$mystatus = $RCmap{'any'};
 }

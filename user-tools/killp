@@ -131,7 +131,7 @@ done
 
 find_processes()
 {
-	# fill global $processes and $ps_label arrays
+	# fill global $processes and $ps_title arrays
 	
 	declare -g -a processes
 	
@@ -157,14 +157,14 @@ find_processes()
 		done
 		lines=`echo "$proclist" | cut -d' ' -f2- | rcmod 1=0 grep --line-number "${grep_opts[@]}" "${grep_params[@]}" | cut -d: -f1`
 		
-		declare -g -A ps_label=()
-		while read -r pid label
+		declare -g -A ps_title=()
+		while read -r pid title
 		do
 			if [ $pid = $$ ]; then continue; fi  # except ourself
-			ps_label[$pid]=$label
+			ps_title[$pid]=$title
 		done < <(echo "$proclist" | lines $lines)
 		
-		processes=("${!ps_label[@]}")
+		processes=("${!ps_title[@]}")
 		;;
 	esac
 }
@@ -230,7 +230,7 @@ do
 			then
 				case "$mode" in
 				cmd|exe)
-					warnx "kill: $id: ${ps_label[$proc]}"
+					warnx "kill: $id: ${ps_title[$proc]}"
 					;;
 				esac
 			fi
@@ -242,7 +242,7 @@ do
 				unset processes_left[$proc]
 				;;
 			cmd|exe)
-				warnx "$what $proc terminated: ${ps_label[$proc]}"
+				warnx "$what $proc terminated: ${ps_title[$proc]}"
 				;;
 			esac
 		fi

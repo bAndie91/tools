@@ -29,9 +29,12 @@ TOOLS ?=   2opml adr2html asterisk-log-separator awk-cut base58 base64url \
   terminaltitle timestamper set-xcursor-lock-and-run mkmagnetlink htmlentities \
   pfx2pem rdfindreport symlinks-analyze rn filterexec trackrun oded cled \
   mail-extract-addresses mail-extract-raw-headers fzf-preview w3m-render \
-  randstr rcmod killp killpgrp killcmd killexe
+  randstr rcmod killp killpgrp killcmd killexe hlcal hlncal
 
-TOOLS_TARGET_FILES = $(addprefix $(TOOLS_TARGET_DIR)/,$(TOOLS))
+SYMLINK_TOOLS = $(foreach tool,$(TOOLS),$(shell test -L $(tool) && echo $(tool)))
+NORMAL_TOOLS = $(filter-out $(SYMLINK_TOOLS),$(TOOLS))
+TOOLS_TARGET_FILES = $(addprefix $(TOOLS_TARGET_DIR)/,$(NORMAL_TOOLS))
+TOOLS_TARGET_SYMLINKS = $(addprefix $(TOOLS_TARGET_DIR)/,$(SYMLINK_TOOLS))
 
 
 
@@ -92,14 +95,20 @@ install-all: \
 .PHONY: install-all
 
 
-install-tools: $(TOOLS_TARGET_FILES)
+install-tools: $(TOOLS_TARGET_FILES) $(TOOLS_TARGET_SYMLINKS)
 .PHONY: install-tools
 
-$(TOOLS_TARGET_FILES): | $(TOOLS_TARGET_DIR)
+$(TOOLS_TARGET_FILES) $(TOOLS_TARGET_SYMLINKS): | $(TOOLS_TARGET_DIR)
 
 $(TOOLS_TARGET_FILES): $(TOOLS_TARGET_DIR)/%: %
 	install $(notdir $@) $(TOOLS_TARGET_DIR)/
 	@echo remove $@ >> uninstall.sh
+
+install-symlinks: $(TOOLS_TARGET_SYMLINKS)
+.PHONY: install-symlinks
+
+$(TOOLS_TARGET_SYMLINKS): $(TOOLS_TARGET_DIR)/%: %
+	ln -snfv $(shell readlink $<) $@
 
 
 list-tools:

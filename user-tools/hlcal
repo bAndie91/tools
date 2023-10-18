@@ -8,6 +8,52 @@ hlcal [OPTIONS] [CAL-OPTIONS]
 
 hlncal [OPTIONS] [NCAL-OPTIONS]
 
+=head1 DESCRIPTION
+
+Wrap cal(1), ncal(1) around and highlight specific days.
+
+=head1 OPTIONS
+
+=over 4
+
+=item I<DOW>=I<COLOR>
+
+=item I<DATE>=I<COLOR>
+
+=item I<START-DATE>...I<END-DATE>[,I<DOW>[,I<DOW>[,...]]]=I<COLOR>
+
+=back
+
+Where I<DOW> is a day-of-week name (3 letters),
+I<COLOR> is a space- or hyphen-delimited list of ANSI color or other
+formatting style name,
+I<DATE> (and I<START-DATE>, I<END-DATE>) is in I<[[YYYY-]MM-]DD> format,
+ie. year and month are optional,
+and lack of them interpreted as "every year" and "every month"
+respectively.
+
+In single date definition, I<DATE>, may enter an asterisk C<*> as month
+to select a given date in every month in the given year, or in every
+year if you leave out the year as well.
+Example: C<1917-*-15>
+
+In the interval definition, may add several I<DOW> days which makes only
+those days highlighted in the specified interval.
+Examples:
+C<04-01...06-30,WED> means every Wednesday in the second quarter.
+C<1...7,FRI> means the first Friday in every month.
+
+=head1 SUPPORTED ANSI COLORS AND STYLES
+
+Colors: black, red, green, yellow, blue, magenta, cyan, white, default.
+
+May be preceded by C<bright>, eg: C<bright red>.
+May be followed by C<bg> to set the background color instead of the
+foreground, eg: C<yellow-bg>.
+
+Styles: bold, faint, italic, underline,
+blink_slow, blink_rapid, inverse, conceal, crossed,
+
 =cut
 
 
@@ -59,6 +105,9 @@ my %Months = (
 	dec=>12,
 );
 my $re_months = join '|', keys %Months;
+my $re_mon = qq/(0?[1-9]|1[012]|$re_months)/;
+my $re_dom = q/(0[1-9]|[12]\d|3[01])/;
+my $re_dow = 'MON|TUE|WED|THU|FRI|SAT|SUN';
 
 
 my %ANSIcolor = (
@@ -101,6 +150,11 @@ sub ansicode
 	#return join '', map { sprintf "\x1B[%sm", $_ } @codes;
 }
 
+sub verify_color
+{
+	my $color = shift;
+	warn "$0: no ANSI code: $color\n" unless all {length} get_ansi_codes $color;
+}
 
 
 $OptNoHighlightToday = 0;
@@ -115,28 +169,44 @@ while(@ARGV)
 	my $arg = shift @ARGV;
 	
 	# TODO: get highlight parameters from config files
+	# TODO: mix dow/date/interval definitions under @Highlight list
 	
-	if(my ($date, $color) = $arg =~ /^(today|yesterday|tomorrow)=(.+)$/i)
-	{
+	$arg =~ s{(today|yesterday|tomorrow)(?=.*=)}{
+		my $date = $1;
 		$date = DateTime->now(time_zone=>'local')->strftime('%F') if $date eq 'today';
-		$date = (DateTime->now(time_zone=>'local') - DateTime::Duration->new(days=>1))->strftime('%F') if $date eq 'yesterday';
-		$date = (DateTime->now(time_zone=>'local') + DateTime::Duration->new(days=>1))->strftime('%F') if $date eq 'tomorrow';
-		$arg = "$date=$color";
-	}
+		$date = DateTime->now(time_zone=>'local')->subtract(days=>1)->strftime('%F') if $date eq 'yesterday';
+		$date = DateTime->now(time_zone=>'local')->add(days=>1)->strftime('%F') if $date eq 'tomorrow';
+		$date
+	}ige;
 	
-	if(my ($day, $color) = $arg =~ /^(MON|TUE|WED|THU|FRI|SAT|SUN)=(.+)$/i)
+	if(my ($day, $color) = $arg =~ /^($re_dow)=(.+)$/i)
 	{
 		$Highlight->{'days-of-week'}->{eval $day} = $color;
-		warn "$0: no ANSI code: $color\n" unless all {length} get_ansi_codes $color;
+		verify_color $color;
 	}
-	elsif($arg =~ /^((?'YEAR'\d\d\d\d)-|)((?'MON'\d\d?|$re_months)-|)(?'DOM'\d{1,2})=(?'COLOR'.+)$/i)
+	elsif($arg =~ /^(((?'YEAR'\d\d\d\d)-|)(?'MON'$re_mon|\*)-|)(?'DOM'$re_dom)=(?'COLOR'.+)$/i)
 	{
-		my $year = $+{'YEAR'} || 'ALL';
-		my $mon = $+{'MON'} || 'ALL';
+		my $year = $+{'YEAR'} || '*';
+		my $mon = $+{'MON'} || '*';
 		my $dom = $+{'DOM'};
 		my $color = $+{'COLOR'};
 		$mon = $Months{$mon} if exists $Months{$mon};
 		$Highlight->{'date'}->{$year}->{$mon}->{$dom} = $color;
+		verify_color $color;
+	}
+	elsif($arg =~ /^(((?'Y1'\d\d\d\d)-|)((?'M1'$re_mon)-)|)(?'D1'$re_dom)\.\.\.(?('M1')(?('Y1')((?'Y2'\d\d\d\d)-|))((?'M2'$re_mon)-|))(?'D2'$re_dom)(?'DOW'(,($re_dow))*)=(?'COLOR'.+)$/i)
+	{
+		push @{$Highlight->{'interval'}}, {
+			'start' => {'y'=>$+{'Y1'}, 'm'=>$Months{lc$+{'M1'}}||$+{'M1'}, 'd'=>$+{'D1'}},
+			'end'   => {'y'=>$+{'Y2'}, 'm'=>$Months{lc$+{'M2'}}||$+{'M2'}, 'd'=>$+{'D2'}},
+			'dow'   => [map {eval} grep {$_} split /,/, $+{'DOW'}],
+			'color' => $+{'COLOR'},
+		};
+		verify_color $+{'COLOR'};
+	}
+	elsif($arg =~ /=/)
+	{
+		pod2usage(-exitval=>2, -verbose=>99);
 	}
 	else
 	{
@@ -147,7 +217,7 @@ while(@ARGV)
 	}
 }
 
-#warn Dumper $Highlight;
+#warn Dumper $Highlight;  # DEBUG
 
 
 @cal_args = @ARGV;
@@ -238,6 +308,11 @@ while(<$pipe>)
 		}
 	}
 	
+	if(/^\s*$/)
+	{
+		$title_passed = 0;
+	}
+	
 	if($layout eq HORIZONTAL)
 	{
 		if(/\d/ and $title_passed)
@@ -261,9 +336,48 @@ while(<$pipe>)
 				my %hldow = map {$_=>$Highlight->{'days-of-week'}->{$_}} keys $Highlight->{'days-of-week'};
 				my $cur_year = $year_column[$month_column] || $year;
 				my $cur_month = $month_column[$month_column];
+				
+				for my $dow ( $week_start_on .. SUN, MON .. ($week_start_on-1) )
+				{
+					my $dom = int substr($_, $dow_bgn{$dow} + $week_start_offset + $accum_shift, $dow_end{$dow}-$dow_bgn{$dow});
+					next unless $dom;
+					my $this_date = DateTime->new(year=>$cur_year, month=>$cur_month, day=>$dom, time_zone=>'local');
+					
+					for my $ival (@{$Highlight->{'interval'}})
+					{
+						next if @{$ival->{'dow'}} and not $dow ~~ @{$ival->{'dow'}};
+						
+						my $s = $ival->{'start'};
+						my $e = $ival->{'end'};
+						
+						my $sy = $s->{'y'}||$cur_year;
+						my $sm = $s->{'m'}||$cur_month;
+						my $start = DateTime->new(year=>$sy, month=>$sm, day=>$s->{'d'}, time_zone=>'local');
+						my $end = DateTime->new(year=>$e->{'y'}||$sy, month=>$e->{'m'}||$sm, day=>$e->{'d'}, time_zone=>'local');
+						
+						if($end < $start)
+						{
+							if   (! $e->{'m'}) { $end->add(months=>1); }
+							elsif(! $e->{'y'}) { $end->add(years=>1); }
+						}
+						if($this_date < $start)
+						{
+							if   (! $s->{'m'}) { $_->subtract(months=>1) for $start, $end; }
+							elsif(! $s->{'y'}) { $_->subtract(years=>1) for $start, $end; }
+						}
+						
+						#warn $this_date->ymd, ": ", $start->ymd, "...", $end->ymd, "\n";  # DEBUG
+						
+						if($this_date >= $start and $this_date <= $end)
+						{
+							$hldow{$dow} .= " " . $ival->{'color'};
+						}
+					}
+				}
+				
 				my %dates = ();
-				$dates{$d} = $c while ($d, $c) = each %{$Highlight->{'date'}->{'ALL'}->{'ALL'}};
-				$dates{$d} = $c while ($d, $c) = each %{$Highlight->{'date'}->{'ALL'}->{$cur_month}};
+				$dates{$d} = $c while ($d, $c) = each %{$Highlight->{'date'}->{'*'}->{'*'}};
+				$dates{$d} = $c while ($d, $c) = each %{$Highlight->{'date'}->{'*'}->{$cur_month}};
 				$dates{$d} = $c while ($d, $c) = each %{$Highlight->{'date'}->{$cur_year}->{$cur_month}};
 				for my $date (keys %dates)
 				{

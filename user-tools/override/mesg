@@ -3,6 +3,7 @@
 set -e
 set -o pipefail
 
+mesg_cmd=`which -a mesg | grep -vx "$0" | head -n1`
 
 if [ -n "$STY" -a -n "$GNUSCREEN_WINDOWID" ]
 then
@@ -13,7 +14,7 @@ then
 		echo "mesg: screen tty is $pty" >&2
 	fi
 	
-	mesg "$@" < "/dev/$pty"
+	"$mesg_cmd" "$@" < "/dev/$pty"
 	
 	if [ -n "$1" ]
 	then
@@ -21,5 +22,5 @@ then
 		screen -S "$STY" -p "$GNUSCREEN_WINDOWID" -X @login $login
 	fi
 else
-	exec /usr/bin/mesg "$@"
+	exec "$mesg_cmd" "$@"
 fi

@@ -34,11 +34,30 @@ while(<>)
 }
 
 __END__
+
 =pod
 
 =head1 NAME
 
 htmlentities - Convert plain text into HTML-safe text
+
+=head1 OPTIONS
+
+=over 4
+
+=item --[no-]control
+
+escape control chars (0x00-0x1F except TAB, LF, and CR)
+
+=item --[no-]meta
+
+escape meta chars (less-than, greater-than, ampersand, double- and single-quote)
+
+=item --[no-]highbit
+
+scape non-ASCII chars
+
+=back
 
 =cut
 

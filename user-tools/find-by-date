@@ -1,5 +1,48 @@
 #!/bin/bash
 
+true <<'EOF'
+
+=pod
+
+=head1 NAME
+
+find-by-date - Find files with GNU find(1) but with easier to comprehend time interval formats
+
+=head1 SYNOPSIS
+
+find-by-date [<FROM>--][<TO>] [<FIND-ARGS>]
+
+=head1 DESCRIPTION
+
+Takes your I<FROM>--I<TO> date-time specifications and turns into the
+appropriative C<< -mmin -I<MINUTES> >> and C<< -mmin +I<MINUTES> >>
+parameters for find(1), then call find(1).
+
+=head1 SUPPORTED DATE FORMATS
+
+Recognize these date-time formats in I<FROM> and I<TO>:
+
+  YYYY-mm-dd_HH:MM
+  YYYY-mm-dd_HH
+  YYYY-mm-dd
+  YYYY-mm
+  YYYY
+       mm-dd
+          dd
+       mm-dd_HH:MM
+       mm-dd_HH
+          dd_HH:MM
+          dd_HH
+             HH:
+            _HH
+
+Enter C<< 0--I<TO> >> to select any time up to I<TO>.
+Enter C<< I<FROM>-- >> to select any time starting from I<FROM>.
+
+=cut
+
+EOF
+
 set -u
 set -e
 set -E
@@ -207,24 +250,39 @@ complete_times()
 
 if [ "$#" -lt 1 ]
 then
-	usage
+	usage >&2
+	exit -2
 fi
 
-if [[ "$1" =~ ^(.*?)--(.*)$ ]]
-then
-	from=${BASH_REMATCH[1]}
+for arg in "$@"
+do
+	if [ "$arg" = --help ]
+	then
+		usage
+		exit 0
+	fi
+done
+
+#while [ $# -gt 0 ]
+#do
+	if [[ "$1" =~ ^(.*?)--(.*)$ ]]
+	then
+		from=${BASH_REMATCH[1]}
 	till=${BASH_REMATCH[2]}
-elif [[ "$1" =~ ^(.*)$ ]]
-then
-	from=${BASH_REMATCH[1]}
-elif [[ "$1" =~ ^--(.*)$ ]]
-then
-	till=${BASH_REMATCH[1]}
-else
-	usage
-fi
-shift
+	elif [[ "$1" =~ ^(.*)--$ ]]
+	then
+		from=${BASH_REMATCH[1]}
+	elif [[ "$1" =~ ^0--(.*)$ ]]
+	then
+		till=${BASH_REMATCH[1]}
+	else
+		usage >&2
+		exit -2
+	fi
+	shift
+#done
 
+# TODO support more intervals
 
 for boundary in from till
 do

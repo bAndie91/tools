@@ -7,6 +7,20 @@
 
 url-parts - Extract specified parts from URLs given in input stream
 
+=head1 SYNOPSIS
+
+echo <URL> | url-parts <PART> [<PART> [<PART> [...]]]
+
+=head1 DESCRIPTION
+
+Supported parts:
+fragment, hostname, netloc, password, path, port, query, scheme, username,
+and query.I<NAME> for the query parameter I<NAME>,
+and query.I<NAME>.I<N> for I<N>th element of the array parameter I<NAME>.
+
+Run C<url-parts --help> for the definitive list of URL part names
+supported by the python urlparse module installed on your system.
+
 =cut
 
 """

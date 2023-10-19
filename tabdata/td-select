@@ -80,7 +80,8 @@ while($arg = shift @ARGV)
 		my $except_column = $1;
 		if(not exists $Header{$except_column})
 		{
-			warn "$0: $except_column: no such column\n" if $OptWarnBadColumnNames;
+			my $cols = join ", ", @Header;
+			warn "$0: $except_column: no such column. known columns: $cols\n" if $OptWarnBadColumnNames;
 			exit 3 if $OptFailBadNegativeColumnNames;
 		}
 		@Columns = grep {$_ ne $except_column} @Columns;
@@ -98,7 +99,8 @@ while($arg = shift @ARGV)
 		my $colname = $1;
 		if(not exists $Header{$colname})
 		{
-			warn "$0: $colname: no such column\n" if $OptWarnBadColumnNames;
+			my $cols = join ", ", @Header;
+			warn "$0: $colname: no such column. known columns: $cols\n" if $OptWarnBadColumnNames;
 			exit 3 if $OptFailBadColumnNames;
 		}
 		push @Columns, $colname;

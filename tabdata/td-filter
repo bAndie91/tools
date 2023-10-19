@@ -153,7 +153,8 @@ if(not defined $Expr)
 		my $colname = $filter->{'field'};
 		if(not exists $Header{$colname})
 		{
-			warn "$0: $colname: no such column\n" if $OptWarnBadColumnNames;
+			my $cols = join ", ", @Header;
+			warn "$0: $colname: no such column. known columns: $cols\n" if $OptWarnBadColumnNames;
 			exit 3 if $OptFailBadColumnNames;
 		}
 	}

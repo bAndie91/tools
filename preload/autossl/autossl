@@ -1,0 +1,68 @@
+#!/bin/bash
+
+help()
+{
+	echo "Usage: autossl <COMMAND> [<ARGUMENTS>]"
+	echo "Environment:"
+	echo "  AUTOSSL_BACKEND - which program to use as a upgrade-to-TLS helper. supported: openssl (default), stunnel"
+	echo "  AUTOSSL_CONVENIENCE - if set to \"off\", don't try to guess SNI servername"
+	echo "  AUTOSSL_SILENT - less diagnostical messages"
+	echo "  AUTOSSL_UPGRADE_PORTS - space-delimited list of port numbers which autossl should work on (default 80)"
+	echo "  AUTOSSL_UPGRADE_IPS - space-delimited list of IPs which autossl should work on. unset means any."
+	echo "  AUTOSSL_TLS_PORT_MAP - space-delimited list of colon-separated port number pairs denoting which port should be mapped to which one (some common ports defaulted)"
+	echo "  OPENSSL_EXTRA_ARGS - additional options passed to openssl"
+	echo "  STUNNEL_EXTRA_ARGS - additional options passed to stunnel"
+}	
+
+if [ $# = 0 ]
+then
+	help >&2
+	exit -1
+elif [ "$1" = --help ]
+then
+	help
+	exit 0
+else
+	declare -a args
+	servername=''
+	
+	if [ "$AUTOSSL_CONVENIENCE" = off ]
+	then
+		args=("$@")
+	else
+		for arg in "$@"
+		do
+			if [[ $arg =~ ^https://([^@/]*@)?([^/ :]+) ]]
+			then
+				servername=${BASH_REMATCH[2]}
+			fi
+			if [ "${arg:0:6}" = https: ]
+			then
+				arg=${arg/https:/http:}
+			fi
+			args+=("$arg")
+		done
+		
+		if [ -n "$servername" ]
+		then
+			OPENSSL_EXTRA_ARGS="$OPENSSL_EXTRA_ARGS${OPENSSL_EXTRA_ARGS:+ }-servername $servername"
+			export OPENSSL_EXTRA_ARGS
+		fi
+	fi
+	
+	if [ ! $AUTOSSL_SILENT ]
+	then
+		echo "autossl: run: ${args[@]}" >&2
+	fi
+	if [ $AUTOSSL_SILENT ]
+	then
+		OPENSSL_EXTRA_ARGS="$OPENSSL_EXTRA_ARGS${OPENSSL_EXTRA_ARGS:+ }-quiet"
+	fi
+	
+	LD_PRELOAD=/usr/lib/tool/preload/autossl.so \
+	AUTOSSL_UPGRADE_PORTS="80${AUTOSSL_UPGRADE_PORTS:+ }${AUTOSSL_UPGRADE_PORTS}" \
+	AUTOSSL_TLS_CMD=autossl-conn \
+	AUTOSSL_TLS_PORT_MAP="21:990 23:992 25:465 80:443 110:995 119:563 143:993 194:994 389:636 $AUTOSSL_TLS_PORT_MAP" \
+	AUTOSSL_ERRNO=5 \
+	exec "${args[@]}"
+fi

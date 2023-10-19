@@ -1,0 +1,43 @@
+#!/bin/bash
+
+# This script is called by autossl.so.
+# See variables in autossl.so and in autossl wrapper script's docs.
+
+diag()
+{
+	if [ ! $AUTOSSL_SILENT ]
+	then
+		echo "$@" >&2
+	fi
+}
+
+ip=$1
+plaintext_port=$2
+
+declare -A tls_ports
+for pair in $AUTOSSL_TLS_PORT_MAP
+do
+	from=${pair%%:*}
+	to=${pair##*:}
+	tls_ports[$from]=$to
+done
+unset pair from to
+
+tls_port=${tls_ports[$plaintext_port]}
+
+if [ -z $tls_port ]
+then
+	unset AUTOSSL_UPGRADE_PORTS
+	exec nc -v "$ip" "$plaintext_port"
+else
+	diag "autossl: opening TLS channel to $ip:$tls_port"
+	
+	if [ "$AUTOSSL_BACKEND" = stunnel ]
+	then
+		diag "autossl: run: stunnel -f -c -r $ip:$tls_port $STUNNEL_EXTRA_ARGS"
+		exec stunnel -f -c -r "$ip:$tls_port" $STUNNEL_EXTRA_ARGS
+	else
+		diag "autossl: run: openssl s_client -connect $ip:$tls_port $OPENSSL_EXTRA_ARGS"
+		exec /usr/local/opt/openssl_1.1.1h/bin/openssl s_client -connect "$ip:$tls_port" $OPENSSL_EXTRA_ARGS
+	fi
+fi

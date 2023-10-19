@@ -1,0 +1,117 @@
+
+=pod
+
+=head1 NAME
+
+autossl - Upgrade plain network socket to encrypted one with the help of autossl.so(3)
+
+=head1 SYNOPSIS
+
+autossl <COMMAND> [<ARGS>]
+
+=head1 DESCRIPTION
+
+Helper script to wrap any (dynamically linked) I<COMMAND> around and set up environment for
+autossl.so(3).
+LD_PRELOAD-able library autossl.so(3) intercepts connect(2) network
+connections and upgrade them to TLS.
+
+This helper script helps you use autossl.so(3) and type less when using
+it with common simple commands, like C<wget URL>.
+
+You probably use it only with simple commands anyways, which makes about
+1 or 2 connections needed to be upgraded by autossl, or only connects
+to IPs with no virtual domains (virtual domains are common at web
+servers).
+See LIMITATIONS below.
+
+As part of the convenience functions, it 
+
+=over 4
+
+=item 1
+
+replaces https URL-looking command line argument to http, letting
+autossl.so(3) intercept the plain connection and upgrade it back to
+https during the connection.
+
+=item 2
+
+finds domain names in command line arguments and passes appropriate
+C<-servername> parameter to the underlaying openssl(1SSL) command.
+
+=back
+
+Turn these convenience functions off by setting
+C<AUTOSSL_CONVENIENCE=off> in your invoking environment.
+
+May set B<OPENSSL_EXTRA_ARGS> environment to pass more parameters to
+openssl(1SSL).
+
+autossl(1) has built-in port mapping which contains I<PLAIN>:I<TLS> port
+pairs for common protocols, but you can extend it by setting
+space-delimited I<PLAIN>:I<TLS> port number pairs in
+B<AUTOSSL_TLS_PORT_MAP> environment variable.
+
+=head1 ENVIRONMENT
+
+=over 4
+
+=item AUTOSSL_BACKEND
+
+which program to use as a upgrade-to-TLS helper.
+Supported: openssl (default), stunnel.
+Note, this is not B<AUTOSSL_TLS_CMD>.
+B<AUTOSSL_TLS_CMD> is set by autossl(1) internally.
+
+=item AUTOSSL_CONVENIENCE
+
+If set to "off" it does not try to guess SNI servername.
+
+=item AUTOSSL_SILENT
+
+Less diagnostical messages
+
+=item AUTOSSL_UPGRADE_PORTS
+
+Space-delimited list of port numbers which autossl should work on (default 80)
+
+=item AUTOSSL_UPGRADE_IPS
+
+Space-delimited list of IPs which autossl should work on.
+Unset to enable autossl on all IPs.
+
+=item AUTOSSL_TLS_PORT_MAP
+
+Space-delimited list of colon-separated port number pairs denoting which port should be mapped to which one.
+Some common ports are set by default (grep AUTOSSL_TLS_PORT_MAP to see which ones).
+
+=item OPENSSL_EXTRA_ARGS
+
+Additional options passed to openssl(1SSL) if it's used
+
+=item STUNNEL_EXTRA_ARGS
+
+Additional options passed to stunnel(8) if it's used
+
+=back
+
+=head1 RATIONALE
+
+Provide encypted network communication support for softwares not speaking
+(high enough version of) SSL/TLS themself.
+
+=head1 LIMITATIONS
+
+May not work if I<COMMAND> connects to multiple services, because many
+SSL/TLS servers need to know which domain (website name) the client is
+about to connect to in order to present to right certificate for the
+domain. However autossl(1) knows only abount the IP address, not the
+domain name. This can be worked around, mostly in simple programms,
+communicating with just a few servers, by guessing the domain name from
+the command line arguments.
+This is done if AUTOSSL_CONVENIENCE is not off.
+
+=head1 SEE ALSO
+
+autossl.so(3)

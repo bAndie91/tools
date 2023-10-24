@@ -38,7 +38,7 @@ _status()
 	code=$?
 	if [ $code = 0 ]
 	then
-		pid=`cat /var/run/daemons/$daemon.pid`
+		pid=`head -n1 /var/run/daemons/$daemon.pid`
 		started=`ps o lstart='' -p $pid`
 		status="$status (running since $started)"
 	fi
@@ -110,7 +110,7 @@ restart)
 	daemon -n "$daemon" -v
 	;;
 log)
-	tail "$@" -f /syslog/daemon/daemon.$daemon/`date +%F`.log
+	tail "$@" -f /syslog/daemon/daemon.$daemon/`date +%Y%m%d`.log
 	;;
 '')
 	exit

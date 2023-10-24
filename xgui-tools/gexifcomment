@@ -1,0 +1,309 @@
+#!/usr/bin/env python
+
+import gtk
+import os
+import sys
+import pyexiv2
+import sqlite3
+import glib
+import traceback
+gtk.threads_init()
+
+
+def add_key_binding(widget, keyname, callback):
+	accelgroup = gtk.AccelGroup()
+	key, modifier = gtk.accelerator_parse(keyname)
+	accelgroup.connect_group(key, modifier, gtk.ACCEL_VISIBLE, callback)
+	widget.add_accel_group(accelgroup)
+
+class StockButton(gtk.Button):
+	def __init__(self, label=None, stock=None, use_underline=True):
+		gtk.Button.__init__(self, label, stock, use_underline)
+		if label is not None:
+			self.set_markup(label)
+	def set_markup(self, label):
+		a = self.get_children()[0]
+		a = a.get_children()[0]
+		a, lbl = a.get_children()
+		lbl.set_markup(label)
+	def set_pixbuf(self, data):
+		a = self.get_children()[0]
+		a = a.get_children()[0]
+		img, a = a.get_children()
+		if data[0] is None:
+			img.set_from_icon_name(data[1], data[2])
+		else:
+			img.set_from_pixbuf(data[0])
+		img.props.visible = True
+
+
+def load_comment(filename):
+	txtv.get_buffer().set_text(get_exif_comment(filename))
+
+def get_comment_text():
+	tb = txtv.get_buffer()
+	s, e = tb.get_start_iter(), tb.get_end_iter()
+	return tb.get_text(s, e)
+
+def save_comment():
+	txt = get_comment_text()
+	set_exif_comment(SubjectFile, txt)
+	update_index(SubjectFile, txt)
+
+def save_comment_and_exit(*a):
+	save_comment()
+	gtk.main_quit()
+
+def tag_entered(entry):
+	tagstr = entry.get_text()
+	if tagstr not in get_comment_text().split("\n"):
+		tb = txtv.get_buffer()
+		end = tb.get_end_iter()
+		lastchar = tb.get_text(tb.get_iter_at_offset(tb.get_char_count() - 1), end)
+		tb.insert(end, ("\n" if lastchar not in ["\n", ''] else '') + tagstr + "\n")
+	entry.set_text('')
+
+def db_open(dbfile):
+	dbconn = sqlite3.connect(dbfile)
+	dbconn.text_factory = str
+	dbcur = dbconn.cursor()
+	dbcur.execute("PRAGMA foreign_keys = ON")
+	return (dbconn, dbcur)
+
+def db_oper(dbfile, relpath, fname, valtext):
+	values = filter(lambda x: x.strip() != '', valtext.split('\n'))
+	(dbconn, dbcur) = db_open(dbfile)
+	try:
+		dbcur.execute("CREATE TABLE IF NOT EXISTS folder (folderid INTEGER PRIMARY KEY, relpath TEXT UNIQUE)")
+		dbcur.execute("CREATE TABLE IF NOT EXISTS tag (tagid INTEGER PRIMARY KEY, tag TEXT UNIQUE)")
+		dbcur.execute("CREATE TABLE IF NOT EXISTS comment (folder REFERENCES folder (folderid), filename TEXT, tag REFERENCES tag (tagid), UNIQUE (folder, filename, tag))")
+		
+		dbcur.execute("INSERT OR IGNORE INTO folder (relpath) VALUES (?)", [relpath])
+		dbcur.executemany("INSERT OR IGNORE INTO tag (tag) VALUES (?)", map(lambda x: [x], values))
+		
+		dbcur.execute("DELETE FROM comment WHERE folder = (SELECT folderid FROM folder WHERE relpath=?) AND filename = ? AND tag NOT IN (SELECT tagid FROM tag WHERE tag IN (" + ','.join(map(lambda x: '?', values)) + "))", [relpath, fname] + values)
+		dbcur.executemany("INSERT OR IGNORE INTO comment (folder, filename, tag) VALUES ((SELECT folderid FROM folder WHERE relpath=?), ?, (SELECT tagid FROM tag WHERE tag=?))", map(lambda x: [relpath, fname, x], values))
+		dbconn.commit()
+	except sqlite3.OperationalError, exc:
+		print "SQLite Error:", exc.message
+		dbconn.close()
+		return False
+	dbconn.close()
+	return True
+
+def update_index(key, val):
+	(dbfilepath, relpath) = find_dbfile()
+	if dbfilepath is None:
+		return False
+	name = os.path.basename(key)
+	return db_oper(dbfilepath, relpath, name, val)
+
+def find_dbfile():
+	path = os.path.realpath(os.path.dirname(SubjectFile))
+	relpath = '.'
+	while True:
+		dbfilepath = os.path.join(path, 'exifcomment.db')
+		print "checking DB in", dbfilepath
+		if os.path.exists(dbfilepath):
+			print "found DB"
+			return (dbfilepath, relpath)
+		if path == '/':
+			break
+		if relpath == '.':
+			relpath = os.path.basename(path)
+		else:
+			relpath = os.path.join(os.path.basename(path), relpath)
+		path = os.path.dirname(path)
+	print "no DB found"
+	return (None, None)
+
+def db_load_tags(store):
+	(dbfile, unused) = find_dbfile()
+	if dbfile is None: return False
+	(dbconn, dbcur) = db_open(dbfile)
+	try:
+		dbcur.execute("SELECT tag FROM tag")
+		while True:
+			tag = dbcur.fetchone()
+			if tag is None: break
+			store.append([tag[0], -1])
+	except sqlite3.OperationalError, exc:
+		print "SQLite Error:", exc.message
+		dbconn.close()
+		return False
+	dbconn.close()
+	return True
+
+def display_error(msg):
+	dlg = gtk.MessageDialog(None, gtk.DIALOG_MODAL | gtk.DIALOG_DESTROY_WITH_PARENT, gtk.MESSAGE_WARNING, gtk.BUTTONS_OK, msg)
+	dlg.run()
+	dlg.destroy()
+
+def load_thumbnail():
+	try:
+		thumbnail_loaded = False
+		metadata = pyexiv2.ImageMetadata(SubjectFile)
+		metadata.read()
+		tn = metadata.exif_thumbnail
+		if tn.data:
+			try:
+				ldr = gtk.gdk.PixbufLoader('jpeg')
+				ldr.write(tn.data)
+				ldr.close()
+				thnl.set_from_pixbuf(ldr.get_pixbuf())
+				thumbnail_loaded = True
+			except Exception, e:
+				traceback.print_exc(e)
+				display_error("Can not load thumbnail.\n"+str(e))
+			finally:
+				ldr.close()
+		if not thumbnail_loaded:
+			pb = gtk.gdk.pixbuf_new_from_file(SubjectFile)
+			w0, h0 = pb.get_width(), pb.get_height()
+			w = 200
+			h = h0 * w / w0
+			pb = pb.scale_simple(w, h, gtk.gdk.INTERP_BILINEAR)
+			thnl.set_from_pixbuf(pb)
+			thumbnail_loaded = True
+	except Exception, e:
+		traceback.print_exc(e)
+		display_error("Can not load thumbnail.\n"+str(e))
+	lbl_load_thnl.hide()
+
+def get_exif_comment(filename):
+	metadata = pyexiv2.ImageMetadata(filename)
+	metadata.read()
+	try:
+		txt = metadata.comment
+	except:
+		txt = ''
+	return txt
+
+def get_exif_tags(filename):
+	metadata = pyexiv2.ImageMetadata(filename)
+	metadata.read()
+	tags = {}
+	for key, tag in metadata.items():
+		if hasattr(tag, 'human_value'):
+			value = tag.human_value
+		elif hasattr(tag, 'values'):
+			value = '\n'.join(tag.values)
+		else:
+			value = tag.value
+		tags[key] = value
+		tags[tag.name] = value
+	return tags
+
+def set_exif_comment(filename, txt):
+	metadata = pyexiv2.ImageMetadata(filename)
+	metadata.read()
+	metadata.comment = txt
+	metadata.write()
+
+def open_externally(*X):
+	import subprocess
+	subprocess.Popen(['gpicview', SubjectFile], stdout=sys.stdout, stderr=sys.stderr)
+
+def completion_matcher(completion, userinput, treeiter, userdata):
+	column_text, column_rank = userdata[:]
+	model = completion.get_model()
+	return model[treeiter][column_text].lower().find(userinput) > -1
+
+def periodic_sorter():
+	completion = cmpl
+	model = completion.get_model()
+	userinput = entr.get_text()
+	last_userinput = completion.get_data('last-userinput')
+	if last_userinput is None or last_userinput != userinput:
+		completion.set_data('last-userinput', userinput)
+		for item in model:
+			item[column_rank] = item[column_text].lower().find(userinput)
+	# continue scheduling:
+	return True
+
+def sorter_cb(model, iter_a, iter_b, userdata):
+	column_text, column_rank = userdata[:]
+	c = cmp(model[iter_a][column_rank], model[iter_b][column_rank])
+	if c == 0:
+		c = cmp(model[iter_a][column_text].lower(), model[iter_b][column_text].lower())
+	return c
+
+def program_start(widget, event):
+	widget.disconnect(start_event_handle)
+	
+	text = ExifTags.get('DateTimeOriginal') or ExifTags.get('DateTime', '')
+	text += "\n"
+	text += os.path.splitext(SubjectFile)[0].replace('/', '\n').strip()
+	lbl_annotation.set_text(text)
+	
+	load_comment(SubjectFile)
+	db_load_tags(lst0)
+	load_thumbnail()
+
+
+
+win = gtk.Window(gtk.WINDOW_TOPLEVEL)
+win.connect('delete-event', lambda a, b: gtk.main_quit())
+win.set_default_size(400, 300)
+add_key_binding(win, 'Escape', gtk.main_quit)
+add_key_binding(win, 'F2', save_comment_and_exit)
+add_key_binding(win, '<Control>O', open_externally)
+
+box0 = gtk.VBox()
+box11 = gtk.HBox()
+box111 = gtk.VBox()
+box112 = gtk.VBox()
+box12 = gtk.HBox()
+lbl_load_thnl = gtk.Label("Loading thumbnail...")
+thnl = gtk.Image()
+lbl_annotation = gtk.Label()
+scrl = gtk.ScrolledWindow()
+txtv = gtk.TextView()
+cmpl = gtk.EntryCompletion()
+entr = gtk.Entry()
+lst0 = gtk.ListStore(str, int)
+column_text = 0
+column_rank = 1
+btn0 = StockButton("Save &amp; Close (F2)", gtk.STOCK_SAVE)
+
+box111.set_border_width(2)
+box112.set_border_width(2)
+lbl_annotation.set_selectable(True)
+scrl.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+btn0.connect('clicked', save_comment_and_exit)
+entr.connect('activate', tag_entered)
+entr.set_completion(cmpl)
+cmpl.set_match_func(completion_matcher, (column_text, column_rank))
+cmpl.set_model(lst0)
+cmpl.set_text_column(column_text)
+lst0.set_sort_column_id(column_rank, gtk.SORT_ASCENDING)
+lst0.set_sort_func(column_rank, sorter_cb, (column_text, column_rank))
+glib.timeout_add(1000, periodic_sorter)
+
+
+win.add(box0)
+box0.pack_start(box11, True, True, 0)
+box0.pack_start(box12, False, True, 0)
+box11.pack_start(box111, True, True, 0)
+box11.pack_start(box112, False, True, 0)
+box111.pack_start(scrl, True, True, 0)
+scrl.add(txtv)
+box111.pack_start(entr, False, True, 0)
+box112.pack_start(lbl_load_thnl, False, False, 0)
+box112.pack_start(thnl, False, False, 0)
+box112.pack_start(lbl_annotation, False, False, 0)
+box12.pack_start(btn0, True, False, 0)
+
+if len(sys.argv) < 2:
+	sys.stderr.write("Usage: %s <filepath>\n" % sys.argv[0])
+	sys.exit(1)
+SubjectFile = sys.argv[1]
+ExifTags = get_exif_tags(SubjectFile)
+
+start_event_handle = win.connect('map-event', program_start)
+
+
+win.show_all()
+win.set_focus(entr)
+gtk.main()
+

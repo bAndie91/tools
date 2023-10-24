@@ -38,6 +38,7 @@ fdupes-hardlink - Make hardlinks from identical files as reported by fdupes(1)
 ff - Find files horizontally, ie. a whole directory level at a time, across subtrees
 fgat - Execute command in foreground at a given time
 filterexec - Echo those arguments with which the given command returns zero.
+find-by-date - Find files with GNU find(1) but with easier to comprehend time interval formats
 findnewestfile - Search for the newest file in a given path recursively and always show the most recent while scanning
 fixRFC822filemtime - Set a file's last modification time, which contains an email message in RFC-822 format, to the email's Date
 fixlogfiledatetime - Set the target files modification time to their respective last log entry's timestamp
@@ -46,6 +47,7 @@ foreach - Run an OS or shell command on each input line, similar to xargs(1)
 g_filename_to_uri - Mimic g_filename_to_uri() GLib function creating a file:// url from path string
 gitdiff - View two files' diff by git-diff(1), even not under git version control
 header.sed - Echo the input stream up to the first empty line (usual end-of-header marker)
+hlcal - Highlight BSD cal(1) output
 htmlentities - Convert plain text into HTML-safe text
 indent2tree - Makes TAB-indented text into ascii tree chart
 inisort - Sort keys in an INI file according to the order of keys in an other INI file
@@ -53,6 +55,7 @@ is_gzip - Return 0 if the file in argument has gzip signature
 levenshtein-distance - Calculate the Levenshtein distance of given strings
 jobsel
 json2bencode - Convert JSON to Bencode (BitTorrent's loosely structured data)
+killp - Send signal to processes (kill, terminate, ...) by PID until they end
 kt - Run command in background terminal; keept(1) convenience wrapper
 levenshtein-distance - Calculate the Levenshtein distance of given strings
 lines - Output only the given lines of the input stream
@@ -62,6 +65,7 @@ logrotate-counters - Increment numbers in file names
 logto - Run a command and append its STDOUT and STDERR to a file
 lsata - List ATA devices on the system
 lsenv - List environment variables of a process
+mail-extract-raw-headers - Get named headers from RFC822-format input.
 mime_extract - Extract parts from a MIME multipart file and save them into separate files
 mkdeb - Create a Debian package (.deb)
 mkmagnetlink - Create a "magnet:" link out of a torrent file
@@ -86,6 +90,7 @@ pvalve - Control how much a given command should run by an other command's exit 
 pyzor-files - Run a pyzor(1) command on the given files
 qrwifi - Generate a string, used in WiFi-setup QR codes, containing a hotspot name and password
 randstr - Generate random string from a given set of characters and with a given length.
+rcmod - Run a given command and modify its Return Code according to the rules given by the user
 renamemanual - Interactive file rename tool
 repeat - Run a give command repeatedly
 reportcmdstatus - Textually show how the given command finished (exit status/signal)
@@ -97,7 +102,6 @@ screenreattach - Reattach to GNU/screen and import environment variables
 screens - List all GNU/Screen sessions accessible by the user and all of their inner windows as well
 set-sys-path - Set PATH according to /etc/environment and run a program
 set-xcursor-lock-and-run - Set X11 cursor to a padlock and run a command
-slay - Try to kill a process until it exists
 ssh-agent-finder - Find a working ssh agent on the system so you get the same in each of your logon sessions
 strip-ansi-seq - Dumb script removing more-or-less any ANSI escape sequences from the input stream
 subst_sudo_user - Sudo helper program

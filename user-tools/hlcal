@@ -4,6 +4,12 @@
 
 =head1 NAME
 
+hlcal - Highlight BSD cal(1) output
+
+hlncal - Highlight BSD ncal(1) output
+
+=head1 SYNOPSIS
+
 hlcal [OPTIONS] [CAL-OPTIONS]
 
 hlncal [OPTIONS] [NCAL-OPTIONS]

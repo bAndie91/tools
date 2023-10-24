@@ -25,6 +25,10 @@ with 1, 2 if 2, 3 if 3, and 0 for any other return value.
 If I<COMMAND> was terminated by a signal, rcmod(1) exits with 128 + signal number
 like bash(1) does.
 
+=head1 SEE ALSO
+
+reportcmdstatus(1), sigdispatch(1)
+
 =cut
 
 

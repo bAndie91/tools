@@ -1,0 +1,68 @@
+#!/usr/bin/env python
+
+"""
+	Simple directory chooser GUI. Useful for embedding in GUI programms.
+"""
+
+import os
+import gtk
+
+class StockButton(gtk.Button):
+	def __init__(self, label=None, stock=None, use_underline=True, icon_size=None):
+		if stock is not None and stock in gtk.stock_list_ids():
+			stock_tmp = stock
+		else:
+			stock_tmp = gtk.STOCK_ABOUT
+		super(self.__class__, self).__init__(stock=stock_tmp, use_underline=use_underline)
+		if label is not None:
+			self.set_markup(label)
+		if stock is None:
+			self.set_icon('')
+		elif stock not in gtk.stock_list_ids():
+			self.set_icon(stock)
+		if icon_size is not None:
+			self.set_icon(stock, icon_size)
+	def __get_children(self):
+		align = self.get_children()[0]
+		hbox = align.get_children()[0]
+		return hbox.get_children()
+	def set_label(self, label):
+		x, lbl = self.__get_children()
+		lbl.set_label(label)
+	def set_markup(self, label):
+		x, lbl = self.__get_children()
+		lbl.set_markup(label)
+	def set_icon(self, icon, size=gtk.ICON_SIZE_BUTTON):
+		img, x = self.__get_children()
+		if type(icon) == str:
+			if icon == '':
+				img.props.visible = False
+			else:
+				img.set_from_icon_name(icon, size)
+				img.props.visible = True
+		else:
+			img.set_from_pixbuf(icon)
+			img.props.visible = True
+
+
+dialog = gtk.FileChooserDialog("Select a Directory", None, gtk.FILE_CHOOSER_ACTION_SAVE, (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL, gtk.STOCK_OK, gtk.RESPONSE_OK))
+dialog.set_action(gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER)
+button_cwd = StockButton(label="Working Dir", stock=gtk.STOCK_JUMP_TO)
+dialog.add_action_widget(button_cwd, gtk.RESPONSE_NO)
+button_cwd.show()
+
+while True:
+	response = dialog.run()
+	if response == gtk.RESPONSE_NO:
+		dialog.set_current_folder(os.getcwd())
+		continue
+	
+	if response == gtk.RESPONSE_OK:
+		print dialog.get_filename()
+		status = 0
+	else:
+		status = 1
+	break
+
+dialog.destroy()
+exit(status)

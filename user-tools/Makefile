@@ -83,6 +83,7 @@ install-symlinks: $(TOOLS_TARGET_SYMLINKS)
 
 $(TOOLS_TARGET_SYMLINKS): $(TOOLS_TARGET_DIR)/%: %
 	ln -snfv $(shell readlink $<) $@
+	@echo remove $@ >> uninstall.sh
 
 
 list-tools:

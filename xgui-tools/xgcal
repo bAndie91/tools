@@ -1,0 +1,1116 @@
+#!/usr/bin/env python2.7
+# -*- coding: utf-8 -*-
+
+import os
+import sys
+import signal
+import gtk
+import gobject
+import glib
+import pango
+import gettext
+import re
+import time
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
+import dbus
+import dbus.service
+import dbus.glib
+import gio
+import threading
+import setproctitle
+import subprocess
+import traceback
+import pytz
+
+
+PROGNAME = 'xgcal'
+APPNAME = 'hu.uucp.%s' % (PROGNAME,)
+TASKBAR_HEIGHT = 32
+PMU_CLOCK = "<span size='32000'><b>"
+PMU_CLOCK_END = "</b></span>"
+PMU_CLOCK_OTHERTZ = "<span size='32000' color='blue'><b>"
+PMU_CLOCK_OTHERTZ_END = "</b></span>"
+PMU_TIMEZONE = "<span color='blue'>"
+PMU_TIMEZONE_END = "</span>"
+PMU_SOLARCLOCK = "<span size='24000'>"
+PMU_SOLARCLOCK_END = "</span>"
+SUNCLOCK_WINDOW_BOTTOM_MARGIN = 15  # bottom margin (status bar of Sunclock app) is constant this many pixels tall
+
+
+def add_key_binding(widget, keyname, callback):
+	accelgroup = gtk.AccelGroup()
+	key, modifier = gtk.accelerator_parse(keyname)
+	accelgroup.connect_group(key, modifier, gtk.ACCEL_VISIBLE, callback)
+	widget.add_accel_group(accelgroup)
+
+def display_error(e):
+	if threading.currentThread().name != 'MainThread':
+		gtk.threads_enter()
+	text = None
+	if isinstance(e, OSError) or isinstance(e, IOError):
+		text = '%s (#%d)\n%s' % (e.strerror, e.errno, e.filename)
+	elif isinstance(e, Exception):
+		text = e.message
+	elif type(e) == type([]):
+		text = ''.join(e)
+	if text is None:
+		text = str(e)
+	dlg = gtk.MessageDialog(None, gtk.DIALOG_MODAL | gtk.DIALOG_DESTROY_WITH_PARENT, gtk.MESSAGE_ERROR, gtk.BUTTONS_OK, text)
+	dlg.set_title(_("Error"))
+	dlg.run()
+	dlg.destroy()
+	if threading.currentThread().name != 'MainThread':
+		gtk.threads_leave()
+
+class DialogCancel(Exception):
+	pass
+
+def question(msg, yes=None, parent=None, cancelable=False, default=gtk.RESPONSE_YES):
+	dlg = gtk.MessageDialog(parent, gtk.DIALOG_MODAL | gtk.DIALOG_DESTROY_WITH_PARENT, gtk.MESSAGE_QUESTION, gtk.BUTTONS_NONE)
+	dlg.set_markup(msg)
+	dlg.set_title(_("Question"))
+	if yes is None:
+		dlg.add_buttons(gtk.STOCK_YES, gtk.RESPONSE_YES)
+	else:
+		if type(yes) in [type(()), type([])]:
+			btn_yes = StockButton(label=yes[0], stock=yes[1])
+			dlg.add_action_widget(btn_yes, gtk.RESPONSE_YES)
+			btn_yes.show()
+		else:
+			dlg.add_buttons(yes, gtk.RESPONSE_YES)
+	dlg.add_buttons(gtk.STOCK_NO, gtk.RESPONSE_NO)
+	if cancelable:
+		dlg.add_buttons(gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL)
+		add_key_binding(dlg, 'Escape', lambda a,b,c,d: dlg.response(gtk.RESPONSE_CANCEL) or True)
+	dlg.set_default_response(default)
+	resp = dlg.run()
+	dlg.destroy()
+	if resp == gtk.RESPONSE_CANCEL:
+		raise DialogCancel()
+	return (resp == gtk.RESPONSE_YES)
+
+def set_dialog_icon_name(dlg, icon):
+	img = dlg.get_content_area().children()[0].children()[0]
+	img.set_from_icon_name(icon, gtk.ICON_SIZE_DIALOG)
+
+
+def act_button(func):
+	if type(func) != type(()):
+		func = (func,)
+	if func[0] is not None:
+		func[0](*func[1:])
+
+def on_click_button(btn, func):
+	act_button(func)
+	return False
+
+class StockButton(gtk.Button):
+	def __init__(self, label=None, stock=None, use_underline=True, icon_size=None, tooltip=None):
+		if stock is not None and stock in gtk.stock_list_ids():
+			stock_tmp = stock
+		else:
+			stock_tmp = gtk.STOCK_ABOUT
+		super(self.__class__, self).__init__(stock=stock_tmp, use_underline=use_underline)
+		if label is not None:
+			self.set_markup(label)
+		if stock is None:
+			self.set_icon('')
+		elif stock not in gtk.stock_list_ids():
+			self.set_icon(stock)
+		if icon_size is not None:
+			self.set_icon(stock, icon_size)
+		if tooltip is not None:
+			self.set_tooltip_text(tooltip)
+	def __get_children(self):
+		align = self.get_children()[0]
+		hbox = align.get_children()[0]
+		return hbox.get_children()
+	def set_label(self, label):
+		x, lbl = self.__get_children()
+		lbl.set_label(label)
+	def set_markup(self, label):
+		x, lbl = self.__get_children()
+		lbl.set_markup(label)
+	def set_icon(self, icon, size=gtk.ICON_SIZE_BUTTON):
+		img, x = self.__get_children()
+		if type(icon) == str:
+			if icon == '':
+				img.props.visible = False
+			else:
+				img.set_from_icon_name(icon, size)
+				img.props.visible = True
+		else:
+			img.set_from_pixbuf(icon)
+			img.props.visible = True
+
+class StockToolButton(gtk.ToolButton):
+	def __init__(self, label=None, stock=None, tooltip=None):
+		super(self.__class__, self).__init__()
+		if stock is not None:
+			if stock in gtk.stock_list_ids():
+				if stock is not None: self.set_stock_id(stock)
+			else:
+				self.set_icon_name(stock)
+		if label is not None:
+			self.set_label(label)
+		if tooltip is not None:
+			self.set_tooltip_text(tooltip)
+	def set_pixbuf(self, pxb):
+		a = self.get_children()[0]
+		a = a.get_children()[0]
+		img, a = a.get_children()
+		img.set_from_pixbuf(pxb)
+		img.props.visible = True
+	def __get_children(self):
+		align = self.get_children()[0]
+		hbox = align.get_children()[0]
+		return hbox.get_children()
+	def set_markup(self, markup):
+		x, lbl = self.__get_children()
+		lbl.set_markup(markup)
+
+class StockMenuItem(gtk.ImageMenuItem):
+	def __init__(self, label=None, stock_id=None, accel_group=None):
+		gtk.ImageMenuItem.__init__(self, stock_id, accel_group)
+		if label is not None:
+			self.set_label(label)
+
+class Calendar(gtk.Calendar):
+	from datetime import datetime
+	from dateutil.relativedelta import relativedelta
+	__gsignals__ = {
+		'marks-changed': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, ()),
+		'mark-added': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, (str,)),
+		'mark-removed': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, (str,)),
+		'date-selected': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, ()),
+		'date-unselected': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, ()),
+	}
+	date_format = '%04d-%02d-%02d'
+	def __init__(self):
+		self._marks = {}
+		self.selected_date = (0, 0, 0)
+		super(self.__class__, self).__init__()
+		self.set_display_options(self.get_display_options() | gtk.CALENDAR_WEEK_START_MONDAY)
+		# create popup menu
+		self.popup_menu = gtk.Menu()
+		mi = gtk.ImageMenuItem(stock_id=gtk.STOCK_JUMP_TO)
+		mi.set_label("Go Today")
+		mi.connect('activate', self.gotoday)
+		self.popup_menu.append(mi)
+		self.popup_menu.show_all()
+		# set initial state
+		self.connect('key-press-event', self.on_key_press)
+		self.connect('key-release-event', self.on_key_press_release)
+		self._block_keypress_release_event = False
+		self.connect('button-press-event', self.on_mouse_click)
+		self.connect('button-release-event', self.on_mouse_clicked)
+		self.connect('day-selected', self.on_selected_day)
+		self._block_day_selected_event = False
+		self.connect('day-selected-double-click', self.on_mark)
+		self.connect('month-changed', self.on_paging)
+		self.gotoday()
+	def on_selected_day(self, *X):
+		if self._block_day_selected_event: return
+		if self.date[2] != 0:
+			if self.selected_date != self.date:
+				self.selected_date = self.date
+				self.emit('date-selected')
+	def act_unselect_day(self):
+		self.selected_date = (0, 0, 0)
+		self.emit('date-unselected')
+	def on_mouse_click(self, widget, event):
+		if event.button == 3:
+			self.popup_menu.popup(None, None, None, event.button, event.time)
+			return True  # eat the event
+	def on_mouse_clicked(self, widget, event):
+		if self.date[2] != 0:
+			if event.button == 1 and event.state & gtk.gdk.SHIFT_MASK != 0:
+				self.select_day(0)
+				self.act_unselect_date()
+	def on_key_press(self, widget, event):
+		# suppress day-selected event to handle it separately in on_key_press_release()
+		self._block_day_selected_event = True
+	def on_key_press_release(self, widget, event):
+		if self._block_keypress_release_event: return
+		self._block_day_selected_event = False
+		c_year, c_month, c_day = self.date
+		if event.keyval == gtk.gdk.keyval_from_name('space'):
+			if c_day == self.selected_date[2]:
+				self.select_day(0)
+				self.act_unselect_day()
+			else:
+				self.on_selected_day()
+		elif event.keyval in [gtk.gdk.keyval_from_name('Enter'), gtk.gdk.keyval_from_name('Return')]:
+			s_year, s_month, s_day = self.selected_date[:]
+			space_key_event = event.copy()
+			space_key_event.keyval = int(gtk.gdk.keyval_from_name('space'))
+			self._block_keypress_release_event = True
+			self.emit('key-press-event', space_key_event)
+			self.emit('key-release-event', space_key_event)
+			self._block_keypress_release_event = False
+			m_year, m_month, m_day = self.date
+			if m_day == 0:
+				m_year, m_month, m_day = s_year, s_month, s_day
+			self.do_mark(m_year, m_month, m_day)
+			self.selected_date = (s_year, s_month, s_day)
+			self.on_paging()
+		elif event.keyval == gtk.gdk.keyval_from_name('Page_Up'):
+			date = self.datetime.strptime('%d-%d'%(c_year,c_month), '%Y-%m') + self.relativedelta(months=-1)
+			self.select_month(date.month - 1, date.year)
+		elif event.keyval == gtk.gdk.keyval_from_name('Page_Down'):
+			date = self.datetime.strptime('%d-%d'%(c_year,c_month), '%Y-%m') + self.relativedelta(months=+1)
+			self.select_month(date.month - 1, date.year)
+	def gotoday(self, *X):
+		now = time.localtime()
+		self.select_month(now.tm_mon - 1, now.tm_year)
+		self.select_day(now.tm_mday)
+		self.on_paging()
+	@property
+	def date(self):
+		y, m, d = super(self.__class__, self).get_date()
+		return y, m+1, d
+	def set_marks(self, marks):
+		self._marks = {}
+		for mark in marks:
+			self._marks[tuple(map(int, mark.split('-')))] = True
+		self.on_paging()
+	def get_marks(self):
+		response = []
+		for year, month, day in self._marks.keys():
+			response.append(date_format % (year, month, day))
+		return response
+	def on_mark(self, *X):
+		c_year, c_month, c_day = self.date
+		self.do_mark(c_year, c_month, c_day)
+	def do_mark(self, c_year, c_month, c_day):
+		was_marked = False
+		for year, month, day in self._marks.keys():
+			if year == c_year and month == c_month and c_day == day:
+				was_marked = True
+				del self._marks[(year, month, day)]
+		if was_marked:
+			self.emit('mark-removed', self.date_format % (c_year, c_month, c_day))
+		else:
+			self._marks[(c_year, c_month, c_day)] = True
+			self.emit('mark-added', self.date_format % (c_year, c_month, c_day))
+		self.on_paging()
+		self.emit('marks-changed')
+	def on_paging(self, *X):
+		self.clear_marks()
+		self.select_day(0)
+		c_year, c_month, c_day = self.date
+		for year, month, day in self._marks:
+			if (year == 0 or year == c_year) and month == c_month:
+				super(self.__class__, self).mark_day(day)
+		if c_year == self.selected_date[0] and c_month == self.selected_date[1]:
+			self.select_day(self.selected_date[2])
+
+class EventImage(gtk.EventBox):
+	def __init__(self):
+		super(self.__class__, self).__init__()
+		self.image = gtk.Image()
+		self.add(self.image)
+	def clear(self):
+		return self.image.clear()
+	def set_from_pixbuf(self, *args):
+		return self.image.set_from_pixbuf(*args)
+	def set_from_file(self, *args):
+		return self.image.set_from_file(*args)
+	def set_from_file_at_size(self, path, w, h):
+		pixbuf = gtk.gdk.pixbuf_new_from_file_at_size(path, w, h)
+		self.image.set_from_pixbuf(pixbuf)
+	def set_size_request(self, *args):
+		return self.image.set_size_request(*args)
+	@property
+	def size(self):
+		pb = self.image.get_pixbuf()
+		return pb.get_width(), pb.get_height()
+	@property
+	def width(self):
+		return self.size[0]
+	@property
+	def height(self):
+		return self.size[1]
+
+
+
+## OS functions
+
+def stderr(s):
+	sys.stderr.write(s)
+
+def run_managed(cmd, args):
+	pid = os.fork()
+	if pid == 0:
+		args = args[:]
+		args.insert(0, os.path.basename(cmd))
+		try:
+			os.execvp(cmd, args)
+		except OSError:
+			pass
+		os._exit(127)
+	else:
+		return pid
+
+def run_detached(cmd, args):
+	args = args[:]
+	args.insert(0, os.path.basename(cmd))
+	pid1 = os.fork()
+	if pid1 == 0:
+		os.closerange(0, 255)
+		pid2 = os.fork()
+		if pid2 == 0:
+			try:
+				os.execvp(cmd, args)
+			except OSError:
+				pass
+			os._exit(127)
+		else:
+			os._exit(0)
+	else:
+		os.waitpid(pid1, 0)
+
+def mkdir_recursively(path):
+	parent = os.path.dirname(path)
+	if not os.path.exists(parent):
+		mkdir_recursively(parent)
+	if not os.path.exists(path):
+		os.mkdir(path)
+
+def pidexists(pid):
+	try:
+		os.kill(pid, 0)
+	except OSError as e:
+		if e.errno == os.errno.ESRCH:
+			return False
+		else:
+			return None
+	return True
+
+
+
+def elhelyez(widget, rect):
+	w = rect.width
+	h = rect.height
+	W, H = widget.get_screen().get_root_window().get_size()
+	widget.move(W - w, H - h - TASKBAR_HEIGHT)
+
+def win_main_show():
+	win_main.connect('size-allocate', elhelyez)
+	load_timezones()
+
+def load_timezones():
+	for tz in pytz.all_timezones:
+		timezone_store.append([tz, 0])
+
+def act_main_toggle(*X):
+	if win_main.get_visible():
+		win_main.hide()
+	else:
+		win_main.show()
+
+def act_main_hide(*X):
+	win_main.hide()
+
+def act_quit():
+	while RuntimeData.get('save_config_timer') is not None:
+		glib.source_remove(RuntimeData.get('save_config_timer'))
+		save_config()
+	RuntimeData['sunclock_thread'].stop()
+	gtk.main_quit()
+	return False
+
+
+def event_masked(event):
+	return any(event.state & getattr(gtk.gdk, mask+'_MASK') for mask in ['CONTROL','SHIFT','MOD4','MOD5','META'])
+
+def main_thread_alive():
+	alive = None
+	for thr in threading.enumerate():
+		if thr.name == 'MainThread':
+			alive = thr.is_alive()
+			break
+	return alive
+
+class xgCalService(dbus.service.Object):
+	def __init__(self, win_main):
+		self.win = win_main
+		bus_name = dbus.service.BusName(APPNAME, bus = dbus.SessionBus())
+		dbus.service.Object.__init__(self, bus_name, '/'+APPNAME.replace('.', '/'))
+	@dbus.service.method(dbus_interface = APPNAME)
+	def terminate(self):
+		act_quit()
+	@dbus.service.method(dbus_interface = APPNAME)
+	def toggle(self):
+		act_main_toggle()
+
+## Private routines
+
+
+def on_calendar_day_selected(*X):
+	if box_solartime.get_visible():
+		show_solartime_panel_delayed()
+		on_coordinates_changed()
+	update_date_info()
+
+def on_coordinates_changed(*X):
+	update_solartime()
+	update_celestial_info(when=selected_date_timestamp())
+	if box_timezone.get_visible():
+		set_timezone_by_coordinates()
+
+def selected_date_timestamp():
+	y, m, d = cal0.selected_date
+	now = time.localtime()
+	if (y, m, d) == (now.tm_year, now.tm_mon, now.tm_mday):
+		isDST = now.tm_isdst
+	else:
+		then_noon = time.localtime(time.mktime((y, m, d, 12, 0, 0, -1, -1, -1)))
+		isDST = then_noon.tm_isdst
+	return time.mktime((y, m, d, now.tm_hour, now.tm_min, now.tm_sec, -1, -1, isDST))
+	
+def selected_date():
+	return time.localtime(selected_date_timestamp())
+
+def update_date_info():
+	dt = selected_date()
+	
+	dayOfYear = time.strftime('%j', dt)
+	dayOfYear = re.sub(r'^0*', '', dayOfYear)
+	week = time.strftime('%W', dt)
+	isoweek = time.strftime('%V', dt)
+	if isoweek != week:
+		isoweek_str = ' (ISO %s)' % isoweek
+	else:
+		isoweek_str = ''
+	
+	with os.popen('hodie -v -d ymd %04d-%02d-%02d' % (dt[0], dt[1], dt[2])) as pipe:
+		hodie = pipe.readline()
+		hodie = re.sub(r'^Hodie ', '', hodie)
+		hodie = re.sub(r'est$', '', hodie)
+		hodie = hodie.replace('\n', '')
+	label_info.set_label(_("DoY %s, Week %s%s, %s") % (dayOfYear, week, isoweek_str, hodie))
+
+def configfilename(option):
+	return os.path.expanduser(os.path.join('~', '.config', 'xgcal', option))
+
+def save_config_queue():
+	if all(option.get('saved') == option['getter']() for option in Config.itervalues()):
+		return
+	if RuntimeData.get('save_config_timer') is not None:
+		return
+	RuntimeData['save_config_timer'] = glib.timeout_add(2000, save_config, priority=glib.PRIORITY_DEFAULT_IDLE)
+
+def save_config():
+	RuntimeData['save_config_timer'] = None
+	for option_name, option in Config.iteritems():
+		saved = option.get('saved')
+		current = option['getter']()
+		if saved != current:
+			filename = configfilename(option_name)
+			mkdir_recursively(os.path.dirname(filename))
+			with open(filename, "w") as f:
+				f.write(str(current))
+			option['saved'] = current
+	return False
+
+def update_clock_continous(clock_label):
+	if os.environ.get('TZ') is None:
+		tztext = ' '
+		pmu_clock = PMU_CLOCK
+		pmu_clock_end = PMU_CLOCK_END
+	else:
+		tztext = time.strftime('%z (%Z)')
+		pmu_clock = PMU_CLOCK_OTHERTZ
+		pmu_clock_end = PMU_CLOCK_OTHERTZ_END
+	now = time.time()
+	s = time.strftime("%H:%M:%S", time.localtime(now))
+	clock_label.set_markup(pmu_clock + s + pmu_clock_end + '\n' + PMU_TIMEZONE + tztext + PMU_TIMEZONE_END)
+	
+	nextsecond = 1 - (now - int(now))
+	glib.timeout_add(int(nextsecond * 1000), update_clock_continous, clock_label, priority=glib.PRIORITY_DEFAULT_IDLE)
+	return False
+
+def update_solartime_continous():
+	if box_solartime.get_visible():
+		now = time.time()
+		update_solartime()
+		glib.timeout_add(60 * 1000, update_solartime_continous, priority=glib.PRIORITY_DEFAULT_IDLE)
+	return False
+
+def update_solartime(*X):
+	lon = box_longitude.signed_value
+	save_config_queue()
+	os.putenv('DATETIME_UTC', time.strftime('%F %T', time.gmtime(selected_date_timestamp())))
+	with os.popen('solartime %s "%%a %%H:%%M"' % (lon)) as pipe:
+		s = pipe.readline()
+		s = s.replace('\n', '')
+	label_solartime.set_markup("%s☼ %s%s" % (PMU_SOLARCLOCK, s, PMU_SOLARCLOCK_END))
+
+def toggle_solartime(btn):
+	if box_solartime.get_visible():
+		box_coordinates.hide()
+		box_solartime.hide()
+		RuntimeData['sunclock_thread'].stop()
+		sunclock_image.clear()
+	else:
+		if box_timezone.get_visible():
+			btn_timezone.set_active(False)
+		show_solartime_panel()
+		on_coordinates_changed()
+
+def show_solartime_panel_delayed():
+	if RuntimeData.get('show_solartime_panel_timer') is None:
+		sunclock_image.clear()
+		RuntimeData['show_solartime_panel_timer'] = glib.timeout_add(1500, show_solartime_panel, priority=glib.PRIORITY_DEFAULT_IDLE)
+
+def show_solartime_panel():
+	if RuntimeData.get('show_solartime_panel_timer') is not None:
+		glib.source_remove(RuntimeData.get('show_solartime_panel_timer'))
+		RuntimeData['show_solartime_panel_timer'] = None
+	try:
+		box_coordinates.show()
+		box_solartime.show()
+		update_solartime_continous()
+		
+		RuntimeData['sunclock_thread'].stop()
+		gtksocket = RuntimeData['sunclock_thread'].gtksocket
+		del RuntimeData['sunclock_thread']
+		RuntimeData['sunclock_thread'] = SunclockThread(gtksocket)
+		RuntimeData['sunclock_thread'].start_longitude = box_longitude.signed_value
+		RuntimeData['sunclock_thread'].start_jumpseconds = selected_date_timestamp() - time.time()
+		win_main_width = win_main.get_size()[0]
+		RuntimeData['sunclock_thread'].sunclock_geometry = (win_main_width, int(win_main_width/2)+SUNCLOCK_WINDOW_BOTTOM_MARGIN)
+		RuntimeData['sunclock_thread'].start()
+	except:
+		traceback.print_exc()
+	# clear glib timer by returning False:
+	RuntimeData['show_solartime_panel_timer'] = None
+	return False
+
+def get_current_timezone_offset_minutes():
+	tz = time.strftime('%z')
+	return int('%s%s' % (tz[0], int(tz[1:3])*60 + int(tz[3:5])))
+
+def update_celestial_info(when=None):
+	if when is None:
+		when = time.time()
+	
+	with os.popen("pom %s" % (time.strftime('%Y%m%d%H', time.localtime(when)),)) as pipe:
+		moon_phase = pipe.readline()
+		moon_phase = re.sub(r'^.*The Moon (is|was|will be) ', '', moon_phase)
+	
+	tzmin = get_current_timezone_offset_minutes()
+	# ISO-6709:1983-co-ordinate
+	coords = '%+06.2f%+07.2f' % (float(box_latitude.signed_value), float(box_longitude.signed_value))
+	proc = subprocess.Popen(['gcal','-c','-H','no','--suppress-date-part','--resource-file=/dev/null',
+		'--text-variable=$C=%s:$T=%s' % (coords,tzmin),
+		'--here=$c=$C,$T',
+		'--here=0 sunrise: (%o6$c ) %o3$c',
+		'--here=0 sunset: %s3$c  (%s6$c )',
+		'--here=0 noon: %o1$c',
+		'--here=0 moonrise: %(5$c',
+		'--here=0 moonset: %)5$c',
+		'%%%s' % time.strftime('%Y%m%d', time.localtime(when))], stdout=subprocess.PIPE, stdin=subprocess.PIPE)
+	stdout, Xstderr = proc.communicate()
+	del proc
+	moon_info = []
+	sun_info = []
+	for line in stdout.split('\n')[3:]:
+		line = re.sub(r'(\d\d):(\d\d)', '\\1<sup>\\2</sup>', line)
+		if re.search(r'^(moon)', line):
+			moon_info.append(line)
+		else:
+			sun_info.append(line)
+	
+	label_celestial.set_markup('☼ ' + ' '.join(sun_info) +
+		' ☾ ' + ' '.join(moon_info) +
+		' ☾ ' + glib.markup_escape_text(moon_phase))
+
+def sunclock_elhelyez(box, box_allocation):
+	if not box.get_data('size-allocate-signal-enable'):
+		return
+	sunclock_xid = box.get_data('sunclock-xid')
+	#print box_allocation, sunclock_xid
+	if sunclock_xid:
+		#box_allocation = box.get_allocation()
+		#sunclock_win = gtk.gdk.window_foreign_new(sunclock_xid)
+		#main_win_pos_x, main_win_pos_y = win_main.get_position()
+		#sunclock_win.move(main_win_pos_x + box_allocation.x, main_win_pos_y + box_allocation.y)
+		box.set_data('size-allocate-signal-enable', False)
+		sunclock_socket.add_id(sunclock_xid)
+
+class SunclockThread(threading.Thread):
+	def __init__(self, gtksocket):
+		threading.Thread.__init__(self)
+		self.pid = None
+		self.gtksocket = gtksocket
+	def stop(self):
+		if self.pid is not None:
+			try:
+				os.kill(self.pid, signal.SIGTERM)
+			except OSError:
+				pass
+		self.pid = None
+	def run(self):
+		geom = "%dx%d" % self.sunclock_geometry[:]
+		self.pid = run_managed('sunclock', ['-clock', '-clockimage', 'vmf/landwater.vmf', '-clockgeom', geom, '-shading', '2', '-nomoon', '-nosun', '-citymode', '0', '-position', '0 %f' % self.start_longitude, '-dateformat', '', '-jump', '%ds' % self.start_jumpseconds])
+		xid = None
+		while xid is None and pidexists(self.pid):
+			time.sleep(0.2)
+			gtk.threads_enter()
+			xid = get_wid_by_class('sunclock')
+			gtk.threads_leave()
+		while xid is not None and self.pid is not None and pidexists(self.pid):
+			gtk.threads_enter()
+			if sunclock_socket.window.get_children():
+				gtk.threads_leave()
+				time.sleep(0.5)
+				continue
+			try:
+				if sunclock_socket.get_parent() is None:
+					box_sunclock.pack_start(sunclock_socket, 0, 1)
+					sunclock_socket.show()
+				sunclock_socket.set_data('sunclock-xid', xid)
+				sunclock_socket.set_data('size-allocate-signal-enable', True)
+				sunclock_win = gtk.gdk.window_foreign_new(xid)
+				w, h = sunclock_win.get_size()
+				h -= SUNCLOCK_WINDOW_BOTTOM_MARGIN
+				sunclock_socket.set_size_request(w, h)
+				sunclock_win.reparent(sunclock_socket.window, 0, 0)
+			finally:
+				gtk.threads_leave()
+
+def on_sunclock_embedded(gtksocket):
+	# give some time to sunclock to paint itself
+	glib.timeout_add(150, screenshot_sunclock, priority=glib.PRIORITY_DEFAULT_IDLE)
+
+def screenshot_sunclock():
+	xid = sunclock_socket.get_data('sunclock-xid')
+	if xid is not None:
+		sunclock_win = gtk.gdk.window_foreign_new(xid)
+		if sunclock_win is not None:
+			w, h = sunclock_socket.get_size_request()
+			#h -= SUNCLOCK_WINDOW_BOTTOM_MARGIN
+			pixbuf = gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB, False, 8, w, h)
+			screenshot = pixbuf.get_from_drawable(sunclock_win, sunclock_win.get_colormap(), 0, 0, 0, 0, w, h)
+			for pixel in tuple(screenshot.get_pixels_array()[0][-1]), tuple(screenshot.get_pixels_array()[-1][-1]):
+				if pixel == (0, 0, 0) or pixel == (255, 255, 255):
+					# last pixel should not be black, it must be a wrong image;
+					# reschedule this function timer:
+					return True
+			sunclock_image.set_from_pixbuf(screenshot)
+			sunclock_image.set_size_request(w, h)
+			sunclock_socket.hide()
+			sunclock_image.show()
+			RuntimeData['sunclock_thread'].stop()
+	return False
+
+def get_world_map_coordinates(image, x, y):
+	lon_min = -180
+	lon_max = 180
+	lat_min = 90
+	lat_max = -90
+	w, h = image.size
+	lon = (x * (lon_max-lon_min) / w) + lon_min
+	lat = (y * (lat_max-lat_min) / h) + lat_min
+	return lon, lat
+
+def on_sunclock_click(widget, event):
+	if event.button == 1:
+		lon, lat = get_world_map_coordinates(widget, event.x, event.y)
+		box_longitude.signed_value = lon
+		box_latitude.signed_value = lat
+
+def get_wid_by_class(wmclass):
+	root = gtk.gdk.get_default_root_window()
+	for xid in root.property_get('_NET_CLIENT_LIST')[2]:
+		w = gtk.gdk.window_foreign_new(xid)
+		if w:
+			wm_class = w.property_get('WM_CLASS')
+			if wm_class is not None:
+				thisclass = wm_class[2].split('\x00')[0]
+				if thisclass == wmclass:
+					return xid
+	return None
+
+
+
+class CoordinateInput(gtk.HBox):
+	HEMISPHERE_WEST, HEMISPHERE_EAST, HEMISPHERE_SOUTH, HEMISPHERE_NORTH = range(4)
+	__gsignals__ = {
+		'changed': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, ()),
+	}
+	def __init__(self, LONGITUDE=False, LATITUDE=False):
+		assert (LONGITUDE or LATITUDE) and not (LONGITUDE and LATITUDE)
+		self.is_latitude = LATITUDE
+		self.is_longitude = LONGITUDE
+		
+		super(self.__class__, self).__init__()
+		label_pre = gtk.Label(_("Longitude") if LONGITUDE else _("Latitude"))
+		label_pre.set_alignment(0.0, 0.5)
+		
+		if LONGITUDE:
+			degree_max = 180.0
+		else:
+			degree_max = 90.0
+		self.adjuster = gtk.Adjustment(value=degree_max/2, lower=0.0, upper=degree_max, step_incr=1.00, page_incr=10.0)
+		self.spinner = gtk.SpinButton(self.adjuster, digits=2)
+		self.spinner.set_wrap(False)
+		self.spinner.connect('output', self.on_change)
+		
+		label_post = gtk.Label(_("°"))
+		self.btn_hemisphere = gtk.Button()
+		self.btn_hemisphere.connect('clicked', self.switch_hemisphere)
+		self.set_hemisphere(self.HEMISPHERE_EAST if LONGITUDE else self.HEMISPHERE_NORTH)
+		
+		self.pack_start(label_pre, 1, 1)
+		self.pack_start(self.spinner, 0, 1)
+		self.pack_start(label_post, 0, 0)
+		self.pack_start(self.btn_hemisphere, 0, 1)
+	def set_hemisphere(self, hemisphere):
+		assert (self.is_longitude and hemisphere in (self.HEMISPHERE_WEST, self.HEMISPHERE_EAST)) or (self.is_latitude and hemisphere in (self.HEMISPHERE_SOUTH, self.HEMISPHERE_NORTH))
+		label = {self.HEMISPHERE_WEST:_("West"), self.HEMISPHERE_EAST:_("East"), self.HEMISPHERE_SOUTH:_("South"), self.HEMISPHERE_NORTH:_("North")}
+		self.btn_hemisphere.set_label(label[hemisphere])
+		self.btn_hemisphere.set_data('hemisphere', hemisphere)
+		if hemisphere in (self.HEMISPHERE_WEST, self.HEMISPHERE_SOUTH):
+			self.adjuster.set_page_increment(-abs(self.adjuster.get_page_increment()))
+			self.adjuster.set_step_increment(-abs(self.adjuster.get_step_increment()))
+		else:
+			self.adjuster.set_page_increment(abs(self.adjuster.get_page_increment()))
+			self.adjuster.set_step_increment(abs(self.adjuster.get_step_increment()))
+	def switch_hemisphere(self, *X):
+		hemisphere = self.btn_hemisphere.get_data('hemisphere')
+		if hemisphere == self.HEMISPHERE_EAST: hemisphere = self.HEMISPHERE_WEST
+		elif hemisphere == self.HEMISPHERE_WEST: hemisphere = self.HEMISPHERE_EAST
+		if hemisphere == self.HEMISPHERE_NORTH: hemisphere = self.HEMISPHERE_SOUTH
+		elif hemisphere == self.HEMISPHERE_SOUTH: hemisphere = self.HEMISPHERE_NORTH
+		self.set_hemisphere(hemisphere)
+		self.emit('changed')
+	def on_change(self, *X):
+		if self.spinner.get_value() in [0.0, 180.0]:
+			self.switch_hemisphere()
+		else:
+			self.emit('changed')
+	@property
+	def signed_value(self):
+		x = self.spinner.get_value()
+		if self.btn_hemisphere.get_data('hemisphere') in (self.HEMISPHERE_WEST, self.HEMISPHERE_SOUTH): x = -x
+		return x
+	@signed_value.setter
+	def signed_value(self, x):
+		try:
+			x = float(x)
+		except ValueError:
+			return x
+		self.spinner.set_value(abs(x))
+		if self.is_longitude:
+			self.set_hemisphere(self.HEMISPHERE_EAST if x >= 0 else self.HEMISPHERE_WEST)
+		else:
+			self.set_hemisphere(self.HEMISPHERE_NORTH if x >= 0 else self.HEMISPHERE_SOUTH)
+		return x
+	def get_signed_value(self):
+		return self.signed_value
+	def set_signed_value(self, x):
+		self.signed_value = x
+
+def set_timezone(tz):
+	if tz is None or tz == '':
+		if 'TZ' in os.environ:
+			del os.environ['TZ']
+	else:
+		os.environ['TZ'] = tz
+	time.tzset()
+
+def on_click_timezone_btn(*X):
+	if box_timezone.get_visible():
+		set_timezone(None)
+		box_coordinates.hide()
+		box_timezone.hide()
+	else:
+		if box_solartime.get_visible():
+			btn_solartime.set_active(False)
+		box_coordinates.show()
+		box_timezone.show()
+		try:
+			set_timezone_by_coordinates()
+		except:
+			on_timezone_string_entered()
+
+def on_timezone_click(widget, event):
+	if event.button == 1:
+		lon, lat = get_world_map_coordinates(widget, event.x, event.y)
+		box_longitude.signed_value = lon
+		box_latitude.signed_value = lat
+
+from multiprocessing import Process, Queue
+
+class TZWhere(object):
+	def __init__(self):
+		self.qq = Queue()
+		self.qa = Queue()
+		self.loader = Process(target=self.subproc, args=(self.qq, self.qa))
+		self.loader.daemon = True
+		self.loader.start()
+	
+	def subproc(self, qq, qa):
+		from tzwhere import tzwhere
+		stderr("loading tzwhere database...\n")
+		t0 = time.time()
+		tzlookup = tzwhere.tzwhere(forceTZ=True)
+		stderr("tzwhere loaded in %.3f sec\n" % (time.time() - t0,))
+		while True:
+			question = qq.get(block=True)
+			try:
+				answer = tzlookup.tzNameAt(*question['pargs'], **question['kwargs'])
+			except:
+				traceback.print_exc()
+				answer = None
+			qa.put([question, answer])
+	
+	def tzNameAt(self, *pa, **kwa):
+		question = {'pargs': pa, 'kwargs': kwa}
+		self.qq.put(question)
+		while True:
+			answer = self.qa.get(block=True, timeout=0.25)
+			if answer[0] == question:
+				answer = answer[1]
+				break
+		return answer
+
+def set_timezone_by_coordinates():
+	lat = float(box_latitude.signed_value)
+	lon = float(box_longitude.signed_value)
+	try:
+		tzname = tzw.tzNameAt(lat, lon, forceTZ=True)
+	except Exception as e:
+		traceback.print_exc(e)
+		stderr(_("TZ database has not been loaded yet.")+'\n')
+		return False
+	else:
+		entry_timezone.set_text(tzname)
+		on_timezone_string_entered()
+
+def on_hover_timezone_image(image, event):
+	lat = float(-(2 *  90 * event.y / image.height) + 90)
+	lon = float((2 * 180 * event.x / image.width) - 180)
+	try:
+		tzname = tzw.tzNameAt(lat, lon, forceTZ=True)
+		image.window.set_cursor(None)
+		image.set_tooltip_text(tzname)
+	except:
+		cursor = gtk.gdk.Cursor(image.window.get_display(), gtk.gdk.WATCH)
+		image.window.set_cursor(cursor)
+		image.set_tooltip_text(_("(loading timezones…)"))
+
+
+def on_timezone_string_entered(*X):
+	set_timezone(entry_timezone.get_text())
+
+class RankedEntryCompletion(gtk.EntryCompletion):
+	def __init__(self, entry=None):
+		super(self.__class__, self).__init__()
+		self._rank_func = self._default_rank_func
+		self.set_match_func(self._match_func)
+		if entry is not None:
+			self.entry = entry
+		else:
+			self.entry = gtk.Entry()
+		self.entry.set_completion(self)
+		self.entry.connect('changed', self.on_edit)
+		self.set_popup_single_match(True)
+	def on_edit(self, *X):
+		glib.timeout_add(100, self.on_after_edit, priority=glib.PRIORITY_DEFAULT_IDLE)
+	def on_after_edit(self):
+		self.rerank(self.entry.get_text())
+	def set_rank_column(self, colnum):
+		assert isinstance(colnum, int)
+		assert colnum >= 0
+		assert colnum < self.get_model().get_n_columns()
+		self._rank_column = colnum
+		self.get_model().set_sort_column_id(colnum, gtk.SORT_DESCENDING)
+	def set_rank_func(self, func):
+		self._rank_func = func
+	def _default_rank_func(self, completion, key, row):
+		return 1
+	def rerank(self, key):
+		for row in self.get_model():
+			row[self._rank_column] = self._rank_func(self, key, row)
+	def _match_func(self, completion, key, rowiter):
+		row = self.get_model()[rowiter]
+		return self._rank_func(self, key, row) > 0
+
+def timezone_completion(completion, query, row):
+	tz = row[0]
+	tz = tz.lower()
+	query = query.lower()
+	if tz.startswith(query):
+		return 3
+	if any([s.startswith(query) for s in tz.split('/')]):
+		return 2
+	if tz.find(query) > -1:
+		return 1
+	return 0
+
+
+
+### Main ###
+
+setproctitle.setproctitle(PROGNAME)
+gettext.textdomain(PROGNAME)
+_ = gettext.gettext
+RuntimeData = {
+	'save_config_timer': None,
+	'show_solartime_panel_timer': None,
+	'tz': None,
+}
+Config = {}
+
+
+if any(x in sys.argv for x in ['--help', '-h', '-?']):
+	print """Usage: %s\n""" % (PROGNAME,)
+	raise SystemExit(0)
+
+# Check if application is already running
+dbus_app_session = dbus.SessionBus().request_name(APPNAME)
+if dbus_app_session != dbus.bus.REQUEST_NAME_REPLY_PRIMARY_OWNER:
+	stderr(_("Already running; toggle window.")+'\n')
+	method = dbus.SessionBus().get_object(APPNAME, '/'+APPNAME.replace('.', '/')).get_dbus_method('toggle')
+	method()
+	raise SystemExit(0)
+
+
+### Build GUI ###
+
+win_main = gtk.Window(gtk.WINDOW_TOPLEVEL)
+box0 = gtk.VBox()
+box1 = gtk.HBox()
+btn_timezone = gtk.ToggleButton(_("TZ"))
+btn_solartime = gtk.ToggleButton(_("Solar"))
+btn_placeholder = gtk.HBox()
+btn_close = gtk.Button(_("Close"))
+box2 = gtk.HBox()
+label_clock = gtk.Label()
+label_info = gtk.Label()
+cal0 = Calendar()
+box_solartime = gtk.VBox()
+box_coordinates = gtk.VBox()
+box_longitude = CoordinateInput(LONGITUDE=True)
+box_latitude = CoordinateInput(LATITUDE=True)
+label_solartime = gtk.Label()
+box_sunclock = gtk.VBox()
+sunclock_socket = gtk.Socket()
+sunclock_image = EventImage()
+label_celestial = gtk.Label()
+box_timezone = gtk.VBox()
+timezone_image = EventImage()
+timezone_store = gtk.ListStore(str, int)
+entrycompletion_timezone = RankedEntryCompletion()
+entry_timezone = entrycompletion_timezone.entry
+
+# Configure main window's widgets
+win_main.set_decorated(False)
+win_main.set_size_request(256, -1)
+win_main.set_resizable(False)
+win_main.set_type_hint(gtk.gdk.WINDOW_TYPE_HINT_POPUP_MENU)
+win_main.set_keep_above(True)
+win_main.set_skip_taskbar_hint(True)
+win_main.set_icon_name('x-office-calendar')
+start_evt = win_main.connect('map-event', lambda w,e: (win_main.disconnect(start_evt), win_main_show()))
+win_main.connect('delete-event', lambda w,e: act_quit())
+add_key_binding(win_main, 'Escape', act_main_hide)
+
+label_solartime.set_markup(PMU_SOLARCLOCK + ':' + PMU_SOLARCLOCK_END)
+label_solartime.set_selectable(True)
+sunclock_socket.connect('size-allocate', sunclock_elhelyez)
+sunclock_socket.connect('plug-removed', lambda *X: True)
+sunclock_socket.connect('plug-added', on_sunclock_embedded)
+sunclock_image.connect('button-press-event', on_sunclock_click)
+label_celestial.set_line_wrap(True)
+label_celestial.set_size_request(win_main.get_size_request()[0], -1)
+label_celestial.set_selectable(True)
+
+timezone_image.set_from_file_at_size('/usr/share/xgcal/timezones.png', win_main.get_size_request()[0], -1)
+timezone_image.connect('button-press-event', on_timezone_click)
+timezone_image.add_events(gtk.gdk.POINTER_MOTION_MASK)
+timezone_image.connect('motion-notify-event', on_hover_timezone_image)
+entry_timezone.connect('changed', on_timezone_string_entered)
+entrycompletion_timezone.set_model(timezone_store)
+entrycompletion_timezone.set_text_column(0)
+entrycompletion_timezone.set_rank_column(1)
+entrycompletion_timezone.set_rank_func(timezone_completion)
+
+btn_timezone.connect('clicked', on_click_timezone_btn)
+btn_solartime.connect('clicked', toggle_solartime)
+btn_close.connect('clicked', act_main_hide)
+label_clock.set_markup(PMU_CLOCK + ':' + PMU_CLOCK_END + '\n' + PMU_TIMEZONE + ' ' + PMU_TIMEZONE_END)
+label_clock.set_padding(18, 0)
+label_clock.set_justify(gtk.JUSTIFY_CENTER)
+label_info.set_line_wrap(True)
+label_info.set_size_request(win_main.get_size_request()[0], -1)
+label_info.set_selectable(True)
+
+# Pack widgets
+win_main.add(box0)
+box0.pack_start(box_coordinates, 0, 1)
+box_coordinates.pack_start(box_longitude, 0, 1)
+box_coordinates.pack_start(box_latitude, 0, 1)
+box0.pack_start(box_solartime, 0, 1)
+box0.pack_start(box_timezone, 0, 1)
+box0.pack_start(box1, 0, 1)
+box0.pack_start(box2, 0, 1)
+box0.pack_start(label_info, 0, 1)
+box0.pack_start(cal0, 0, 1)
+
+box1.pack_start(btn_timezone, 0, 0)
+box1.pack_start(btn_solartime, 0, 0)
+box1.pack_start(btn_placeholder, 1, 1)
+box1.pack_start(btn_close, 0, 0)
+box2.pack_start(label_clock, 1, 1)
+
+box_timezone.pack_start(timezone_image, 0, 1)
+box_timezone.pack_start(entry_timezone, 0, 0)
+
+box_solartime.pack_start(label_solartime, 0, 1)
+box_solartime.pack_start(box_sunclock, 0, 1)
+box_sunclock.pack_start(sunclock_image, 0, 1)
+box_sunclock.pack_start(sunclock_socket, 0, 1)
+box_solartime.pack_start(label_celestial, 0, 1)
+
+win_main.show_all()
+box_coordinates.hide()
+box_solartime.hide()
+sunclock_image.hide()
+box_timezone.hide()
+dbus_service = xgCalService(win_main)
+
+
+Config['longitude'] = {
+	'getter': box_longitude.get_signed_value,
+	'setter': box_longitude.set_signed_value,
+}
+Config['latitude'] = {
+	'getter': box_latitude.get_signed_value,
+	'setter': box_latitude.set_signed_value,
+}
+# Load config
+for option_name, option in Config.iteritems():
+	filename = configfilename(option_name)
+	if os.path.exists(filename):
+		with open(filename, "r") as f:
+			saved_raw = f.readline().strip()
+			option['saved'] = option['setter'](saved_raw)
+
+gtk.gdk.threads_init()
+RuntimeData['sunclock_thread'] = SunclockThread(sunclock_socket)
+tzw = TZWhere()
+update_clock_continous(label_clock)
+on_calendar_day_selected()
+
+box_longitude.connect('changed', on_coordinates_changed)
+box_latitude.connect('changed', on_coordinates_changed)
+cal0.connect('date-selected', on_calendar_day_selected)
+
+gtk.main()
+#os.kill(os.getpid(), signal.SIGQUIT)

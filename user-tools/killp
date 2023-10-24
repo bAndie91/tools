@@ -42,7 +42,7 @@ Other options:
 
 =over 4
 
-=item [--]signal=I<SIG>
+=item [--]signal=I<SIG>, [-]s=I<SIG>
 
 Which signal to send.
 See kill(1) and signal(7) for valid I<SIG> signal names and numbers.
@@ -53,6 +53,8 @@ How much to wait between attempts.
 See sleep(1) for valid I<IVAL> intervals.
 
 =item -D, --debug
+
+=item -n, --dryrun
 
 =back
 
@@ -93,6 +95,7 @@ esac
 
 
 opt_debug=''
+opt_dryrun=''
 Signal=TERM
 Interval=0.2
 declare -A processes_left
@@ -102,7 +105,7 @@ declare -a grep_opts=()
 for arg in "$@"
 do
 	case "$arg" in
-	signal=*|sig=*|--sig=*|--signal=*)
+	signal=*|sig=*|s=*|--signal=*|--sig=*|-s=*)
 		Signal=${arg#*=}
 		;;
 	interval=*|--interval=*)
@@ -116,6 +119,13 @@ do
 		grep_opts+=("$arg")
 		;;
 	-D|--debug)
+		opt_debug=1
+		;;
+	-n|--dryrun|--dry-run)
+		opt_dryrun=1
+		;;
+	-nD|-Dn)
+		opt_dryrun=1
 		opt_debug=1
 		;;
 	-*|*=*)
@@ -234,7 +244,10 @@ do
 					;;
 				esac
 			fi
-			kill -- -$Signal "$id"
+			if [ ! $opt_dryrun ]
+			then
+				kill -- -$Signal "$id"
+			fi
 		else
 			case "$mode" in
 			pid|pgid)

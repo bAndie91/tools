@@ -9,7 +9,7 @@ Rename 1 or more than 2 files interactively:
 	exit
 fi
 
-if [ $# = 2 -a ! -e "$2" ]
+if [ $# = 2 -a \( ! -e "$2" -o -d "$2" \) ]
 then
 	mv -n "$@"
 	# set error status if the first file still exists (rename was not successful)

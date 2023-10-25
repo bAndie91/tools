@@ -1,7 +1,7 @@
 
 REPO_ROOT = ..
 
-TOOLS = xlock xunlock
+TOOLS = xlock xunlock rxvt-inband xdpy-attach set-display-rxvt
 
 MANPAGE_SECTION = 1
 

@@ -53,7 +53,7 @@ status()
 	then
 		{
 			echo -n "known daemons: "
-			{ list_pidfile_daemons; list_configured_daemons; } | sort -u | tr "\n" " "
+			list_all_daemons | tr "\n" " "
 			echo
 		}>&2
 	fi
@@ -64,15 +64,33 @@ list_pidfile_daemons()
 	ls -1 /var/run/daemons | sed -e 's/\.pid$//'
 }
 
+_filter_daemon_names()
+{
+	perl -ne '($s) = /^\s*(\S+)/; $s =~ /^[^*#]/ and print "$s\n"'
+}
+
 list_configured_daemons()
 {
-	cat /etc/daemon.conf | perl -ne '/^\s*([^*#\s]\S*)/ and print "$1\n"'
+	cat /etc/daemon.conf | perl -pe 's/^#DISABLED# //' | _filter_daemon_names
+}
+
+list_enabled_daemons()
+{
+	cat /etc/daemon.conf | _filter_daemon_names
+}
+
+list_all_daemons()
+{
+	{
+		list_pidfile_daemons
+		list_configured_daemons
+	}|\
+	sort -u
 }
 
 if [ $# = 0 ]
 then
-	{ list_pidfile_daemons; list_configured_daemons; } |\
-	sort -u |\
+	list_all_daemons |\
 	while read daemon
 	do
 		_status "$daemon"
@@ -93,31 +111,36 @@ status "$daemon"
 
 case "$verb" in
 start)
-	daemon -n "$daemon" -v
+	if list_enabled_daemons | grep -qx "$daemon"
+	then
+		daemon -n "$daemon" -v
+	else
+		errx 1 "$daemon: not sure, is it enabled in /etc/daemon.conf ?"
+	fi
 	;;
 stop)
 	daemon -n "$daemon" -v --stop
 	;;
 disable)
-	cat /etc/daemon.conf | daemon="$daemon" perl -pe 's/^\s*\Q$ENV{daemon}\E\s/# $&/' | sponge /etc/daemon.conf
+	cat /etc/daemon.conf | daemon="$daemon" perl -pe 's/^\Q$ENV{daemon}\E\s/#DISABLED# $&/' | sponge /etc/daemon.conf
 	;;
 enable)
-	cat /etc/daemon.conf | daemon="$daemon" perl -pe 's/^\s*#\s*(\Q$ENV{daemon}\E)/$1/' | sponge /etc/daemon.conf
+	cat /etc/daemon.conf | daemon="$daemon" perl -pe 's/^#DISABLED# (\Q$ENV{daemon}\E)/$1/' | sponge /etc/daemon.conf
 	;;
 restart)
-	daemon -n "$daemon" -v --stop
-	_status "$daemon"
-	daemon -n "$daemon" -v
+	daemon -n "$daemon" -v --restart
 	;;
 log)
 	tail "$@" -f /syslog/daemon/daemon.$daemon/`date +%Y%m%d`.log
+	exit
 	;;
-'')
+''|status)
+	# status is already shown above
 	exit
 	;;
 *)
 	warnx "unknown verb '$verb'"
-	warnx "valid verbs: start, restart, stop, log, disable, enable"
+	warnx "valid verbs: start, restart, stop, log, disable, enable, status"
 	false
 	;;
 esac

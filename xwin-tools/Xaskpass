@@ -1,0 +1,16 @@
+#!/bin/sh
+
+prompt="Enter password:"
+if [ -n "$1" ]
+then
+	prompt="$*"
+	# Strip ANSI color codes
+	prompt=$(echo "$prompt" | sed -e 's/\x1b[^m]*m//g')
+fi
+
+if type zenity >/dev/null 2>&1
+then
+	zenity --title "sudo" --entry --text "$prompt" --entry-text '' --hide-text
+else
+	Xdialog --stdout --title "sudo" --passwordbox "$prompt" 0 0
+fi

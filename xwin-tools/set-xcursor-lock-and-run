@@ -1,0 +1,133 @@
+#!/usr/bin/env python
+
+"""
+
+=pod
+
+=head1 NAME
+
+set-xcursor-lock-and-run - Set X11 mouse pointer to a lock icon and run the given command
+
+=head1 SYNOPSIS
+
+set-xcursor-lock-and-run <COMMAND> [<ARGS>]
+
+=cut
+
+"""
+
+import sys
+import os
+import subprocess
+import gtk
+import glib
+import threading
+import time
+import signal
+gtk.gdk.threads_init()
+
+xpm_cursor = [
+"20 20 4 1 ",
+"  c None",
+". c white",
+"X c black",
+", c yellow",
+"       ......       ",
+"      .XXXXXX.      ",
+"     .XXXXXXXX.     ",
+"    .XX......XX.    ",
+"    .XX.    .XX.    ",
+"    .XX.    .XX.    ",
+"    .XX.    .XX.    ",
+"    .XX.    .XX.    ",
+"  ...XX.    .XX...  ",
+"  .XXXXXXXXXXXXXX.  ",
+"  .X,,,,,,,,,,,,X.  ",
+"  .X,,,,,,,,,,,,X.  ",
+"  .X,,,,,,,,,,,,X.  ",
+"  .X,,,,,,,,,,,,X.  ",
+"  .X,,,,,XX,,,,,X.  ",
+"  .X,,,,,XX,,,,,X.  ",
+"  .X,,,,,XX,,,,,X.  ",
+"   .X,,,,,,,,,,X.   ",
+"    .XXXXXXXXXX.    ",
+"     ..........     ",
+]
+
+
+
+def on_start(*X):
+	#drawable = window.window
+	#drawable = None
+	#white = gtk.gdk.Color('white')
+	#black = gtk.gdk.Color('black')
+	#green = gtk.gdk.Color('green')
+	
+	#pixmap, X = gtk.gdk.pixmap_create_from_xpm_d(drawable, green, xpm_cursor, 1)
+	#mask, X = gtk.gdk.pixmap_create_from_xpm_d(drawable, green, xpm_mask, 1)
+	#pixmap = gtk.gdk.pixmap_create_from_data(drawable, xbm_cursor, 20, 20, 1, black, white)
+	#mask = gtk.gdk.pixmap_create_from_data(drawable, xbm_mask, 20, 20, 1, black, white)
+	pixbuf = gtk.gdk.pixbuf_new_from_xpm_data(xpm_cursor)
+	
+	#cursor = gtk.gdk.Cursor(gtk.gdk.X_CURSOR)
+	#cursor = gtk.gdk.Cursor(pixmap, mask, black, white, 0, 0)
+	cursor = gtk.gdk.Cursor(display, pixbuf, 0, 0)
+	window.window.set_cursor(cursor)
+	
+	Xscreen, pointer_x, pointer_y, Xmods = display.get_pointer()
+	print pointer_x, pointer_y
+	window.move(pointer_x - int(ww/2), pointer_y - int(wh/2))
+	
+	glib.idle_add(run_external_prog, priority=glib.PRIORITY_DEFAULT_IDLE)
+
+def run_external_prog(*X):
+	subprocess.call(sys.argv[1:])
+	go_idle()
+
+def go_idle():
+	window.connect('leave-notify-event', on_blur)
+	window.connect('key-press-event', on_blur)
+	try:
+		os.kill(parent, signal.SIGUSR1)
+	except:
+		pass
+
+def on_blur(*X):
+	gtk.main_quit()
+
+def set_mouse_pointer(x, y):
+	from ctypes import cdll, c_int, c_voidp, byref
+	xlib = cdll.LoadLibrary('libX11.so')
+	display = xlib.XOpenDisplay(None)
+	root = xlib.XDefaultRootWindow(display)
+	xlib.XWarpPointer(display, None, root, 0, 0, 0, 0, c_int(x), c_int(y))
+	xlib.XCloseDisplay(display)
+
+
+parent = os.getpid()
+pid = os.fork()
+if pid > 0:
+	os.closerange(3, 65535)
+	wait = True
+	def leave(*X):
+		wait = False
+		sys.exit(0)
+	signal.signal(signal.SIGUSR1, leave)
+	while wait: time.sleep(86400)
+	sys.exit(0)
+
+
+set_mouse_pointer(0, 0)
+
+
+display = gtk.gdk.Display(None)
+window = gtk.Window()
+ww, wh = 2, 2
+window.set_default_size(ww, wh)
+window.set_geometry_hints(min_width=ww, min_height=wh)
+window.set_decorated(False)
+window.set_skip_taskbar_hint(True)
+window.connect('map-event', on_start)
+window.connect('delete-event', lambda *X: gtk.main_quit())
+window.show_all()
+gtk.main()

@@ -1,7 +1,8 @@
 
 REPO_ROOT = ..
 
-TOOLS = xlock xunlock rxvt-inband xdpy-attach set-display-rxvt
+TOOLS = xlock xunlock rxvt-inband xdpy-attach set-display-rxvt \
+  set-xcursor-lock-and-run Xaskpass xosd
 
 MANPAGE_SECTION = 1
 

@@ -1,0 +1,31 @@
+#!/bin/bash
+
+if [ -z "$DISPLAY" ]
+then
+	exit 1
+fi
+
+install -d $HOME/.osd -m 0700
+
+socket=$HOME/.osd/${DISPLAY//:/_}.sock
+
+if ! lsof -n -Fp $socket >/dev/null 2>/dev/null
+then
+	socat UNIX-RECV:$socket,unlink-early EXEC:"osd_cat -c green -s 1 -S gray -o 32 -l 3 -d 4",nofork &
+fi
+
+while true
+do
+	if [ -n "$1" ]
+	then
+		socat - UNIX-SENDTO:$socket <<<"$@"
+	else
+		socat - UNIX-SENDTO:$socket
+	fi
+	if [ $? = 0 ]
+	then
+		break
+	fi
+	sleep 0.25
+done
+

@@ -5,7 +5,7 @@ OLDINCLUDEDIR = /usr/include/tool
 
 TOOLS = grandparentexe relpath mksock remove syncfs utmp usbreset \
   chmod-cheap setgroups kill-rogue xidle logbtmp lastcsv wall \
-  loadenv setpgrp
+  loadenv setpgrp xdpys
 
 SPECIAL_INSTALL_TOOLS = grandparentexe netbulk lastbcsv
 
@@ -63,7 +63,7 @@ netbulk: setgroups.c
 lastbcsv: lastcsv
 	ln -sfT lastcsv $@
 
-xidle: override CFLAGS += -lX11 -lXss
+xidle xdpys: override CFLAGS += -lX11 -lXss
 
 loadenv: override CFLAGS += -I$(OLDINCLUDEDIR) -L$(LIBDIR) -larray -Wl,-rpath=$(LIBDIR)
 

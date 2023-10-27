@@ -1,0 +1,8 @@
+=pod
+
+=head1 NAME
+
+xdpys - Search X11/Xorg displays on the current machine
+
+=cut
+

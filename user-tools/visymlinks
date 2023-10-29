@@ -1,0 +1,80 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+visymlinks - Bulk edit target of symlinks
+
+=head1 SYNOPSIS
+
+visymlinks [<PATH> [<PATH> [...]]]
+
+=head1 DESCRIPTION
+
+Open up your default editor (see sensible-editor(1)) to edit the targets of I<PATH> symlinks
+given in command arguments.
+If no I<PATH> given, all symlinks will be edited in the current working directory.
+Once finished in the editor, changes the target of those symlinks which were edited.
+Contrary to visymlinks(1)'s relative, vidir(1),
+if a I<PATH> symlink is removed in the editor, it won't be removed from the filesystem.
+
+=head1 RETURN VALUE
+
+Returns zero if everything went fine.
+Returns the exit status of the editor if it was not zero (also skip changing symlinks).
+Returns the error code of symlink(2) if any of such calls failed.
+
+=head1 SEE ALSO
+
+vidir(1) from moreutils, vifiles(1)
+
+=cut
+
+
+use File::Temp qw/tempfile/;
+use Carp qw/croak/;
+
+$0 =~ s/.*\/([^\/]+)$/$1/;
+
+($fh, $filename) = tempfile( "visymlinks-XXXXXX", TMPDIR => 1 );
+
+for my $path (@ARGV || glob '*')
+{
+	if(-l $path)
+	{
+		printf {$fh} ("%s\t%s\n", $path, readlink $path) or croak "$0: $filename: write: $!";
+	}
+}
+
+close $fh or croak "$0: $filename: close: $!";
+
+system "sensible-editor", $filename;
+$editor_err = $?;
+
+if($editor_err == 0)
+{
+	open my $fh, '<', $filename or "$0: $filename: open: $!";
+	while(<$fh>)
+	{
+		chomp;
+		my ($path, $new_target) = split /\t/;
+		if(-e $path and !-l $path)
+		{
+			warn "$0: $path: no longer a symlink!\n";
+		}
+		else
+		{
+			my $old_target = readlink $path;
+			if($old_target ne $new_target)
+			{
+				warn "$0: $path: old target: $old_target\n";
+				warn "$0: $path: new target: $new_target\n";
+				unlink $path;
+				symlink $new_target, $path or croak "$0: $path: symlink: $!";
+			}
+		}
+	}
+}
+
+exit $editor_err;

@@ -3,8 +3,12 @@ TOOLS = mount.bindfs mount.posixovlfs mount.xattrovlfs mount.fusefile
 
 TARGETS = $(foreach name,$(TOOLS),/sbin/$(name))
 
-install-all: $(TARGETS)
 
+default:
+	@echo may be interested in: install-all
+	false
+
+install-all: $(TARGETS)
 .PHONY: install-all
 
 $(TARGETS): /sbin/%: %

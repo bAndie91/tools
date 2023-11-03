@@ -56,7 +56,7 @@ else
 	fi
 	if [ $AUTOSSL_SILENT ]
 	then
-		OPENSSL_EXTRA_ARGS="$OPENSSL_EXTRA_ARGS${OPENSSL_EXTRA_ARGS:+ }-quiet"
+		OPENSSL_EXTRA_ARGS="$OPENSSL_EXTRA_ARGS${OPENSSL_EXTRA_ARGS:+ }-verify_quiet"
 	fi
 	
 	LD_PRELOAD=/usr/lib/tool/preload/autossl.so \

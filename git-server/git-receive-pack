@@ -1,0 +1,37 @@
+#!/bin/bash
+
+set -e
+set -o pipefail
+set -u
+
+directory=''
+
+echo ---- >&2
+cat /etc/issue.git >&2
+echo ---- >&2
+
+for arg in "$@"
+do
+	case "$arg" in
+	-*)	true;;
+	*)	directory=$arg;;
+	esac
+done
+
+if [ -n "$directory" ]
+then
+	mkdir -p "$directory"
+	chmod u+rwx,o-rwx "$directory"
+	git init --bare "$directory" >&2
+fi
+
+/usr/bin/git-receive-pack "$@"
+status=$?
+
+if [ -n "$directory" ]
+then
+	git-repo-mgmt "$directory" || true
+	( cd "$directory" && git update-server-info ; ) || true
+fi
+
+exit $status

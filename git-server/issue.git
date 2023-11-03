@@ -1,0 +1,5 @@
+This is a lightweight git server. You can manage each of your
+repositories by the special 'repo-mgmt' branch. By default each repo is
+private. You can make it public by putting "public" in the file
+"/access" in the repo's root directory on the 'repo-mgmt' branch. You
+can delete the repo by putting "delete" in the file "/access".

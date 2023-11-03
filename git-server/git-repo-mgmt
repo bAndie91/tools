@@ -1,0 +1,45 @@
+#!/bin/bash
+
+set -u
+
+directory=$1
+
+echo "----" >&2
+echo "Performing repo management commands..." >&2
+
+(
+set -e
+set -o pipefail
+
+GIT_DIR="$directory" git show repo-mgmt:access |\
+while read -r line
+do
+	case "$line" in
+	public)
+		echo "Making '$directory' public..." >&2
+		chmod o+rx "$directory"
+		;;
+	private)
+		echo "Making '$directory' private..." >&2
+		setfacl -b "$directory"
+		chmod g-rwx,o-rwx "$directory"
+		;;
+	default)
+		# leave permissions as they are set at the beginning
+		true
+		;;
+	delete)
+		echo "Deleting '$directory'..." >&2
+		rm -rf --one-file-system "$directory"
+		;;
+	*)
+		echo "Unknown directive: '$line'" >&2
+		;;
+	esac
+done
+)
+
+errstatus=$?
+echo "Repo management commands are over." >&2
+echo "----" >&2
+exit $errstatus

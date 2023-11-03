@@ -1,0 +1,553 @@
+#!/usr/bin/env python2.7
+# -*- coding: utf-8 -*-
+
+import sys
+import os
+import gtk
+import subprocess
+import tempfile
+import glib
+import pyexiv2
+import math
+from shutil import copyfile
+import re
+import traceback
+
+
+def add_key_binding(widget, keyname, callback):
+	accelgroup = gtk.AccelGroup()
+	key, modifier = gtk.accelerator_parse(keyname)
+	accelgroup.connect_group(key, modifier, gtk.ACCEL_VISIBLE, callback)
+	widget.add_accel_group(accelgroup)
+
+class EventImage(gtk.EventBox):
+	def __init__(self):
+		super(self.__class__, self).__init__()
+		self.image = gtk.Image()
+		self.image.set_alignment(0, 0)
+		self.add(self.image)
+	def clear(self):
+		return self.image.clear()
+	def set_from_pixbuf(self, *args):
+		return self.image.set_from_pixbuf(*args)
+	def set_from_file(self, *args):
+		return self.image.set_from_file(*args)
+	def set_from_file_at_size(self, path, w, h):
+		pixbuf = gtk.gdk.pixbuf_new_from_file_at_size(path, w, h)
+		self.image.set_from_pixbuf(pixbuf)
+	def set_size_request(self, *args):
+		return self.image.set_size_request(*args)
+	@property
+	def size(self):
+		pb = self.image.get_pixbuf()
+		return pb.get_width(), pb.get_height()
+	@property
+	def width(self):
+		return self.size[0]
+	@property
+	def height(self):
+		return self.size[1]
+	@property
+	def pixbuf(self):
+		return self.image.get_pixbuf()
+	@pixbuf.setter
+	def pixbuf(self, pb):
+		self.image.set_from_pixbuf(pb)
+	def redraw(self):
+		self.pixbuf = self.pixbuf
+
+class StockButton(gtk.Button):
+	def __init__(self, label=None, stock=None, use_underline=True, icon_size=None):
+		if stock is not None and stock in gtk.stock_list_ids():
+			stock_tmp = stock
+		else:
+			stock_tmp = gtk.STOCK_ABOUT
+		super(self.__class__, self).__init__(stock=stock_tmp, use_underline=use_underline)
+		if label is not None:
+			self.set_markup(label)
+		if stock is None:
+			self.set_icon('')
+		elif stock not in gtk.stock_list_ids():
+			self.set_icon(stock)
+		if icon_size is not None:
+			self.set_icon(stock, icon_size)
+	def __get_children(self):
+		align = self.get_children()[0]
+		hbox = align.get_children()[0]
+		return hbox.get_children()
+	def set_label(self, label):
+		x, lbl = self.__get_children()
+		lbl.set_label(label)
+	def set_markup(self, label):
+		x, lbl = self.__get_children()
+		lbl.set_markup(label)
+	def set_icon(self, icon, size=gtk.ICON_SIZE_BUTTON):
+		img, x = self.__get_children()
+		if type(icon) == str:
+			if icon == '':
+				img.props.visible = False
+			else:
+				img.set_from_icon_name(icon, size)
+				img.props.visible = True
+		else:
+			img.set_from_pixbuf(icon)
+			img.props.visible = True
+
+class Coordinate(object):
+	def __init__(self, x, y=None):
+		if type(x) == int:
+			assert type(y) == int
+			self.x = x
+			self.y = y
+		else:
+			assert y is None
+			x, y = x.split(',')
+			self.x = int(x)
+			self.y = int(y)
+	def __str__(self):
+		return '%d,%d' % (self.x, self.y)
+	def __repr__(self):
+		return '<%d,%d>' % (self.x, self.y)
+
+def on_clicked(widget, event):
+	x = int(min(max(0, event.x), image.width))
+	y = int(min(max(0, event.y), image.height))
+	
+	if event.button == 1:
+		if all([c.x!=x and c.y!=y for c in coordinates]):
+			if len(coordinates) >= 4:
+				remove_closest_point(x, y)
+			coordinates.append(Coordinate(x, y))
+	elif event.button == 3:
+		remove_closest_point(x, y)
+	refresh_display()
+	update_statusline()
+
+def remove_closest_point(x, y):
+	if len(coordinates) > 0:
+		distances = map(lambda c: {'d': (abs(c.x - x)**2 + abs(c.y - y)**2)**0.5, 'p': c}, coordinates)
+		closest = sorted(distances, key=lambda x: x['d'])[0]['p']
+		coordinates.remove(closest)
+
+def update_statusline():
+	topleft, bottomleft, topright, bottomright = get_quadrangle_points()
+	#text = '%d:%d; %d:%d; %d:%d; %d:%d' % (topleft.x, topleft.y, topright.x, topright.y, bottomright.x, bottomright.y, bottomleft.x, bottomleft.y)
+	text = '<span color="red">⸬</span> = '
+	text += ' '.join(map(lambda c: "(%d,%d)"%(c.x, c.y), filter(lambda c: c.x >= 0, [topleft, topright, bottomright, bottomleft])))
+	if len(coordinates) > 1:
+		leftmost, topmost, rightmost, bottommost = get_cirumrectangle()
+		text += '  <span color="green">▭</span> = %dx%d+%d+%d' % (rightmost-leftmost, bottommost-topmost, leftmost, topmost)
+		
+		vangle, hangle = get_linesegment_angle(coordinates[0], coordinates[1])
+		text += '  ∡ = %0.2f° ⟂ %0.2f°' % (hangle, vangle)
+	
+	statusline.set_markup(text)
+
+def refresh_display():
+	image.redraw()
+	glib.idle_add(draw_cages, priority=glib.PRIORITY_DEFAULT_IDLE)
+
+def draw_cages():
+	if glob.show_quadrangle:
+		draw_quadrangle_cage()
+	if glob.show_circumrectangle:
+		draw_circumrectangle_cage()
+
+def draw_quadrangle_cage():
+	topleft, bottomleft, topright, bottomright = get_quadrangle_points()
+	real_points = filter(lambda c: c.x >= 0, [topleft, topright, bottomright, bottomleft])
+	if len(real_points) > 0:
+		drawable = image.window
+		gc = gtk.gdk.GC(drawable)
+		gc.set_rgb_fg_color(gtk.gdk.color_parse('red'))
+		drawable.draw_lines(gc, [(c.x, c.y) for c in make_polygon(real_points)])
+
+def draw_circumrectangle_cage():
+	if len(coordinates) > 1:
+		leftmost, topmost, rightmost, bottommost = get_cirumrectangle()
+		drawable = image.window
+		gc = gtk.gdk.GC(drawable)
+		gc.set_rgb_fg_color(gtk.gdk.color_parse('green'))
+		drawable.draw_lines(gc, [(leftmost, topmost), (rightmost, topmost), (rightmost, bottommost), (leftmost, bottommost), (leftmost, topmost)])
+
+def make_polygon(points):
+	for i in range(len(points)):
+		yield points[i-1]
+		yield points[i]
+
+def get_quadrangle_points():
+	points_left_to_right = sorted(coordinates, cmp=lambda a, b: cmp(a.x, b.x))
+	while len(points_left_to_right) < 4: points_left_to_right.append(Coordinate(-1, -1))
+	src_left_points  = points_left_to_right[0:2]
+	src_right_points = points_left_to_right[-2:]
+	src_topleft     = sorted(src_left_points,  cmp=lambda a, b: cmp(a.y, b.y))[0]
+	src_bottomleft  = sorted(src_left_points,  cmp=lambda a, b: cmp(a.y, b.y))[1]
+	src_topright    = sorted(src_right_points, cmp=lambda a, b: cmp(a.y, b.y))[0]
+	src_bottomright = sorted(src_right_points, cmp=lambda a, b: cmp(a.y, b.y))[1]
+	return src_topleft, src_bottomleft, src_topright, src_bottomright
+
+def get_cirumrectangle():
+	leftmost   = sorted(coordinates, cmp=lambda a, b: cmp(a.x, b.x))[0].x
+	topmost    = sorted(coordinates, cmp=lambda a, b: cmp(a.y, b.y))[0].y
+	rightmost  = sorted(coordinates, cmp=lambda a, b: cmp(a.x, b.x))[-1].x
+	bottommost = sorted(coordinates, cmp=lambda a, b: cmp(a.y, b.y))[-1].y
+	return leftmost, topmost, rightmost, bottommost
+
+def do_magick(distortion=True, crop=True):
+	src_topleft, src_bottomleft, src_topright, src_bottomright = get_quadrangle_points()
+	leftmost, topmost, rightmost, bottommost = get_cirumrectangle()
+	trg_topleft     = Coordinate(leftmost, topmost)
+	trg_bottomleft  = Coordinate(leftmost, bottommost)
+	trg_topright    = Coordinate(rightmost, topmost)
+	trg_bottomright = Coordinate(rightmost, bottommost)
+	coordinatepairs = ' '.join(map(str, [
+		src_topleft, trg_topleft, 
+		src_topright, trg_topright,
+		src_bottomright, trg_bottomright,
+		src_bottomleft, trg_bottomleft,
+		]))
+	# "perspect-run" is there only to visualize something is running,
+	# take it out to run convert silently in the background.
+	cmd = ["perspect-run", "convert", "-verbose", glob.sourcefile, "-auto-orient"]
+	if distortion:
+		cmd.extend(["-matte", "-virtual-pixel", "transparent", "-distort", "Perspective", coordinatepairs])
+	if crop:
+		cmd.extend(["-crop", "%dx%d+%d+%d" % (rightmost-leftmost, bottommost-topmost, leftmost, topmost), "+repage"])
+	run_command_with_tempfile(cmd)
+
+def run_command_with_tempfile(cmd):
+	_, suffix = os.path.splitext(glob.sourcefile)
+	_fd, outfile = tempfile.mkstemp(suffix=suffix)
+	cmd.extend([outfile])
+	run_command_background(cmd, callback=(cb_imagemagick, {'outfile': outfile, 'original_file': glob.sourcefile}))
+
+def cb_imagemagick(err, user_params):
+	if err != 0:
+		# don't display erro message on gtk gui because it's in a forked process.
+		sys.stderr.write("imagemagick error: %d\n" % err)
+	else:
+		os.environ['PERSPECT_ORIGIN_FILE'] = user_params['original_file']
+		outfile = user_params['outfile']
+		subprocess.Popen([sys.executable, sys.argv[0], outfile], stdout=sys.stdout, stderr=sys.stderr)
+
+def run_command_background(cmd, callback=None):
+	# start convert in detached background process
+	pid1 = os.fork()
+	if pid1 == 0:
+		os.closerange(3, 65535)
+		pid2 = os.fork()
+		if pid2 == 0:
+			print cmd
+			err = subprocess.call(cmd, stdout=sys.stdout, stderr=sys.stderr)
+			if callback is not None:
+				callback[0](err, *callback[1:])
+			os._exit(err)
+		else:
+			os._exit(0)
+	else:
+		os.waitpid(pid1, 0)
+
+def do_distortion_and_crop(*_):
+	do_magick(distortion=True, crop=True)
+
+def do_distortion(*_):
+	do_magick(distortion=True, crop=False)
+
+def do_crop(*_):
+	do_magick(distortion=False, crop=True)
+
+def get_linesegment_angle(A, B):
+	tan = float(A.x - B.x) / float(A.y - B.y)
+	ang = math.degrees(math.atan(tan))
+	return ang, ang + 90 if ang <= 0 else ang - 90
+
+def do_rotation_horizontal(*_):
+	vangle, hangle = get_linesegment_angle(coordinates[0], coordinates[1])
+	cmd = get_rotation_params(hangle)
+	run_command_with_tempfile(cmd)
+
+def do_rotation_vertical(*_):
+	vangle, hangle = get_linesegment_angle(coordinates[0], coordinates[1])
+	cmd = get_rotation_params(vangle)
+	run_command_with_tempfile(cmd)
+
+def do_rotation_horizontal_and_autocrop(*_):
+	vangle, hangle = get_linesegment_angle(coordinates[0], coordinates[1])
+	cmd = get_rotation_params(hangle)
+	cmd.extend(["-fuzz", "20%", "-trim", "+repage"])
+	run_command_with_tempfile(cmd)
+	
+def do_rotation_vertical_and_autocrop(*_):
+	vangle, hangle = get_linesegment_angle(coordinates[0], coordinates[1])
+	cmd = get_rotation_params(vangle)
+	cmd.extend(["-fuzz", "20%", "-trim", "+repage"])
+	run_command_with_tempfile(cmd)
+
+def get_rotation_params(angle):
+	cmd = ["perspect-run", "convert", glob.sourcefile, "-auto-orient", "-rotate", str(angle)]
+	return cmd
+
+def exif_transforms():
+	# transform the image on screen according to the file's EXIF metadata
+	metadata = pyexiv2.ImageMetadata(glob.sourcefile)
+	metadata.read()
+	if 'Exif.Image.Orientation' in metadata.exif_keys:
+		orientation = metadata['Exif.Image.Orientation'].value
+		# flip-flop:
+		if orientation in [2, 4]:
+			# mirror on the vertical axis
+			image.pixbuf = image.pixbuf.flip(horizontal=False)
+			orientation -= 1
+		elif orientation in [5, 7]:
+			# mirror on the horizontal axis
+			image.pixbuf = image.pixbuf.flip(horizontal=True)
+			orientation += 1
+		# rotation:
+		rotation = None
+		if orientation == 6:
+			# rotate 90° CW
+			rotation = gtk.gdk.PIXBUF_ROTATE_CLOCKWISE
+		elif orientation == 3:
+			# rotate 180° CW
+			rotation = gtk.gdk.PIXBUF_ROTATE_UPSIDEDOWN
+		elif orientation == 8:
+			# rotate 270° CW
+			rotation = gtk.gdk.PIXBUF_ROTATE_COUNTERCLOCKWISE
+		if rotation is not None:
+			image.pixbuf = image.pixbuf.rotate_simple(rotation)
+
+def do_open(*_):
+	run_command_background(["gpicview", glob.sourcefile])
+
+def do_save_as(*_):
+	proposed_path = os.environ.get('PERSPECT_ORIGIN_FILE', glob.sourcefile)
+	save_path = file_choose_dialog_save(proposed_path)
+	if save_path is not None:
+		if not os.path.exists(save_path) or question("Overwrite?\n<tt>%s</tt>"%glib.markup_escape_text(save_path), gtk.STOCK_SAVE, gtk.STOCK_CANCEL, window):
+			try:
+				copyfile(glob.sourcefile, save_path)
+			except Exception as e:
+				display_error(e)
+
+
+def display_error(e):
+	text = None
+	if isinstance(e, OSError) or isinstance(e, IOError):
+		text = '%s (#%d)' % (e.strerror, e.errno)
+		if e.filename is not None:
+			text += '\n%s' % (e.filename)
+	elif isinstance(e, Exception):
+		text = e.message
+	elif type(e) == type([]):
+		text = ''.join(e)
+	if text is None:
+		text = str(e)
+	dlg = gtk.MessageDialog(window, gtk.DIALOG_MODAL | gtk.DIALOG_DESTROY_WITH_PARENT, gtk.MESSAGE_ERROR, gtk.BUTTONS_OK, text)
+	dlg.set_title("Error")
+	dlg.run()
+	dlg.destroy()
+
+def question(msg, stock_yes=None, stock_no=None, parent=None):
+	dlg = gtk.MessageDialog(parent, gtk.DIALOG_MODAL | gtk.DIALOG_DESTROY_WITH_PARENT, gtk.MESSAGE_QUESTION, gtk.BUTTONS_YES_NO)
+	dlg.set_markup(msg)
+	dlg.set_title("Question")
+	if stock_no is not None:
+		dlg.get_widget_for_response(gtk.RESPONSE_NO).hide()
+		if hasattr(stock_no, '__iter__'):
+			btn_no = StockButton(label=stock_no[0], stock=stock_no[1])
+		else:
+			btn_no = StockButton(stock=stock_no)
+		dlg.add_action_widget(btn_no, gtk.RESPONSE_NO)
+		btn_no.show()
+	if stock_yes is not None:
+		dlg.get_widget_for_response(gtk.RESPONSE_YES).hide()
+		if hasattr(stock_yes, '__iter__'):
+			btn_yes = StockButton(label=stock_yes[0], stock=stock_yes[1])
+		else:
+			btn_yes = StockButton(stock=stock_yes)
+		dlg.add_action_widget(btn_yes, gtk.RESPONSE_YES)
+		btn_yes.show()
+	resp = dlg.run()
+	dlg.destroy()
+	return (resp == gtk.RESPONSE_YES)
+
+def file_choose_dialog_save(filepath):
+	global LastFolder
+	try: LastFolder
+	except NameError: LastFolder = None
+	selected = None
+	action = gtk.FILE_CHOOSER_ACTION_SAVE
+	
+	dlg = gtk.FileChooserDialog(parent=window, action=action, buttons=(gtk.STOCK_CANCEL, gtk.RESPONSE_REJECT, gtk.STOCK_SAVE, gtk.RESPONSE_ACCEPT))
+	if LastFolder is not None: dlg.set_current_folder(LastFolder)
+	dlg.set_current_name(os.path.basename(filepath))
+	
+	last_resp_num = max(map(lambda a: int(getattr(gtk, a)), filter(lambda a: a.startswith('RESPONSE_'), dir(gtk))))
+	
+	resp_num_cwd = last_resp_num + 1
+	btn_cwd = StockButton(label="Working Dir", stock=gtk.STOCK_JUMP_TO)
+	dlg.add_action_widget(btn_cwd, resp_num_cwd)
+	btn_cwd.show()
+	
+	resp_num_fdir = last_resp_num + 2
+	btn_fdir = StockButton(label="Jump to File", stock=gtk.STOCK_JUMP_TO)
+	dlg.add_action_widget(btn_fdir, resp_num_fdir)
+	btn_fdir.show()
+	
+	while True:
+		resp = dlg.run()
+		if resp == gtk.RESPONSE_ACCEPT:
+			selected = dlg.get_filename()
+			break
+		elif resp == resp_num_cwd:
+			dlg.set_current_folder(os.getcwd())
+		elif resp == resp_num_fdir:
+			dlg.set_current_folder(os.path.dirname(filepath))
+		else:
+			break
+	LastFolder = dlg.get_current_folder()
+	dlg.destroy()
+	return selected
+
+class SimpleStore(object):
+	pass
+
+def toggle_quadrangle(*X):
+	glob.show_quadrangle = not glob.show_quadrangle
+	refresh_display()
+
+def toggle_circumrectangle(*X):
+	glob.show_circumrectangle = not glob.show_circumrectangle
+	refresh_display()
+
+def load_file(filepath):
+	image.set_from_file(filepath)
+	glob.sourcefile = filepath
+	exif_transforms()
+	window.set_title(window.get_title() + ": " + glob.sourcefile)
+
+USER_LOG_FILE = '~/.perspect.coords.log'
+
+def do_save_coordinates(*X):
+	curr_coords = get_quadrangle_points()
+	last_coords = read_last_saved_coordinates()
+	# append surrently pointed coordinates to the log file
+	# unless the exact same coords were saved most recently.
+	if any([cc.x != lc.x or cc.y != lc.y for cc, lc in zip(curr_coords, last_coords)]):
+		with open(os.path.expanduser(USER_LOG_FILE), 'a') as fh:
+			fh.write("%s %s %s %s\n" % curr_coords[0:4])
+
+def read_last_saved_coordinates(*X):
+	last_coords = (Coordinate(-1, -1), Coordinate(-1, -1), Coordinate(-1, -1), Coordinate(-1, -1))
+	try:
+		filecontext = open(os.path.expanduser(USER_LOG_FILE), 'r')
+	except (OSError, IOError) as e:
+		traceback.print_exc()
+		pass
+	else:
+		with filecontext as fh:
+			try: fh.seek(-32, 2)
+			except IOError as e: pass
+			while True:
+				pos = fh.tell()
+				buf = fh.read()
+				fh.seek(pos, 0)
+				if pos == 0: start_anchor_re = '^'
+				else: start_anchor_re = r'(?<=\n)'
+				matches = re.findall(start_anchor_re + r'(\S+) (\S+) (\S+) (\S+)(?=\n|$)', buf)
+				if matches:
+					print matches
+					last_coords = [Coordinate(x) for x in matches[-1]]
+					break
+				else:
+					if pos == 0: break
+					try: fh.seek(-32, 1)
+					except IOError as e: fh.seek(0, 0)
+	return last_coords
+
+def do_load_coordinates(*X):
+	# replace currently pointed coordinates to the last saved ones
+	last_coords = read_last_saved_coordinates()
+	last_coords = [c for c in last_coords if not (c.x == -1 or c.y == -1)]
+	while coordinates:
+		coordinates.pop()
+	coordinates.extend(last_coords)
+	refresh_display()
+	update_statusline()
+
+def show_help(*X):
+	text = """Billentyűparancsok
+
+<b>F1</b> : Perspektíva javítás
+<b>Shift + F1</b> : Perspektíva javítás és méretre vágás
+<b>F2</b> : Méretre vágás
+<b>F3</b> : Forgatás úgy hogy a meghúzott vonal vízszintes legyen
+<b>F4</b> : Forgatás úgy hogy a meghúzott vonal függőleges legyen
+<b>Shift + F3/F4</b> : Forgatás ugyanígy és automatikus méretre vágás
+
+<b>F5</b> : Kijelölt koordináták mentése <tt>"""+USER_LOG_FILE+"""</tt> fájlba
+<b>F6</b> : Utoljára mentett koordináták visszaállítása
+<b>Q</b> : Kijelölt négyszöget mutat/elrejt
+<b>R</b> : Körülírt téglalapot mutat/elrejt
+
+<b>Ctrl + S</b> : Aktuális fájl mentése más néven
+<b>Ctrl + O</b> : Aktuális fájl megnyitása külső programmal
+<b>Escape</b> : Kilépés
+
+<b>Bal egérgomb</b> : Pontok megjelölése (max 4) egy szakasz vagy négyszög meghúzásához
+<b>Jobb egérgomb</b> : A legközelebbi pont törlése
+<b>Középső egérgomb</b> : Meghúzott szakasz vagy sokszög újrarajzoltatása
+<b>Alt + Bal egérgomb</b> : Ablak mozgatása (ha az ablakkezelő támogatja)
+"""
+	dlg = gtk.MessageDialog(window, gtk.DIALOG_MODAL | gtk.DIALOG_DESTROY_WITH_PARENT, gtk.MESSAGE_INFO, gtk.BUTTONS_OK)
+	dlg.set_markup(text)
+	dlg.set_title("Help")
+	dlg.run()
+	dlg.destroy()
+
+
+
+window = gtk.Window()
+window.set_title("Perspective correction")
+window.connect('delete-event', lambda *x: gtk.main_quit())
+add_key_binding(window, 'Escape', gtk.main_quit)
+add_key_binding(window, 'question', show_help)
+add_key_binding(window, 'r', toggle_circumrectangle)
+add_key_binding(window, 'q', toggle_quadrangle)
+add_key_binding(window, 'F1', do_distortion)
+add_key_binding(window, '<Shift>F1', do_distortion_and_crop)
+add_key_binding(window, 'F2', do_crop)
+add_key_binding(window, 'F3', do_rotation_horizontal)
+add_key_binding(window, '<Shift>F3', do_rotation_horizontal_and_autocrop)
+add_key_binding(window, 'F4', do_rotation_vertical)
+add_key_binding(window, '<Shift>F4', do_rotation_vertical_and_autocrop)
+add_key_binding(window, 'F5', do_save_coordinates)
+add_key_binding(window, 'F6', do_load_coordinates)
+add_key_binding(window, '<Control>S', do_save_as)
+add_key_binding(window, '<Control>O', do_open)
+
+box1 = gtk.VBox()
+statusline = gtk.Label()
+statusline.set_selectable(True)
+statusline.set_alignment(0, 0)
+
+
+glob = SimpleStore()
+glob.show_quadrangle = True
+glob.show_circumrectangle = False
+image = EventImage()
+image.connect('button-release-event', on_clicked)
+
+load_file(sys.argv[1])
+
+
+
+coordinates = []
+
+window.add(box1)
+box1.pack_start(image, True, True)
+box1.pack_start(statusline, False, True)
+
+window.show_all()
+window.window.set_cursor(gtk.gdk.Cursor(gtk.gdk.CROSSHAIR))
+gtk.main()

@@ -7,9 +7,42 @@ true <<EOF
 
 screens - List all GNU/Screen sessions accessible by the user and all of their inner windows as well
 
+=head1 OPTIONS
+
+=over 4
+
+=item -W
+
+don't show individual windows in each GNU/Screen session
+
+=back
+
 =cut
 
 EOF
+
+
+show_windows=yes
+
+
+while [ $# != 0 ]
+do
+	case "$1" in
+	--help)
+		pod2text "$0"
+		exit;;
+	-W)
+		show_windows=no
+		;;
+	--)
+		shift
+		break;;
+	-*)
+		echo "${0##*/}: unknown option: $1" >&1
+		exit -1;;
+	esac
+	shift
+done
 
 
 screen -ls |\
@@ -17,19 +50,22 @@ grep -Evi '^(No Sockets found|[0-9]+ Sockets? in)|^\s*$' |\
 while IFS=$'\n' read -r line
 do
 	echo "$line"
-	if [[ $line =~ ^[\ $'\t']+([^ $'\t']+) ]]
+	if [ $show_windows = yes ]
 	then
-		sty=${BASH_REMATCH[1]}
-		for win in `screen -S "$sty" -Q @echo -p %v`
-		do
-			win=${win//[!0-9]/}
-			tty=`screen -S "$sty" -p "$win" -Q @echo -p %T`
-			title=`screen -S "$sty" -p "$win" -Q @echo -p %t`
-			echo $'\t'$'\t'"$win"$'\t'"$tty"$'\t'"$title"
-			unset tty
-			unset title
-		done
-		unset win
-		unset sty
+		if [[ $line =~ ^[\ $'\t']+([^ $'\t']+) ]]
+		then
+			sty=${BASH_REMATCH[1]}
+			for win in `screen -S "$sty" -Q @echo -p %v`
+			do
+				win=${win//[!0-9]/}
+				tty=`screen -S "$sty" -p "$win" -Q @echo -p %T`
+				title=`screen -S "$sty" -p "$win" -Q @echo -p %t`
+				echo $'\t'$'\t'"$win"$'\t'"$tty"$'\t'"$title"
+				unset tty
+				unset title
+			done
+			unset win
+			unset sty
+		fi
 	fi
 done

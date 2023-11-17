@@ -319,3 +319,8 @@ bash_scriptdir()
 {
 	dirname "$(readlink -f "$0")"
 }
+
+ECHO()
+{
+	printf %s "$*"
+}

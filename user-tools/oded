@@ -411,6 +411,7 @@ But you can always refer to the same path by prepending C<./> (or C</>
 in case of absolute paths) to it.
 
 =cut
+
 		if($$instructions_ref =~ s/^open$EOIT//)
 		{
 			my $may_create = 0;
@@ -493,6 +494,7 @@ in case of absolute paths) to it.
 =item goto end of [last] search result
 
 =cut
+
 			if($$instructions_ref =~ s/^end of( last)? search result$EOIT//)
 			{
 				my $c = $last_search_is_regexp ? '/' : '"';
@@ -508,6 +510,7 @@ in case of absolute paths) to it.
 =item goto [sof | eof | sol | eol]
 
 =cut
+
 			elsif($$instructions_ref =~ s/^((?<ANCHOR>start|end)( of (?<SCOPE>file|line)|)|(?<ANCHOR>[se])o(?<SCOPE>[fl]))$EOIT//)
 			{
 				my $anchor = substr $+{'ANCHOR'}, 0, 1;
@@ -561,6 +564,7 @@ in case of absolute paths) to it.
 =item goto [previous | next] line
 
 =cut
+
 			elsif($$instructions_ref =~ s/^(?<DIRECTION>next|previous) line$EOIT//)
 			{
 				if($+{'DIRECTION'} eq 'next')
@@ -579,6 +583,7 @@ in case of absolute paths) to it.
 Lines and byte offsets are indexed by 0.
 
 =cut
+
 			elsif($$instructions_ref =~ s/^(?<WHAT>line|offset) (?<INDEX>\d+)$EOIT//)
 			{
 				if($+{'WHAT'} eq 'line')
@@ -598,6 +603,7 @@ Lines and byte offsets are indexed by 0.
 Set cursor position in file.
 
 =cut
+
 			elsif($$instructions_ref =~ s/^mark (\S+)$EOIT//)
 			{
 				$goto_pos = resolve_mark $curfile, $1;
@@ -617,6 +623,7 @@ Set cursor position in file.
 =item go [back | forward] COUNT line[s]
 
 =cut
+
 		elsif($$instructions_ref =~ s/^go (?<DIRECTION>back|forward) (?<COUNT>[1-9]\d*) lines?$EOIT//)
 		{
 			if($+{'DIRECTION'} eq 'forward')
@@ -633,6 +640,7 @@ Set cursor position in file.
 =item [go] [up | down | left | right] [COUNT times]
 
 =cut
+
 		elsif($$instructions_ref =~ s/^(go |)(?<WHERE>up|down|left|right)( (?<COUNT>[1-9]\d*) times|)$EOIT//)
 		{
 			my $count = $+{'COUNT'} || 1;
@@ -668,6 +676,7 @@ It does not overwrite current selection.
 Add newline to the end only if called as c<enter>.
 
 =cut
+
 		elsif($$instructions_ref =~ s/^(?<CMD>type|enter)$EOIT//)
 		{
 			my $cmd = $+{'CMD'};
@@ -689,6 +698,7 @@ It does not overwrite current selection, but the text itself
 let it be currently selected or not.
 
 =cut
+
 		elsif($$instructions_ref =~ s/^over(write|type) with$EOIT//)
 		{
 			my $text = get_text_parameter $instructions_ref;
@@ -717,6 +727,7 @@ If you want to replace all the occurrences in the whole file,
 "goto start" first.
 
 =cut
+
 		elsif($$instructions_ref =~ s/^replace( (?<LIMIT>all|next( (?<COUNT>[1-9]\d*)|))|)(?<OCCUR> occurrences?(?<OF> of|)|)$EOIT//)
 		{
 			croak "$0: don't understand this REPLACE instruction" if not $+{'LIMIT'} and $+{'OCCUR'};
@@ -788,6 +799,7 @@ If you want to replace all the occurrences in the whole file,
 =item backspace [COUNT char[s]]
 
 =cut
+
 		elsif($$instructions_ref =~ s/^(?<CMD>delete(?! selection)|backspace)( (?<COUNT>[1-9]\d*) chars?|)$EOIT//)
 		{
 			my $count = $+{'COUNT'} || 1;
@@ -822,6 +834,7 @@ pattern but the last one.
 In interactive mode C<search next> is enough.
 
 =cut
+
 		elsif($$instructions_ref =~ s/^search(?<NEXT> next|)$EOIT//)
 		{
 			my $next = 1 if $+{'NEXT'};
@@ -873,6 +886,7 @@ Put a named mark to the current cursor position.
 NAME must not be a reserved mark name: START, END, SOL, EOL, HERE.
 
 =cut
+
 		elsif($$instructions_ref =~ s/^mark as (\S+)$EOIT//)
 		{
 			my $m = $1;
@@ -883,6 +897,7 @@ NAME must not be a reserved mark name: START, END, SOL, EOL, HERE.
 =item clear mark NAME
 
 =cut
+
 		elsif($$instructions_ref =~ s/^clear mark (\S+)$EOIT//)
 		{
 			delete $curfile->{'mark'}->{$1};
@@ -914,6 +929,7 @@ You have some special predefined marks:
 If either C<from> or C<to> is missing, C<HERE> is implied.
 
 =cut
+
 		elsif($$instructions_ref =~ s/^select ((?<FROM>from)|to) (?<M1>\S+)(?('FROM')( to (?<M2>\S+)|))$EOIT//)
 		{
 			delete $curfile->{'mark'}->{'SELECTION-START'};
@@ -933,6 +949,7 @@ If either C<from> or C<to> is missing, C<HERE> is implied.
 =item select none
 
 =cut
+
 		elsif($$instructions_ref =~ s/^select( none|( last|) search result)$EOIT//)
 		{
 			my $what = $1;
@@ -950,6 +967,7 @@ If either C<from> or C<to> is missing, C<HERE> is implied.
 =item select [COUNT] [char[s] | word[s] | line[s]]
 
 =cut
+
 =pod
 
 =item copy [[selection] | [last] search result | to [start | end] of line]
@@ -967,6 +985,7 @@ If either C<from> or C<to> is missing, C<HERE> is implied.
 =item [copy | cut | delete] to [the] [start | end] of line
 
 =cut
+
 		elsif($$instructions_ref =~ s/^(?<CMD>copy|cut|delete)(?<WHAT> selection|( last|) search result|to( the|) (?<ANCHOR>start|end) of line|)$EOIT//)
 		{
 			my $cmd = $+{'CMD'};
@@ -1006,6 +1025,7 @@ If either C<from> or C<to> is missing, C<HERE> is implied.
 =item paste [selection]
 
 =cut
+
 		elsif($$instructions_ref =~ s/^paste( selection|)$EOIT//)
 		{
 			insert_text $curfile, $Clipboard;
@@ -1018,6 +1038,7 @@ If either C<from> or C<to> is missing, C<HERE> is implied.
 =item redo
 
 =cut
+
 =pod
 
 =item insert file FILE
@@ -1035,6 +1056,7 @@ Send selected text to COMMAND as stdin,
 and in case of C<filter>, replace selection with its stdout.
 
 =cut
+
 		elsif($$instructions_ref =~ s/^(?<CMD>insert (?<WHAT>file|output of)|filter selection through|send selection to)$EOIT//)
 		{
 			my $cmd = $+{'CMD'};
@@ -1123,6 +1145,7 @@ and in case of C<filter>, replace selection with its stdout.
 =item capitalize
 
 =cut
+
 		elsif($$instructions_ref =~ s/^(uppercase|lowercase|capitalize)$EOIT//)
 		{
 			my $op = $1;
@@ -1145,6 +1168,7 @@ The one in foreground prefixed with an C<*> asterisk.
 If any of them opened by an alias name, it shown after the path in C<[]> brackets.
 
 =cut
+
 		elsif($$instructions_ref =~ s/^show open(ed)? files?$EOIT//)
 		{
 			for my $path (keys %openedfile)
@@ -1164,6 +1188,7 @@ If any of them opened by an alias name, it shown after the path in C<[]> bracket
 Show the contents of the file in foreground.
 
 =cut
+
 		elsif($$instructions_ref =~ s/^show contents(?<WITH>( with (cursor|selection|marks))*)$EOIT//)
 		{
 			my $extras = $+{'WITH'};
@@ -1237,6 +1262,7 @@ Show the contents of the file in foreground.
 =item show cursor
 
 =cut
+
 		elsif($$instructions_ref =~ s/^show cursor$EOIT//)
 		{
 			print $position_before_operation;
@@ -1247,6 +1273,7 @@ Show the contents of the file in foreground.
 =item show marks
 
 =cut
+
 		elsif($$instructions_ref =~ s/^show marks$EOIT//)
 		{
 			for my $mark (sort {$curfile->{'mark'}->{$a} <=> $curfile->{'mark'}->{$b}} keys $curfile->{'mark'})
@@ -1257,6 +1284,7 @@ Show the contents of the file in foreground.
 =item show clipboard
 
 =cut
+
 		elsif($$instructions_ref =~ s/^show clipboard$EOIT//)
 		{
 			print $Clipboard;
@@ -1268,6 +1296,7 @@ Show the contents of the file in foreground.
 =item unset OPTION
 
 =cut
+
 		elsif($$instructions_ref =~ s/^((?<CMD>set) (?<OPT>\S+)( (?<VALUE>on|off)|)|(?<CMD>unset) (?<OPT>\S+))$EOIT//)
 		{
 			my $value = $+{'VALUE'};
@@ -1286,6 +1315,7 @@ Show the contents of the file in foreground.
 =item show options
 
 =cut
+
 		elsif($$instructions_ref =~ s/^show options$EOIT//)
 		{
 			for my $o (sort keys %Opt)
@@ -1298,6 +1328,7 @@ Show the contents of the file in foreground.
 =item [show] help
 
 =cut
+
 		elsif($$instructions_ref =~ s/^(show |)help$EOIT//)
 		{
 			pod2usage(-exitval=>'NOEXIT', -verbose=>99);
@@ -1320,6 +1351,7 @@ Show the contents of the file in foreground.
 =back
 
 =cut
+
 }
 
 

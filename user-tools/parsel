@@ -9,7 +9,7 @@ parsel - Select parts of a HTML document based on CSS selectors
 
 =head1 INVOCATION
 
-cat page.html | parsel <B<SELECTOR>> [<B<SELECTOR>> [...]]
+parsel <B<SELECTOR>> [<B<SELECTOR>> [...]] < document.html
 
 =head1 DESCRIPTION
 
@@ -18,19 +18,21 @@ arguments. See 'parsel' and 'cssselect' python modules to see which
 selectors and pseudo selectors are supported.
 
 Each B<SELECTOR> selects a part in the DOM, but unlike CSS, does not
-narrow the DOM tree considered by subsequent selectors. So a sequence of
-C<div p> arguments (2 arguments) selects all <DIV> and then all <P> in
+narrow the DOM tree down for subsequent selectors. So a sequence of
+C<div p> arguments (2 arguments) selects all C<< <DIV> >> and then all C<< <P> >> in
 the document; in other words it is NOT equivalent to the C<div p> css
 selector which selects only those <P> which are under any <DIV>.
+To combine selectors, see the C</> (slash) operator below.
 
 Each B<SELECTOR> also outputs what was matched, in the following format:
 First output an integer how many distinct HTML parts were selected, then
 output the selected parts themself each in its own line.
 CR, LF, and Backslash chars are escaped by one Backslash char. It's
 useful for programmatic consumption, because you only have to fist read
-a line which tells how many subsequent lines to read: each one is a  DOM
-part on its own. Then just unescape Backslash-R, Backslash-N, and double
-Backslashes to get the HTML content.
+a line which tells how many subsequent lines to read: each one is one
+selected DOM sub-tree on its own (or text, see C<::text> and C<[[ATTRIB]]> below).
+Then just unescape Backslash-R, Backslash-N, and double Backslashes
+to get the HTML content.
 
 Additionally it takes these special arguments as well:
 

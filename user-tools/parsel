@@ -45,8 +45,8 @@ Mnemonic: Command line echo suppression in DOS batch and in Makefile.
 
 Remove HTML tags and leaves text content only before output.
 C<text{}> syntax is borrowed from pup(1).
-C<::text> form is there for you if curly brackets are magical in your shell and you don't bother escaping.
-Note, C<::text> is not a valid CSS pseudo selector at the moment.
+C<::text> form is there for you if curly brackets are magical in your shell and you don't want to type escaping.
+Note, C<::text> is not a standard CSS pseudo selector at the moment.
 
 =item B<attr{ATTRIB}> or B<[[ATTRIB]]>
 
@@ -71,6 +71,15 @@ the same result.
 A stand-alone C<..> rewinds the base DOM selection to the
 previous base selection before the last C</>.
 Mnemonic: parent directory.
+Note, it does not select the parent element in the DOM tree,
+but the stuff previously selected in this parsel(1) run.
+To select the parent element(s) use C<parent{}>.
+
+=item B<parent{}> or B<:parent>
+
+Select the currently selected elements' parent elements on the DOM tree.
+Note, C<:parent> is not a standard CSS selector at the moment.
+Use the C<parent{}> form to disambiguate it from real (standardized) CSS selectors in your code.
 
 =item B<@:root>
 
@@ -183,6 +192,10 @@ for arg in sys.argv[1:]:
 		# only the current scope's root which we have narrowed, so step in
 		# here and rewind to the original DOM.
 		base_selection = parsel.selector.SelectorList([whole_selection])
+	
+	if arg == ':parent' or arg == 'parent{}':
+		curr_selection = curr_selection.xpath('..')
+		apply_current_selector = False
 	
 	if arg == '::text' or arg == 'text{}':
 		output_text_only = True

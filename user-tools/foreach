@@ -75,6 +75,12 @@ Rather exit with the said command's exit status code.
  ls -l --time-style +%FT%T%z | foreach --data --fields sh -c 'echo size: $5, file: $7'
  ls -l --time-style +%FT%T%z | foreach --sh 'echo size: ${FIELD[4]}, file: ${FIELD[6]}'
 
+=head1 CAVEATS
+
+Placeholder C<{}> is substituted in all I<ARGS> anywhere, not just stand-alone C<{}> arguments,
+but IS NOT ESCAPED!
+So be careful using it in shell command arguments like C<sh -e 'echo "data is: {}"'>.
+
 =head1 SEE ALSO
 
 xargs(1)

@@ -9,31 +9,7 @@ foreach - Run an OS or shell command on each input line, similar to xargs(1)
 
 =head1 SYNOPSIS
 
- foreach [I<OPTIONS>] I<COMMAND> [I<ARGS> ...]
-
-=head1 OPTIONS
-
-=over 4
-
-=item -e, --sh
-
-=item -l, --data
-
-=item -f, --fields
-
-=item -d, --delimiter DELIM
-
-=item -t, --tab
-
-=item -P, --no-placeholder
-
-=item -v, --verbose
-
-=item -n, --dry-run
-
-=item -E, --errexit
-
-=back
+foreach [I<OPTIONS>] I<COMMAND> [I<ARGS> ...]
 
 =head1 DESCRIPTION
 
@@ -52,10 +28,52 @@ input line goes to C<$DATA>, individual fields go to C<${FIELD[@]}>.
 Set I<-d> B<DELIM> if you want to split B<DATA> not by C<$IFS> but by other delimiter,
 eg. C<$'\t'> (tab).
 
+=head1 OPTIONS
+
+=over 4
+
+=item -e, --sh
+
+I<COMMAND> is a shell script and for each B<DATA>, it runs in the same shell context,
+so variables are preserved across invocations.
+
+=item -l, --data
+
+Pass B<DATA> in the arguments after the user-specified I<ARGS>.
+
+=item -f, --fields
+
+Pass individual fields of B<DATA> in the arguments after B<DATA> if I<--data> is given,
+or after the user-specified I<ARGS> if I<--data> is not given.
+
+=item -d, --delimiter DELIM
+
+Cut up B<DATA> into fields at B<DELIM> chars.
+Default is C<$IFS>.
+
+=item -t, --tab
+
+Cut up B<DATA> into fields at TAB chars..
+
+=item -P, --no-placeholder
+
+Do not substitute C<{}> with B<DATA>.
+
+=item -v, --verbose
+
+=item -n, --dry-run
+
+=item -E, --errexit
+
+Stop executing if a I<COMMAND> returns non-zero.
+Rather exit with the said command's exit status code.
+
+=back
+
 =head1 EXAMPLES
 
- ls -l --time-style +%FT%T%z | foreach --data --fields sh -c 'echo size: $5, file: $7'"
- ls -l --time-style +%FT%T%z | foreach --sh 'echo size: ${FIELD[4]}, file: ${FIELD[6]}'"
+ ls -l --time-style +%FT%T%z | foreach --data --fields sh -c 'echo size: $5, file: $7'
+ ls -l --time-style +%FT%T%z | foreach --sh 'echo size: ${FIELD[4]}, file: ${FIELD[6]}'
 
 =head1 SEE ALSO
 
@@ -167,7 +185,10 @@ do
 				fi
 				cmd_and_args+=("$arg")
 			done
+		else
+			cmd_and_args=("${FOREACH_COMMAND[@]}")
 		fi
+		
 		if [ "$FOREACH_REPLACE_PLACEHOLDER" != yes -o $placeholder_found = no ]
 		then
 			if [ "$FOREACH_PASS_DATA" = yes ]; then cmd_and_args+=("$DATA"); fi

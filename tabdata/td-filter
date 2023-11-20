@@ -8,19 +8,21 @@ td-filter - Show only those records from the input tabular data stream which mat
 
 =head1 USAGE
 
-td-filter [<OPTIONS>] [--] <COLUMN> <OPERATOR> <R-VALUE> [<COLUMN> <OPERATOR> <R-VALUE> [...]]
+td-filter [I<OPTIONS>] [--] I<COLUMN> I<OPERATOR> I<R-VALUE> [[or] I<COLUMN> I<OPERATOR> I<R-VALUE> [[or] ...]]
 
-td-filter [<OPTIONS>] --perl <EXPR>
+td-filter [I<OPTIONS>] --perl I<EXPR>
 
 =head1 DESCRIPTION
 
 Pass through those records which match at least one of the conditions (inclusive OR).
-You may put together conditions conjunctively (AND) by chaining multiple td-filter commands in the pipe.
+You may put together conditions conjunctively (AND) by chaining multiple td-filter commands by shell pipes.
 Example:
 
   td-filter NAME eq john NAME eq jacob | tr-filter AGE -gt 18
 
 This gives the records with either john or jacob, and all of them will be above 18.
+
+Optional word I<or> maked your code more explicite.
 
 td-filter(1) evaluates the Perl expression in the second form and passes through only
 if the result is true-ish in Perl (non zero, non empty string, etc).
@@ -57,29 +59,83 @@ These operators are supported, semantics are the same as in Perl, see perlop(1).
 
 For your convenience, not to bother with escaping, you may also use these operators as alternatives to the canonical ones above:
 
-is : string equality
+=over 4
 
-is not, isnt, isnot : string inequality
+=item is
 
--eq : numerical equality
+string equality
 
--ne : numerical inequality
+=item is not
 
-<>  : numerical inequality
+=item isnt
 
--gt : numerical greater than
+=item isnot
 
--ge : numerical greater or equal
+string inequality
 
--lt : numerical less than
+=item -eq
 
--le : numerical less or equal
+numerical equality
 
-match : regexp match
+=item -ne
 
-notmatch : negated regexp match
+numerical inequality
 
-have, has : substring match
+=item <>
+
+numerical inequality
+
+=item -gt
+
+numerical greater than
+
+=item -ge
+
+numerical greater or equal
+
+=item -lt
+
+numerical less than
+
+=item -le
+
+numerical less or equal
+
+=item match
+
+regexp match
+
+=item notmatch
+
+=item does not match
+
+negated regexp match
+
+=back
+
+Other operators:
+
+=over 4
+
+=item [is] one of
+
+I<R-VALUE> is split into pieces by commas (C<,>) and
+equality to at least one of them is checked
+
+=item [contains | has] [whole word]
+
+Substring match (plural forms "contain" and "have" are also accepted).
+Optional I<whole word> is a literal part of the operator.
+
+=item [contains | has] one of [whole word]
+
+Similar to B<is one of>, but substring match is checked
+instead of full string equality.
+Optional I<whole word> is a literal part of the operator.
+
+=back
+
+Operators may be preceeded by I<not>, I<does not>, I<do not> to negate their effect.
 
 =head1 CAVEATS
 
@@ -88,7 +144,8 @@ If there is no <COLUMN> column in the input data, it's silently considered empty
 
 =cut
 
-use feature qw/switch/;
+use Switch;
+use List::MoreUtils qw/all any none/;
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 @Filter = ();
@@ -108,7 +165,11 @@ $Expr = undef;
 	'-le', '<=',
 	'notmatch', '!~',
 	'match', '=~',
-	'have', 'has',
+);
+%operator_alterform = (
+	'have',    'contains',
+	'has',     'contains',
+	'contain', 'contains',
 );
 
 if($ARGV[0] eq '--perl')
@@ -121,26 +182,35 @@ else
 {
 	while(scalar @ARGV)
 	{
+		shift @ARGV if $ARGV[0] eq 'or';
+		
 		my $column = shift @ARGV;
 		
 		my $negation = 0;
 		if($ARGV[0] eq 'not') { $negation = 1; shift @ARGV; }
+		elsif($ARGV[0] ~~ ['does', 'do'] and $ARGV[1] eq 'not') { $negation = 1; shift @ARGV; shift @ARGV; }
 		
 		my $operator = shift @ARGV or die "$0: missing operator for: $column\n";
-		$operator .= ' ' . shift @ARGV if $operator eq 'is' and $ARGV[0] eq 'not';
+		if($operator eq 'is' and $ARGV[0] eq 'not') { $operator .= ' ' . shift @ARGV; }
+		$operator = $operator_alterform{$operator} if exists $operator_alterform{$operator};
+		if($operator ~~ ['contains', 'is'] and $ARGV[0] ~~ ['one', 'any'] and $ARGV[1] eq 'of')
+			{ $operator .= '-one-of'; shift @ARGV; shift @ARGV; }
+		
+		$operator = $operator_alias{$operator} if exists $operator_alias{$operator};
+		
+		my $wholeword = 0;
+		if($operator ~~ [qw/contains contains-one-of/] and $ARGV[0] eq 'whole' and $ARGV[1] eq 'word')
+			{ $wholeword = 1; shift @ARGV; shift @ARGV; }
 		
 		my $rvalue = shift @ARGV or die "$0: missing r-value for: $column $operator\n";
 		
 		
-		# operator aliases
-		$operator = $operator_alias{$operator} if exists $operator_alias{$operator};
-		
-		unless($operator ~~ [qw/== != <= >= < > =~ !~ eq ne gt lt has/])
+		unless($operator ~~ [qw/== != <= >= < > =~ !~ eq ne gt lt is-one-of contains contains-one-of/])
 		{
 			die "$0: unknown operator: $operator\n";
 		}
 		
-		push @Filter, {'field'=>$column, 'operator'=>$operator, 'negation'=>$negation, 'value'=>$rvalue,};
+		push @Filter, {'field'=>$column, 'operator'=>$operator, 'negation'=>$negation, 'value'=>$rvalue, 'wholeword'=>$wholeword};
 	}
 }
 
@@ -185,13 +255,38 @@ while(my @Field = read_record(\*STDIN))
 			my $operator = $filter->{'operator'};
 			my $result;
 			
-			given($operator)
+			if($filter->{'wholeword'})
 			{
-				when('has')
+				# have to match "whole word" - simple substring match won't be enough.
+				# transform "contains" and "contains-one-of" operators into a regexp match.
+				
+				if($operator eq 'contains-one-of')
+				{
+					$right_data = '\b(' . (join '|', map { quotemeta($_) } split /,/, $right_data) . ')\b';
+				}
+				elsif($operator eq 'contains')
+				{
+					$right_data = '\b' . quotemeta($right_data) . '\b';
+				}
+				else { die "$0: should not happen\n"; }
+				$operator = '=~';
+			}
+			
+			switch($operator)
+			{
+				case 'contains'
 				{
 					$result = 1 + index $left_data, $right_data;
 				}
-				default
+				case 'is-one-of'
+				{
+					$result = any { $left_data eq $_ } split /,/, $right_data;
+				}
+				case 'contains-one-of'
+				{
+					$result = any { 1 + index $left_data, $_ } split /,/, $right_data;
+				}
+				else
 				{
 					my $left_code = '$left_data';
 					my $right_code = '$right_data';

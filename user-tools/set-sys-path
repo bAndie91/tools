@@ -5,11 +5,14 @@ true <<EOF
 
 =head1 NAME
 
-set-sys-path - Set PATH according to /etc/environment and run a program
+set-sys-path - Set PATH according to /etc/environment and run the given command
 
 =cut
 
 EOF
+
+
+set -e
 
 export PATH=`/usr/sbin/pam_getenv PATH`
 exec "$@"

@@ -7,6 +7,26 @@ true <<EOF
 
 kt - Run command in background terminal; keept(1) convenience wrapper
 
+=head1 SYNOPSIS
+
+kt [jobs | I<COMMAND> I<ARGS>]
+
+=head1 DESCRIPTION
+
+Run I<COMMAND> in a keept(1) session, so you may send it to the background
+with all of its terminal I/O, and recall with the same C<kt COMMAND ARGS>
+command.
+
+Call C<kt jobs> to show running command sessions.
+
+=head1 FILES
+
+Stores control files in F<~/.cache/keept>.
+
+=head1 SEE ALSO
+
+keept(1)
+
 =cut
 
 EOF

@@ -1,0 +1,47 @@
+#!/bin/bash
+
+set -e
+set -o pipefail
+set -u
+
+. /usr/lib/tool/bash-utils
+
+verbosity=1
+
+remote_name=$1
+remote_url=$2
+
+while true
+do
+	read -r command args
+	
+	case "$command" in
+	capabilities)
+		echo connect
+		echo option
+		echo
+		;;
+	option)
+		read -r option value <<< "$args"
+		case "$option" in
+		verbosity)
+			verbosity=$value
+			echo ok
+			;;
+		*)
+			echo unsupported
+			;;
+		esac
+		;;
+	connect)
+		service=$args
+		
+		;;
+	'')
+		exit
+		;;
+	*)
+		errx -1 "unknown command: $command"
+		;;
+	esac
+done

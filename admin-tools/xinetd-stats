@@ -1,0 +1,29 @@
+#!/bin/bash
+
+{
+	stdbuf -oL tail -n 0 -F /var/run/xinetd.dump |\
+	{
+	pass=''
+	while IFS='' read -r line
+	do
+		if [[ $line =~ ^INTERNAL\ STATE\ DUMP ]]
+		then
+			pass=1
+		fi
+		if [ $pass ]
+		then
+			printf "%s\n" "$line"
+		fi
+		if [[ $line =~ ^END\ OF\ DUMP ]]
+		then
+			pass=''
+			break
+		fi
+	done
+	pipekill 0
+	}
+}&
+
+pkill -USR1 -F /var/run/xinetd.pid
+
+wait

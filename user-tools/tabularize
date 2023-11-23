@@ -47,8 +47,7 @@ set_unicode()
 
 set_unicode
 
-declare -A right_align_cols=()
-right_align_guess=yes
+declare -a columnAlignment=()
 horizontalLines=yes
 margins=yes
 
@@ -68,14 +67,12 @@ case "$1" in
 	margins=''
 	;;
 -r|--align-right)
-	right_align_guess=''
 	shift
-	while [ $# -gt 0 ] && [ "${1:0:1}" != - ]
-	do
-		right_align_cols[$1]=x
-		shift
-	done
-	continue
+	columnAlignment[$1]=right
+	;;
+-l|--align-left)
+	shift
+	columnAlignment[$1]=left
 	;;
 -v|--output-vertical-separator)
 	shift
@@ -102,10 +99,11 @@ Options:
                 no margins, ie. no right-most and left-most vertical borders
  -v, --output-vertical-separator CHAR
                 vertical separator character(s) in the output
- -r, --align-right NUM [NUM [...]]
-                align these columns (0-indexed) to the right, others to the
-                left. turn off auto-detection. default is auto-detect based
-                on numeric content."
+ -r, --align-right NUM
+                align these columns (0-indexed) to the right, others are
+                auto-detected. this option is repeatable.
+ -l, --align-left NUM
+                similar to --align-right option"
 	exit
 	;;
 -*)
@@ -138,6 +136,20 @@ explode()
 	# return $EXPLODE_ARRAY
 }
 
+is_numeric_check_sep()
+{
+	local thousands_sep=$2
+	local fraction_sep=$3
+	[[ $1 =~ ^[+-]?[0-9]+($thousands_sep[0-9]+)*($fraction_sep[0-9]+($thousands_sep[0-9]+)*)?$ ]]
+}
+is_numeric()
+{
+	is_numeric_check_sep "$1" ',' . || return 0
+	is_numeric_check_sep "$1" ' ' , || return 0
+	is_numeric_check_sep "$1" '.' , || return 0
+	return 1
+}
+
 
 # compute width of each column
 
@@ -161,9 +173,9 @@ do
 		fi
 			
 		# guess if this cell has numerical content (skip 1st line as it's likely a header)
-		if [ "$right_align_guess" = yes -a $num_line -gt 0 -a -n "$cell" ]
+		if [ $num_line -gt 0 -a -n "$cell" -a -z "${columnAlignment[$column]:-}" ]
 		then
-			if expr + "$cell" : '[+-]\?[0-9., ]\+$' >/dev/null 2>&1
+			if is_numeric "$cell"
 			then
 				let numericals_by_col[$column]++
 			else
@@ -193,14 +205,16 @@ innerFmt=''
 bottomFmt=''
 segments=()
 sequentColumn=''
-columnAlignment=()
 for column in "${!column_width[@]}"
 do
-	if [ "$right_align_guess" = yes -a ${numericals_by_col[$column]:-0} -ge ${non_numericals_by_col[$column]:-0} ] || [ "$right_align_guess" != yes -a "${right_align_cols[$column]:-}" ]
+	if [ -z "${columnAlignment[$column]:-}" ]
 	then
-		columnAlignment[$column]=right
-	else
-		columnAlignment[$column]=left
+		if [ ${numericals_by_col[$column]:-0} -ge ${non_numericals_by_col[$column]:-0} ]
+		then
+			columnAlignment[$column]=right
+		else
+			columnAlignment[$column]=left
+		fi
 	fi
 	
 	cellFmt="${cellFmt:-${margins:+$verticalBar}}${sequentColumn:+$verticalBar}%*s"

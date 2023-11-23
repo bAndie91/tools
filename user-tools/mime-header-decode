@@ -1,0 +1,16 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+mime-header-decode - Decode MIME-encoded stream on stdin line-by-line
+
+=cut
+
+
+use Encode;
+while(<STDIN>)
+{
+	print encode("UTF-8", decode("MIME-Header", $_));
+}

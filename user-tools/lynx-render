@@ -1,0 +1,3 @@
+#!/bin/bash
+
+exec lynx -width=-1 -stderr -force_html -assume_charset=UTF-8 -display_charset=UTF-8 -dump -stdin "$@"

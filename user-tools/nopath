@@ -16,6 +16,9 @@ nopath [-r|--recursive] I<DIRLIST> I<COMMAND> [I<ARGS>]
 Run I<COMMAND> by looking up directories in C<PATH> environment variable
 as usual, except ignore those directories which are given in colon-delimited list, I<DIRLIST>.
 
+Useful in situations like you have a wrapper command X which runs the "real" command X and
+don't want to burn in the wrapped command's full path, but keep relying on PATH-lookup mechanisms.
+
 =cut
 
 EOF

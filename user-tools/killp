@@ -170,7 +170,7 @@ find_processes()
 		declare -g -A ps_title=()
 		while read -r pid title
 		do
-			if [ $pid = $$ ]; then continue; fi  # except ourself
+			if [ $pid = $$ -o $pid = "$PPID" ]; then continue; fi  # except ourself and parent
 			ps_title[$pid]=$title
 		done < <(echo "$proclist" | lines $lines)
 		
@@ -201,7 +201,7 @@ do
 	
 	if [ ${#processes[@]} = 0 ]
 	then
-		# did not found any more of the named commands
+		# did not find any more of the named commands
 		break
 	fi
 	
@@ -216,7 +216,7 @@ do
 
 	if [ ${#processes[@]} = 0 ]
 	then
-		# did not found any more of the named commands
+		# did not find any more of the named commands
 		break
 	fi
 	

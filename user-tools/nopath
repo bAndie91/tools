@@ -1,0 +1,80 @@
+#!/bin/bash
+
+true <<'EOF'
+=pod
+
+=head1 NAME
+
+nopath - Run command by disregarding some PATH directories
+
+=head1 SYNOPSIS
+
+nopath [-r|--recursive] I<DIRLIST> I<COMMAND> [I<ARGS>]
+
+=head1 DESCRIPTION
+
+Run I<COMMAND> by looking up directories in C<PATH> environment variable
+as usual, except ignore those directories which are given in colon-delimited list, I<DIRLIST>.
+
+Useful in situations like you have a wrapper command X which runs the "real" command X and
+don't want to burn in the wrapped command's full path, but keep relying on PATH-lookup mechanisms.
+
+=cut
+
+EOF
+
+
+set -e
+set -o pipefail
+set -u
+
+. /usr/lib/tool/bash-utils
+
+
+opt_recursive=''
+
+while [ $# != 0 ]
+do
+	case "$1" in
+	--help)
+		pod2text "$0"
+		exit 0;;
+	-r|--recursive)
+		opt_recursive=1
+		;;
+	--)
+		shift
+		break;;
+	-*)
+		errx -1 "unknown option: $1";;
+	*)
+		break;;
+	esac
+	shift
+done
+
+IFS=':'
+declare -a nopaths=($1)
+declare -a sys_paths=($PATH)
+IFS=$' \t\n'
+shift
+
+sys_path=$PATH
+
+declare -a paths=()
+for dir in ${sys_paths[@]}
+do
+	if ! in_list "$dir" "${nopaths[@]}" && ! in_list "$dir/" "${nopaths[@]}" && ! in_list "${dir//%+(\/)}" "${nopaths[@]}"
+	then
+		paths+=("$dir")
+	fi
+done
+
+PATH=`bash_join : "${paths[@]}"`
+
+if [ $opt_recursive ]
+then
+	exec "$@"
+else
+	exec env PATH="$sys_path" "$@"
+fi

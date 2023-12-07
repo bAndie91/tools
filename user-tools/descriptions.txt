@@ -59,13 +59,14 @@ killp - Send signal to processes (kill, terminate, ...) by PID until they end
 kt - Run command in background terminal; keept(1) convenience wrapper
 levenshtein-distance - Calculate the Levenshtein distance of given strings
 lines - Output only the given lines of the input stream
-lnto - ln(1) convenience wrapper; you enter link target paths relative to the current directory
+lnto - Convenience wrapper for ln(1). User enters link target paths relative to the current directory
 loggerexec - Run a command and send STDOUT and STDERR to syslog
 logrotate-counters - Increment numbers in file names
 logto - Run a command and append its STDOUT and STDERR to a file
 lsata - List ATA devices on the system
 lsenv - List environment variables of a process
 mail-extract-raw-headers - Get named headers from RFC822-format input.
+mime-header-decode - Decode MIME-encoded stream on stdin line-by-line
 mime_extract - Extract parts from a MIME multipart file and save them into separate files
 mkdeb - Create a Debian package (.deb)
 mkmagnetlink - Create a "magnet:" link out of a torrent file
@@ -100,7 +101,7 @@ screen-notify - Send status-line message to the current GNU/Screen instance
 screenconsole - Interactive CLI to run GNU/screen commands against current or specified screen session
 screenreattach - Reattach to GNU/screen and import environment variables
 screens - List all GNU/Screen sessions accessible by the user and all of their inner windows as well
-set-sys-path - Set PATH according to /etc/environment and run a program
+set-sys-path - Set PATH according to /etc/environment and run the given command
 set-xcursor-lock-and-run - Set X11 cursor to a padlock and run a command
 ssh-agent-finder - Find a working ssh agent on the system so you get the same in each of your logon sessions
 strip-ansi-seq - Dumb script removing more-or-less any ANSI escape sequences from the input stream
@@ -126,6 +127,7 @@ url_encode - Escape URL-unsafe chars in text given either in parameters or in st
 url_encode_bf - Make all chars given either in parameters or in stdin to percent-encoded sequence
 vidir-sanitize - Helper script to change tricky filenames in a directory
 vifiles - Edit multiple files as one
+visymlinks - Bulk edit target of symlinks
 waitpid - Wait for a process to end (even if not child of current shell)
 whisper-retention-info - Show data retention policy in Whisper timeseries database file
 wikibot - Update Wikimedia (Wikipedia) article

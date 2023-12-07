@@ -48,6 +48,10 @@ B<PVALVE_STATUS> describes whether B<LONG RUNNING COMMAND> should be in running 
 Possible values: RUN, STOP.
 This environment is available by B<CONTROL COMMAND>.
 
+=item B<PVALVE_PID>
+
+PID of B<LONG RUNNING COMMAND>.
+
 =back
 
 =head1 CAVEATS
@@ -90,10 +94,10 @@ done
 
 quit()
 {
-	kill -TERM -$pid
+	kill -TERM -$PVALVE_PID
 	if [ "$PVALVE_STATUS" = STOP ]
 	then
-		kill -CONT -$pid
+		kill -CONT -$PVALVE_PID
 	fi
 	exit 130
 }
@@ -113,29 +117,30 @@ exists()
 trap quit TERM INT
 
 setpgrp "${controlled_cmd[@]}" &
-pid=$!
+PVALVE_PID=$!
+export PVALVE_PID
 PVALVE_STATUS=RUN
 export PVALVE_STATUS
 
-echo "$toolname: RUN $pid" >&2
+echo "$toolname: RUN $PVALVE_PID" >&2
 
 stdout_file=`readlink /proc/self/fd/1`
 exec {stdout_copy_fd}> "$stdout_file"
 
-while exists $pid
+while exists $PVALVE_PID
 do
 	delay=`command "${controller_cmd[@]}" | tee /dev/fd/$stdout_copy_fd | tail -n1; exit ${PIPESTATUS[0]}`
 	code=$?
 	
 	if [ $code = 0 -a $PVALVE_STATUS != RUN ]
 	then
-		echo "$toolname: CONT -$pid" >&2
-		kill -CONT -$pid
+		echo "$toolname: CONT -$PVALVE_PID" >&2
+		kill -CONT -$PVALVE_PID
 		PVALVE_STATUS=RUN
 	elif [ $code != 0 -a $PVALVE_STATUS = RUN ]
 	then
-		echo "$toolname: STOP -$pid" >&2
-		kill -STOP -$pid
+		echo "$toolname: STOP -$PVALVE_PID" >&2
+		kill -STOP -$PVALVE_PID
 		PVALVE_STATUS=STOP
 	fi
 	

@@ -31,7 +31,7 @@ $(TOOLS_TARGET_DIR)/multithrottler: /usr/lib/multithrottler/Throttler.pm
 	install $(REPO_ROOT)/libexec/perlshell $@
 	@echo remove $@ >> uninstall.sh
 
-/usr/share/doc/tool/rsync-semichroot.txt: $(REPO_ROOT)/doc/rsync-semichroot.txt
+/usr/share/doc/tool/rsync-semichroot.txt: $(REPO_ROOT)/doc/rsync-semichroot.txt | /usr/share/doc/tool
 	install $(REPO_ROOT)/doc/rsync-semichroot.txt $@
 	@echo remove $@ >> uninstall.sh
 

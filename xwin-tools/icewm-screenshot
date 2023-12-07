@@ -1,0 +1,37 @@
+#!/bin/sh
+
+coords=''
+
+if [ ."$1" = .--region ]
+then
+	shift
+	
+	if [ ."$1" = .--repeat ]
+	then
+		shift
+		coords=`cat ~/.config/screenshot-utility/last-selected-region`
+	fi
+	
+	if [ -z "$coords" ]
+	then
+		selection=$(xrectsel -p)
+		coords=$(echo "$selection" | sed -ne 1p)
+		
+		if [ -n "$coords" ]
+		then
+			# select the whole window under the cursor if not a region was selected, just a point
+			if expr "$coords" : '^0x0[+-]' >/dev/null
+			then
+				coords=$(echo "$selection" | sed -ne 2p)
+			fi
+			
+			# save coordinates for later use
+			mkdir -p ~/.config/screenshot-utility
+			echo "$coords" > ~/.config/screenshot-utility/last-selected-region
+		fi
+	fi
+fi
+
+filepath=~/tmp/screenshot_$(date +%F_%H%M%S).jpg
+xwd -root | convert - ${coords:+-crop "$coords"} "$filepath"
+exec gpicview "$filepath"

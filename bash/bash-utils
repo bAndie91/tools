@@ -317,7 +317,7 @@ array_reverse()
 
 bash_scriptdir()
 {
-	dirname "$(readlink -f "$0")"
+	dirname "$(readlink -f "${BASH_SOURCE[-1]}")"
 }
 
 ECHO()

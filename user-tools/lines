@@ -10,7 +10,7 @@ lines - Output only the given lines of the input stream
 
 
 
-if('--help' ~~ @ARGV)
+if(grep {$_ eq '--help'} @ARGV)
 {
 	die "Usage: $0 [<RANGES> [<RANGES> [...]]] [-- <FILE> [<FILE> [...]]]
   Read from from FILEs if specified, STDIN otherwise.

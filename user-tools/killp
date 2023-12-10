@@ -52,7 +52,13 @@ See kill(1) and signal(7) for valid I<SIG> signal names and numbers.
 How much to wait between attempts.
 See sleep(1) for valid I<IVAL> intervals.
 
-=item -D, --debug
+=item -q, --quiet
+
+=item -v, --verbose
+
+By default, prints what is being killed on the second attempt onward.
+With --verbose, prints the first attempt too.
+With --quiet, does not print what is being killed.
 
 =item -n, --dryrun
 
@@ -94,15 +100,34 @@ killexe)
 esac
 
 
-opt_debug=''
+opt_verbose=''
+opt_quiet=''
 opt_dryrun=''
 Signal=TERM
 Interval=0.2
 declare -A processes_left
 declare -a grep_opts=()
+declare -a args=()
 
-
+# explode "-abc" arguments into separate "-a -b -c" pieces.
 for arg in "$@"
+do
+	case "$arg" in
+	-[!-]*)
+		pos=1
+		while [ -n "${arg:$pos:1}" ]
+		do
+			args+=("-${arg:$pos:1}")
+			let pos++
+		done
+		;;
+	*)
+		args+=("$arg")
+		;;
+	esac
+done
+
+for arg in "${args[@]}"
 do
 	case "$arg" in
 	signal=*|sig=*|s=*|--signal=*|--sig=*|-s=*)
@@ -118,15 +143,14 @@ do
 	-E|--extended-regexp|-F|--fixed-strings|-G|--basic-regexp|-P|--perl-regexp|-i|--ignore-case|-w|--word-regexp|-x|--line-regexp)
 		grep_opts+=("$arg")
 		;;
-	-D|--debug)
-		opt_debug=1
+	-q|--quiet)
+		opt_quiet=1
+		;;
+	-v|--verbose)
+		opt_verbose=1
 		;;
 	-n|--dryrun|--dry-run)
 		opt_dryrun=1
-		;;
-	-nD|-Dn)
-		opt_dryrun=1
-		opt_debug=1
 		;;
 	-*|*=*)
 		pod2text "$0" >&2
@@ -193,7 +217,8 @@ do
 	then
 		# leave some time for the processes to exit.
 		# it's usually faster to wait here a bit,
-		# than rush here and find processes, then wait a longer time below.
+		# than rush to find processes, then wait a longer time if the processes 
+		# were still there which we killed.
 		sleep 0.1
 	fi
 	
@@ -216,7 +241,7 @@ do
 
 	if [ ${#processes[@]} = 0 ]
 	then
-		# did not find any more of the named commands
+		# did not find more of the named commands
 		break
 	fi
 	
@@ -236,14 +261,20 @@ do
 		
 		if kill -- -0 "$id"
 		then
-			if [ $opt_debug ]
+			if [ ! $opt_quiet ]
 			then
-				case "$mode" in
-				cmd|exe)
-					warnx "kill: $id: ${ps_title[$proc]}"
-					;;
-				esac
+				if [ "$opt_verbose" -o $attempt -gt 0 ]
+				then
+					msg_end=''
+					case "$mode" in
+					cmd|exe)
+						msg_end=": ${ps_title[$proc]}"
+						;;
+					esac
+					warnx "attempt $attempt: $id$msg_end"
+				fi
 			fi
+			
 			if [ ! $opt_dryrun ]
 			then
 				kill -- -$Signal "$id"

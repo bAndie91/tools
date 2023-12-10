@@ -1,0 +1,82 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+mrkv2td - Transform multi-record key-value (MRKV) stream to tabular data format.
+
+=head1 DESCRIPTION
+
+As tabular data format presents field names at the start of transmission,
+mrkv2td(1) infers them only from the first record,
+so no need to buffer the whole dataset to find all fields,
+and it's usual for all records to have all fields anyways.
+
+=head1 OPTIONS
+
+=over 4
+
+=item -s, --separator REGEXP
+
+Regexp which separates field name from cell data in MRKV stream.
+Default is TAB (C<\t>).
+
+=back
+
+=head1 SEE ALSO
+
+td2mrkv(1)
+
+=cut
+
+$OptSeparatorRegexp = "\t";
+
+use Data::Dumper;
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
+
+sub flush_record
+{
+	my $colnum = shift;
+	my $record = shift;
+	
+	print join($FS, map { $record->{$_} } sort { $colnum->{$a} <=> $colnum->{$b} } keys $record).$RS;
+}
+
+@Headers = ();
+%ColumnNumber = ();
+%record = ();
+$record_num = 0;
+
+while(my $line = <STDIN>)
+{
+	chomp $line;
+	if($line eq '')
+	{
+		if($record_num == 0)
+		{
+			print join($FS, @Headers).$RS;
+		}
+		
+		flush_record \%ColumnNumber, \%record;
+		%record = ();
+		$record_num++;
+	}
+	else
+	{
+		my ($field, $cell) = split /$OptSeparatorRegexp/, $line, 2;
+		$record{$field} = $cell;
+		
+		if($record_num == 0)
+		{
+			push @Headers, $field;
+			$ColumnNumber{$field} = $#Headers;
+		}
+	}
+}
+
+if(%record)
+{
+	flush_record \%ColumnNumber, \%record;
+}

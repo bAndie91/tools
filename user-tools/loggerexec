@@ -7,6 +7,20 @@ true <<EOF
 
 loggerexec - Run a command and send STDOUT and STDERR to syslog
 
+=head1 SYNOPSIS
+
+loggerexec [-s] I<FACILITY> I<IDENT> I<COMMAND> [I<ARGS>]
+
+Send I<COMMAND>'s stdout and stderr to syslog.
+I<FACILITY> is one of standard syslog facility names (user, mail, daemon, auth, local0, ...).
+I<IDENT> is a freely choosen identity name, also known as tag or programname.
+I<COMMAND>'s stdout goes as B<info> log level, stderr goes as B<error> log level.
+Option C<-s> puts the output on stdout/stderr too.
+
+=head1 SEE ALSO
+
+logger(1), stdsyslog(1)
+
 =cut
 
 EOF
@@ -14,12 +28,7 @@ EOF
 
 if [ ".$1" = ".--help" ]
 then
-	echo "Usage: $0 [-s] <FACILITY> <IDENT> <COMMAND> [<ARGS>]"
-	echo "Send COMMAND's stdout and stderr to syslog."
-	echo "FACILITY is one of standard syslog facility names (user, mail, daemon, auth, local0, ...)"
-	echo "IDENT is a freely choosen identity name, also known as tag or programname."
-	echo "COMMAND's stdout goes as 'info' log level, stderr goes as 'error' log level."
-	echo "Option '-s' puts the output on stdout/stderr too."
+	pod2text "$0"
 	exit
 fi
 

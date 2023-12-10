@@ -21,6 +21,10 @@ Default is TAB (C<\t>).
 
 getent passwd | tr : "\t" | td-add-headers USER PW UID GID GECOS HOME SHELL | td-select +ALL -PW | td2mrkv
 
+=head1 SEE ALSO
+
+mrkv2td(1), td2html(1)
+
 =cut
 
 $OptSeparator = "\t";

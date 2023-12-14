@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 coords=''
 
@@ -33,5 +33,6 @@ then
 fi
 
 filepath=~/tmp/screenshot_$(date +%F_%H%M%S).jpg
-xwd -root | convert - ${coords:+-crop "$coords"} "$filepath"
+# may remove 'xwdtopnm' if your imagemagick version supports "X-Window screen dump" format
+xwd -root | xwdtopnm | convert - ${coords:+-crop "$coords"} "$filepath"
 exec mimeopen-gui "$filepath"

@@ -9,7 +9,7 @@ then
 	if [ ."$1" = .--repeat ]
 	then
 		shift
-		coords=`cat ~/.config/screenshot-utility/last-selected-region`
+		coords=`cat ~/.config/xscreenshot/last-selected-region`
 	fi
 	
 	if [ -z "$coords" ]
@@ -26,12 +26,12 @@ then
 			fi
 			
 			# save coordinates for later use
-			mkdir -p ~/.config/screenshot-utility
-			echo "$coords" > ~/.config/screenshot-utility/last-selected-region
+			mkdir -p ~/.config/xscreenshot
+			echo "$coords" > ~/.config/xscreenshot/last-selected-region
 		fi
 	fi
 fi
 
 filepath=~/tmp/screenshot_$(date +%F_%H%M%S).jpg
 xwd -root | convert - ${coords:+-crop "$coords"} "$filepath"
-exec gpicview "$filepath"
+exec mimeopen-gui "$filepath"

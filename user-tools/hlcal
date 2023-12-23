@@ -168,6 +168,7 @@ sub verify_color
 $OptNoHighlightToday = 0;
 # weeks starts on Sunday by default in cal
 $week_start_on = SUN;
+$week_start_day_explicite = 0;
 $calcmd = 'cal';
 $calcmd = 'ncal' if $0 =~ /ncal/;
 
@@ -231,8 +232,8 @@ while(@ARGV)
 @cal_args = @ARGV;
 
 GetOptions(
-	'M' => sub { $week_start_on = MON; },
-	'S' => sub { $week_start_on = SUN; },
+	'M' => sub { $week_start_on = MON; $week_start_day_explicite = 1; },
+	'S' => sub { $week_start_on = SUN; $week_start_day_explicite = 1; },
 	'C' => sub { $calcmd = 'cal'; },
 	'N' => sub { $calcmd = 'ncal'; },
 	'b' => sub { $layout = HORIZONTAL; },
@@ -250,6 +251,17 @@ if(not defined $layout)
 	$layout = HORIZONTAL;
 	$layout = VERTICAL if $calcmd eq 'ncal';
 }
+
+if(!$week_start_day_explicite and $calcmd eq 'ncal')
+{
+	# ncal takes locale settings for the week's first day
+	($first_weekday) = `locale -k first_weekday` =~ /=(\d+)/;
+	if(defined $first_weekday)
+	{
+		$week_start_on = ($first_weekday+5) % 7;
+	}
+}
+
 
 
 my $month_parser = new DateTime::Format::Strptime(pattern=>'%Y %b', on_error=>'croak', locale=>setlocale(LC_TIME));

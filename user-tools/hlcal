@@ -77,6 +77,8 @@ use DateTime::Format::Strptime;
 use DateTime::Locale;
 use locale;
 
+no warnings 'experimental::smartmatch';
+
 
 # take the basename of the command as procname.
 $0 =~ s/.*\/([^\/]+)$/$1/;
@@ -339,7 +341,7 @@ while(<$pipe>)
 			{
 				my $week_start_offset = $month_column * ($where_last_dow_column_ends + $month_spacing);
 				
-				my %hldow = map {$_=>$Highlight->{'days-of-week'}->{$_}} keys $Highlight->{'days-of-week'};
+				my %hldow = map {$_=>$Highlight->{'days-of-week'}->{$_}} keys %{$Highlight->{'days-of-week'}};
 				my $cur_year = $year_column[$month_column] || $year;
 				my $cur_month = $month_column[$month_column];
 				
@@ -432,7 +434,7 @@ while(<$pipe>)
 		{
 			# TODO: hilight dates
 			
-			while (my ($hldow, $color) = each $Highlight->{'days-of-week'})
+			while (my ($hldow, $color) = each %{$Highlight->{'days-of-week'}})
 			{
 				if($day_of_week == $hldow)
 				{

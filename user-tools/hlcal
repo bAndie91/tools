@@ -77,7 +77,7 @@ use DateTime::Format::Strptime;
 use DateTime::Locale;
 use locale;
 
-no warnings 'experimental::smartmatch';
+no if exists($warnings::Offsets{'experimental::smartmatch'}), warnings, 'experimental::smartmatch';
 
 
 # take the basename of the command as procname.
@@ -256,9 +256,12 @@ my $month_parser = new DateTime::Format::Strptime(pattern=>'%Y %b', on_error=>'c
 
 
 
-# prevent cal to highlight today. we will do it.
-unshift @cal_args, "-h";
-
+# if this bsdcal version supports -h flag,
+if(system("$calcmd -h >/dev/null 2>&1") == 0)
+{
+	# prevent cal to highlight today. we will do it.
+	unshift @cal_args, "-h";
+}
 
 open my $pipe, '-|:utf8', $calcmd, @cal_args or croak "$0: popen: $calcmd: $!";
 binmode STDOUT, ':utf8';

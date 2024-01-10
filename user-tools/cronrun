@@ -1,0 +1,155 @@
+#!/bin/bash
+
+{
+
+true <<'EOF'
+=pod
+
+=head1 NAME
+
+cronrun - convenience features to run commands in task scheduler environment
+
+=head1 SYNOPSIS
+
+cronrun [I<OPTIONS>] <I<COMMAND>> [I<ARGS>]
+
+Run I<COMMAND> in a way most scheduled jobs are intended to run, ie:
+
+=over 4
+
+=item Set computing priority (nice, ionice) to low
+
+=item Delay start for random amount of time, thus avoiding load-burst when multiple jobs start at the same time
+
+=item Allow only one instance at a time (by locking)
+
+=back
+
+=head1 OPTIONS
+
+=over 4
+
+=item --random-delay, -d I<SEC>
+
+Delay program execution at most I<SEC> seconds.
+Default is to wait nothing.
+
+=item --wait-lock, -W
+
+Wait for the lock to release.
+By default cronrun(1) fails immediately if locked.
+
+=back
+
+=head1 DESCRIPTION
+
+Lock is based on C<CRONJOBID> environment, or I<COMMAND> if C<CRONJOBID> is not set.
+
+If C<CRONJOBID> is set, logs go to syslog, in the "cron" facility, stdout at info level, stderr at error level.
+
+=head1 FILES
+
+=over 4
+
+=item F<~/.cache/cronrun>
+
+Lock files stored in this directory.
+
+=back
+
+=head1 ENVIRONMENT
+
+=over 4
+
+=item CRONJOBID
+
+Recommended practice is to set C<CRONJOBID=something> in your crontab before each C<cronrun ...> job definition.
+
+=back
+
+=head1 LIMITATIONS
+
+=head1 SEE ALSO
+
+=cut
+
+EOF
+
+
+
+
+scriptname=${0##*/}
+random_delay_sec=0
+wait_lock=''
+
+while [ $# != 0 ]
+do
+	case "$1" in
+	--help)
+		exit;;
+	-d|--random-delay)
+		shift
+		random_delay_sec=$1
+		;;
+	-W|--wait-lock)
+		wait_lock=1
+		;;
+	--)	shift; break;;
+	-*)	echo "$scriptname: unknown option: $1" >&2
+		exit -1;;
+	*)	break;;
+	esac
+	shift
+done
+
+lockdir=~/.cache/cronrun/locks
+cmd_hash=`echo -n "${CRONJOBID:-$1}" | md5sum | cut -c1-32`
+
+
+# delay random amount of seconds
+sleep $[RANDOM % ($random_delay_sec + 1)]
+
+
+# scheduled jobs are likely good to run at low priority
+renice -n 19 -p $$ >/dev/null
+ionice -c 3 -p $$
+
+
+# set up logging
+if [ -n "$CRONJOBID" ]
+then
+	syslog_ident=$LOGNAME.${CRONJOBID//\//.}
+	exec 1> >(logger -p cron.info -t "$syslog_ident" -s 2>&1) 2> >(logger -p cron.error -t "$syslog_ident" -s 1>&2)
+fi
+
+
+# check the lock
+mkdir -p "$lockdir"
+lockfile=$lockdir/$cmd_hash
+exec {lock_fd}>>"$lockfile"
+flock --exclusive --nonblock $lock_fd
+errno=$?
+if [ $errno != 0 ]
+then
+	if [ $wait_lock ]
+	then
+		echo "cronrun: waiting on lock..." >&2
+		flock --exclusive $lock_fd
+		errno=$?
+		if [ $errno != 0 ]
+		then
+			exit $errno
+		fi
+		echo "cronrun: lock acquired" >&2
+	else
+		exit $errno
+	fi
+fi
+
+# ---- lock acquired ----
+
+# run the job
+exec "$@"
+
+exit $?
+}

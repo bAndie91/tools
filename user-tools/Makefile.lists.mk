@@ -25,4 +25,4 @@ TOOLS ?=   2opml adr2html asterisk-log-separator awk-cut base58 base64url \
   pfx2pem rdfindreport symlinks-analyze rn filterexec trackrun oded cled \
   mail-extract-addresses mail-extract-raw-headers fzf-preview w3m-render \
   randstr rcmod killp killpgrp killcmd killexe hlcal hlncal visymlinks \
-  lynx-render mime-header-decode nopath query-alternatives
+  lynx-render mime-header-decode nopath query-alternatives cronrun

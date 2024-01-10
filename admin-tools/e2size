@@ -1,0 +1,5 @@
+#!/bin/sh
+tune2fs -l "$1" |\
+	perl -ne '/^Block count:\s*(\d+)/ and $bc=$1;
+	/^Block size:\s*(\d+)/ and $bs=$1;
+	END { print $bs * $bc, " bytes\n"; }'

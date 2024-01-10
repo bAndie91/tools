@@ -21,6 +21,7 @@ chshebang - Change a script's default interpreter
 cled - Command Line-Editor - Edit text file lines by commands directly from shell
 convert_chromium_cookies_to_netscape.sh - Convert Chromium and derivative web browser's cookies to Netscape format (used by wget and curl)
 corner_time - Place a digital clock in the upper right hand corner of the terminal
+cronrun - convenience features to run commands in task scheduler environment
 cut.awk - Output only the selected fields from the input stream, parameters follow awk(1) syntax
 daemonctl - Manage preconfigured libslack daemon(1) daemons more conveniently
 dataurl2bin - Decode "data:..." URLs from input stream and output the raw binary data
@@ -76,6 +77,7 @@ multithrottler - Run given command if not reached the defined rate limit
 mysql-fix-orphan-privileges.php - Suggest SQL commands to clean up unused records in system tables which hold permission data
 noacute - Strip diacritics (acute, umlaut, ...) from letters on the input stream
 nocomment - remove comment lines from input stream
+nopath - Run command by disregarding some PATH directories
 oded - On-disk editor - edit text files by commands directly from shell
 organizebydate - Rename files based on their date-time
 palemoon-current-url - Display the webpage's URL which is currently open in Palemoon web browser

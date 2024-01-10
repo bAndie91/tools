@@ -1,0 +1,1 @@
+exec screen -S "$STY" -X detach

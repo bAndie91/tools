@@ -28,6 +28,7 @@ dataurl2bin - Decode "data:..." URLs from input stream and output the raw binary
 debdiff - Display differences between 2 Debian packages (*.deb files)
 descpids - List all descendant process PIDs of the given process(es)
 dfbar - Display disk space usage with simple bar chart (as reported by df(1))
+dict-repl - Shell-like interface for dict(1).
 digasn - Query Autonom System Number (ASN) from DNS
 diu - Display Inode usage, similar to du(1) for space usage
 dlnew - Download web resource if local copy is older

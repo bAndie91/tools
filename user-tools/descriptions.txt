@@ -72,6 +72,7 @@ mime-header-decode - Decode MIME-encoded stream on stdin line-by-line
 mime_extract - Extract parts from a MIME multipart file and save them into separate files
 mkdeb - Create a Debian package (.deb)
 mkmagnetlink - Create a "magnet:" link out of a torrent file
+movesymlinks - Rename file and correct its symlinks to keep point to it.
 moz_bookmarks - Read Mozilla bookmarks database and display titles and URLs line-by-line
 msg - Write to given user's open terminals
 multithrottler - Run given command if not reached the defined rate limit

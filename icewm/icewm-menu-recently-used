@@ -1,0 +1,59 @@
+#!/usr/bin/env python2
+
+import os
+import sys
+import re
+import gtk
+
+def esc(s):
+	return re.sub(r'["\\]', '\\"', s)
+
+def iconpath_for_mime(mime):
+	BASE = "/usr/share/rox/ROX/MIME"
+	(main, sub) = mime.split('/')
+	path = os.path.join(BASE, main+'-'+sub+'.png')
+	if not os.path.exists(path):
+		path = os.path.join(BASE, main+'-x-generic.png')
+	return path
+
+MODE_MIXED, MODE_NORMAL, MODE_DIRS = range(3)
+mode = MODE_MIXED
+
+try:
+	if sys.argv[1] == 'directories':
+		mode = MODE_DIRS
+	elif sys.argv[1] == 'all':
+		mode = MODE_NORMAL
+except IndexError:
+	pass
+
+rmag = gtk.recent_manager_get_default()
+items = rmag.get_items()
+items.sort(cmp=lambda a, b: cmp(a.get_visited(), b.get_visited()))
+dirs = {}
+
+for item in items:
+	filepath = item.get_uri_display()
+	
+	if mode in [MODE_NORMAL, MODE_MIXED]:
+		if item.is_local() and not item.get_private_hint() and item.exists():
+			label = item.get_short_name()
+			iconpath = iconpath_for_mime(item.get_mime_type())
+			
+			# this method seems sparsely supported by applications
+			# they register their commands wrong.
+			#
+			#app = item.last_application()
+			#(cmd, _, _) = item.get_application_info(app)
+			#command_str = "%s %s" % (cmd, filepath)
+			
+			command_str = "%s \"%s\"" % ('rox' if os.path.isdir(filepath) else 'mimeopen-gui', esc(filepath))
+			
+			print "prog \"%s\" \"%s\" %s" % (esc(label), esc(iconpath), command_str)
+	
+	if mode in [MODE_DIRS, MODE_MIXED]:
+		if item.is_local() and not item.get_private_hint():
+			dirpath = os.path.dirname(filepath)
+			if dirpath not in dirs:
+				dirs[dirpath] = True
+				print "prog \"%s\" folder rox \"%s\"" % (esc(dirpath), esc(dirpath))

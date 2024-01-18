@@ -1,0 +1,48 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+substenv - Substitute environment variables in parameters and run the resulting command
+
+=head1 SYNOPSIS
+
+substenv I<COMMAND> [I<ARGS>]
+
+=head1 DESCRIPTION
+
+Replace all occurrances of C<$NAME> in I<COMMAND> and I<ARGS> to the I<NAME> environment
+variable's value, then run I<COMMAND>.
+
+=head1 EXAMPLE
+
+ system('substenv', 'ls', '$HOME/.config')
+
+runs:
+
+ execve('ls', ['ls', '/home/jdoe/.config'])
+
+=head1 NOTES
+
+Does not support full shell-like variable interpolation.
+Use a real shell for it.
+
+=head1 RATIONALE
+
+Sometimes you don't want a shell to be in the picture when composing commands,
+yet need to weave some environment variable into it.
+
+=cut
+
+
+@run_cmd = ();
+
+for my $arg (@ARGV)
+{
+	$arg =~ s/\$([A-Z0-9_]+)/$ENV{$1}/g;
+	push @run_cmd, $arg;
+}
+
+exec @run_cmd;
+exit 127;

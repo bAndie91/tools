@@ -175,26 +175,26 @@ do
 	
 	FOREACH_COMMAND_STATUS=0
 	
+	declare -a cmd_and_args=()
+	placeholder_found=no
+	if [ "$FOREACH_REPLACE_PLACEHOLDER" = yes ]
+	then
+		for arg in "${FOREACH_COMMAND[@]}"
+		do
+			if [[ $arg =~ \{\} ]]
+			then
+				placeholder='{}'
+				arg=${arg//$placeholder/$DATA}
+				placeholder_found=yes
+			fi
+			cmd_and_args+=("$arg")
+		done
+	else
+		cmd_and_args=("${FOREACH_COMMAND[@]}")
+	fi
+	
 	if [ "$FOREACH_MODE" = command ]
 	then
-		declare -a cmd_and_args=()
-		placeholder_found=no
-		if [ "$FOREACH_REPLACE_PLACEHOLDER" = yes ]
-		then
-			for arg in "${FOREACH_COMMAND[@]}"
-			do
-				if [[ $arg =~ \{\} ]]
-				then
-					placeholder='{}'
-					arg=${arg//$placeholder/$DATA}
-					placeholder_found=yes
-				fi
-				cmd_and_args+=("$arg")
-			done
-		else
-			cmd_and_args=("${FOREACH_COMMAND[@]}")
-		fi
-		
 		if [ "$FOREACH_REPLACE_PLACEHOLDER" != yes -o $placeholder_found = no ]
 		then
 			if [ "$FOREACH_PASS_DATA" = yes ]; then cmd_and_args+=("$DATA"); fi
@@ -214,12 +214,12 @@ do
 	else
 		if [ "$FOREACH_VERBOSE" = yes ]
 		then
-			echo "foreach: ${FOREACH_COMMAND[*]}" >&2
+			echo "foreach: ${cmd_and_args[*]}" >&2
 		fi
 		
 		if [ "$FOREACH_DRYRUN" = no ]
 		then
-			eval "${FOREACH_COMMAND[@]}"
+			eval "${cmd_and_args[@]}"
 			FOREACH_COMMAND_STATUS=$?
 		fi
 	fi

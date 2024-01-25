@@ -1,6 +1,7 @@
 #!/usr/bin/env perl
 ###################
 
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 $me=$0;
 $0="jobsel";
 #sub helpy { $pos = tell DATA; print STDERR <DATA>; seek DATA,$pos,0 }

@@ -127,6 +127,7 @@ Show line numbers in verbose mode.
 use Data::Dumper;
 use Getopt::Long qw/:config no_ignore_case bundling pass_through/;
 use feature qw/switch/;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 use Pod::Usage;
 # Term::ReadLine::Gnu is recommended
 $readline_support = eval q{ use Term::ReadLine; 1; };

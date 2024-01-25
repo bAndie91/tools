@@ -7,6 +7,7 @@ use Socket qw/AF_UNIX AF_INET SOCK_STREAM pack_sockaddr_in inet_aton sockaddr_un
 use POSIX ':sys_wait_h';
 use Data::Dumper;
 use Fcntl qw/F_GETFL F_SETFL O_NONBLOCK O_RDONLY O_WRONLY/;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 
 sub blockio

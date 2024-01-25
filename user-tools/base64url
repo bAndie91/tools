@@ -1,6 +1,7 @@
 #!/usr/bin/env perl
 
 use warnings;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 use MIME::Base64 qw/encode_base64url decode_base64url/;
 
 if($ARGV[0] ~~ ['-d', '--decode'])

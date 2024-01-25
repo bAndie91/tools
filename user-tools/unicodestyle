@@ -5,6 +5,7 @@ use Getopt::Long;
 use Data::Dumper;
 use Encode qw/decode encode/;
 use constant { LOWER => 0, UPPER => 1, COMMON_SURROGATE => 0xd835, };
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 binmode STDIN, ':utf8';
 binmode STDOUT, ':utf8';
 

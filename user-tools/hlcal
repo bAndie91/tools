@@ -66,6 +66,7 @@ blink_slow, blink_rapid, inverse, conceal, crossed,
 use Data::Dumper;
 use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat pass_through/;
 use feature qw/switch/;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 use Pod::Usage;
 use Carp qw/croak/;
 use List::MoreUtils qw/all any none/;
@@ -76,8 +77,6 @@ use DateTime::Duration;
 use DateTime::Format::Strptime;
 use DateTime::Locale;
 use locale;
-
-no if exists($warnings::Offsets{'experimental::smartmatch'}), warnings, 'experimental::smartmatch';
 
 
 # take the basename of the command as procname.

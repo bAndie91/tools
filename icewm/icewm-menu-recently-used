@@ -6,7 +6,7 @@ import re
 import gtk
 
 def esc(s):
-	return re.sub(r'["\\]', '\\"', s)
+	return s.replace('\\', '\\\\').replace('"', '\\"')
 
 def iconpath_for_mime(mime):
 	BASE = "/usr/share/rox/ROX/MIME"
@@ -16,29 +16,18 @@ def iconpath_for_mime(mime):
 		path = os.path.join(BASE, main+'-x-generic.png')
 	return path
 
-MODE_MIXED, MODE_NORMAL, MODE_DIRS = range(3)
-mode = MODE_MIXED
 
-try:
-	if sys.argv[1] == 'directories':
-		mode = MODE_DIRS
-	elif sys.argv[1] == 'all':
-		mode = MODE_NORMAL
-except IndexError:
-	pass
-
-rmag = gtk.recent_manager_get_default()
-items = rmag.get_items()
-items.sort(cmp=lambda a, b: cmp(a.get_visited(), b.get_visited()))
+items = os.popen('recent-files-gtk', 'r').readlines()
 dirs = {}
 
 for item in items:
-	filepath = item.get_uri_display()
+	item = item.rstrip('\n')
+	mime_type, filepath = item.split('\t', 1)
+	filepath = filepath.rstrip(os.path.sep)
 	
-	if mode in [MODE_NORMAL, MODE_MIXED]:
-		if item.is_local() and not item.get_private_hint() and item.exists():
-			label = item.get_short_name()
-			iconpath = iconpath_for_mime(item.get_mime_type())
+	if os.path.exists(filepath):
+			label = os.path.basename(filepath)
+			iconpath = iconpath_for_mime(mime_type)
 			
 			# this method seems sparsely supported by applications
 			# they register their commands wrong.
@@ -50,10 +39,9 @@ for item in items:
 			command_str = "%s \"%s\"" % ('rox' if os.path.isdir(filepath) else 'mimeopen-gui', esc(filepath))
 			
 			print "prog \"%s\" \"%s\" %s" % (esc(label), esc(iconpath), command_str)
-	
-	if mode in [MODE_DIRS, MODE_MIXED]:
-		if item.is_local() and not item.get_private_hint():
-			dirpath = os.path.dirname(filepath)
-			if dirpath not in dirs:
-				dirs[dirpath] = True
-				print "prog \"%s\" folder rox \"%s\"" % (esc(dirpath), esc(dirpath))
+			
+			if not os.path.isdir(filepath):
+				dirpath = os.path.dirname(filepath)
+				if dirpath not in dirs:
+					dirs[dirpath] = True
+					print "prog \"%s\" folder rox \"%s\"" % (esc(dirpath), esc(dirpath))

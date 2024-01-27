@@ -19,4 +19,4 @@ for item in items:
 		dirpath = os.path.dirname(filepath)
 		if dirpath not in dirs:
 			dirs[dirpath] = True
-			print "inode/directory\t%s" % (dirpath,)
+			print "inode/directory\t%s/" % (dirpath,)

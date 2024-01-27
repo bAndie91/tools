@@ -12,11 +12,13 @@ dirs = {}
 
 for item in items:
 	filepath = item.get_uri_display()
+	filepath = filepath.rstrip(os.path.sep)
 	
 	if item.is_local() and not item.get_private_hint():
-		print "%s\t%s" % (item.get_mime_type(), filepath,)
+		print "%s\t%s%s" % (item.get_mime_type(), filepath, os.path.sep if os.path.isdir(filepath) and not filepath.endswith(os.path.sep) else '')
 		
-		dirpath = os.path.dirname(filepath)
-		if dirpath not in dirs:
-			dirs[dirpath] = True
-			print "inode/directory\t%s/" % (dirpath,)
+		if not os.path.isdir(filepath):
+			dirpath = os.path.dirname(filepath)
+			if dirpath not in dirs:
+				dirs[dirpath] = True
+				print "inode/directory\t%s/" % (dirpath,)

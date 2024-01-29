@@ -198,6 +198,8 @@ while(@ARGV)
 		my $mon = $+{'MON'} || '*';
 		my $dom = $+{'DOM'};
 		my $color = $+{'COLOR'};
+		$mon =~ s/^0//;
+		$dom =~ s/^0//;
 		$mon = $Months{$mon} if exists $Months{$mon};
 		$Highlight->{'date'}->{$year}->{$mon}->{$dom} = $color;
 		verify_color $color;

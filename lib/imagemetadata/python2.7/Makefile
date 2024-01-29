@@ -6,8 +6,8 @@ default:
 	@echo some targets to choose form: install
 	@false
 
-$(PYTHONLIBDIR)/imagerotation.py: imagerotation.py
+$(PYTHONLIBDIR)/imagemetadata.py: imagemetadata.py
 	[ -d "$(PYTHONPREFIX)" ]
 	install --compare "$<" "$@"
 
-install: $(PYTHONLIBDIR)/imagerotation.py
+install: $(PYTHONLIBDIR)/imagemetadata.py

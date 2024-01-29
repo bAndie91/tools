@@ -31,11 +31,11 @@ UNINSTALL/xgcal:
 	$(call rid,/usr/share/xgcal)
 	$(call rid,$(PREFIX)/xgcal)
 
-$(PREFIX)/xgcal: DEPENDENCY/sunclock /usr/share/xgcal/timezones.png
+$(PREFIX)/xgcal: DEPENDENCY/sunclock DEPENDENCY/gcal DEPENDENCY/solartime /usr/share/xgcal/timezones.png
 
-DEPENDENCY/sunclock:
-	type sunclock
-.PHONY: DEPENDENCY/sunclock
+DEPENDENCY/sunclock DEPENDENCY/gcal DEPENDENCY/solartime:
+	type $(notdir $@)
+.PHONY: DEPENDENCY/sunclock DEPENDENCY/gcal DEPENDENCY/solartime
 
 /usr/share/xgcal/timezones.png: timezones.png | /usr/share/xgcal
 	install $< $@

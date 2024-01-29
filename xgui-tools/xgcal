@@ -542,8 +542,14 @@ def update_solartime_continous():
 def update_solartime(*X):
 	lon = box_longitude.signed_value
 	save_config_queue()
-	os.putenv('DATETIME_UTC', time.strftime('%F %T', time.gmtime(selected_date_timestamp())))
-	with os.popen('solartime %s "%%a %%H:%%M"' % (lon)) as pipe:
+	# if solartime supports overrtiding current time by DATETIME_UTC env:
+	DATETIME_UTC = time.strftime('%F %T', time.gmtime(selected_date_timestamp()))
+	os.putenv('DATETIME_UTC', DATETIME_UTC)
+	cmd = 'solartime %s "%%a %%H:%%M"' % (lon,)
+	sys.stderr.write("DATETIME_UTC='%s' %s\n" % (DATETIME_UTC, cmd))
+	# otherwise use faketime:
+	#cmd = 'faketime "%s UTC" solartime %s "%%a %%H:%%M"' % (DATETIME_UTC, lon,)
+	with os.popen(cmd) as pipe:
 		s = pipe.readline()
 		s = s.replace('\n', '')
 	label_solartime.set_markup("%s☼ %s%s" % (PMU_SOLARCLOCK, s, PMU_SOLARCLOCK_END))
@@ -604,7 +610,7 @@ def update_celestial_info(when=None):
 	tzmin = get_current_timezone_offset_minutes()
 	# ISO-6709:1983-co-ordinate
 	coords = '%+06.2f%+07.2f' % (float(box_latitude.signed_value), float(box_longitude.signed_value))
-	proc = subprocess.Popen(['gcal','-c','-H','no','--suppress-date-part','--resource-file=/dev/null',
+	cmd = ['gcal','-c','-H','no','--suppress-date-part','--resource-file=/dev/null',
 		'--text-variable=$C=%s:$T=%s' % (coords,tzmin),
 		'--here=$c=$C,$T',
 		'--here=0 sunrise: (%o6$c ) %o3$c',
@@ -612,7 +618,9 @@ def update_celestial_info(when=None):
 		'--here=0 noon: %o1$c',
 		'--here=0 moonrise: %(5$c',
 		'--here=0 moonset: %)5$c',
-		'%%%s' % time.strftime('%Y%m%d', time.localtime(when))], stdout=subprocess.PIPE, stdin=subprocess.PIPE)
+		'%%%s' % time.strftime('%Y%m%d', time.localtime(when))]
+	sys.stderr.write(' '.join(["'"+arg.replace("'", "'\\''")+"'" for arg in cmd])+'\n')
+	proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stdin=subprocess.PIPE)
 	stdout, Xstderr = proc.communicate()
 	del proc
 	moon_info = []
@@ -655,7 +663,9 @@ class SunclockThread(threading.Thread):
 		self.pid = None
 	def run(self):
 		geom = "%dx%d" % self.sunclock_geometry[:]
-		self.pid = run_managed('sunclock', ['-clock', '-clockimage', 'vmf/landwater.vmf', '-clockgeom', geom, '-shading', '2', '-nomoon', '-nosun', '-citymode', '0', '-position', '0 %f' % self.start_longitude, '-dateformat', '', '-jump', '%ds' % self.start_jumpseconds])
+		cmd = ['-clock', '-clockimage', 'vmf/landwater.vmf', '-clockgeom', geom, '-shading', '2', '-nomoon', '-nosun', '-citymode', '0', '-position', '0 %f' % self.start_longitude, '-dateformat', '', '-jump', '%ds' % self.start_jumpseconds]
+		sys.stderr.write('sunclock '+(' '.join(["'"+arg.replace("'", "'\\''")+"'" for arg in cmd]))+'\n')
+		self.pid = run_managed('sunclock', cmd)
 		xid = None
 		while xid is None and pidexists(self.pid):
 			time.sleep(0.2)

@@ -277,7 +277,7 @@ do
 			
 			if [ ! $opt_dryrun ]
 			then
-				kill -- -$Signal "$id"
+				kill -- -$Signal "$id" || true
 			fi
 		else
 			case "$mode" in

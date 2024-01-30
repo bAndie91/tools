@@ -21,6 +21,7 @@ $(OLDINCLUDEDIR):
 	@echo remove $@ >> uninstall.sh
 
 install: $(LIBDIR)/libarray.so $(OLDINCLUDEDIR)/libarray.h
+	ldconfig
 .PHONY: install
 
 clean:

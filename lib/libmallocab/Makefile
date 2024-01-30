@@ -14,4 +14,5 @@ $(OLDINCLUDEDIR)/libmallocab.h: libmallocab.h
 	@echo remove $@ >> uninstall.sh
 
 install: $(LIBDIR)/libmallocab.so $(OLDINCLUDEDIR)/libmallocab.h
+	ldconfig
 .PHONY: install

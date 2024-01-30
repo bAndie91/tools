@@ -1,0 +1,5 @@
+#!/bin/sh
+
+ps -eww o user,pid,ppid,pgrp,tpgid,sid,ruid,rgid,euid,egid,suid,sgid,fuid,fgid,start_time,tty,rss,stat,pcpu,pri,nice,cmd "$@" |\
+td-trans
+

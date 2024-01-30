@@ -10,9 +10,9 @@ killp - Send signal to processes (kill, terminate, ...) by PID until they end
 
 killpgrp - Send signal to processes (kill, terminate, ...) by PGID until they end
 
-killcmd - Send signal to processes (kill, terminate, ...) by name until they end
+killcmd - Send signal to processes (kill, terminate, ...) by command line until they end
 
-killexe - Send signal to processes (kill, terminate, ...) by their executable path until they end
+killexe - Send signal to processes (kill, terminate, ...) by executable path until they end
 
 =head1 SYNOPSIS
 
@@ -42,6 +42,16 @@ Other options:
 
 =over 4
 
+=item -a
+
+B<killcmd> looks for matching substring in the command's arguments too.
+By default, only the command name is considered (first word in the command line).
+
+=item -f
+
+B<killcmd> and B<killexe> look for matching substring in the command's full path too.
+By default, only the basename is considered.
+
 =item [--]signal=I<SIG>, [-]s=I<SIG>
 
 Which signal to send.
@@ -66,7 +76,7 @@ With --quiet, does not print what is being killed.
 
 =head1 SEE ALSO
 
-kill(1), pkill(1), killall(1), signal(7)
+kill(1), pkill(1), pgrep(1), killall(1), signal(7)
 
 =cut
 
@@ -103,6 +113,8 @@ esac
 opt_verbose=''
 opt_quiet=''
 opt_dryrun=''
+opt_match_command_args=''
+opt_match_full_path=''
 Signal=TERM
 Interval=0.2
 declare -A processes_left
@@ -143,6 +155,22 @@ do
 	-E|--extended-regexp|-F|--fixed-strings|-G|--basic-regexp|-P|--perl-regexp|-i|--ignore-case|-w|--word-regexp|-x|--line-regexp)
 		grep_opts+=("$arg")
 		;;
+	-a)
+		if [ "$mode" != cmd ]
+		then
+			pod2text "$0" >&2
+			exit 2
+		fi
+		opt_match_command_args=1
+		;;
+	-f)
+		if [ "$mode" != cmd -a "$mode" != exe ]
+		then
+			pod2text "$0" >&2
+			exit 2
+		fi
+		opt_match_full_path=1
+		;;
 	-q|--quiet)
 		opt_quiet=1
 		;;
@@ -178,6 +206,19 @@ find_processes()
 		;;
 	esac
 	
+	proclist_to_search=$proclist
+	
+	if [ "$mode" = cmd -a ! "$opt_match_command_args" ]
+	then
+		# discard the command arguments (keep the pid and the first word)
+		proclist_to_search=`cut -f 1,2 -d ' ' <<< "$proclist_to_search"`
+	fi
+	if [ \( "$mode" = cmd -o "$mode" = exe \) -a ! "$opt_match_full_path" ]
+	then
+		# discard everything except pid (everything before space) and the basename (everything after the last slash)
+		proclist_to_search=`sed -e 's, .*/\([^/]\+\)$, \1,' <<< "$proclist_to_search"`
+	fi
+	
 	
 	case "$mode" in
 	pid|pgid)
@@ -189,7 +230,7 @@ find_processes()
 		do
 			grep_params+=(-e "$cmd")
 		done
-		lines=`echo "$proclist" | cut -d' ' -f2- | rcmod 1=0 grep --line-number "${grep_opts[@]}" "${grep_params[@]}" | cut -d: -f1`
+		lines=`echo "$proclist_to_search" | cut -d' ' -f2- | rcmod 1=0 grep --line-number "${grep_opts[@]}" "${grep_params[@]}" | cut -d: -f1`
 		
 		declare -g -A ps_title=()
 		while read -r pid title
@@ -227,6 +268,10 @@ do
 	if [ ${#processes[@]} = 0 ]
 	then
 		# did not find any more of the named commands
+		if [ $attempt = 0 ]
+		then
+			warnx "no such process found"
+		fi
 		break
 	fi
 	
@@ -234,15 +279,14 @@ do
 	if [ $attempt -gt 0 ]
 	then
 		sleep $Interval
-	fi
-	
-	
-	find_processes
-
-	if [ ${#processes[@]} = 0 ]
-	then
-		# did not find more of the named commands
-		break
+		
+		find_processes
+		
+		if [ ${#processes[@]} = 0 ]
+		then
+			# did not find more of the named commands
+			break
+		fi
 	fi
 	
 	

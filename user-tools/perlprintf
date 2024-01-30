@@ -1,0 +1,5 @@
+#!/usr/bin/env perl
+
+$\ = $ENV{'PERL5_ORS'} if exists $ENV{'PERL5_ORS'};
+
+printf $ARGV[0].$\, map { eval $_ } @ARGV[1..$#ARGV];

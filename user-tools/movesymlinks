@@ -1,0 +1,48 @@
+#!/bin/bash
+
+true <<END
+=pod
+
+=head1 NAME
+
+movesymlinks - Rename file and correct its symlinks to keep point to it.
+
+=head1 SYNOPSIS
+
+movesymlinks I<OLDNAME> I<NEWNAME> [I<DIR> [I<DIR> [...]]]
+
+Rename file I<OLDNAME> to I<NEWNAME> and search I<DIR> directories for symlinks
+pointing to I<OLDNAME> and change them to point to I<NEWNAME>.
+
+=cut
+
+END
+
+if [ $# = 0 -o "$1" = --help ]
+then
+	pod2text < "$0"
+	if [ $# = 0 ]
+	then
+		exit -1
+	fi
+	exit 0
+fi
+
+set -e -o pipefail
+set -u
+
+oldname=$1
+shift
+newname=$1
+shift
+
+mv -v -n "$oldname" "$newname"
+
+find "$@" -maxdepth 1 -type l -printf '%f	%l\n' |\
+while IFS=$'\t' read -r symlinkfile target
+do
+	if [ "$target" = "$oldname" ]
+	then
+		ln -v -snf "$newname" "$symlinkfile"
+	fi
+done

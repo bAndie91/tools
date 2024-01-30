@@ -7,12 +7,12 @@ import gtk
 import subprocess
 import tempfile
 import glib
-import pyexiv2
 import math
 from shutil import copyfile
 import re
 import traceback
-
+try: import better_exchook
+except ImportError: pass
 
 def add_key_binding(widget, keyname, callback):
 	accelgroup = gtk.AccelGroup()
@@ -287,34 +287,36 @@ def get_rotation_params(angle):
 	cmd = ["perspect-run", "convert", glob.sourcefile, "-auto-orient", "-rotate", str(angle)]
 	return cmd
 
-def exif_transforms():
+import imagemetadata
+
+def imagerotation_cb(transformation, user_data):
+	if transformation == imagerotation.FLIP:
+		user_data['pixbuf'] = user_data['pixbuf'].flip(horizontal=False)
+	elif transformation == imagerotation.FLOP:
+		user_data['pixbuf'] = user_data['pixbuf'].flip(horizontal=True)
+	elif transformation == imagerotation.CLOCKWISE:
+		user_data['pixbuf'] = user_data['pixbuf'].rotate_simple(gtk.gdk.buf_ROTATE_CLOCKWISE)
+	elif transformation == imagerotation.UPSIDEDOWN:
+		user_data['pixbuf'] = user_data['pixbuf'].rotate_simple(gtk.gdk.buf_ROTATE_UPSIDEDOWN)
+	elif transformation == imagerotation.COUNTERCLOCKWISE:
+		user_data['pixbuf'] = user_data['pixbuf'].rotate_simple(gtk.gdk.buf_ROTATE_COUNTERCLOCKWISE)
+	else:
+		#warnx("unknown image transformation code %d" % transformation)
+		pass
+
+def load_image(imageobj, sourcefile):
+	loader = gtk.gdk.PixbufLoader()
+	imagedata = open(sourcefile, 'r').read()
+	loader.write(imagedata)
+	loader.close()
+	pixbuf = loader.get_pixbuf()
+	
 	# transform the image on screen according to the file's EXIF metadata
-	metadata = pyexiv2.ImageMetadata(glob.sourcefile)
-	metadata.read()
-	if 'Exif.Image.Orientation' in metadata.exif_keys:
-		orientation = metadata['Exif.Image.Orientation'].value
-		# flip-flop:
-		if orientation in [2, 4]:
-			# mirror on the vertical axis
-			image.pixbuf = image.pixbuf.flip(horizontal=False)
-			orientation -= 1
-		elif orientation in [5, 7]:
-			# mirror on the horizontal axis
-			image.pixbuf = image.pixbuf.flip(horizontal=True)
-			orientation += 1
-		# rotation:
-		rotation = None
-		if orientation == 6:
-			# rotate 90° CW
-			rotation = gtk.gdk.PIXBUF_ROTATE_CLOCKWISE
-		elif orientation == 3:
-			# rotate 180° CW
-			rotation = gtk.gdk.PIXBUF_ROTATE_UPSIDEDOWN
-		elif orientation == 8:
-			# rotate 270° CW
-			rotation = gtk.gdk.PIXBUF_ROTATE_COUNTERCLOCKWISE
-		if rotation is not None:
-			image.pixbuf = image.pixbuf.rotate_simple(rotation)
+	rotation = {'pixbuf': pixbuf}
+	irot = imagemetadata.Image(imagedata = imagedata)
+	irot.rotate(imagerotation_cb, rotation)
+	
+	image.set_from_pixbuf(rotation['pixbuf'])
 
 def do_open(*_):
 	run_command_background(["gpicview", glob.sourcefile])
@@ -421,9 +423,8 @@ def toggle_circumrectangle(*X):
 	refresh_display()
 
 def load_file(filepath):
-	image.set_from_file(filepath)
+	load_image(image, filepath)
 	glob.sourcefile = filepath
-	exif_transforms()
 	window.set_title(window.get_title() + ": " + glob.sourcefile)
 
 USER_LOG_FILE = '~/.perspect.coords.log'

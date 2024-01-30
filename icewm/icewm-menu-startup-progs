@@ -1,0 +1,18 @@
+#!/usr/bin/env perl
+
+for $file (glob "/etc/xdg/autostart/*")
+{
+	my %prog = ();
+	open my $fh, '<', $file or warn $!;
+	while(<$fh>)
+	{
+		chomp;
+		if(/^(Name|Icon|Exec)=(.+)/)
+		{
+			$prog{$1} = $2;
+		}
+	}
+	close $fh;
+	
+	print "prog \"$prog{Name}\" \"$prog{Icon}\" $prog{Exec}\n";
+}

@@ -1,0 +1,15 @@
+#!/usr/bin/env perl
+
+use constant {RXVT_CAPTURE=>1, RXVT_PASS=>(),};
+
+sub on_user_command
+{
+	my ($rxvt, $comm) = @_;
+	if($comm eq "print-scrollback")
+	{
+		my $state = urxvt::ShiftMask;
+		my $keycode = 111;  # Print
+		$rxvt->key_press($state, $keycode);
+		$rxvt->key_release($state, $keycode);
+	}
+}

@@ -3,7 +3,7 @@
 import gtk
 import os
 import sys
-import pyexiv2
+import imagemetadata
 import sqlite3
 import glib
 import traceback
@@ -37,9 +37,6 @@ class StockButton(gtk.Button):
 		img.props.visible = True
 
 
-def load_comment(filename):
-	txtv.get_buffer().set_text(get_exif_comment(filename))
-
 def get_comment_text():
 	tb = txtv.get_buffer()
 	s, e = tb.get_start_iter(), tb.get_end_iter()
@@ -47,7 +44,7 @@ def get_comment_text():
 
 def save_comment():
 	txt = get_comment_text()
-	set_exif_comment(SubjectFile, txt)
+	Metadata.comment = txt
 	update_index(SubjectFile, txt)
 
 def save_comment_and_exit(*a):
@@ -142,21 +139,18 @@ def display_error(msg):
 def load_thumbnail():
 	try:
 		thumbnail_loaded = False
-		metadata = pyexiv2.ImageMetadata(SubjectFile)
-		metadata.read()
-		tn = metadata.exif_thumbnail
-		if tn.data:
+		thumbnail = Metadata.thumbnail
+		if thumbnail is not None:
 			try:
 				ldr = gtk.gdk.PixbufLoader('jpeg')
-				ldr.write(tn.data)
+				ldr.write(thumbnail)
 				ldr.close()
 				thnl.set_from_pixbuf(ldr.get_pixbuf())
 				thumbnail_loaded = True
 			except Exception, e:
 				traceback.print_exc(e)
 				display_error("Can not load thumbnail.\n"+str(e))
-			finally:
-				ldr.close()
+		
 		if not thumbnail_loaded:
 			pb = gtk.gdk.pixbuf_new_from_file(SubjectFile)
 			w0, h0 = pb.get_width(), pb.get_height()
@@ -169,36 +163,6 @@ def load_thumbnail():
 		traceback.print_exc(e)
 		display_error("Can not load thumbnail.\n"+str(e))
 	lbl_load_thnl.hide()
-
-def get_exif_comment(filename):
-	metadata = pyexiv2.ImageMetadata(filename)
-	metadata.read()
-	try:
-		txt = metadata.comment
-	except:
-		txt = ''
-	return txt
-
-def get_exif_tags(filename):
-	metadata = pyexiv2.ImageMetadata(filename)
-	metadata.read()
-	tags = {}
-	for key, tag in metadata.items():
-		if hasattr(tag, 'human_value'):
-			value = tag.human_value
-		elif hasattr(tag, 'values'):
-			value = '\n'.join(tag.values)
-		else:
-			value = tag.value
-		tags[key] = value
-		tags[tag.name] = value
-	return tags
-
-def set_exif_comment(filename, txt):
-	metadata = pyexiv2.ImageMetadata(filename)
-	metadata.read()
-	metadata.comment = txt
-	metadata.write()
 
 def open_externally(*X):
 	import subprocess
@@ -231,12 +195,12 @@ def sorter_cb(model, iter_a, iter_b, userdata):
 def program_start(widget, event):
 	widget.disconnect(start_event_handle)
 	
-	text = ExifTags.get('DateTimeOriginal') or ExifTags.get('DateTime', '')
+	text = Metadata.tags.get('DateTimeOriginal') or Metadata.tags.get('DateTime', '')
 	text += "\n"
 	text += os.path.splitext(SubjectFile)[0].replace('/', '\n').strip()
 	lbl_annotation.set_text(text)
 	
-	load_comment(SubjectFile)
+	txtv.get_buffer().set_text(Metadata.comment)
 	db_load_tags(lst0)
 	load_thumbnail()
 
@@ -298,7 +262,7 @@ if len(sys.argv) < 2:
 	sys.stderr.write("Usage: %s <filepath>\n" % sys.argv[0])
 	sys.exit(1)
 SubjectFile = sys.argv[1]
-ExifTags = get_exif_tags(SubjectFile)
+Metadata = imagemetadata.Image(open(SubjectFile, 'r').read())
 
 start_event_handle = win.connect('map-event', program_start)
 

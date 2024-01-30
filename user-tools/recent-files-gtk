@@ -1,0 +1,25 @@
+#!/usr/bin/env python2
+
+import os
+import sys
+import re
+import gtk
+
+rmag = gtk.recent_manager_get_default()
+items = rmag.get_items()
+items.sort(cmp=lambda a, b: cmp(a.get_visited(), b.get_visited()))
+dirs = {}
+
+for item in items:
+	filepath = item.get_uri_display()
+	filepath = filepath.rstrip(os.path.sep)
+	isdir = os.path.isdir(filepath)
+	
+	if item.is_local() and not item.get_private_hint():
+		print "%s\t%s%s" % (item.get_mime_type(), filepath, os.path.sep if isdir and not filepath.endswith(os.path.sep) else '')
+		
+		if not isdir:
+			dirpath = os.path.dirname(filepath)
+			if dirpath not in dirs:
+				dirs[dirpath] = True
+				print "inode/directory\t%s/" % (dirpath,)

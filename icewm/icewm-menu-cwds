@@ -1,0 +1,21 @@
+#!/usr/bin/env perl
+
+for my $wd (glob "/proc/[0-9]*/cwd")
+{
+	$dir{$_} = $wd if $_ = readlink $wd;
+}
+
+for my $dir (sort keys %dir)
+{
+	my $wd = $dir{$dir};
+	
+	my $opendir = $dir;
+	$opendir = $wd if ! -e $dir;
+	
+	# escape for icewm menu parser
+	$dir =~ s{^$ENV{'HOME'}/}{~/};
+	$dir =~ s/[""\\]/\\$&/g;
+	$opendir =~ s/[""\\]/\\$&/g;
+	
+	print "prog \"$dir\" folder mimeopen-gui \"$opendir\"\n"
+}

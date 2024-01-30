@@ -6,6 +6,7 @@ use Throttler;
 use YAML;
 use Getopt::Long;
 Getopt::Long::Configure('no_ignore_case');
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 sub warnxf
 {

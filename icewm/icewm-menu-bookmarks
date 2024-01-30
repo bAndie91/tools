@@ -1,0 +1,19 @@
+#!/usr/bin/env perl
+
+$\ = "\n";
+
+#print "menuprogreload \"Aktuális Könyvtárak\" folder 2 icewm-menu-cwds";
+
+open $f, '<', $ENV{"HOME"}."/.gtk-bookmarks";
+while(<$f>)
+{
+	if(s{^file://(\S+).*\n}{$1})
+	{
+		s/%(..)/chr hex $1/ge;  # decode url-encoded chars
+		s/[""\\]/\\$&/g;  # escape for icewm menu parser
+		print "prog \"$_\" folder rox \"$_\"";
+	}
+}
+
+print "separator";
+print "prog Szerkesztés /usr/share/icons/gnome/48x48/apps/text-editor substenv mimeopen-gui \$HOME/.gtk-bookmarks";

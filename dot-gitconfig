@@ -159,6 +159,7 @@
 	# commit info
 	
 	is-there-something-to-commit = ! "[ -n \"$(git status -s --porcelain --untracked-files=no)\" ]"
+	commit-if-there-is-something = ! "fn(){ ! git is-there-something-to-commit || git commit-tracked "$@"; }; fn"
 
 	# merges
 

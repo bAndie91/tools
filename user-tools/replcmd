@@ -11,9 +11,14 @@ replcmd - Wrap any command in a REPL interface
 
 replcmd I<COMMAND> [I<ARGS>]
 
+=head1 DESCRIPTION
+
+Run I<COMMAND> repeatedly with words read from STDIN appended to its argument list after I<ARGS>.
+You may add prompt, history, and other CLI-goodies on top of replcmd(1) by eg. rlwrap(1).
+
 =head1 EXAMPLE
 
-rlwrap --remember --command-name dict --substitute-prompt replcmd dict
+rlwrap --remember --command-name dict --substitute-prompt "dict> " replcmd dict
 
 =cut
 

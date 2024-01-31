@@ -1,0 +1,32 @@
+#!/bin/bash
+
+true <<'EOF'
+=pod
+
+=head1 NAME
+
+replcmd - Wrap any command in a REPL interface
+
+=head1 SYNOPSIS
+
+replcmd I<COMMAND> [I<ARGS>]
+
+=head1 EXAMPLE
+
+rlwrap --remember --command-name dict --substitute-prompt replcmd dict
+
+=cut
+
+EOF
+
+
+if [ $# -le 0 ]
+then
+	pod2text "$0" >&2
+	exit 2
+fi
+
+while read -a words
+do
+	"$@" "${words[@]}"
+done

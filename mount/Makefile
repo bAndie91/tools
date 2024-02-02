@@ -1,5 +1,6 @@
 
-TOOLS = mount.bindfs mount.posixovlfs mount.xattrovlfs mount.fusefile
+TOOLS = mount.bindfs mount.posixovlfs mount.xattrovlfs mount.fusefile \
+  mount.restic
 
 TARGETS = $(foreach name,$(TOOLS),/sbin/$(name))
 

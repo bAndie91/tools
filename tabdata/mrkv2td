@@ -33,6 +33,7 @@ td2mrkv(1)
 $OptSeparatorRegexp = "\t";
 
 use Data::Dumper;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 

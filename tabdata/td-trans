@@ -9,6 +9,7 @@ td-trans - Transform whitespace-delimited into TAB-delimited lines ignoring sorr
 
 =cut
 
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 while(my $line = <STDIN>)

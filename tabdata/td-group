@@ -58,6 +58,7 @@ Have to sort input data first.
 
 $OptSeparator = " ";
 
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 # pass through header

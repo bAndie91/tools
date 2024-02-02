@@ -41,6 +41,7 @@ show headers (default)
 
 =cut
 
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 process_header(scalar <STDIN>);

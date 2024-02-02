@@ -29,6 +29,7 @@ mrkv2td(1), td2html(1)
 
 $OptSeparator = "\t";
 
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 

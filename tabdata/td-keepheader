@@ -16,6 +16,7 @@ ls -l | td-trans-ls | td-select NAME +REST | td-keepheader sort | tabularize
 
 =cut
 
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 die "$0: no COMMAND given\n" unless @ARGV;

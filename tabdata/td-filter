@@ -146,6 +146,7 @@ If there is no <COLUMN> column in the input data, it's silently considered empty
 
 use Switch;
 use List::MoreUtils qw/all any none/;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 @Filter = ();

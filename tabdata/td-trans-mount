@@ -25,6 +25,7 @@ mount -l | td-trans-mount
 
 =cut
 
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 @Headers = ("DEVICE", "MOUNTPOINT", "TYPE", "OPTIONS", "LABEL");

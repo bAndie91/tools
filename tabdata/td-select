@@ -63,6 +63,7 @@ If you want to put a given column to the first place and left others intact:
 
 =cut
 
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 process_header(scalar <STDIN>);

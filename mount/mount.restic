@@ -1,0 +1,72 @@
+#!/bin/bash
+
+set -e
+set -u
+
+declare -a available_restic_mount_opts=($(restic mount --help | grep -Eio "[-]-[a-z0-9-]+"))
+declare -a restic_mount_args=()
+fuse_opts=''
+
+mntname=$1
+shift
+mntpoint=$1
+shift
+
+
+while [ $# -gt 0 ]
+do
+case "$1" in
+-o)
+	shift
+	oldIFS=$IFS
+	IFS=,
+	for option in $1
+	do
+		option_key=${option%%=*}
+		is_restic_opt=0
+		for restic_opt in "${available_restic_mount_opts[@]}"
+		do
+			case "$restic_opt" in
+			--repo)	continue;;
+			esac
+			
+			if [ "--$option_key" = "$restic_opt" ]
+			then
+				if [[ $option =~ =(.+) ]]
+				then
+					option_value=${BASH_REMATCH[1]}
+					if [ "${option_value:0:2}" = '~/' ]
+					then
+						option_value=$HOME/${option_value:2}
+						option="$option_key=$option_value"
+					fi
+				fi
+				
+				restic_mount_args+=("--$option")
+				is_restic_opt=1
+				break
+			fi
+		done
+		
+		if [ $is_restic_opt = 0 ]
+		then
+			fuse_opts=$fuse_opts${fuse_opts:+,}$option
+		fi
+	done
+	IFS=$oldIFS
+	;;
+-n|-s)
+	true
+	;;
+*)
+	echo "Unknown option: $1" >&2
+	exit 255
+	;;
+esac
+shift
+done
+
+set +u
+
+exec setsid restic mount "${restic_mount_args[@]}" --repo="$mntname" ${fuse_opts:+-o "$fuse_opts"} "$mntpoint" &
+disown

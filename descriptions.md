@@ -2,6 +2,7 @@
 |---|---|
 | [2opml](user-tools/2opml) | Convert list of URLs to OPML.
 | [adr2html](user-tools/adr2html) | Convert Opera Hostlist 2.0 bookmarks to HTML
+| [applyfilter](user-tools/applyfilter) | Filter a file via a command's STDIO and write back to it
 | [asterisk-log-separator](user-tools/asterisk-log-separator) | Split up Asterisk PBX log file into multiple files based on which process wrote each part
 | [awk-cut](user-tools/awk-cut) | Select fields from input stream with awk
 | [base58](user-tools/base58) | Encode to (decode from) Base58
@@ -13,8 +14,10 @@
 | [chmod-cheap](compiled-tools/coreutils/chmod-cheap.patch) | chmod(1) files only if new mode differs from the old one
 | [chromium_cookie_decrypt.py](user-tools/chromium_cookie_decrypt.py) | Decrypt Chromium web browser stored cookies and output cleartext
 | [chshebang](user-tools/chshebang) | Change a script's default interpreter
+| [cled](user-tools/cled) | Command Line-Editor - Edit text file lines by commands directly from shell
 | [convert_chromium_cookies_to_netscape.sh](user-tools/convert_chromium_cookies_to_netscape.sh) | Convert Chromium and derivative web browser's cookies to Netscape format (used by wget and curl)
 | [corner_time](user-tools/corner_time) | Place a digital clock in the upper right hand corner of the terminal
+| [cronrun](user-tools/cronrun) | convenience features to run commands in task scheduler environment
 | [cut.awk](user-tools/cut.awk) | Output only the selected fields from the input stream, parameters follow awk(1) syntax
 | [daemonctl](user-tools/daemonctl) | Manage preconfigured libslack daemon(1) daemons more conveniently
 | [dataurl2bin](user-tools/dataurl2bin) | Decode "data:..." URLs from input stream and output the raw binary data
@@ -25,7 +28,6 @@
 | [diu](user-tools/diu) | Display Inode usage, similar to du(1) for space usage
 | [dlnew](user-tools/dlnew) | Download web resource if local copy is older
 | [eat](user-tools/eat) | Read and echo back input (like cat(1)) until interrupted (ie. ignore end-of-file)
-| [edc](user-tools/edc) | Edit text files by commands directly in shell
 | [errorlevel](user-tools/errorlevel) | Exit with the given status code
 | [fcomplete](user-tools/fcomplete) | Complete a smaller file with the data from a bigger one
 | [fc-search-codepoint](user-tools/fc-search-codepoint) | Print the names of available X11 fonts containing the given code point(s)
@@ -33,6 +35,7 @@
 | [ff](user-tools/ff) | Find files horizontally, ie. a whole directory level at a time, across subtrees
 | [fgat](user-tools/fgat) | Execute command in foreground at a given time
 | [filterexec](user-tools/filterexec) | Echo those arguments with which the given command returns zero.
+| [find-by-date](user-tools/find-by-date) | Find files with GNU find(1) but with easier to comprehend time interval formats
 | [findnewestfile](user-tools/findnewestfile) | Search for the newest file in a given path recursively and always show the most recent while scanning
 | [findoldestfile](user-tools/findoldestfile) | Search for the oldest file in a given path recursively and always show the most older while scanning
 | [fixlogfiledatetime](user-tools/fixlogfiledatetime) | Set the target files modification time to their respective last log entry's timestamp
@@ -44,6 +47,8 @@
 | [grandparentexe](compiled-tools/grandparentexe.c) | Display the grandparent process executable path of the current process
 | [header.sed](user-tools/header.sed) | Echo the input stream up to the first empty line (usual end-of-header marker)
 | [Head](user-tools/Head) | output as many lines from the first part of files as many lines on the terminal currently
+| [hlcal](user-tools/hlcal) | Highlight BSD cal(1) output
+| [hlncal](user-tools/hlncal) | Highlight BSD ncal(1) output
 | [htmlentities](user-tools/htmlentities) | Convert plain text into HTML-safe text
 | [indent2tree](user-tools/indent2tree) | Makes TAB-indented text into ascii tree chart
 | [inisort](user-tools/inisort) | Sort keys in an INI file according to the order of keys in an other INI file
@@ -51,13 +56,17 @@
 | [jaro-metric](user-tools/jaro-metric) | Calculate the Jaro metric of given strings
 | [jaro-winkler-metric](user-tools/jaro-winkler-metric) | Calculate the Jaro-Winkler metric of given strings
 | [json2bencode](user-tools/json2bencode) | Convert JSON to Bencode (BitTorrent's loosely structured data)
+| [killcmd](user-tools/killcmd) | Send signal to processes (kill, terminate, ...) by command line until they end
+| [killexe](user-tools/killexe) | Send signal to processes (kill, terminate, ...) by executable path until they end
+| [killpgrp](user-tools/killpgrp) | Send signal to processes (kill, terminate, ...) by PGID until they end
+| [killp](user-tools/killp) | Send signal to processes (kill, terminate, ...) by PID until they end
 | [kt](user-tools/kt) | Run command in background terminal; keept(1) convenience wrapper
 | [lastbcsv](compiled-tools/lastcsv.pod) | List of last bad login attempts in CSV format
 | [lastcsv](compiled-tools/lastcsv.d/lastcsv.c) | List of last logged in users in CSV format
 | [LevelDB](user-tools/LevelDB) | Commandline interface for Google's leveldb key-value storage
 | [levenshtein-distance](user-tools/levenshtein-distance) | Calculate the Levenshtein distance of given strings
 | [lines](user-tools/lines) | Output only the given lines of the input stream
-| [lnto](user-tools/lnto) | ln(1) convenience wrapper; you enter link target paths relative to the current directory
+| [lnto](user-tools/lnto) | Convenience wrapper for ln(1). User enters link target paths relative to the current directory
 | [loadenv](compiled-tools/loadenv.c) | Load environment variables from file and run a program in that environment
 | [logbtmp](compiled-tools/logbtmp.d/logbtmp.c) | Add new entry to the system's bad-login database (btmp)
 | [loggerexec](user-tools/loggerexec) | Run a command and send STDOUT and STDERR to syslog
@@ -65,16 +74,21 @@
 | [logto](user-tools/logto) | Run a command and append its STDOUT and STDERR to a file
 | [lsata](user-tools/lsata) | List ATA devices on the system
 | [lsenv](user-tools/lsenv) | List environment variables of a process
+| [mail-extract-raw-headers](user-tools/mail-extract-raw-headers) | Get named headers from RFC822-format input.
 | [mime_extract](user-tools/mime_extract) | Extract parts from a MIME multipart file and save them into separate files
+| [mime-header-decode](user-tools/mime-header-decode) | Decode MIME-encoded stream on stdin line-by-line
 | [mkdeb](user-tools/mkdeb) | Create a Debian package (.deb)
 | [mkmagnetlink](user-tools/mkmagnetlink) | Create a "magnet:" link out of a torrent file
 | [mksock](compiled-tools/mksock.c) | Create a socket type file
+| [movesymlinks](user-tools/movesymlinks) | Rename file and correct its symlinks to keep point to it.
 | [moz_bookmarks](user-tools/moz_bookmarks) | Read Mozilla bookmarks database and display titles and URLs line-by-line
 | [msg](user-tools/msg) | Write to given user's open terminals
 | [multithrottler](user-tools/multithrottler) | Run given command if not reached the defined rate limit
 | [mysql-fix-orphan-privileges.php](user-tools/mysql-fix-orphan-privileges.php) | Suggest SQL commands to clean up unused records in system tables which hold permission data
 | [noacute](user-tools/noacute) | Strip diacritics (acute, umlaut, ...) from letters on the input stream
 | [nocomment](user-tools/nocomment) | remove comment lines from input stream
+| [nopath](user-tools/nopath) | Run command by disregarding some PATH directories
+| [oded](user-tools/oded) | On-disk editor - edit text files by commands directly from shell
 | [organizebydate](user-tools/organizebydate) | Rename files based on their date-time
 | [palemoon-current-url](user-tools/palemoon-current-url) | Display the webpage's URL which is currently open in Palemoon web browser
 | [parsel](user-tools/parsel) | Select parts of a HTML document based on CSS selectors
@@ -94,10 +108,13 @@
 | [pvalve](user-tools/pvalve) | Control how much a given command should run by an other command's exit code
 | [pyzor-files](user-tools/pyzor-files) | Run a pyzor(1) command on the given files
 | [qrwifi](user-tools/qrwifi) | Generate a string, used in WiFi-setup QR codes, containing a hotspot name and password
+| [randstr](user-tools/randstr) | Generate random string from a given set of characters and with a given length.
+| [rcmod](user-tools/rcmod) | Run a given command and modify its Return Code according to the rules given by the user
 | [relpath](compiled-tools/relpath.c) | Calculate the shortest relative path between directories
 | [remove](compiled-tools/remove.c) | Remove file and directoy alike
 | [renamemanual](user-tools/renamemanual) | Interactive file rename tool
 | [repeat](user-tools/repeat) | Run a give command repeatedly
+| [replcmd](user-tools/replcmd) | Wrap any command in a REPL interface
 | [reportcmdstatus](user-tools/reportcmdstatus) | Textually show how the given command finished (exit status/signal)
 | [rsacrypt](user-tools/rsacrypt) | Encrypt/decrypt files with RSA
 | [rsysrq](user-tools/rsysrq) | Send SysRQ commands remotely over the network
@@ -107,12 +124,12 @@
 | [screens](user-tools/screens) | List all GNU/Screen sessions accessible by the user and all of their inner windows as well
 | [setgroups](compiled-tools/setgroups.c) | Start a process with specified set of GIDs
 | [setpgrp](compiled-tools/setpgrp.c) | CLI frontend for setpgrp(2) - run a program in a new process group
-| [set-sys-path](user-tools/set-sys-path) | Set PATH according to /etc/environment and run a program
+| [set-sys-path](user-tools/set-sys-path) | Set PATH according to /etc/environment and run the given command
 | [set-xcursor-lock-and-run](user-tools/set-xcursor-lock-and-run) | Set X11 cursor to a padlock and run a command
-| [slayall](user-tools/slayall) | Try to kill a process by name until it exists
-| [slay](user-tools/slay) | Try to kill a process until it exists
+| [set-xcursor-lock-and-run](xwin-tools/set-xcursor-lock-and-run) | Set X11 mouse pointer to a lock icon and run the given command
 | [ssh-agent-finder](user-tools/ssh-agent-finder) | Find a working ssh agent on the system so you get the same in each of your logon sessions
 | [strip-ansi-seq](user-tools/strip-ansi-seq) | Dumb script removing more-or-less any ANSI escape sequences from the input stream
+| [substenv](user-tools/substenv) | Substitute environment variables in parameters and run the resulting command
 | [subst_sudo_user](user-tools/subst_sudo_user) | Sudo helper program
 | [swap](user-tools/swap) | swaps two files' names
 | [symlinks2dot](user-tools/symlinks2dot) | Generate a graph in dot(1) format representing the symlink-target relations among the given files
@@ -139,9 +156,13 @@
 | [utmp](compiled-tools/utmp.c) | Display UTMP database like who(1) but machine-parsable
 | [vidir-sanitize](user-tools/vidir-sanitize) | Helper script to change tricky filenames in a directory
 | [vifiles](user-tools/vifiles) | Edit multiple files as one
+| [visymlinks](user-tools/visymlinks) | Bulk edit target of symlinks
 | [waitpid](user-tools/waitpid) | Wait for a process to end (even if not child of current shell)
 | [whisper-retention-info](user-tools/whisper-retention-info) | Show data retention policy in Whisper timeseries database file
 | [wikibot](user-tools/wikibot) | Update Wikimedia (Wikipedia) article
 | [xdg-autostart](user-tools/xdg-autostart) | Start XDG autostart programms
+| [xdpys](compiled-tools/xdpys.c) | Search X11/Xorg displays on the current machine
 | [xidle](compiled-tools/xidle.c) | Display idle time of an X11 screen
+| [xlock](xwin-tools/xlock) | Lock X11 screen by disable (enable) input devices
 | [xml2json](user-tools/xml2json) | Convert XML input to JSON
+| [xunlock](xwin-tools/xunlock) | Unlock X11 screen by disable (enable) input devices

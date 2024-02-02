@@ -1,0 +1,20 @@
+#!/usr/bin/env perl
+
+while(<STDIN>)
+{
+	($type, $path) = /(\S+)\t(.+)\n/;
+	$path =~ s/\/$//;
+	
+	if($type ne "inode/directory")
+	{
+		$path =~ s/([^\/]+)$//;
+	}
+	
+	$path =~ s/^(.+)\/$/$1/;
+	
+	if(!$dirs{$path})
+	{
+		print "inode/directory\t$path\n";
+		$dirs{$path}=1;
+	}
+}

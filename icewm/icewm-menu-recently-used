@@ -17,31 +17,33 @@ def iconpath_for_mime(mime):
 	return path
 
 
-items = os.popen('recent-files-gtk', 'r').readlines()
+opt_fullpath = any(flag in sys.argv for flag in ['-f', '--fullpath-label'])
+
 dirs = {}
 
-for item in items:
+while True:
+	item = sys.stdin.readline()
+	if item == '': break
+	
 	item = item.rstrip('\n')
 	mime_type, filepath = item.split('\t', 1)
 	filepath = filepath.rstrip(os.path.sep)
 	
 	if os.path.exists(filepath):
+		if opt_fullpath:
+			label = filepath
+		else:
 			label = os.path.basename(filepath)
-			iconpath = iconpath_for_mime(mime_type)
-			
-			# this method seems sparsely supported by applications
-			# they register their commands wrong.
-			#
-			#app = item.last_application()
-			#(cmd, _, _) = item.get_application_info(app)
-			#command_str = "%s %s" % (cmd, filepath)
-			
-			command_str = "%s \"%s\"" % ('rox' if os.path.isdir(filepath) else 'mimeopen-gui', esc(filepath))
-			
-			print "prog \"%s\" \"%s\" %s" % (esc(label), esc(iconpath), command_str)
-			
-			if not os.path.isdir(filepath):
-				dirpath = os.path.dirname(filepath)
-				if dirpath not in dirs:
-					dirs[dirpath] = True
-					print "prog \"%s\" folder rox \"%s\"" % (esc(dirpath), esc(dirpath))
+		
+		iconpath = iconpath_for_mime(mime_type)
+		
+		# this method seems sparsely supported by applications
+		# they register their commands wrong.
+		#
+		#app = item.last_application()
+		#(cmd, _, _) = item.get_application_info(app)
+		#command_str = "%s %s" % (cmd, filepath)
+		
+		cmd = "mimeopen-gui"
+		
+		print "prog \"%s\" \"%s\" %s %s" % (esc(label), esc(iconpath), cmd, esc(filepath))

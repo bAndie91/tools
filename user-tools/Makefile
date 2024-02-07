@@ -5,7 +5,8 @@ TOOLS_TARGET_DIR = /usr/tool
 
 include $(dir $(lastword $(MAKEFILE_LIST)))/Makefile.lists.mk
 
-SYMLINK_TOOLS = $(foreach tool,$(TOOLS),$(shell test -L $(tool) && echo $(tool)))
+SYMLINKS = $(shell find $(addprefix ./,$(TOOLS)) -maxdepth 0 -type l -printf "%f\n")
+SYMLINK_TOOLS = $(filter $(SYMLINKS),$(TOOLS))
 NORMAL_TOOLS = $(filter-out $(SYMLINK_TOOLS),$(TOOLS))
 TOOLS_TARGET_FILES = $(addprefix $(TOOLS_TARGET_DIR)/,$(NORMAL_TOOLS))
 TOOLS_TARGET_SYMLINKS = $(addprefix $(TOOLS_TARGET_DIR)/,$(SYMLINK_TOOLS))
@@ -62,6 +63,13 @@ $(TOOLS_TARGET_DIR):
 
 
 
+DEPCHECK_TARGETS = $(addprefix DEPCHECK/,$(NORMAL_TOOLS))
+depcheck-all: $(DEPCHECK_TARGETS)
+.PHONY: $(DEPCHECK_TARGETS)
+DEPCHECK/lines:
+	perl -MARGV::readonly -e 1
+
+
 install-all: \
   /usr/lib/tool/bash-utils \
   install-tools \
@@ -69,12 +77,12 @@ install-all: \
 .PHONY: install-all
 
 
-install-tools: $(TOOLS_TARGET_FILES) $(TOOLS_TARGET_SYMLINKS)
+install-tools: depcheck-all $(TOOLS_TARGET_FILES) $(TOOLS_TARGET_SYMLINKS)
 .PHONY: install-tools
 
 $(TOOLS_TARGET_FILES) $(TOOLS_TARGET_SYMLINKS): | $(TOOLS_TARGET_DIR)
 
-$(TOOLS_TARGET_FILES): $(TOOLS_TARGET_DIR)/%: %
+$(TOOLS_TARGET_FILES): $(TOOLS_TARGET_DIR)/%: % DEPCHECK/%
 	install $(notdir $@) $(TOOLS_TARGET_DIR)/
 	@echo remove $@ >> uninstall.sh
 

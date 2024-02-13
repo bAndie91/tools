@@ -16,6 +16,23 @@ replcmd I<COMMAND> [I<ARGS>]
 Run I<COMMAND> repeatedly with words read from STDIN appended to its argument list after I<ARGS>.
 You may add prompt, history, and other CLI-goodies on top of replcmd(1) by eg. rlwrap(1).
 
+=head1 RUNTIME COMMANDS
+
+=over 4
+
+=item I<WORDS>
+
+Run I<COMMAND> I<ARGS> I<WORDS>.
+I<WORDS> get split on C<$IFS>.
+
+=item # [I<PARAM-1> [I<PARAM-2> [...]]]
+
+Prefix the line with a C<#> hash mark to
+set fixed parameters for I<COMMAND>.
+These will be inserted between I<ARGS> and I<WORDS> read form STDIN.
+
+=back
+
 =head1 EXAMPLE
 
 rlwrap --remember --command-name dict --substitute-prompt "dict> " replcmd dict
@@ -31,7 +48,19 @@ then
 	exit 2
 fi
 
+fixed_params=()
+
 while read -a words
 do
-	"$@" "${words[@]}"
+	line=${words[*]}
+	if [[ $line =~ ^#\s*(.+) ]]
+	then
+		fixed_params=(${BASH_REMATCH[1]})
+		continue
+	fi
+	
+	if [ ${#words[@]} != 0 ]
+	then
+		"$@" "${fixed_params[@]}" "${words[@]}"
+	fi
 done

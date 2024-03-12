@@ -44,7 +44,7 @@ shift @ARGV if $ARGV[0] eq '--';
 
 sub process_header
 {
-	$HeaderLine = @_[0];
+	$HeaderLine = $_[0];
 	chomp $HeaderLine;
 	@Header = split $FS, $HeaderLine;
 	%Header = ();

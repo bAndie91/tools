@@ -1,6 +1,13 @@
-td-select - Show only the specified columns from the input tabular data stream.
+mrkv2td - Transform multi-record key-value (MRKV) stream to tabular data format.
+td-add-headers - Add headers to the tabular data stream and pass through the rows.
+td-alter - Add new columns and fields to tabular data stream, and modify value of existing fields.
 td-filter - Show only those records from the input tabular data stream which match to the conditions.
+td-group - Collapse sorted tabular data stream's rows with equivalent first fields into one row.
+td-keepheader - Plug a non header-aware program in the tabular-data processing pipeline
+td-pivot - Switch columns for rows in tabular data
+td-select - Show only the specified columns from the input tabular data stream.
 td-trans - Transform whitespace-delimited into TAB-delimited lines ignoring sorrounding whitespace and make duplicated header names unique.
 td-trans-ls - Transform ls(1) output into fix number of TAB-delimited columns.
+td-trans-mount - Transform mount(1) output to tabular data stream.
+td2html - Transform tabular data stream into a HTML table.
 td2mrkv - Transform tabular data into multi-record key-value (MRKV) format.
-td-keepheader - Plug a non header-aware program in the tabular-data processing pipeline

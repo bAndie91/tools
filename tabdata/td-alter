@@ -8,22 +8,31 @@ td-alter - Add new columns and fields to tabular data stream, and modify value o
 
 =head1 USAGE
 
-td-alter <COLUMN>=<EXPR> [<COLUMN>=<EXPR> [<COLUMN>=<EXPR> [...]]]
+td-alter I<COLUMN>=I<EXPR> [I<COLUMN>=I<EXPR> [I<COLUMN>=I<EXPR> [...]]]
 
 =head1 DESCRIPTION
 
-On each data row, sets field in <COLUMN> to the value resulted by <EXPR>
+On each data row, sets field in I<COLUMN> to the value resulted by I<EXPR>
 Perl expression.
-In <EXPR>, you may refer to other columns by bareword or by
-C<$Field{'COLUMN'}> if you must, where COLUMN is a column name.
-You can create new columns simply by referring a <COLUMN> name not yet
-existing.
-You can use an earlier defined <COLUMN>'s value in a later defined
-<EXPR>.
+
+In I<EXPR>, you may refer to other columns by C<$Field{'COLUMN'}> where I<COLUMN> is a column name,
+or in case of uppercase alpha-numberic field names, simply by C<COLUMN>
+(these are set up as subroutines internally).
+Topic variable (C<$_>) is set to the current value of I<COLUMN>.
+
+You can create new columns simply by referring to a I<COLUMN> name does not yet exist.
+You can use an earlier defined I<COLUMN>'s value in a subsequent I<EXPR>.
 
 =head1 EXAMPLES
 
-ls -l | td-trans-ls | td-alter TYPE='substr MODE,0,1' BIGFILE='SIZE>10000000 && TYPE ne "d" ? "yes" : "no"'
+Add new columns: TYPE and IS_BIGFILE.
+IS_BIGFILE depends on previously defined TYPE field.
+
+ ls -l | td-trans-ls | td-alter TYPE='substr MODE,0,1' IS_BIGFILE='SIZE>10000000 && TYPE ne "d" ? "yes" : "no"'
+
+Strip sub-seconds and timezone from DATETIME field.
+
+ TIME_STYLE=full-iso ls -l | td-trans-ls | td-alter DATETIME='s/\..*//; $_'
 
 =head1 OPTIONS
 
@@ -85,11 +94,16 @@ while($line = <STDIN>)
 	for my $d (@Derives)
 	{
 		my $cidx = $Header{$d->{'column'}};
-		my $expr = $d->{'expr'};
-		for my $col (@Header)
+		my $expr_prerun = '';
+		for my $col (grep {/^[A-Z_][A-Z0-9_]*$/} @Header)
 		{
-			$expr =~ s/\b(\Q$col\E)\b/\$Field{'$1'}/g;
+			# define all (uppercase alpha-numeric only) column name as a subroutine
+			# which return the given field's value.
+			$expr_prerun .= sprintf('sub %s { $Field{"%s"} };', $col, $col);
 		}
+		$expr_prerun .= '$_ = $Field[$cidx];';
+		my $expr = $expr_prerun . $d->{'expr'};
+		
 		$Field[$cidx] = $Field{$d->{'column'}} = eval $expr;
 		warn $@ if $@;
 	}

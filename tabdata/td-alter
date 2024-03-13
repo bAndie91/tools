@@ -15,9 +15,10 @@ td-alter I<COLUMN>=I<EXPR> [I<COLUMN>=I<EXPR> [I<COLUMN>=I<EXPR> [...]]]
 On each data row, sets field in I<COLUMN> to the value resulted by I<EXPR>
 Perl expression.
 
-In I<EXPR>, you may refer to other columns by C<$Field{'COLUMN'}> where I<COLUMN> is a column name,
+In I<EXPR>, you may refer to other columns by C<$F{NAME}> where I<NAME> is the column name;
+or by C<$F[INDEX]> where I<INDEX> is the 0-based column index number;
 or in case of uppercase alpha-numberic field names, simply by C<COLUMN>
-(these are set up as subroutines internally).
+(because these are set up as subroutines internally).
 Topic variable (C<$_>) is set to the current value of I<COLUMN>.
 
 You can create new columns simply by referring to a I<COLUMN> name does not yet exist.
@@ -88,8 +89,8 @@ while($line = <STDIN>)
 {
 	chomp $line;
 	
-	@Field = split $FS, $line;
-	%Field = map {$_=>$Field[$Header{$_}]} keys %Header;
+	@F = split $FS, $line;
+	%F = map {$_=>$F[$Header{$_}]} keys %Header;
 	
 	for my $d (@Derives)
 	{
@@ -99,20 +100,20 @@ while($line = <STDIN>)
 		{
 			# define all (uppercase alpha-numeric only) column name as a subroutine
 			# which return the given field's value.
-			$expr_prerun .= sprintf('sub %s { $Field{"%s"} };', $col, $col);
+			$expr_prerun .= sprintf('sub %s { $F{"%s"} };', $col, $col);
 		}
-		$expr_prerun .= '$_ = $Field[$cidx];';
+		$expr_prerun .= '$_ = $F[$cidx];';
 		my $expr = $expr_prerun . $d->{'expr'};
 		
-		$Field[$cidx] = $Field{$d->{'column'}} = eval $expr;
+		$F[$cidx] = $F{$d->{'column'}} = eval $expr;
 		warn $@ if $@;
 	}
 	
 	# undefined is empty string in tab-data format.
-	for my $idx (0..$#Field)
+	for my $idx (0..$#F)
 	{
-		$Field[$idx] = '' if not defined $Field[$idx];
+		$F[$idx] = '' if not defined $F[$idx];
 	}
 	
-	print join($FS, @Field).$RS;
+	print join($FS, @F).$RS;
 }

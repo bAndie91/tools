@@ -15,17 +15,18 @@ td-filter [I<OPTIONS>] --perl I<EXPR>
 =head1 DESCRIPTION
 
 Pass through those records which match at least one of the conditions (inclusive OR).
-You may put together conditions conjunctively (AND) by chaining multiple td-filter commands by shell pipes.
+A condition consists of a triplet of I<COLUMN>, I<OPERATOR>, and I<R-VALUE>.
+You may put together conditions conjunctively (AND) by chaining multiple td-filter(1) commands by shell pipes.
 Example:
 
   td-filter NAME eq john NAME eq jacob | tr-filter AGE -gt 18
 
 This gives the records with either john or jacob, and all of them will be above 18.
 
-Optional word I<or> maked your code more explicite.
+The optional word "B<or>" between triplets makes your code more explicite.
 
-td-filter(1) evaluates the Perl expression in the second form and passes through only
-if the result is true-ish in Perl (non zero, non empty string, etc).
+td-filter(1) evaluates the Perl expression in the second form and passes through records
+only if the result is true-ish in Perl (non zero, non empty string, etc).
 Each field's value is in @F by index, and in %F by column name.
 You can implement more complex conditions in this way.
 
@@ -33,7 +34,7 @@ You can implement more complex conditions in this way.
 
 =over 4
 
-=item -H, --no--header
+=item -H, --no-header
 
 do not show headers
 
@@ -63,7 +64,7 @@ For your convenience, not to bother with escaping, you may also use these operat
 
 =item is
 
-string equality
+string equality (B<eq>)
 
 =item is not
 
@@ -71,45 +72,45 @@ string equality
 
 =item isnot
 
-string inequality
+string inequality (B<ne>)
 
 =item -eq
 
-numerical equality
+numerical equality (B<==>)
 
 =item -ne
 
-numerical inequality
+numerical inequality (B<!=>)
 
 =item <>
 
-numerical inequality
+numerical inequality (B<!=>)
 
 =item -gt
 
-numerical greater than
+numerical greater than (B<E<gt>>)
 
 =item -ge
 
-numerical greater or equal
+numerical greater or equal (B<E<gt>=>)
 
 =item -lt
 
-numerical less than
+numerical less than (B<E<lt>>)
 
 =item -le
 
-numerical less or equal
+numerical less or equal (B<E<lt>=>)
 
 =item match
 
-regexp match
+regexp match (B<=~>)
 
 =item notmatch
 
 =item does not match
 
-negated regexp match
+negated regexp match (B<!~>)
 
 =back
 
@@ -120,11 +121,12 @@ Other operators:
 =item [is] one of
 
 I<R-VALUE> is split into pieces by commas (C<,>) and
-equality to at least one of them is checked
+equality to at least one of them is required
 
 =item [contains | has] [whole word]
 
-Substring match (plural forms "contain" and "have" are also accepted).
+Substring match.
+Plural forms ("contain" and "have") are also accepted.
 Optional I<whole word> is a literal part of the operator.
 
 =item [contains | has] one of [whole word]
@@ -139,8 +141,8 @@ Operators may be preceeded by I<not>, I<does not>, I<do not> to negate their eff
 
 =head1 CAVEATS
 
-If there is no <COLUMN> column in the input data, it's silently considered empty.
-<R-VALUE> does not need quoting or escaping.
+If there is no I<COLUMN> column in the input data, it's silently considered empty.
+td-filter(1) does not need I<R-VALUE> to be quoted or escaped, however your shell may do.
 
 =cut
 

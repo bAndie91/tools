@@ -1,0 +1,39 @@
+#!/usr/bin/env perl
+
+$0 =~ s/^.*\/([^\/]+)$/$1/;
+
+if(not $ENV{'BATTERY_LOW_ACTION'})
+{
+	die "$0: Set BATTERY_LOW_ACTION environment to a command.\n";
+}
+if(not $ENV{'BATTERY_TIME_THRESHOLD'})
+{
+	die "$0: Set BATTERY_TIME_THRESHOLD environment to how many remaining sec will trigger the action.\n";
+}
+
+open my $pipe, '-|', 'acpi', '-b' or die "$0: $!";
+while(<$pipe>)
+{
+	if(/(\d\d):(\d\d):(\d\d) remaining/)
+	{
+		my ($hour, $min, $sec) = ($1, $2, $3);
+		my $remaining_sec = $hour * 3600 + $min * 60 + $sec;
+		if($remaining_sec > $highest_remaining_sec)
+		{
+			$highest_remaining_sec = $remaining_sec;
+			$highest_remaining_time = "$hour:$min:$sec";
+		}
+	}
+}
+close $pipe;
+
+if($highest_remaining_sec <= $ENV{'BATTERY_TIME_THRESHOLD'})
+{
+	my $command = $ENV{'BATTERY_LOW_ACTION'};
+	warn "$0: remaining time: $highest_remaining_time. Running $command\n";
+	system $command;
+}
+else
+{
+	warn "$0: remaining time: $highest_remaining_time. No action.\n";
+}

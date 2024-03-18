@@ -29,7 +29,8 @@ The command itself can access this variable to read.
 
 Sleep interval between invocations.
 In seconds, by default.
-See sleep(1) for valid parameters.
+See sleep(1) for valid parameters, eg. "10m" for 10 minutes.
+Default is no delay.
 
 =back
 

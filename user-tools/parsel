@@ -32,6 +32,7 @@ useful for programmatic consumption, because you only have to fist read
 a line which tells how many subsequent lines to read: each one is one
 selected DOM sub-tree on its own (or text, see C<::text> and C<[[ATTRIB]]> below).
 Then just unescape Backslash-R, Backslash-N, and double Backslashes
+(for example with C<sed -e 's/\\\\/\\/g; s/\\r/\r/g; s/\\n/\n/g'>)
 to get the HTML content.
 
 Additionally it takes these special arguments as well:

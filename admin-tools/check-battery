@@ -10,6 +10,20 @@ if(not $ENV{'BATTERY_TIME_THRESHOLD'})
 {
 	die "$0: Set BATTERY_TIME_THRESHOLD environment to how many remaining sec will trigger the action.\n";
 }
+if(not $ENV{'MIN_UPTIME'})
+{
+	die "$0: Set MIN_UPTIME environment to prevent firing action shortly after reboot.\n";
+}
+
+open my $fh, '/proc/uptime' or die "$0: $!";
+($uptime) = <$fh> =~ /(\d+)/;
+close $fh;
+
+if($uptime <= $ENV{'MIN_UPTIME'})
+{
+	exit 0;
+}
+
 
 open my $pipe, '-|', 'acpi', '-b' or die "$0: $!";
 while(<$pipe>)

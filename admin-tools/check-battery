@@ -50,12 +50,23 @@ while(<$pipe>)
 close $pipe;
 
 $message = "remaining percentage: $highest_percent%, remaining time: $highest_remaining_time.";
+$fire_action = 0;
 
-if(($ENV{'BATTERY_TIME_THRESHOLD'} and $highest_remaining_sec <= $ENV{'BATTERY_TIME_THRESHOLD'}) 
-or ($ENV{'BATTERY_PERCENTAGE_THRESHOLD'} and $highest_percent <= $ENV{'BATTERY_PERCENTAGE_THRESHOLD'}))
+if($ENV{'BATTERY_TIME_THRESHOLD'} and $highest_remaining_sec <= $ENV{'BATTERY_TIME_THRESHOLD'})
+{
+	$message .= " Remaining time less than $ENV{'BATTERY_TIME_THRESHOLD'} sec.";
+	$fire_action = 1;
+}
+if($ENV{'BATTERY_PERCENTAGE_THRESHOLD'} and $highest_percent <= $ENV{'BATTERY_PERCENTAGE_THRESHOLD'})
+{
+	$message .= " Less than $ENV{'BATTERY_PERCENTAGE_THRESHOLD'}% left.";
+	$fire_action = 1;
+}
+
+if($fire_action)
 {
 	my $command = $ENV{'BATTERY_LOW_ACTION'};
-	warn "$0: $message Running $command\n";
+	warn "$0: $message Running '$command'.\n";
 	system $command;
 }
 else

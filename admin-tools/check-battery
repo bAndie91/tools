@@ -6,9 +6,9 @@ if(not $ENV{'BATTERY_LOW_ACTION'})
 {
 	die "$0: Set BATTERY_LOW_ACTION environment to a command.\n";
 }
-if(not $ENV{'BATTERY_TIME_THRESHOLD'})
+if(not $ENV{'BATTERY_TIME_THRESHOLD'} and not $ENV{'BATTERY_PERCENTAGE_THRESHOLD'})
 {
-	die "$0: Set BATTERY_TIME_THRESHOLD environment to how many remaining sec will trigger the action.\n";
+	die "$0: Set BATTERY_TIME_THRESHOLD and/or BATTERY_PERCENTAGE_THRESHOLD environment to at most how many remaining sec or percentage will trigger the action.\n";
 }
 if(not $ENV{'MIN_UPTIME'})
 {
@@ -38,16 +38,27 @@ while(<$pipe>)
 			$highest_remaining_time = "$hour:$min:$sec";
 		}
 	}
+	if(/(\d+)%/)
+	{
+		my $percent = $1;
+		if($percent > $highest_percent)
+		{
+			$highest_percent = $percent;
+		}
+	}
 }
 close $pipe;
 
-if($highest_remaining_sec <= $ENV{'BATTERY_TIME_THRESHOLD'})
+$message = "remaining percentage: $highest_percent%, remaining time: $highest_remaining_time.";
+
+if(($ENV{'BATTERY_TIME_THRESHOLD'} and $highest_remaining_sec <= $ENV{'BATTERY_TIME_THRESHOLD'}) 
+or ($ENV{'BATTERY_PERCENTAGE_THRESHOLD'} and $highest_percent <= $ENV{'BATTERY_PERCENTAGE_THRESHOLD'}))
 {
 	my $command = $ENV{'BATTERY_LOW_ACTION'};
-	warn "$0: remaining time: $highest_remaining_time. Running $command\n";
+	warn "$0: $message Running $command\n";
 	system $command;
 }
 else
 {
-	warn "$0: remaining time: $highest_remaining_time. No action.\n";
+	warn "$0: $message No action.\n";
 }

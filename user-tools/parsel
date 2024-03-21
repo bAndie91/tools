@@ -62,12 +62,33 @@ parsel(1) takes double square brackets to actually output the attribute.
 =item B</> (forward slash)
 
 A stand-alone C</> takes the current selection as a base for the rest of the selectors.
+Therefore the subsequent I<SELECTOR>s work on the previously selected elements,
+not on the document root.
 Mnemonic: one directory level deeper.
 So this arg sequence: C<.content / p div> selects only those P and DIV elements
 which are inside a "content" class. 
 This is useful because with css only, you can not group P and DIV together here.
 In other words neither C<.content p, div> nor C<.content E<gt> p, div> provides
 the same result.
+
+=item B<SEL1/SEL2/SEL3>
+
+A series of selectors delmited by C</> forward slashes in a single argument
+is to delve into the DOM tree, but show only those elements which the last selector yields.
+In contrast to the multi-argument variant C<SEL1 / SEL2 / SEL3>, which shows everything
+SEL1, SEL2, SEL3, etc produces.
+Similar to this 5 words argument: C<@SEL1 / @SEL2 / SEL3>, except C<SEL1/SEL2/SEL3>
+rewinds the base selection to the one before SEL1, while the former one moves the
+base selection to SEL3 at the end.
+
+You may still silence its output by prepending C<@>, like: C<@SEL1/SEL2/SEL3>, so
+not even SEL3 will be shown.
+This is useful when you want only its attributes or inner text (see B<text{}> and B<attr{}>).
+
+Since slashes may occour normally in valid CSS selectors,
+please double those C</> slashes which are not meant to separate selectors,
+but are part of a selector - usually an URL in a tag attribute.
+Eg. instead of C<a[href="http://example.net/page"]>, input C<a[href="http:////example.net//page"]>.
 
 =item B<..> (double period)
 
@@ -90,6 +111,17 @@ Rewind base selection back to the DOM's root.
 Note, C<:root> is also a valid CSS pseudo selector, but in a subtree (entered into by C</>)
 it would yield only that subtree, not the original DOM, so parsel(1) goes back to it at this point.
 You likely need C<@> too to suppress output the whole document here.
+
+=back
+
+=head1 OPTIONS
+
+=over 4
+
+=item -1
+
+Show only the first element found.
+The output is not escaped in this case.
 
 =back
 
@@ -154,6 +186,14 @@ import parsel
 from parsel import Selector
 import w3lib.html
 import re
+import argparse
+
+
+argparser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+argparser.add_argument('-1', action='store_true', help="show only 1 element unescaped")
+argparser.add_argument('SELECTORS', nargs='*', help="see man page for details")
+cli_args = argparser.parse_args()
+opt_single_hit = getattr(cli_args, '1')
 
 
 def parsel_escape(s):
@@ -161,6 +201,25 @@ def parsel_escape(s):
 	s = s.replace('\r', '\\r')
 	s = s.replace('\n', '\\n')
 	return s
+
+def show_hits(selection):
+	if not silenced:
+		if not opt_single_hit:
+			print(len(selection))
+		
+		for hit in selection:
+			out = hit.get()
+			
+			if output_text_only:
+				out = w3lib.html.remove_tags(out)
+			if output_attribute_only is not None:
+				out = hit.attrib.get(output_attribute_only, '')
+			
+			if opt_single_hit:
+				print(out)
+				sys.exit(0)
+			else:
+				print(parsel_escape(out))
 
 
 html = ''.join(sys.stdin.readlines())
@@ -170,12 +229,35 @@ base_selection = parsel.selector.SelectorList([whole_selection])
 curr_selection = base_selection
 prev_selections = []
 
-for arg in sys.argv[1:]:
+for arg in cli_args.SELECTORS:
 	
 	silenced = False
 	output_text_only = False
 	output_attribute_only = None
 	apply_current_selector = True
+	
+	if arg.startswith('@'):
+		silenced = True
+		arg = arg[1:]
+	
+	sub_selectors = re.split(r'(?<!/)/(?!/)', arg)
+	if len(sub_selectors) > 1 and arg != '/':
+		sub_selectors = [sel.replace('//', '/') for sel in sub_selectors]
+		sub_selection = base_selection
+		
+		for sel in sub_selectors:
+			try:
+				sub_selection = sub_selection.css(sel)
+			except:
+				sys.stderr.write("CSS selection error at '%s' in '%s'.\n" % (sel, arg))
+				raise
+		
+		show_hits(sub_selection)
+		
+		curr_selection = sub_selection
+		continue
+	
+	arg = arg.replace('//', '/')
 	
 	if arg == '/':
 		prev_selections.append(curr_selection)
@@ -186,10 +268,6 @@ for arg in sys.argv[1:]:
 		base_selection = prev_selections.pop()
 		continue
 
-	if arg.startswith('@'):
-		silenced = True
-		arg = arg[1:]
-	
 	if arg == ':root':
 		# cssselector knows this ':root' pseudo selector, but it'd select
 		# only the current scope's root which we have narrowed, so step in
@@ -216,15 +294,4 @@ for arg in sys.argv[1:]:
 			sys.stderr.write("CSS selection error at '%s'.\n" % arg)
 			raise
 	
-	if not silenced:
-		print(len(curr_selection))
-		for hit in curr_selection:
-			out = hit.get()
-			
-			if output_text_only:
-				out = w3lib.html.remove_tags(out)
-			if output_attribute_only is not None:
-				out = hit.attrib.get(output_attribute_only, '')
-			
-			print(parsel_escape(out))
-
+	show_hits(curr_selection)

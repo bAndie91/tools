@@ -22,7 +22,7 @@ ornate_per_line()
 }
 
 
-xattrs=`getfattr --physical --dump "$path" 2>/dev/null`
+xattrs=`getfattr --physical --dump --encoding=text "$path" 2>/dev/null`
 if [ -n "$xattrs" ]
 then
 	ansi_codes=`tput bold; tput setaf 5`

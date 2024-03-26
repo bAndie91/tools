@@ -60,6 +60,12 @@ foreground, eg: C<yellow-bg>.
 Styles: bold, faint, italic, underline,
 blink_slow, blink_rapid, inverse, conceal, crossed,
 
+Note, not all styles are supported by all terminal emulators.
+
+=head1 EXAMPLE
+
+  hlncal today=inverse `ncal -e`=yellow_bg-red SUN=bright-red SAT=red -bM3
+
 =cut
 
 

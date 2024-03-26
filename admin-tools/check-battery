@@ -1,0 +1,75 @@
+#!/usr/bin/env perl
+
+$0 =~ s/^.*\/([^\/]+)$/$1/;
+
+if(not $ENV{'BATTERY_LOW_ACTION'})
+{
+	die "$0: Set BATTERY_LOW_ACTION environment to a command.\n";
+}
+if(not $ENV{'BATTERY_TIME_THRESHOLD'} and not $ENV{'BATTERY_PERCENTAGE_THRESHOLD'})
+{
+	die "$0: Set BATTERY_TIME_THRESHOLD and/or BATTERY_PERCENTAGE_THRESHOLD environment to at most how many remaining sec or percentage will trigger the action.\n";
+}
+if(not $ENV{'MIN_UPTIME'})
+{
+	die "$0: Set MIN_UPTIME environment to prevent firing action shortly after reboot.\n";
+}
+
+open my $fh, '/proc/uptime' or die "$0: $!";
+($uptime) = <$fh> =~ /(\d+)/;
+close $fh;
+
+if($uptime <= $ENV{'MIN_UPTIME'})
+{
+	exit 0;
+}
+
+
+open my $pipe, '-|', 'acpi', '-b' or die "$0: $!";
+while(<$pipe>)
+{
+	if(/(\d\d):(\d\d):(\d\d) remaining/)
+	{
+		my ($hour, $min, $sec) = ($1, $2, $3);
+		my $remaining_sec = $hour * 3600 + $min * 60 + $sec;
+		if($remaining_sec > $highest_remaining_sec)
+		{
+			$highest_remaining_sec = $remaining_sec;
+			$highest_remaining_time = "$hour:$min:$sec";
+		}
+	}
+	if(/(\d+)%/)
+	{
+		my $percent = $1;
+		if($percent > $highest_percent)
+		{
+			$highest_percent = $percent;
+		}
+	}
+}
+close $pipe;
+
+$message = "remaining percentage: $highest_percent%, remaining time: $highest_remaining_time.";
+$fire_action = 0;
+
+if($ENV{'BATTERY_TIME_THRESHOLD'} and $highest_remaining_sec <= $ENV{'BATTERY_TIME_THRESHOLD'})
+{
+	$message .= " Remaining time less than $ENV{'BATTERY_TIME_THRESHOLD'} sec.";
+	$fire_action = 1;
+}
+if($ENV{'BATTERY_PERCENTAGE_THRESHOLD'} and $highest_percent <= $ENV{'BATTERY_PERCENTAGE_THRESHOLD'})
+{
+	$message .= " Less than $ENV{'BATTERY_PERCENTAGE_THRESHOLD'}% left.";
+	$fire_action = 1;
+}
+
+if($fire_action)
+{
+	my $command = $ENV{'BATTERY_LOW_ACTION'};
+	warn "$0: $message Running '$command'.\n";
+	system $command;
+}
+else
+{
+	warn "$0: $message No action.\n";
+}

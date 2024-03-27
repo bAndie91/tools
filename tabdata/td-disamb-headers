@@ -1,0 +1,49 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+td-disamb-headers - Disambiguate headers in tabular data
+
+=head1 DESCRIPTION
+
+Change column names in input tabular data stream by appending a sequential number 
+to the duplicated column names.
+The first occurrance is kept as-is.
+If a particular column name already ends with an integer, it gets incremented.
+
+=head1 EXAMPLE
+
+  echo "PID	PID	PID2	PID2	USER	CMD" | td-disamb-headers
+
+Output:
+
+  PID	PID3	PID2	PID4	USER	CMD
+
+=cut
+
+
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
+
+process_header(scalar <STDIN>);
+
+@new_Columns = ();
+for my $colname (@Header)
+{
+	my @other_Columns = grep {$_ ne $colname} @Header;
+	my $new_colname = $colname;
+	while($new_colname ~~ @new_Columns or $new_colname ~~ @other_Columns)
+	{
+		# increment trailing counter
+		$new_colname =~ s/(\d*)$/($1 or 1) + 1/e;
+	}
+	push @new_Columns, $new_colname;
+}
+@Header = @new_Columns;
+
+print join($FS, @Header).$RS;
+
+print while <STDIN>;

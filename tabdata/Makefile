@@ -8,7 +8,7 @@ TOOLS = \
   td2mrkv \
   td-add-headers \
   td-alter \
-  td-disabm-headers \
+  td-disamb-headers \
   td-filter \
   td-group \
   td-keepheader \

@@ -2,8 +2,23 @@
 BIN_DIR = /usr/tool
 LIB_DIR = /usr/lib/tool/perl5/tabdata
 
-TOOLS = td-select td-filter td-trans td-trans-ls td2mrkv td-keepheader \
-  td-trans-mount td-alter td-add-headers td-pivot td-group td2html mrkv2td
+TOOLS = \
+  mrkv2td \
+  td2html \
+  td2mrkv \
+  td-add-headers \
+  td-alter \
+  td-disabm-headers \
+  td-filter \
+  td-group \
+  td-keepheader \
+  td-pivot \
+  td-select \
+  td-trans \
+  td-trans-fixcol \
+  td-trans-ls \
+  td-trans-mount \
+
 
 TARGET_TOOLS = $(foreach filename,$(TOOLS),$(BIN_DIR)/$(filename))
 

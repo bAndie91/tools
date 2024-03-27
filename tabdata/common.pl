@@ -11,6 +11,7 @@ $OptWarnBadColumnNames = 1;
 $OptFailBadColumnNames = 1;
 $OptFailBadNegativeColumnNames = 0;
 $OptAddExtraColumns = 1;
+$OptMinColumnSpacing = 2;
 
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 use Getopt::Long qw/:config no_ignore_case bundling pass_through require_order no_getopt_compat/;
@@ -24,6 +25,8 @@ GetOptions(
 	'w|warn-nonexisting-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 1; },
 	'strict-columns' => sub { $OptWarnBadColumnNames = 1; $OptFailBadColumnNames = 1; $OptFailBadNegativeColumnNames = 1; },
 	
+	'm=i' => \$OptMinColumnSpacing,
+	
 	's|separator=s' => \$OptSeparator,
 	
 	'x|extra-columns' => sub { $OptAddExtraColumns = 1; },
@@ -31,6 +34,8 @@ GetOptions(
 	
 	'help|?' => sub{ pod2usage(-exitval=>0, -verbose=>99); },
 ) or pod2usage(-exitval=>2, -verbose=>99);
+
+# TODO separate GetOptions() per td-* tool
 
 if('--' ~~ @ARGV and $ARGV[0] ne '--')
 {

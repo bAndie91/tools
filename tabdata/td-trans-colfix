@@ -1,0 +1,70 @@
+#!/usr/bin/env perl
+
+
+=pod
+
+=head1 NAME
+
+td-trans-colfix - Transform a table-looking text, aligned to fixed columns by spaces, into tabular data.
+
+=head1 DESCRIPTION
+
+First line is the header consisting of the column names.
+Each field's text must start in the same terminal column as the column name.
+
+=head1 OPTIONS
+
+=over 4
+
+=item -m
+
+Minimum spacing between columns.
+Default is 2.
+This allows the input data to have column names with single spaces.
+
+=back
+
+=cut
+
+
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
+
+@Column = ();
+$chars_eaten = 0;
+
+$headline = <STDIN>;
+chomp $headline;
+while($headline =~ /^(.+?)([ ]{$OptMinColumnSpacing,}|$)/)
+{
+	my ($colname, $spaces) = ($1, $2);
+	my $width = length($colname.$spaces);
+	push @Column, {
+		name => $colname,
+		start => $chars_eaten,
+		width => $width,
+	};
+	$chars_eaten += $width;
+	$headline = $';
+}
+
+if($OptShowHeader)
+{
+	print join($FS, map {$_->{name}} @Column).$RS;
+}
+
+while(my $line = <STDIN>)
+{
+	chomp $line;
+	my @Fields = ();
+	
+	for my $idx (0..$#Column)
+	{
+		my $field = substr $line, $Column[$idx]->{start}, $Column[$idx]->{width};
+		$field =~ s/\s*$//;
+		push @Fields, $field;
+	}
+	
+	print join($FS, @Fields).$RS;
+}

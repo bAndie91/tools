@@ -233,7 +233,7 @@ if(not defined $Expr)
 	}
 }
 
-if($OptShowHeader)
+if($OptShowHeader and length $HeaderLine)
 {
 	print $HeaderLine.$RS;
 }

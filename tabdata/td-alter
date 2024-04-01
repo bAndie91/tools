@@ -80,7 +80,7 @@ while(scalar @ARGV)
 	shift @ARGV;
 }
 
-if($OptShowHeader)
+if($OptShowHeader and @Header)
 {
 	print join($FS, @Header).$RS;
 }

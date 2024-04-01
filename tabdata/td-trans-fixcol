@@ -58,7 +58,7 @@ while($headline =~ /^(.+?)([ ]{$OptMinColumnSpacing,}|$)/)
 $Column[$#Column]->{width} = undef if scalar @Column;
 
 
-if($OptShowHeader)
+if($OptShowHeader and @Column)
 {
 	print join($FS, map {$_->{name}} @Column).$RS;
 }

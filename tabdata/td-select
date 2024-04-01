@@ -113,7 +113,7 @@ while($arg = shift @ARGV)
 }
 
 # display selected headers
-if($OptShowHeader)
+if($OptShowHeader and @Columns)
 {
 	@Output = ();
 	for my $col (@Columns)

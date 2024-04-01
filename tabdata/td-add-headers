@@ -59,11 +59,11 @@ if($OptAddExtraColumns)
 }
 else
 {
-	$first_line = '';
+	$first_line = undef;
 }
 
 print join($FS, @Headers).$RS;
-print $first_line.$RS;
+print $first_line.$RS if defined $first_line;
 while(<STDIN>)
 {
 	print;

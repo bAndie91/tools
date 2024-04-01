@@ -7,6 +7,18 @@
 
 td-trans - Transform whitespace-delimited into TAB-delimited lines ignoring sorrounding whitespace.
 
+=head1 OPTIONS
+
+=over 4
+
+=item -c, --max-columns I<NUM>
+
+Maximum number of columns.
+The I<NUM>th column may have any whitespace.
+By default it's equivalent to the number of fields in the header (first line).
+
+=back
+
 =cut
 
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
@@ -18,14 +30,14 @@ while(my $line = <STDIN>)
 	$line =~ s/^\s*//g;
 	$line =~ s/\s*$//g;
 
-	if($. == 1)
+	if($. == 1 and not defined $OptMaxColumns)
 	{
 		# the first line considered header,
 		# and the number of fields dictates (at most) how many fields are there in the rest of the stream.
-		$num_of_fields = scalar split /\s+/, $line;
+		$OptMaxColumns = scalar split /\s+/, $line;
 	}
 	
-	my @Fields = split /\s+/, $line, $num_of_fields;
+	my @Fields = split /\s+/, $line, $OptMaxColumns;
 	
 	print join($FS, @Fields).$RS;
 }

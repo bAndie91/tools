@@ -12,6 +12,7 @@ $OptFailBadColumnNames = 1;
 $OptFailBadNegativeColumnNames = 0;
 $OptAddExtraColumns = 1;
 $OptMinColumnSpacing = 2;
+$OptMaxColumns = undef;
 
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 use Getopt::Long qw/:config no_ignore_case bundling pass_through require_order no_getopt_compat/;
@@ -25,7 +26,8 @@ GetOptions(
 	'w|warn-nonexisting-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 1; },
 	'strict-columns' => sub { $OptWarnBadColumnNames = 1; $OptFailBadColumnNames = 1; $OptFailBadNegativeColumnNames = 1; },
 	
-	'm=i' => \$OptMinColumnSpacing,
+	'm|min-column-spacing=i' => \$OptMinColumnSpacing,
+	'c|max-columns=i' => \$OptMaxColumns,
 	
 	's|separator=s' => \$OptSeparator,
 	

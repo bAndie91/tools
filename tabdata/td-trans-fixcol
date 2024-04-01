@@ -16,7 +16,7 @@ Each field's text must start in the same terminal column as the column name.
 
 =over 4
 
-=item -m
+=item -m, --min-column-spacing I<NUM>
 
 Minimum spacing between columns.
 Default is 2.

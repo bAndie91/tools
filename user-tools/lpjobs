@@ -1,0 +1,41 @@
+#!/bin/bash
+
+TAB=$'\t'
+
+
+LANG=C lpq -a | td-trans-fixcol |\
+td-select -H Job Rank 'File(s)' |\
+{
+	declare -a job_rank
+	declare -a job_filename
+	declare -a job_printer
+	declare -a job_datetime
+	declare -A jobs
+	
+	while read -r jobid rank filename
+	do
+		job_rank[$jobid]=$rank
+		job_filename[$jobid]=$filename
+		jobs[$jobid]=1
+	done
+	
+	lpstat -o | td-trans -c 4 |\
+	td-add-headers -X PRINTERJOBID USER SIZE DATETIME |\
+	td-alter _='($printer, $jobid) = PRINTERJOBID =~ /^(.+?)-(\d+)$/' PRINTER='$printer' JOBID='$jobid' |\
+	td-select -H JOBID PRINTER DATETIME |\
+	{
+		while read -r jobid printer datetime
+		do
+			job_printer[$jobid]=$printer
+			job_datetime[$jobid]=$datetime
+			jobs[$jobid]=1
+		done
+		
+		echo "JOB${TAB}PRINTER${TAB}RANK${TAB}DATETIME${TAB}FILE"
+		
+		for jobid in `printf '%s\n' "${!jobs[@]}" | sort -n`
+		do
+			echo "$jobid${TAB}${job_printer[$jobid]}${TAB}${job_rank[$jobid]}${TAB}${job_datetime[$jobid]}${TAB}${job_filename[$jobid]}"
+		done
+	}
+}

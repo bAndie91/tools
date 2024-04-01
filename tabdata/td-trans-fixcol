@@ -55,7 +55,7 @@ while($headline =~ /^(.+?)([ ]{$OptMinColumnSpacing,}|$)/)
 }
 
 # last column is undefinitely wide
-$Column[$#Column]->{width} = undef;
+$Column[$#Column]->{width} = undef if scalar @Column;
 
 
 if($OptShowHeader)

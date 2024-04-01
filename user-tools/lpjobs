@@ -3,7 +3,9 @@
 TAB=$'\t'
 
 
-LANG=C lpq -a | td-trans-fixcol |\
+LANG=C lpq -a |\
+sed -e '/^no entries$/ d' |\
+td-trans-fixcol |\
 td-select -H Job Rank 'File(s)' |\
 {
 	declare -a job_rank

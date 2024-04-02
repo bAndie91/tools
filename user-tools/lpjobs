@@ -1,5 +1,17 @@
 #!/bin/bash
 
+true <<<'EOF'
+=pod
+
+=head1 NAME
+
+lpjobs - Show printer queue jobs (wrapper for lpq and lpstat)
+
+=cut
+
+EOF
+
+
 TAB=$'\t'
 
 

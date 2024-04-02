@@ -65,6 +65,7 @@ lnto - Convenience wrapper for ln(1). User enters link target paths relative to 
 loggerexec - Run a command and send STDOUT and STDERR to syslog
 logrotate-counters - Increment numbers in file names
 logto - Run a command and append its STDOUT and STDERR to a file
+lpjobs - Show printer queue jobs (wrapper for lpq and lpstat)
 lsata - List ATA devices on the system
 lsenv - List environment variables of a process
 mail-extract-raw-headers - Get named headers from RFC822-format input.
@@ -96,6 +97,7 @@ pyzor-files - Run a pyzor(1) command on the given files
 qrwifi - Generate a string, used in WiFi-setup QR codes, containing a hotspot name and password
 randstr - Generate random string from a given set of characters and with a given length.
 rcmod - Run a given command and modify its Return Code according to the rules given by the user
+redirexec - Execute a command with some file descriptiors redirected.
 renamemanual - Interactive file rename tool
 repeat - Run a give command repeatedly
 replcmd - Wrap any command in a REPL interface

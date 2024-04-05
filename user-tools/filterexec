@@ -10,11 +10,11 @@ filterexec - Echo those arguments with which the given command returns zero.
 
 =head1 SYNOPSIS
 
-filterexec <COMMAND> [<ARGS>] -- <DATA-1> [<DATA-2> [... <DATA-n>]]
+filterexec I<COMMAND> [I<ARGS>] -- I<DATA-1> [I<DATA-2> [... I<DATA-n>]]
 
 =head1 DESCRIPTION
 
-Prints each DATA (1 per line) only if command "COMMAND ARGS DATA" exits
+Prints each I<DATA> (1 per line) only if command I<COMMAND ARGS DATA> exits
 succesfully, ie. with zero exit status.
 
 =head1 EXAMPLE

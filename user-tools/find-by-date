@@ -10,7 +10,7 @@ find-by-date - Find files with GNU find(1) but with easier to comprehend time in
 
 =head1 SYNOPSIS
 
-find-by-date [<FROM>--][<TO>] [<FIND-ARGS>]
+find-by-date [I<FROM>--][I<TO>] [I<FIND-ARGS>]
 
 =head1 DESCRIPTION
 

@@ -96,7 +96,6 @@ class Clock(gtk.Label):
 	def _next_update_interval_ms(self):
 		now = time.time()
 		nextsecond = 1 - (now - int(now))
-		if nextsecond > 0.9: nextsecond = 0
 		return int(nextsecond * 1000)
 	
 	def update_display(self):
@@ -155,7 +154,7 @@ class Stopper(Clock):
 			hours = display_time / 3600
 			return '%s%02d:%02d.%02d' % (
 				('%dh ' % hours) if hours >= 1 else '', 
-				display_time / 60 % 3600, 
+				display_time / 60 % 60, 
 				display_time % 60, 
 				(display_time - int(display_time)) * 100,
 			)
@@ -184,6 +183,7 @@ class SpinLabel(gtk.EventBox):
 		return self._value
 	@value.setter
 	def value(self, x):
+		x = int(x)
 		if x > self.range[1]: x = self.range[0]
 		if x < self.range[0]: x = self.range[1]
 		self._value = x
@@ -236,11 +236,16 @@ class KitchenTimer(gtk.HBox, Clock):
 			self._running = True
 			self.emit('started')
 	
+	def stop(self):
+		if self.alarmed:
+			self._running = False
+	
 	def alarm(self):
 		message = "Timer Alarm"
 		dialog = gtk.MessageDialog(flags=gtk.DIALOG_DESTROY_WITH_PARENT, type=gtk.MESSAGE_WARNING, buttons=gtk.BUTTONS_OK, message_format=message)
 		dialog.set_type_hint(gtk.gdk.WINDOW_TYPE_HINT_TOOLBAR)
 		dialog.set_keep_above(True)
+		dialog.set_skip_taskbar_hint(False)
 		dialog.set_icon_name('alarm-clock')
 		dialog.set_title(message)
 		dialog.format_secondary_text("Your %d:%02d:%02d timer is due!" % (self.scheduled_hours, self.scheduled_minutes, self.scheduled_seconds))
@@ -268,7 +273,7 @@ class KitchenTimer(gtk.HBox, Clock):
 				self.minutes.format = fmt % '%02d:'
 				self.seconds.format = fmt % '%02d'
 			self.hours.value = abs(display_time) / 3600
-			self.minutes.value = abs(display_time) / 60 % 3600
+			self.minutes.value = abs(display_time) / 60 % 60
 			self.seconds.value = abs(display_time) % 60
 
 
@@ -311,8 +316,11 @@ class KitchenTimerUI(gtk.HBox):
 		self.timer = KitchenTimer()
 		self.btn_start = StockButton(stock=gtk.STOCK_MEDIA_PLAY, label='')
 		self.btn_start.connect('clicked', lambda *X: self.timer.start())
+		self.btn_stop = StockButton(stock=gtk.STOCK_MEDIA_STOP, label='')
+		self.btn_stop.connect('clicked', lambda *X: self.timer.stop())
 		self.pack_start(self.timer, expand=True, fill=True)
 		self.pack_start(self.btn_start, expand=False, fill=False)
+		self.pack_start(self.btn_stop, expand=False, fill=False)
 		
 		self.timer.connect('started', lambda *X: self.manage_button_states())
 		self.manage_button_states()

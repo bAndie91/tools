@@ -165,7 +165,7 @@ class Stopper(Clock):
 
 class SpinLabel(gtk.EventBox):
 	def __init__(self, format, start_value):
-		self._format = format
+		self.format = format
 		self._value = start_value
 		self._locked = False
 		self.range = (0, 59)
@@ -197,7 +197,7 @@ class SpinLabel(gtk.EventBox):
 		delta = +1 if event.direction == gtk.gdk.SCROLL_UP else -1
 		self.value += delta
 	def _update_label(self):
-		self.label.set_markup("<span size='32000'><b>%s</b></span>" % (self._format % self._value))
+		self.label.set_markup(self.format % self._value)
 
 class KitchenTimer(gtk.HBox, Clock):
 	name = "Timer"
@@ -208,9 +208,11 @@ class KitchenTimer(gtk.HBox, Clock):
 	}
 	
 	def __init__(self):
-		self.hours = SpinLabel('%d:', 0)
-		self.minutes = SpinLabel('%02d:', 0)
-		self.seconds = SpinLabel('%02d', 0)
+		fmt = "<span size='32000'><b>%s</b></span>"
+		self.hours = SpinLabel(fmt % '%d:', 0)
+		self.minutes = SpinLabel(fmt % '%02d:', 0)
+		self.seconds = SpinLabel(fmt % '%02d', 0)
+		self.alarmed = False
 		super(gtk.HBox, self).__init__()
 		super(Clock, self).__init__()
 		self.pack_start(self.hours, expand=False, fill=False)
@@ -256,13 +258,18 @@ class KitchenTimer(gtk.HBox, Clock):
 		if self._running:
 			display_time = self._future_time - time.time()
 			if display_time <= 0:
-				display_time = 0
-				self._running = False
-				self.emit('due')
-				self.alarm()
-			self.hours.value = display_time / 3600
-			self.minutes.value = display_time / 60 % 3600
-			self.seconds.value = display_time % 60
+				if not self.alarmed:
+					self.emit('due')
+					self.alarm()
+					self.alarmed = True
+				
+				fmt = "<span size='32000' foreground='red'><b>%s</b></span>"
+				self.hours.format = fmt % '-%d:'
+				self.minutes.format = fmt % '%02d:'
+				self.seconds.format = fmt % '%02d'
+			self.hours.value = abs(display_time) / 3600
+			self.minutes.value = abs(display_time) / 60 % 3600
+			self.seconds.value = abs(display_time) % 60
 
 
 class StopperUI(gtk.HBox):
@@ -293,7 +300,7 @@ class StopperUI(gtk.HBox):
 		return self.stopper.is_running
 	
 	def drain(self):
-		self.timer._draining = True
+		self.stopper._draining = True
 
 
 class KitchenTimerUI(gtk.HBox):

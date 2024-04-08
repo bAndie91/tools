@@ -5,7 +5,7 @@ default:
 	@echo may be interested in: install-all
 	false
 
-TOOLS = gexifcomment gtail xgcal perspect
+TOOLS = gexifcomment gtail xgcal xstopper perspect
 
 TARGET_FILES = $(foreach tool,$(TOOLS),$(PREFIX)/$(tool))
 UNINSTALL_TARGETS = $(foreach tool,$(TOOLS),UNINSTALL/$(tool))

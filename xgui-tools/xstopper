@@ -20,8 +20,11 @@ def win_main_show():
 
 
 def act_quit():
-	gtk.main_quit()
-	return False
+	if len(running_timers()) > 0:
+		pass
+	else:
+		gtk.main_quit()
+	return True
 
 
 def add_key_binding(widget, keyname, callback):
@@ -29,51 +32,6 @@ def add_key_binding(widget, keyname, callback):
 	key, modifier = gtk.accelerator_parse(keyname)
 	accelgroup.connect_group(key, modifier, gtk.ACCEL_VISIBLE, callback)
 	widget.add_accel_group(accelgroup)
-
-
-class Clock(gtk.Label):
-	name = "Clock"
-	_format = '%H:%M:%S'
-	
-	def __init__(self, *pargs, **kwargs):
-		super(gtk.Label, self).__init__(*pargs, **kwargs)
-		self._update()
-	
-	@property
-	def format(self):
-		return self._format
-	
-	@format.setter
-	def format(self, format):
-		self._format = format
-	
-	@property
-	def display(self):
-		return time.strftime(self._format, time.localtime(time.time()))
-	
-	def _update(self):
-		self.set_markup("<span size='32000'><b>" + self.display + "</b></span>")
-		now = time.time()
-		nextsecond = 1 - (now - int(now))
-		glib.timeout_add(int(nextsecond * 1000), self._update, priority=glib.PRIORITY_DEFAULT_IDLE)
-		return False
-
-
-class Stopper(Clock):
-	name = "Stopper"
-	_start_time = -1
-	
-	def run(self):
-		self._start_time = time.time()
-	
-	@property
-	def display(self):
-		return time.strftime(self._format, time.localtime(time.time() - self._start_time))
-
-
-class KitchenTimer(Clock):
-	name = "Timer"
-	pass
 
 
 class StockButton(gtk.Button):
@@ -116,17 +74,153 @@ class StockButton(gtk.Button):
 			img.props.visible = True
 
 
+
+class Clock(gtk.Label):
+	name = "Clock"
+	_format = '%H:%M:%S'
+	
+	def __init__(self):
+		super(gtk.Label, self).__init__()
+		self._update()
+	
+	@property
+	def format(self):
+		return self._format
+	
+	@format.setter
+	def format(self, format):
+		self._format = format
+	
+	@property
+	def display(self):
+		return time.strftime(self._format, time.localtime(time.time()))
+	
+	def _next_update_interval_ms(self):
+		now = time.time()
+		nextsecond = 1 - (now - int(now))
+		return int(nextsecond * 1000)
+	
+	def _update(self):
+		self.set_markup("<span size='32000'><b>" + self.display + "</b></span>")
+		glib.timeout_add(self._next_update_interval_ms(), self._update, priority=glib.PRIORITY_DEFAULT_IDLE)
+		return False
+
+
+class Stopper(Clock):
+	name = "Stopper"
+	
+	def __init__(self):
+		self._start_time = 0
+		self._behind_interval = 0
+		self._running = False
+		self._last_paused_time = 0
+		super(self.__class__, self).__init__()
+	
+	def run(self):
+		if not self._running:
+			now = time.time()
+			if self._start_time == 0:
+				self._start_time = now
+			if self._last_paused_time > 0:
+				self._behind_interval += now - self._last_paused_time
+			self._running = True
+			self._update()
+	
+	def pause(self):
+		if self._running:
+			self._last_paused_time = time.time()
+			self._running = False
+			self._update()
+	
+	@property
+	def is_running(self):
+		return self._running
+	
+	def _next_update_interval_ms(self):
+		return 10
+	
+	@property
+	def display(self):
+		if self._start_time > 0:
+			if self._running:
+				display_time = time.time() - self._start_time - self._behind_interval
+			else:
+				display_time = self._last_paused_time - self._start_time - self._behind_interval
+			hours = display_time / 3600
+			return '%s%02d:%02d.%02d' % (
+				('%dh ' % hours) if hours >= 1 else '', 
+				display_time / 60 % 3600, 
+				display_time % 60, 
+				(display_time - int(display_time)) * 100,
+			)
+		else:
+			return '--:--.--'
+
+
+class StopperUI(gtk.HBox):
+	name = Stopper.name
+	
+	def __init__(self, *pargs, **kwargs):
+		super(gtk.HBox, self).__init__(*pargs, **kwargs)
+		self.stopper = Stopper()
+		btn_start = StockButton(stock=gtk.STOCK_MEDIA_PLAY, label='')
+		btn_pause = StockButton(stock=gtk.STOCK_MEDIA_PAUSE, label='')
+		btn_start.connect('clicked', lambda *X: self.stopper.run())
+		btn_pause.connect('clicked', lambda *X: self.stopper.pause())
+		self.pack_start(self.stopper, expand=True, fill=True)
+		self.pack_start(btn_start, expand=False, fill=False)
+		self.pack_start(btn_pause, expand=False, fill=False)
+	
+	@property
+	def is_running(self):
+		return self.stopper._running
+
+
+class KitchenTimer(Clock):
+	name = "Timer"
+	
+	@property
+	def is_running(self):
+		return False
+
+
+class KitchenTimerUI(gtk.HBox, KitchenTimer):
+	name = KitchenTimer.name
+	pass
+
+
 class MultiBox(gtk.VBox):
 	def __init__(self, klass):
 		super(gtk.VBox, self).__init__()
+		self._items = []
 		self._klass = klass
 		plusbutton = StockButton(stock=gtk.STOCK_ADD, label=klass.name)
 		plusbutton.connect('clicked', lambda *x: self.new_item())
 		self.pack_start(plusbutton, expand=False, fill=False)
 		self.new_item()
 	def new_item(self):
-		self.pack_start(self._klass(), expand=False, fill=False)
+		item = self._klass()
+		self._items.append(item)
+		hbox = gtk.HBox()
+		hbox.multibox_item = item
+		button_remove = StockButton(stock=gtk.STOCK_REMOVE, label='')
+		button_remove.connect('clicked', lambda X, hbox: self.remove_item(hbox), hbox)
+		self.pack_start(hbox, expand=False, fill=False)
+		hbox.pack_start(item, expand=True, fill=True)
+		hbox.pack_start(button_remove, expand=False, fill=False)
 		self.show_all()
+	@property
+	def items(self):
+		return self._items
+	def remove_item(self, hbox):
+		item = hbox.multibox_item
+		self.items.remove(item)
+		item.destroy()
+		hbox.destroy()
+
+
+def running_timers():
+	return [item for item in mb_stoppers.items + mb_kitchentimers.items if item.is_running]
 
 
 win_main = gtk.Window(gtk.WINDOW_TOPLEVEL)
@@ -141,13 +235,15 @@ win_main.set_keep_above(True)
 win_main.set_icon_name('alarm-clock')
 
 start_evt = win_main.connect('map-event', lambda w,e: (win_main.disconnect(start_evt), win_main_show()))
-win_main.connect('delete-event', lambda w,e: True)
+win_main.connect('delete-event', lambda w,e: act_quit())
 add_key_binding(win_main, '<Ctrl><Shift>Q', lambda *x: act_quit())
 
 win_main.add(box0)
 box0.pack_start(MultiBox(Clock), expand=True, fill=False)
-box0.pack_start(MultiBox(Stopper), expand=True, fill=False)
-box0.pack_start(MultiBox(KitchenTimer), expand=True, fill=False)
+mb_stoppers = MultiBox(StopperUI)
+mb_kitchentimers = MultiBox(KitchenTimerUI)
+box0.pack_start(mb_stoppers, expand=True, fill=False)
+box0.pack_start(mb_kitchentimers, expand=True, fill=False)
 win_main.show_all()
 
 gtk.main()

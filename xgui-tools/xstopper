@@ -1,0 +1,153 @@
+#!/usr/bin/env python2.7
+# -*- coding: utf-8 -*-
+
+import os
+import sys
+import signal
+import gtk
+import gobject
+import glib
+import pango
+import gettext
+import re
+import time
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
+
+
+def win_main_show():
+	pass
+
+
+def act_quit():
+	gtk.main_quit()
+	return False
+
+
+def add_key_binding(widget, keyname, callback):
+	accelgroup = gtk.AccelGroup()
+	key, modifier = gtk.accelerator_parse(keyname)
+	accelgroup.connect_group(key, modifier, gtk.ACCEL_VISIBLE, callback)
+	widget.add_accel_group(accelgroup)
+
+
+class Clock(gtk.Label):
+	name = "Clock"
+	_format = '%H:%M:%S'
+	
+	def __init__(self, *pargs, **kwargs):
+		super(gtk.Label, self).__init__(*pargs, **kwargs)
+		self._update()
+	
+	@property
+	def format(self):
+		return self._format
+	
+	@format.setter
+	def format(self, format):
+		self._format = format
+	
+	@property
+	def display(self):
+		return time.strftime(self._format, time.localtime(time.time()))
+	
+	def _update(self):
+		self.set_markup("<span size='32000'><b>" + self.display + "</b></span>")
+		now = time.time()
+		nextsecond = 1 - (now - int(now))
+		glib.timeout_add(int(nextsecond * 1000), self._update, priority=glib.PRIORITY_DEFAULT_IDLE)
+		return False
+
+
+class Stopper(Clock):
+	name = "Stopper"
+	_start_time = -1
+	
+	def run(self):
+		self._start_time = time.time()
+	
+	@property
+	def display(self):
+		return time.strftime(self._format, time.localtime(time.time() - self._start_time))
+
+
+class KitchenTimer(Clock):
+	name = "Timer"
+	pass
+
+
+class StockButton(gtk.Button):
+	def __init__(self, label=None, stock=None, use_underline=True, icon_size=None, tooltip=None):
+		if stock is not None and stock in gtk.stock_list_ids():
+			stock_tmp = stock
+		else:
+			stock_tmp = gtk.STOCK_ABOUT
+		super(self.__class__, self).__init__(stock=stock_tmp, use_underline=use_underline)
+		if label is not None:
+			self.set_markup(label)
+		if stock is None:
+			self.set_icon('')
+		elif stock not in gtk.stock_list_ids():
+			self.set_icon(stock)
+		if icon_size is not None:
+			self.set_icon(stock, icon_size)
+		if tooltip is not None:
+			self.set_tooltip_text(tooltip)
+	def __get_children(self):
+		align = self.get_children()[0]
+		hbox = align.get_children()[0]
+		return hbox.get_children()
+	def set_label(self, label):
+		x, lbl = self.__get_children()
+		lbl.set_label(label)
+	def set_markup(self, label):
+		x, lbl = self.__get_children()
+		lbl.set_markup(label)
+	def set_icon(self, icon, size=gtk.ICON_SIZE_BUTTON):
+		img, x = self.__get_children()
+		if type(icon) == str:
+			if icon == '':
+				img.props.visible = False
+			else:
+				img.set_from_icon_name(icon, size)
+				img.props.visible = True
+		else:
+			img.set_from_pixbuf(icon)
+			img.props.visible = True
+
+
+class MultiBox(gtk.VBox):
+	def __init__(self, klass):
+		super(gtk.VBox, self).__init__()
+		self._klass = klass
+		plusbutton = StockButton(stock=gtk.STOCK_ADD, label=klass.name)
+		plusbutton.connect('clicked', lambda *x: self.new_item())
+		self.pack_start(plusbutton, expand=False, fill=False)
+		self.new_item()
+	def new_item(self):
+		self.pack_start(self._klass(), expand=False, fill=False)
+		self.show_all()
+
+
+win_main = gtk.Window(gtk.WINDOW_TOPLEVEL)
+box0 = gtk.HBox()
+box_clocks = gtk.VBox()
+box_stoppers = gtk.VBox()
+box_kitchentimers = gtk.VBox()
+
+win_main.set_size_request(600, -1)
+win_main.set_type_hint(gtk.gdk.WINDOW_TYPE_HINT_TOOLBAR)
+win_main.set_keep_above(True)
+win_main.set_icon_name('alarm-clock')
+
+start_evt = win_main.connect('map-event', lambda w,e: (win_main.disconnect(start_evt), win_main_show()))
+win_main.connect('delete-event', lambda w,e: True)
+add_key_binding(win_main, '<Ctrl><Shift>Q', lambda *x: act_quit())
+
+win_main.add(box0)
+box0.pack_start(MultiBox(Clock), expand=True, fill=False)
+box0.pack_start(MultiBox(Stopper), expand=True, fill=False)
+box0.pack_start(MultiBox(KitchenTimer), expand=True, fill=False)
+win_main.show_all()
+
+gtk.main()

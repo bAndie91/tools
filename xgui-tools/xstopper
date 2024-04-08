@@ -77,37 +77,45 @@ class StockButton(gtk.Button):
 
 class Clock(gtk.Label):
 	name = "Clock"
-	_format = '%H:%M:%S'
 	
 	def __init__(self):
 		super(gtk.Label, self).__init__()
+		self._format = '%H:%M:%S'
+		self._running = False
+		self._draining = False
 		self._update()
-	
-	@property
-	def format(self):
-		return self._format
-	
-	@format.setter
-	def format(self, format):
-		self._format = format
 	
 	@property
 	def display(self):
 		return time.strftime(self._format, time.localtime(time.time()))
 	
+	@property
+	def is_running(self):
+		return self._running
+	
 	def _next_update_interval_ms(self):
 		now = time.time()
 		nextsecond = 1 - (now - int(now))
+		if nextsecond > 0.9: nextsecond = 0
 		return int(nextsecond * 1000)
 	
-	def _update(self):
+	def update_display(self):
 		self.set_markup("<span size='32000'><b>" + self.display + "</b></span>")
-		glib.timeout_add(self._next_update_interval_ms(), self._update, priority=glib.PRIORITY_DEFAULT_IDLE)
+	
+	def _update(self):
+		if not self._draining:
+			self.update_display()
+			glib.timeout_add(self._next_update_interval_ms(), self._update, priority=glib.PRIORITY_DEFAULT_IDLE)
 		return False
 
 
 class Stopper(Clock):
 	name = "Stopper"
+	
+	__gsignals__ = {
+		'started': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
+		'paused': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
+	}
 	
 	def __init__(self):
 		self._start_time = 0
@@ -124,17 +132,15 @@ class Stopper(Clock):
 			if self._last_paused_time > 0:
 				self._behind_interval += now - self._last_paused_time
 			self._running = True
+			self.emit('started')
 			self._update()
 	
 	def pause(self):
 		if self._running:
 			self._last_paused_time = time.time()
 			self._running = False
+			self.emit('paused')
 			self._update()
-	
-	@property
-	def is_running(self):
-		return self._running
 	
 	def _next_update_interval_ms(self):
 		return 10
@@ -157,36 +163,163 @@ class Stopper(Clock):
 			return '--:--.--'
 
 
+class SpinLabel(gtk.EventBox):
+	def __init__(self, format, start_value):
+		self._format = format
+		self._value = start_value
+		self._locked = False
+		self.range = (0, 59)
+		self.label = gtk.Label()
+		super(self.__class__, self).__init__()
+		self.add(self.label)
+		self.connect('scroll-event', self._event_scroll)
+		self.show_all()
+		self._update_label()
+	def __str__(self):
+		return str(self._value)
+	def __int__(self):
+		return self._value
+	@property
+	def value(self):
+		return self._value
+	@value.setter
+	def value(self, x):
+		if x > self.range[1]: x = self.range[0]
+		if x < self.range[0]: x = self.range[1]
+		self._value = x
+		self._update_label()
+	def lock(self):
+		self._locked = True
+	def unlock(self):
+		self._locked = False
+	def _event_scroll(self, X, event):
+		if self._locked: return
+		delta = +1 if event.direction == gtk.gdk.SCROLL_UP else -1
+		self.value += delta
+	def _update_label(self):
+		self.label.set_markup("<span size='32000'><b>%s</b></span>" % (self._format % self._value))
+
+class KitchenTimer(gtk.HBox, Clock):
+	name = "Timer"
+	
+	__gsignals__ = {
+		'started': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
+		'due': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
+	}
+	
+	def __init__(self):
+		self.hours = SpinLabel('%d:', 0)
+		self.minutes = SpinLabel('%02d:', 0)
+		self.seconds = SpinLabel('%02d', 0)
+		super(gtk.HBox, self).__init__()
+		super(Clock, self).__init__()
+		self.pack_start(self.hours, expand=False, fill=False)
+		self.pack_start(self.minutes, expand=False, fill=False)
+		self.pack_start(self.seconds, expand=False, fill=False)
+		self.show_all()
+	
+	@property
+	def scheduled_time(self):
+		return int(self.hours) * 3600 + int(self.minutes) * 60 + int(self.seconds)
+	
+	def start(self):
+		if not self._running:
+			self.scheduled_hours = int(self.hours)
+			self.scheduled_minutes = int(self.minutes)
+			self.scheduled_seconds = int(self.seconds)
+			self.hours.lock()
+			self.minutes.lock()
+			self.seconds.lock()
+			self._future_time = time.time() + self.scheduled_time
+			self._running = True
+			self.emit('started')
+	
+	def alarm(self):
+		message = "Timer Alarm"
+		dialog = gtk.MessageDialog(flags=gtk.DIALOG_DESTROY_WITH_PARENT, type=gtk.MESSAGE_WARNING, buttons=gtk.BUTTONS_OK, message_format=message)
+		dialog.set_type_hint(gtk.gdk.WINDOW_TYPE_HINT_TOOLBAR)
+		dialog.set_keep_above(True)
+		dialog.set_icon_name('alarm-clock')
+		dialog.set_title(message)
+		dialog.format_secondary_text("Your %d:%02d:%02d timer is due!" % (self.scheduled_hours, self.scheduled_minutes, self.scheduled_seconds))
+		btn_ok = dialog.get_widget_for_response(gtk.RESPONSE_OK)
+		btn_ok.connect('clicked', lambda *X: dialog.destroy())
+		dialog.show_all()
+		win_main.present()
+		dialog.present()
+	
+	@property
+	def display(self):
+		return ''
+	
+	def update_display(self):
+		if self._running:
+			display_time = self._future_time - time.time()
+			if display_time <= 0:
+				display_time = 0
+				self._running = False
+				self.emit('due')
+				self.alarm()
+			self.hours.value = display_time / 3600
+			self.minutes.value = display_time / 60 % 3600
+			self.seconds.value = display_time % 60
+
+
 class StopperUI(gtk.HBox):
 	name = Stopper.name
 	
 	def __init__(self, *pargs, **kwargs):
 		super(gtk.HBox, self).__init__(*pargs, **kwargs)
 		self.stopper = Stopper()
-		btn_start = StockButton(stock=gtk.STOCK_MEDIA_PLAY, label='')
-		btn_pause = StockButton(stock=gtk.STOCK_MEDIA_PAUSE, label='')
-		btn_start.connect('clicked', lambda *X: self.stopper.run())
-		btn_pause.connect('clicked', lambda *X: self.stopper.pause())
+		self.btn_start = StockButton(stock=gtk.STOCK_MEDIA_PLAY, label='')
+		self.btn_pause = StockButton(stock=gtk.STOCK_MEDIA_PAUSE, label='')
+		self.btn_start.connect('clicked', lambda *X: self.stopper.run())
+		self.btn_pause.connect('clicked', lambda *X: self.stopper.pause())
 		self.pack_start(self.stopper, expand=True, fill=True)
-		self.pack_start(btn_start, expand=False, fill=False)
-		self.pack_start(btn_pause, expand=False, fill=False)
+		self.pack_start(self.btn_start, expand=False, fill=False)
+		self.pack_start(self.btn_pause, expand=False, fill=False)
+		
+		self.stopper.connect('started', lambda *X: self.manage_button_states())
+		self.stopper.connect('paused', lambda *X: self.manage_button_states())
+		self.manage_button_states()
+	
+	def manage_button_states(self):
+		running = self.stopper.is_running
+		self.btn_start.set_sensitive(not running)
+		self.btn_pause.set_sensitive(running)
 	
 	@property
 	def is_running(self):
-		return self.stopper._running
-
-
-class KitchenTimer(Clock):
-	name = "Timer"
+		return self.stopper.is_running
 	
-	@property
-	def is_running(self):
-		return False
+	def drain(self):
+		self.timer._draining = True
 
 
-class KitchenTimerUI(gtk.HBox, KitchenTimer):
+class KitchenTimerUI(gtk.HBox):
 	name = KitchenTimer.name
-	pass
+	
+	def __init__(self, *pargs, **kwargs):
+		super(gtk.HBox, self).__init__(*pargs, **kwargs)
+		self.timer = KitchenTimer()
+		self.btn_start = StockButton(stock=gtk.STOCK_MEDIA_PLAY, label='')
+		self.btn_start.connect('clicked', lambda *X: self.timer.start())
+		self.pack_start(self.timer, expand=True, fill=True)
+		self.pack_start(self.btn_start, expand=False, fill=False)
+		
+		self.timer.connect('started', lambda *X: self.manage_button_states())
+		self.manage_button_states()
+	
+	def manage_button_states(self):
+		running = self.timer.is_running
+		self.btn_start.set_sensitive(not running)
+	
+	@property
+	def is_running(self):
+		return self.timer._running
+	
+	def drain(self):
+		self.timer._draining = True
 
 
 class MultiBox(gtk.VBox):
@@ -215,6 +348,7 @@ class MultiBox(gtk.VBox):
 	def remove_item(self, hbox):
 		item = hbox.multibox_item
 		self.items.remove(item)
+		item.drain()
 		item.destroy()
 		hbox.destroy()
 
@@ -229,7 +363,7 @@ box_clocks = gtk.VBox()
 box_stoppers = gtk.VBox()
 box_kitchentimers = gtk.VBox()
 
-win_main.set_size_request(600, -1)
+win_main.set_size_request(700, -1)
 win_main.set_type_hint(gtk.gdk.WINDOW_TYPE_HINT_TOOLBAR)
 win_main.set_keep_above(True)
 win_main.set_icon_name('alarm-clock')

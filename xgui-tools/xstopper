@@ -207,7 +207,7 @@ class Stopper(Clock):
 				(display_time - int(display_time)) * 100,
 			)
 		else:
-			face = '--:--.--'
+			face = '00:00.00'
 		self.set_markup("<span size='32000'><b>" + face + "</b></span>")
 
 
@@ -221,6 +221,9 @@ class SpinLabel(gtk.EventBox):
 		super(self.__class__, self).__init__()
 		self.add(self.label)
 		self.connect('scroll-event', self._event_scroll)
+		self.connect('motion-notify-event', self._event_drag)
+		self.motion_last_pos = 0
+		self.drag_sensitivity = 30
 		self.show_all()
 		self._update_label()
 	def __str__(self):
@@ -245,6 +248,14 @@ class SpinLabel(gtk.EventBox):
 		if self._locked: return
 		delta = +1 if event.direction == gtk.gdk.SCROLL_UP else -1
 		self.value += delta
+	def _event_drag(self, X, event):
+		if self._locked: return
+		print event.y
+		diff = event.y - self.motion_last_pos
+		if abs(diff) > self.drag_sensitivity:
+			delta = +1 if diff < 0 else -1
+			self.motion_last_pos = event.y
+			self.value += delta
 	def _update_label(self):
 		self.label.set_markup(self.format % self._value)
 
@@ -426,51 +437,20 @@ class AlarmClockUI(gtk.HBox):
 		self.show_all()
 
 
-class WrapBox(gtk.VBox):
-	def __init__(self, *pargs, **kwargs):
-		super(self.__class__, self).__init__(*pargs, **kwargs)
-		self.items = []
-	
-	def pack_start(self, widget, *pargs, **kwargs):
-		widget.managed_by_wrapbox = True
-		self.items.append(widget)
-		self.reorder_items()
-	
-	def reorder_items(self):
-		for item in self.items + self.get_children():
-			try:
-				if item.managed_by_wrapbox:
-					item.parent.remove(item)
-			except AttributeError:
-				pass
-		
-		n_items = len(self.items)
-		max_items_per_row = int(math.ceil(math.sqrt(n_items)))
-		for row_idx in range(int(n_items / max_items_per_row) + 1):
-			row = gtk.HBox()
-			row.managed_by_wrapbox = True
-			super(gtk.VBox, self).pack_start(row, expand=False, fill=False)
-			item_offset = row_idx * max_items_per_row
-			for item_idx in range(item_offset, item_offset + max_items_per_row):
-				if len(self.items) <= item_idx: break
-				print 'row', row_idx, 'item', item_idx
-				row.pack_start(self.items[item_idx])
-
-
-class MultiClassInstantiatorBox(gtk.VBox):
+class MultiClassInstantiatorBox(gtk.HBox):
 	def __init__(self, classes):
-		super(self.__class__, self).__init__()
+		super(self.__class__, self).__init__(homogeneous=True, spacing=2)
 		self._items = []
-		buttonbox = gtk.VBox()
 		for cls in classes:
+			column = gtk.VBox()
 			add_widget_button = StockButton(stock=gtk.STOCK_ADD, label=cls.name)
-			add_widget_button.connect('clicked', lambda X, cls: self.new_item(cls), cls)
-			buttonbox.pack_start(add_widget_button, expand=False, fill=False)
-		self.wrapbox = WrapBox()
-		self.wrapbox.pack_end(buttonbox, expand=False, fill=False)
-		self.pack_start(self.wrapbox)
+			add_widget_button.connect('clicked', lambda X, column, cls: self.new_item(column, cls), column, cls)
+			column.pack_start(add_widget_button, expand=False, fill=False)
+			self.pack_start(column, expand=False, fill=False)
+			self.new_item(column, cls)
 		self.show_all()
-	def new_item(self, cls):
+	
+	def new_item(self, column, cls):
 		item = cls()
 		self._items.append(item)
 		removable_box = gtk.HBox()
@@ -479,17 +459,20 @@ class MultiClassInstantiatorBox(gtk.VBox):
 		button_remove.connect('clicked', lambda X, removable_box: self.remove_item(removable_box), removable_box)
 		removable_box.pack_start(item, expand=True, fill=True)
 		removable_box.pack_start(button_remove, expand=False, fill=False)
-		self.wrapbox.pack_start(removable_box, expand=False, fill=False)
-		self.wrapbox.show_all()
+		column.pack_start(removable_box, expand=False, fill=False)
+		column.show_all()
+	
 	@property
 	def items(self):
 		return self._items
+	
 	def remove_item(self, removable_box):
 		item = removable_box.inner_widget
-		self.items.remove(item)
-		item.clock.drain()
-		item.destroy()
-		removable_box.destroy()
+		if not item.clock.is_running:
+			self.items.remove(item)
+			item.clock.drain()
+			item.destroy()
+			removable_box.destroy()
 
 
 def running_timers():
@@ -497,12 +480,9 @@ def running_timers():
 
 
 win_main = gtk.Window(gtk.WINDOW_TOPLEVEL)
-box0 = gtk.HBox()
-box_clocks = gtk.VBox()
-box_stoppers = gtk.VBox()
-box_kitchentimers = gtk.VBox()
+box0 = gtk.VBox()
 
-win_main.set_size_request(700, -1)
+win_main.set_size_request(800, -1)
 win_main.set_type_hint(gtk.gdk.WINDOW_TYPE_HINT_TOOLBAR)
 win_main.set_keep_above(True)
 win_main.set_icon_name('alarm-clock')
@@ -511,8 +491,10 @@ start_evt = win_main.connect('map-event', lambda w,e: (win_main.disconnect(start
 win_main.connect('delete-event', lambda w,e: act_quit())
 add_key_binding(win_main, '<Ctrl><Shift>Q', lambda *x: act_quit())
 
-multibox = MultiClassInstantiatorBox(classes=(ClockUI, StopperUI, KitchenTimerUI, AlarmClockUI))
-win_main.add(multibox)
+box0.pack_start(ClockUI(), expand=False, fill=True)
+multibox = MultiClassInstantiatorBox(classes=(StopperUI, KitchenTimerUI, AlarmClockUI))
+box0.pack_start(multibox, expand=True, fill=True)
+win_main.add(box0)
 win_main.show_all()
 
 gtk.main()

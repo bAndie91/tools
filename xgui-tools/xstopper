@@ -13,6 +13,7 @@ import re
 import time
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
+import math
 
 
 def win_main_show():
@@ -344,6 +345,7 @@ class Alarmer(object):
 		dialog.set_keep_above(True)
 		dialog.set_skip_taskbar_hint(False)
 		dialog.set_icon_name('alarm-clock')
+		dialog.get_image().set_from_icon_name('alarm-clock', gtk.ICON_SIZE_DIALOG)
 		dialog.set_title(self.title)
 		dialog.format_secondary_text(self.text)
 		btn_ok = dialog.get_widget_for_response(gtk.RESPONSE_OK)
@@ -424,21 +426,50 @@ class AlarmClockUI(gtk.HBox):
 		self.show_all()
 
 
-class WrapBox(gtk.HBox):
-	pass
+class WrapBox(gtk.VBox):
+	def __init__(self, *pargs, **kwargs):
+		super(self.__class__, self).__init__(*pargs, **kwargs)
+		self.items = []
+	
+	def pack_start(self, widget, *pargs, **kwargs):
+		widget.managed_by_wrapbox = True
+		self.items.append(widget)
+		self.reorder_items()
+	
+	def reorder_items(self):
+		for item in self.items + self.get_children():
+			try:
+				if item.managed_by_wrapbox:
+					item.parent.remove(item)
+			except AttributeError:
+				pass
+		
+		n_items = len(self.items)
+		max_items_per_row = int(math.ceil(math.sqrt(n_items)))
+		for row_idx in range(int(n_items / max_items_per_row) + 1):
+			row = gtk.HBox()
+			row.managed_by_wrapbox = True
+			super(gtk.VBox, self).pack_start(row, expand=False, fill=False)
+			item_offset = row_idx * max_items_per_row
+			for item_idx in range(item_offset, item_offset + max_items_per_row):
+				if len(self.items) <= item_idx: break
+				print 'row', row_idx, 'item', item_idx
+				row.pack_start(self.items[item_idx])
 
 
-class MultiClassInstantiatorBox(WrapBox):
+class MultiClassInstantiatorBox(gtk.VBox):
 	def __init__(self, classes):
-		self.classes = classes
-		super(WrapBox, self).__init__()
+		super(self.__class__, self).__init__()
 		self._items = []
 		buttonbox = gtk.VBox()
 		for cls in classes:
 			add_widget_button = StockButton(stock=gtk.STOCK_ADD, label=cls.name)
 			add_widget_button.connect('clicked', lambda X, cls: self.new_item(cls), cls)
 			buttonbox.pack_start(add_widget_button, expand=False, fill=False)
-		self.pack_end(buttonbox, expand=False, fill=False)
+		self.wrapbox = WrapBox()
+		self.wrapbox.pack_end(buttonbox, expand=False, fill=False)
+		self.pack_start(self.wrapbox)
+		self.show_all()
 	def new_item(self, cls):
 		item = cls()
 		self._items.append(item)
@@ -448,8 +479,8 @@ class MultiClassInstantiatorBox(WrapBox):
 		button_remove.connect('clicked', lambda X, removable_box: self.remove_item(removable_box), removable_box)
 		removable_box.pack_start(item, expand=True, fill=True)
 		removable_box.pack_start(button_remove, expand=False, fill=False)
-		self.pack_start(removable_box, expand=False, fill=False)
-		self.show_all()
+		self.wrapbox.pack_start(removable_box, expand=False, fill=False)
+		self.wrapbox.show_all()
 	@property
 	def items(self):
 		return self._items

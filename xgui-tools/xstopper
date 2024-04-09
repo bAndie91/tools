@@ -120,6 +120,7 @@ class AlarmClock(gtk.HBox, Clock):
 	
 	def __init__(self):
 		self.face = AdjustableClock()
+		self.face.hours.range = (0, 23)
 		super(gtk.HBox, self).__init__()
 		super(Clock, self).__init__()
 		self.pack_start(self.face, expand=False, fill=False)
@@ -250,7 +251,6 @@ class SpinLabel(gtk.EventBox):
 		self.value += delta
 	def _event_drag(self, X, event):
 		if self._locked: return
-		print event.y
 		diff = event.y - self.motion_last_pos
 		if abs(diff) > self.drag_sensitivity:
 			delta = +1 if diff < 0 else -1

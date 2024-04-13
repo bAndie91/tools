@@ -42,7 +42,7 @@ sub flush_record
 	my $colnum = shift;
 	my $record = shift;
 	
-	print join($FS, map { $record->{$_} } sort { $colnum->{$a} <=> $colnum->{$b} } keys $record).$RS;
+	print join($FS, map { $record->{$_} } sort { $colnum->{$a} <=> $colnum->{$b} } keys %$record).$RS;
 }
 
 @Headers = ();
@@ -60,7 +60,7 @@ while(my $line = <STDIN>)
 			print join($FS, @Headers).$RS;
 		}
 		
-		flush_record \%ColumnNumber, \%record;
+		flush_record(\%ColumnNumber, \%record);
 		%record = ();
 		$record_num++;
 	}
@@ -79,5 +79,5 @@ while(my $line = <STDIN>)
 
 if(%record)
 {
-	flush_record \%ColumnNumber, \%record;
+	flush_record(\%ColumnNumber, \%record);
 }

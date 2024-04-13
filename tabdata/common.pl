@@ -29,7 +29,7 @@ GetOptions(
 	'm|min-column-spacing=i' => \$OptMinColumnSpacing,
 	'c|max-columns=i' => \$OptMaxColumns,
 	
-	's|separator=s' => \$OptSeparator,
+	's|separator=s' => \$OptSeparatorRegexp,
 	
 	'x|extra-columns' => sub { $OptAddExtraColumns = 1; },
 	'X|no-extra-columns' => sub { $OptAddExtraColumns = 0; },

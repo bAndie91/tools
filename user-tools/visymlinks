@@ -39,7 +39,8 @@ $0 =~ s/.*\/([^\/]+)$/$1/;
 
 ($fh, $filename) = tempfile( "visymlinks-XXXXXX", TMPDIR => 1 );
 
-for my $path (@ARGV || glob '*')
+push @ARGV, glob '*' unless @ARGV;
+for my $path (@ARGV)
 {
 	if(-l $path)
 	{

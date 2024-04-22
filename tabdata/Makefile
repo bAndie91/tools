@@ -18,6 +18,7 @@ TOOLS = \
   td-trans-fixcol \
   td-trans-ls \
   td-trans-mount \
+  vcf2td \
 
 
 TARGET_TOOLS = $(foreach filename,$(TOOLS),$(BIN_DIR)/$(filename))

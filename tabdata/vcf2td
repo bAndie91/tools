@@ -1,0 +1,95 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+vcf2td - Transform VCF to tabular data format.
+
+=head1 OPTIONS
+
+=over 4
+
+=item -C I<COLUMN> -C I<COLUMN> ...
+
+Predefine columns.
+Useful if the first record does not contain all fields.
+By default vcf2td(1) makes the header out of fields found in the first record.
+
+=back
+
+=cut
+
+
+use Data::Dumper;
+use Encode;
+use MIME::QuotedPrint;
+use Switch;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
+@columns = @OptPredefColumns;
+%record = ();
+$RN = 0;
+
+while(<STDIN>)
+{
+	s/\r?\n//;
+	
+	if(my($field, $data) = /^(.+?):(.*)$/)
+	{
+		my($field_name, @params) = split /;/, $field;
+		my %param = map {split /=/, $_, 2} @params;
+		
+		if(not $field_name ~~ @columns)
+		{
+			if(not $field_name ~~ [qw/BEGIN VERSION END/])
+			{
+				if($RN == 0)
+				{
+					push @columns, $field_name 
+				}
+				else
+				{
+					die "$0: column not defined: $field_name\n";
+				}
+			}
+		}
+		
+		switch($param{'ENCODING'})
+		{
+			case('QUOTED-PRINTABLE') { $data = decode_qp($data); }
+			case(undef) { 1; }
+			else { die "$0: unknown encoding: $param{'ENCODING'}, line $., record $RN\n"; }
+		}
+		
+		if($field_name eq 'N')
+		{
+			my ($family_name, $given_name, $middle_name, $prefixes) = split /;/, $data;
+			$record{'N.family'} = $family_name;
+			$record{'N.given'} = $given_name;
+			$record{'N.middle'} = $middle_name;
+			$record{'N.prefixes'} = $prefixes;
+			
+			$data =~ s/;+/;/g;
+			$data =~ s/;$//;
+			$data =~ s/^;//;
+		}
+		
+		$record{$field_name} = $data;
+		
+		if($field_name eq 'END')
+		{
+			if($RN == 0)
+			{
+				print join($FS, @columns) . $RS;
+			}
+			
+			print join($FS, map {$record{$_}} @columns) . $RS;
+			
+			%record = ();
+			$RN++;
+			next;
+		}
+	}
+}

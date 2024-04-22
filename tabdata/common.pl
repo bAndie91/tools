@@ -13,6 +13,7 @@ $OptFailBadNegativeColumnNames = 0;
 $OptAddExtraColumns = 1;
 $OptMinColumnSpacing = 2;
 $OptMaxColumns = undef;
+@OptPredefColumns = ();
 
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 use Getopt::Long qw/:config no_ignore_case bundling pass_through require_order no_getopt_compat/;
@@ -33,6 +34,8 @@ GetOptions(
 	
 	'x|extra-columns' => sub { $OptAddExtraColumns = 1; },
 	'X|no-extra-columns' => sub { $OptAddExtraColumns = 0; },
+	
+	'C|columns=s@' => \@OptPredefColumns,
 	
 	'help|?' => sub{ pod2usage(-exitval=>0, -verbose=>99); },
 ) or pod2usage(-exitval=>2, -verbose=>99);

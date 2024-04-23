@@ -59,6 +59,14 @@ Cut up B<DATA> into fields at TAB chars..
 
 Do not substitute C<{}> with B<DATA>.
 
+=item -p, --prefix I<TEMPLATE>
+
+Print something before each command execution.
+I<TEMPLATE> is a bash-interpolated string,
+may contain C<$DATA> and C<${FIELD[n]}>.
+Probably need to put in single quotes when passing to foreach(1) in the invoking shell.
+Beware using backtick, command substitution, double quotes, semicolon - since it's B<eval>ed.
+
 =item -v, --verbose
 
 =item -n, --dry-run
@@ -102,6 +110,7 @@ FOREACH_PASS_FIELDS=no
 FOREACH_REPLACE_PLACEHOLDER=yes
 FOREACH_DRYRUN=no
 FOREACH_ERREXIT=no
+FOREACH_PREFIX_TEMPLATE=''
 
 
 while [ $# != 0 ]
@@ -129,6 +138,10 @@ do
 		;;
 	-P|--no-placeholder)
 		FOREACH_REPLACE_PLACEHOLDER=no
+		;;
+	-p|--prefix)
+		shift
+		FOREACH_PREFIX_TEMPLATE=$1
 		;;
 	-v|--verbose)
 		FOREACH_VERBOSE=yes
@@ -200,25 +213,23 @@ do
 			if [ "$FOREACH_PASS_DATA" = yes ]; then cmd_and_args+=("$DATA"); fi
 			if [ "$FOREACH_PASS_FIELDS" = yes ]; then cmd_and_args+=("${FIELD[@]}"); fi
 		fi
-		
-		if [ "$FOREACH_VERBOSE" = yes ]
-		then
-			echo "foreach: ${cmd_and_args[*]}" >&2
-		fi
-		
-		if [ "$FOREACH_DRYRUN" = no ]
+	fi
+	
+	if [ "$FOREACH_VERBOSE" = yes ]
+	then
+		echo "foreach: ${cmd_and_args[*]}" >&2
+	fi
+	
+	eval "FOREACH_PREFIX=\"$FOREACH_PREFIX_TEMPLATE\""
+	echo -n "$FOREACH_PREFIX"
+	
+	if [ "$FOREACH_DRYRUN" = no ]
+	then
+		if [ "$FOREACH_MODE" = command ]
 		then
 			command "${cmd_and_args[@]}"
 			FOREACH_COMMAND_STATUS=$?
-		fi
-	else
-		if [ "$FOREACH_VERBOSE" = yes ]
-		then
-			echo "foreach: ${cmd_and_args[*]}" >&2
-		fi
-		
-		if [ "$FOREACH_DRYRUN" = no ]
-		then
+		else
 			eval "${cmd_and_args[@]}"
 			FOREACH_COMMAND_STATUS=$?
 		fi

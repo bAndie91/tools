@@ -184,10 +184,10 @@ sub handle_children
 		my $status = ${^CHILD_ERROR_NATIVE};
 		if($pid == $daemon_pid)
 		{
-			my $exitcode = WIFSIGNALED($status) ? undef : WEXITSTATUS($status);
+			my $exitcode = WEXITED($status) ? WEXITSTATUS($status) : undef;
 			my $exitsignal = WIFSIGNALED($status) ? WTERMSIG($status) : undef;
 			logger sprintf "daemon %s (pid %d) deceased, exit status %s signal %s",
-				$id, $daemon_pid, $exitcode // '-', $exitsignal // '-';
+				$id, $daemon_pid, $exitcode // 'none', $exitsignal // 'none';
 			$Daemon{$id}->{'exitcode'} = $exitcode;
 			$Daemon{$id}->{'exitsignal'} = $exitsignal;
 			append_fixsizelist \@{$Daemon{$id}->{'exittimes'}}, $restart_burst_limit, time;

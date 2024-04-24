@@ -72,7 +72,7 @@ sub stop_daemon
 	my $pid = $Daemon{$id}->{'pid'};
 	if(defined $pid)
 	{
-		logger "stopping $id: pid $pid";
+		logger "terminating $id PID $pid";
 		kill 'TERM', $pid;
 	}
 	else
@@ -99,6 +99,7 @@ sub start_daemon
 	}
 	else
 	{
+		logger "started $id PID $pid";
 		$Daemon{$id}->{'pid'} = $pid;
 		append_fixsizelist \@{$Daemon{$id}->{'starttimes'}}, $restart_burst_limit, time;
 	}
@@ -157,7 +158,7 @@ sub reload
 		}
 		else
 		{
-			logger "stop $id as it's no longer managed";
+			logger "terminate $id as it's no longer managed";
 			delete $Daemon{$id}->{'cmd_args'};
 			stop_daemon $id;
 		}
@@ -184,9 +185,9 @@ sub handle_children
 		my $status = ${^CHILD_ERROR_NATIVE};
 		if($pid == $daemon_pid)
 		{
-			my $exitcode = WEXITED($status) ? WEXITSTATUS($status) : undef;
+			my $exitcode = WIFEXITED($status) ? WEXITSTATUS($status) : undef;
 			my $exitsignal = WIFSIGNALED($status) ? WTERMSIG($status) : undef;
-			logger sprintf "daemon %s (pid %d) deceased, exit status %s signal %s",
+			logger sprintf "daemon %s PID %d deceased, exit status %s signal %s",
 				$id, $daemon_pid, $exitcode // 'none', $exitsignal // 'none';
 			$Daemon{$id}->{'exitcode'} = $exitcode;
 			$Daemon{$id}->{'exitsignal'} = $exitsignal;
@@ -265,7 +266,7 @@ while(1)
 			{
 				if(scalar @{$dmon->{'exittimes'}} >= $restart_burst_limit and $dmon->{'exittimes'}->[0] > time - $restart_burst_period)
 				{
-					logger "daemon $id restarted too often, delay";
+					logger "daemon $id respawned too often, delay for $restart_burst_period sec";
 					wakeup_at_most $restart_burst_period;
 				}
 				else

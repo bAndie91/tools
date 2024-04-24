@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+"""
+Derived from https://github.com/togald/thinkpad-l390-yoga-scripts/
+Derived from https://github.com/ffejery/thinkpad-l380-yoga-scripts
+thinkpad-rotate.py
+Rotates any detected screen, wacom digitizers, touchscreens,
+touchpad/trackpoint based on orientation gathered from accelerometer. 
+Tested with Lenovo ThinkPad L380 Yoga
+https://github.com/ffejery/thinkpad-l380-yoga-scripts
+Originally from AdmiralAkber:
+Tested with Lenovo Thinkpad Yoga S1
+https://github.com/admiralakber/thinkpad-yoga-scripts
+Acknowledgements:
+Modified from source:
+https://gist.githubusercontent.com/ei-grad/4d9d23b1463a99d24a8d/raw/rotate.py
+"""
+
+
+import time
+import os
+import sys
+from glob import glob
+
+
+class IIODevice(object):
+	def __init__(self, device_dir):
+		# raise an exception if the directory does not exist
+		os.stat(device_dir)
+		self.device_dir = device_dir
+	
+	def _prop(self, name, ret_type = None):
+		data = open(os.path.join(self.device_dir, name), 'r').read()
+		if ret_type is not None:
+			return ret_type(data)
+		return data
+	
+	@property
+	def name(self):
+		return self._prop('name')
+	
+	@property
+	def accel_xy(self):
+		return self.accel_x, self.accel_y
+	
+	@property
+	def accel_x(self):
+		return self._prop('in_accel_x_raw', float) * self._prop('in_accel_x_scale', float)
+	
+	@property
+	def accel_y(self):
+		return self._prop('in_accel_y_raw', float) * self._prop('in_accel_y_scale', float)
+
+
+for device_dir in glob('/sys/bus/iio/devices/iio:device*'):
+	iio_device = IIODevice(device_dir)
+	if 'accel' in iio_device.name:
+		break
+else:
+	sys.stderr.write("Can't find an accellerator device!\n")
+	sys.exit(1)
+
+
+g = 7.0  # (m^2 / s) sensibility, gravity trigger
+
+
+orientations = {
+	'normal': {
+		'condition': lambda x, y: y > g,
+	},
+	'upside-down': {
+		'condition': lambda x, y: y <= -g,
+	},
+	'left-up': {
+		'condition': lambda x, y: x > g,
+	},
+	'right-up': {
+		'condition': lambda x, y: x <= -g,
+	},
+}
+
+
+def notify_new_orientation(orientation):
+	open('/dev/orientation', 'w').write(orientation)
+
+
+if __name__ == '__main__':
+	current_orientation_name = None
+	
+	while True:
+		x, y = iio_device.accel_xy
+		
+		for orientation_name, orientation in orientations.items():
+			if orientation_name == current_orientation_name:
+				continue
+			else:
+				if orientation['condition'](x, y):
+					notify_new_orientation(orientation_name)
+					current_orientation_name = orientation_name
+		
+		# TODO listen on events instead of periodic polling
+		time.sleep(0.25)

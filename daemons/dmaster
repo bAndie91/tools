@@ -1,0 +1,198 @@
+#!/usr/bin/env perl
+
+use Data::Dumper;
+use POSIX ":sys_wait_h";
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+
+
+$0 = 'dmaster';
+$Root = $ENV{'XDG_CONFIG_HOME'} || '';
+%Daemon = ();
+
+
+sub logger
+{
+	my $s = shift;
+	warn "$0: $s\n";
+}
+
+sub stop_daemon
+{
+	my $id = shift;
+	my $pid = $Daemon{$id}->{'pid'};
+	if(defined $pid)
+	{
+		logger "stopping $id: pid $pid";
+		kill 'TERM', $pid;
+	}
+	else
+	{
+		logger "daemon $id has no PID";
+	}
+}
+
+sub start_daemon
+{
+	my $id = shift;
+	my $cmd_args = $Daemon{$id}->{'cmd_args'};
+	logger "starting $id: @$cmd_args";
+	
+	my $pid = fork;
+	if($pid == 0)
+	{
+		exec @$cmd_args;
+		exit 127;
+	}
+	elsif(not defined $pid)
+	{
+		logger "fork: $!";
+	}
+	else
+	{
+		$Daemon{$id}->{'pid'} = $pid;
+		$Daemon{$id}->{'starttime'} = time;
+	}
+}
+
+sub parse_cmd_string
+{
+	my $cmd = shift;
+	my @cmd_args = ();
+	while($cmd =~ /^("([^""]*)"|\S+)\s*/)
+	{
+		my $arg = defined $2 ? $2 : $1;
+		push @cmd_args, $arg;
+		$cmd = $';
+	}
+	return @cmd_args;
+}
+
+sub read_daemon_inittab
+{
+	my $path = shift;
+	open my $fh, '<', $path or logger "open $path: $!";
+	return unless $fh;
+	my %new_daemon = ();
+	while(<$fh>)
+	{
+		next if /^\s*#/;
+		if(my ($id, $cmd) = /^(\S+)\s+(.+)$/)
+		{
+			my @cmd_args = parse_cmd_string $cmd;
+			$new_daemon{$id}->{'cmd_args'} = \@cmd_args;
+		}
+	}
+	close $fh;
+	return %new_daemon;
+}
+
+sub reload
+{
+	my $daemontab = $Root.'/etc/daemontab';
+	logger "reloading $daemontab";
+	my %new_daemon = read_daemon_inittab $daemontab;
+	
+	for my $id (keys %Daemon)
+	{
+		if($id ~~ [keys %new_daemon])
+		{
+			logger "keep $id";
+			$Daemon{$id}->{'cmd_args'} = $new_daemon{$id}->{'cmd_args'};
+			delete $new_daemon{$id};
+		}
+		else
+		{
+			logger "stop $id as it's no longer managed";
+			delete $Daemon{$id}->{'cmd_args'};
+			stop_daemon $id;
+		}
+	}
+	
+	for my $id (keys %new_daemon)
+	{
+		$Daemon{$id}->{'cmd_args'} = $new_daemon{$id}->{'cmd_args'};
+		start_daemon $id;
+	}
+}
+
+sub handle_children
+{
+	for my $id (keys %Daemon)
+	{
+		my $daemon_pid = $Daemon{$id}->{'pid'};
+		next unless defined $daemon_pid;
+		
+		my $pid = waitpid($daemon_pid, WNOHANG);
+		my $status = ${^CHILD_ERROR_NATIVE};
+		if($pid == $daemon_pid)
+		{
+			my $exitcode = WIFSIGNALED($status) ? undef : WEXITSTATUS($status);
+			my $exitsignal = WIFSIGNALED($status) ? WTERMSIG($status) : undef;
+			logger sprintf "daemon %s (pid %d) deceased, exit status %s signal %s",
+				$id, $daemon_pid, $exitcode // '-', $exitsignal // '-';
+			$Daemon{$id}->{'exitcode'} = $exitcode;
+			$Daemon{$id}->{'exitsignal'} = $exitsignal;
+			$Daemon{$id}->{'exittime'} = time;
+			delete $Daemon{$id}->{'pid'};
+		}
+	}
+}
+
+$SIG{'HUP'} = sub { $do_reload = 1; };
+$SIG{'CHLD'} = sub { $do_handle_children = 1; };
+$SIG{'TERM'} = $SIG{'INT'} = sub { $do_shutdown = 1; };
+$SIG{'ALRM'} = sub {};
+
+reload;
+
+while(1)
+{
+	sleep 86400;
+	
+	if($do_handle_children)
+	{
+		$do_handle_children = 0;
+		handle_children;
+	}
+	
+	if($do_shutdown)
+	{
+		my $subprocesses = 0;
+		for my $id (keys %Daemon)
+		{
+			if(exists $Daemon{$id}->{'pid'})
+			{
+				stop_daemon $id;
+				$subprocesses++;
+			}
+		}
+		if($subprocesses == 0)
+		{
+			logger "exit";
+			exit;
+		}
+	}
+	
+	if($do_reload)
+	{
+		$do_reload = 0;
+		reload;
+	}
+	
+	# check if daemons need restart
+	for my $id (keys %Daemon)
+	{
+		if(not exists $Daemon{$id}->{'pid'})
+		{
+			if(exists $Daemon{$id}->{'cmd_args'})
+			{
+				# TODO check if it does not restart too often
+				start_daemon $id;
+			}
+			else
+			{
+				delete $Daemon{$id};
+			}
+		}
+	}
+}

@@ -1,5 +1,43 @@
 #!/usr/bin/env perl
 
+=pod
+
+=head1 NAME
+
+dmaster - Manage continuously running processes
+
+=head1 SYNOPSIS
+
+dmaster
+
+=head1 DESCRIPTION
+
+Daemon master.
+Start programs defined in B<daemontab> file.
+Restart them when ended.
+
+Re-read the B<daemontab> file on B<HUP> signal,
+stops processes which are no longer in it (or I<ID> changed),
+and starts new ones.
+Those daemons whose I<COMMAND> I<ARGS> changed, are not restarted automatically.
+
+=head1 FILES
+
+=over 4
+
+=item F</etc/daemontab>
+
+Format is I<ID> I<COMMAND> I<ARGS> per each line.
+
+=back
+
+=head1 SEE ALSO
+
+supervisor(1), supervise(8), daemon(1), runit(1)
+
+=cut
+
+
 use Data::Dumper;
 use POSIX ":sys_wait_h";
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
@@ -82,6 +120,7 @@ sub parse_cmd_string
 sub read_daemon_inittab
 {
 	my $path = shift;
+	# TODO: lock
 	open my $fh, '<', $path or logger "open $path: $!";
 	return unless $fh;
 	my %new_daemon = ();

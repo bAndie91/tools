@@ -1,6 +1,6 @@
 #!/bin/bash
 
-true <<<'EOF'
+true <<'EOF'
 =pod
 
 =head1 NAME

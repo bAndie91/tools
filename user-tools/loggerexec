@@ -49,4 +49,4 @@ shift
 ident=$1
 shift
 
-exec "$@" > >(logger -p "$facility.info" -t "$ident" "${logger_opts[@]}" 2>&1) 2> >(logger -p "$facility.error" -t "$ident" "${logger_opts[@]}")
+exec "$@" > >(exec logger -p "$facility.info" -t "$ident" "${logger_opts[@]}" 2>&1) 2> >(exec logger -p "$facility.error" -t "$ident" "${logger_opts[@]}")

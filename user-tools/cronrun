@@ -120,7 +120,7 @@ sleep $[RANDOM % ($random_delay_sec + 1)]
 if [ -n "$CRONJOBID" ]
 then
 	syslog_ident=$LOGNAME.${CRONJOBID//\//.}
-	exec 1> >(logger -p cron.info -t "$syslog_ident" -s 2>&1) 2> >(logger -p cron.error -t "$syslog_ident" -s 1>&2)
+	exec 1> >(exec logger -p cron.info -t "$syslog_ident" -s 2>&1) 2> >(exec logger -p cron.error -t "$syslog_ident" -s 1>&2)
 fi
 
 

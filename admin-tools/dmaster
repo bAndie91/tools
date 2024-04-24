@@ -217,6 +217,7 @@ $SIG{'TERM'} = $SIG{'INT'} = sub { $do_shutdown = 1; };
 $SIG{'ALRM'} = sub { };
 
 
+logger "start";
 reload;
 
 

@@ -11,21 +11,32 @@ $0 =~ s/.*\/([^\/]+)$/$1/;
 	'a' => {symbol => '>>', word => 'append'},
 );
 
+%stdmode = (
+	0 => 'r',
+	1 => 'c',
+	2 => 'c',
+);
+
 @redirs = ();
 
 while(@ARGV)
 {
 	my $fdspec = shift @ARGV;
 	if($fdspec eq '--') { last; }
-	if($fdspec =~ /^(?'fd'\d+|std(in|out|err)):(?'mode'r|c|rw|a):(file:(?'path'.+)|fd:(?'fileno'\d+|std(in|out|err)))$/)
+	if($fdspec =~ /^(?'fd'\d+|std(in|out|err)):(?'dest'-|(?'mode'r|c|rw|a):(file:(?'path'.+)|fd:(?'fileno'\d+|std(in|out|err))))$/)
 	{
-		my ($fd, $mode, $path, $fileno) = ($+{'fd'}, $+{'mode'}, $+{'path'}, $+{'fileno'});
+		my ($fd, $dest, $mode, $path, $fileno) = ($+{'fd'}, $+{'dest'}, $+{'mode'}, $+{'path'}, $+{'fileno'});
 		$fd = 0 if $fd eq 'stdin';
 		$fd = 1 if $fd eq 'stdout';
 		$fd = 2 if $fd eq 'stderr';
 		$fileno = 0 if $fileno eq 'stdin';
 		$fileno = 1 if $fileno eq 'stdout';
 		$fileno = 2 if $fileno eq 'stderr';
+		if($dest eq '-')
+		{
+			$mode = $stdmode{$fd} // goto SYNTAX_ERROR;
+			$path = '/dev/null';
+		}
 		push @redirs, {
 			fd => $fd,
 			mode => $perlopenmode{$mode}->{'symbol'} . (defined $fileno ? '&=' : ''),
@@ -35,6 +46,7 @@ while(@ARGV)
 	}
 	else
 	{
+		SYNTAX_ERROR:
 		warn "invalid redirect specification: $fdspec\n";
 		pod2usage(-exitval=>2, -verbose=>99);
 	}
@@ -62,7 +74,11 @@ redirexec - Execute a command with some file descriptiors redirected.
 
 =head1 SYNOPSIS
 
-redirexec [I<FILENO>:I<MODE>:[file:I<PATH> | fd:I<FD>]] -- I<COMMAND> I<ARGS>
+redirexec [I<FILENO>:I<MODE>:file:I<PATH>] -- I<COMMAND> I<ARGS>
+
+redirexec [I<FILENO>:I<MODE>:fd:I<FD>] -- I<COMMAND> I<ARGS>
+
+redirexec [I<FILENO>:-] -- I<COMMAND> I<ARGS>
 
 =head1 DESCRIPTION
 
@@ -95,17 +111,20 @@ append
 
 =head1 EXAMPLES
 
-  +----------------+--------------------------+
-  | shell syntax   | redirexec equivalent     |
-  +================+==========================+
-  | > output.txt   | stdout:c:file:output.txt |
-  |                | 1:c:file:output.txt      |
-  +----------------+--------------------------+
-  | 2>&1           | stderr:c:fd:stdout       |
-  |                | 2:c:fd:1                 |
-  +----------------+--------------------------+
-  | </dev/null     | 0:r:file:/dev/null       |
-  +----------------+--------------------------+
+  +-----------------+--------------------------+
+  | shell syntax    | redirexec(1) equivalents |
+  +=================+==========================+
+  | > output.txt    | stdout:c:file:output.txt |
+  |                 | 1:c:file:output.txt      |
+  +-----------------+--------------------------+
+  | 2>&1            | stderr:c:fd:stdout       |
+  |                 | 2:c:fd:1                 |
+  +-----------------+--------------------------+
+  | </dev/null      | 0:r:file:/dev/null       |
+  |                 | 0:-                      |
+  +-----------------+--------------------------+
+  | >/dev/null 2>&1 | 1:- 2:-                  |
+  +-----------------+--------------------------+
   
 
 =cut

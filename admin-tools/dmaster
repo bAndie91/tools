@@ -8,12 +8,24 @@ no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 $0 = 'dmaster';
 $Root = $ENV{'XDG_CONFIG_HOME'} || '';
 %Daemon = ();
+$restart_burst_period = 2;
+$restart_burst_limit = 5;
 
 
 sub logger
 {
 	my $s = shift;
 	warn "$0: $s\n";
+}
+
+sub append_fixsizelist
+{
+	my ($listref, $size, @items) = @_;
+	push @$listref, @items;
+	while(scalar @$listref > $size)
+	{
+		shift @$listref;
+	}
 }
 
 sub stop_daemon
@@ -50,7 +62,7 @@ sub start_daemon
 	else
 	{
 		$Daemon{$id}->{'pid'} = $pid;
-		$Daemon{$id}->{'starttime'} = time;
+		append_fixsizelist \@{$Daemon{$id}->{'starttimes'}}, $restart_burst_limit, time;
 	}
 }
 
@@ -80,6 +92,10 @@ sub read_daemon_inittab
 		{
 			my @cmd_args = parse_cmd_string $cmd;
 			$new_daemon{$id}->{'cmd_args'} = \@cmd_args;
+		}
+		else
+		{
+			logger "can not parse line $.";
 		}
 	}
 	close $fh;
@@ -111,6 +127,9 @@ sub reload
 	for my $id (keys %new_daemon)
 	{
 		$Daemon{$id}->{'cmd_args'} = $new_daemon{$id}->{'cmd_args'};
+	}
+	for my $id (keys %new_daemon)
+	{
 		start_daemon $id;
 	}
 }
@@ -132,18 +151,35 @@ sub handle_children
 				$id, $daemon_pid, $exitcode // '-', $exitsignal // '-';
 			$Daemon{$id}->{'exitcode'} = $exitcode;
 			$Daemon{$id}->{'exitsignal'} = $exitsignal;
-			$Daemon{$id}->{'exittime'} = time;
+			append_fixsizelist \@{$Daemon{$id}->{'exittimes'}}, $restart_burst_limit, time;
 			delete $Daemon{$id}->{'pid'};
 		}
 	}
 }
 
+$NextAlarm_ts = 0;
+
+sub wakeup_at_most
+{
+	my $sec = shift;
+	my $now = time;
+	my $next_alarm_ts = $now + $sec;
+	if($NextAlarm_ts <= $now or $next_alarm_ts < $NextAlarm_ts)
+	{
+		$NextAlarm_ts = $next_alarm_ts;
+		alarm $sec;
+	}
+}
+
+
 $SIG{'HUP'} = sub { $do_reload = 1; };
 $SIG{'CHLD'} = sub { $do_handle_children = 1; };
 $SIG{'TERM'} = $SIG{'INT'} = sub { $do_shutdown = 1; };
-$SIG{'ALRM'} = sub {};
+$SIG{'ALRM'} = sub { };
+
 
 reload;
+
 
 while(1)
 {
@@ -182,15 +218,25 @@ while(1)
 	# check if daemons need restart
 	for my $id (keys %Daemon)
 	{
-		if(not exists $Daemon{$id}->{'pid'})
+		my $dmon = $Daemon{$id};
+		if(not exists $dmon->{'pid'})
 		{
-			if(exists $Daemon{$id}->{'cmd_args'})
+			if(exists $dmon->{'cmd_args'})
 			{
-				# TODO check if it does not restart too often
-				start_daemon $id;
+				if(scalar @{$dmon->{'exittimes'}} >= $restart_burst_limit and $dmon->{'exittimes'}->[0] > time - $restart_burst_period)
+				{
+					logger "daemon $id restarted too often, delay";
+					wakeup_at_most $restart_burst_period;
+				}
+				else
+				{
+					start_daemon $id;
+				}
 			}
 			else
 			{
+				# it's ended and command deleted, so
+				# we no longer manage this daemon
 				delete $Daemon{$id};
 			}
 		}

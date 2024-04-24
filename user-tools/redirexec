@@ -11,12 +11,6 @@ $0 =~ s/.*\/([^\/]+)$/$1/;
 	'a' => {symbol => '>>', word => 'append'},
 );
 
-%stdmode = (
-	0 => 'r',
-	1 => 'c',
-	2 => 'c',
-);
-
 @redirs = ();
 
 while(@ARGV)
@@ -34,7 +28,7 @@ while(@ARGV)
 		$fileno = 2 if $fileno eq 'stderr';
 		if($dest eq '-')
 		{
-			$mode = $stdmode{$fd} // goto SYNTAX_ERROR;
+			$mode = 'rw';
 			$path = '/dev/null';
 		}
 		push @redirs, {
@@ -46,7 +40,6 @@ while(@ARGV)
 	}
 	else
 	{
-		SYNTAX_ERROR:
 		warn "invalid redirect specification: $fdspec\n";
 		pod2usage(-exitval=>2, -verbose=>99);
 	}

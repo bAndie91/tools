@@ -126,7 +126,7 @@ sub read_daemon_inittab
 	my %new_daemon = ();
 	while(<$fh>)
 	{
-		next if /^\s*#/;
+		next if /^\s*(#|$)/;
 		if(my ($id, $cmd) = /^(\S+)\s+(.+)$/)
 		{
 			my @cmd_args = parse_cmd_string $cmd;

@@ -17,7 +17,7 @@ Run I<COMMAND> in a way most scheduled jobs are intended to run, ie:
 
 =over 4
 
-=item Set computing priority (nice, ionice) to low
+=item Set computing priority (nice(1), ionice(1)) to low
 
 =item Delay start for random amount of time, thus avoiding load-burst when multiple jobs start at the same time
 
@@ -45,7 +45,8 @@ By default cronrun(1) fails immediately if locked.
 
 Lock is based on C<CRONJOBID> environment, or I<COMMAND> if C<CRONJOBID> is not set.
 
-If C<CRONJOBID> is set, logs go to syslog, in the "cron" facility, stdout at info level, stderr at error level.
+If C<CRONJOBID> is set, STDIO goes to syslog too, in the "cron" facility, stdout at info level, stderr at error level.
+If not set, STDIO is not redirected.
 
 =head1 FILES
 
@@ -102,17 +103,17 @@ do
 	shift
 done
 
-lockdir=~/.cache/cronrun/locks
+if [ `id -u` = 0 ]
+then
+	lockdir=/var/run/lock/cronrun
+else
+	lockdir=~/.cache/cronrun/locks
+fi
 cmd_hash=`echo -n "${CRONJOBID:-$1}" | md5sum | cut -c1-32`
 
 
 # delay random amount of seconds
 sleep $[RANDOM % ($random_delay_sec + 1)]
-
-
-# scheduled jobs are likely good to run at low priority
-renice -n 19 -p $$ >/dev/null
-ionice -c 3 -p $$
 
 
 # set up logging
@@ -121,6 +122,11 @@ then
 	syslog_ident=$LOGNAME.${CRONJOBID//\//.}
 	exec 1> >(logger -p cron.info -t "$syslog_ident" -s 2>&1) 2> >(logger -p cron.error -t "$syslog_ident" -s 1>&2)
 fi
+
+
+# scheduled jobs are likely good to run at low priority
+renice -n 19 -p $$ >/dev/null
+ionice -c 3 -p $$
 
 
 # check the lock

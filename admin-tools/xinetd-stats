@@ -1,11 +1,15 @@
 #!/bin/bash
 
-{
-	stdbuf -oL tail -n 0 -F /var/run/xinetd.dump |\
+	stdbuf -oL tail -n 0 -v -F /var/run/xinetd.dump |\
 	{
 	pass=''
 	while IFS='' read -r line
 	do
+		if [[ $line =~ ^==\> ]]
+		then
+			# tail opened the file, it's time to ask xinetd to dump
+			pkill -USR1 -F /var/run/xinetd.pid
+		fi
 		if [[ $line =~ ^INTERNAL\ STATE\ DUMP ]]
 		then
 			pass=1
@@ -20,10 +24,7 @@
 			break
 		fi
 	done
+	
+	# we got enough data, terminate tail
 	pipekill 0
 	}
-}&
-
-pkill -USR1 -F /var/run/xinetd.pid
-
-wait

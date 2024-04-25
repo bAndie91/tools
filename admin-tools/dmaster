@@ -212,7 +212,7 @@ sub wakeup_at_most
 }
 
 
-$SIG{'HUP'} = sub { $do_reload = 1; };
+$SIG{'HUP'} = sub { $do_reload = 1 unless $do_shutdown; };
 $SIG{'CHLD'} = sub { $do_handle_children = 1; };
 $SIG{'TERM'} = $SIG{'INT'} = sub { $do_shutdown = 1; };
 $SIG{'ALRM'} = sub { };
@@ -224,6 +224,7 @@ reload;
 
 while(1)
 {
+	# go idle. but it will be interrupted by signals.
 	sleep 86400;
 	
 	if($do_handle_children)
@@ -256,7 +257,7 @@ while(1)
 		reload;
 	}
 	
-	# check if daemons need restart
+	# check if daemons need respawn
 	for my $id (keys %Daemon)
 	{
 		my $dmon = $Daemon{$id};

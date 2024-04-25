@@ -17,15 +17,28 @@ filterexec I<COMMAND> [I<ARGS>] -- I<DATA-1> [I<DATA-2> [... I<DATA-n>]]
 Prints each I<DATA> (1 per line) only if command I<COMMAND ARGS DATA> exits
 succesfully, ie. with zero exit status.
 
+If you want to evaluate not command line arguments, but data read on STDIN,
+then combine filterexec(1) with foreach(1).
+
 =head1 EXAMPLE
 
   filterexec test -d -- $(ls)
 
 Shows only the directories.
+The shell's tokenization may wrongly splits up file names containing space.
+Perhaps set C<IFS> to newline only.
+
+  ls -1 | foreach filterexec test -d --
+
+Same, but file names are supplied 1-by-1, not all at once,
+hence filterexec(1) is invoked multiple times.
 
 =cut
 
 EOF
+
+# text editor syntax highlighter fix: '
+
 
 
 declare -a command=()

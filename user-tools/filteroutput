@@ -1,0 +1,173 @@
+#!/usr/bin/env perl
+
+use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat/;
+use Fcntl qw/F_GETFL F_SETFL O_NONBLOCK/;
+
+
+$0 = 'filteroutput';
+
+
+@FilterFiles = ();
+@FilterStdout = ();
+@FilterStderr = ();
+
+
+GetOptions(
+	'F|filter-file=s@' => \@FilterFiles,
+	'o|pass-stdout=s@' => sub { push @FilterStdout, {'pass'=>1, 'pattern'=>$_[1]}; },
+	'e|pass-stderr=s@' => sub { push @FilterStderr, {'pass'=>1, 'pattern'=>$_[1]}; },
+	'O|filter-stdout=s@' => sub { push @FilterStdout, {'pass'=>0, 'pattern'=>$_[1]}; },
+	'E|filter-stderr=s@' => sub { push @FilterStderr, {'pass'=>0, 'pattern'=>$_[1]}; },
+)
+or pod2usage(-exitval=>2, -verbose=>99);
+
+if(not @ARGV)
+{
+	pod2usage(-exitval=>2, -verbose=>99);
+}
+
+
+# TODO process @FilterFiles and append to FilterStd{out,err}
+
+
+sub filter_pass
+{
+	my $line = shift;
+	my $filters = shift;
+	my $pass = 1;
+	
+	for my $filt (@$filters)
+	{
+		my $match = $line =~ $filt->{'pattern'};
+		last if not $match;
+		$pass = $filt->{'pass'};
+	}
+	
+	return $pass;
+}
+
+sub process_stream
+{
+	my $stream = shift;
+	while(1)
+	{
+		my $nl = index $stream->{'buf'}, "\n";
+		last if $nl == -1;
+		
+		my $line = substr $stream->{'buf'}, 0, $nl;
+		print {$stream->{'fh'}} $line if filter_pass $line, $stream->{'filter'};
+		
+		$stream->{'buf'} = substr $stream->{'buf'}, $nl+1;
+	}
+}
+
+
+
+pipe($stdout_r, $stdout_w) or die "$0: pipe: $!\n";
+pipe($stderr_r, $stderr_w) or die "$0: pipe: $!\n";
+
+
+my $pid = fork;
+if(not defined $pid)
+{
+	die "$0: fork: $!\n";
+}
+elsif($pid == 0)
+{
+	open STDOUT, '>&', $stdout_w or die "$0: replace stdout: $!\n";
+	open STDERR, '>&', $stderr_w or die "$0: replace stderr: $!\n";
+	select STDERR; $|++;
+	select STDOUT; $|++;
+	exec @ARGV;
+	exit 127;
+}
+
+
+fcntl($stdout_r, F_SETFL, fcntl($stdout_r, F_GETFL, 0) | O_NONBLOCK);
+fcntl($stderr_r, F_SETFL, fcntl($stderr_r, F_GETFL, 0) | O_NONBLOCK);
+
+$pipe = {
+	'out' => {
+		'fh' => $stdout_r,
+		'fd' => fileno $stdout_r,
+		'buf' => '',
+		'filter' => \@FilterStdout,
+	},
+	'err' => {
+		'fh' => $stderr_r,
+		'fd' => fileno $stderr_r,
+		'buf' => '',
+		'filter' => \@FilterStderr,
+	},
+};
+
+
+$SIG{'PIPE'} = 'IGNORE';
+
+
+while(1)
+{
+	$fds = '';
+	for my $n ('out', 'err')
+	{
+		vec($fds, $pipe->{$n}->{'fd'}, 1) = 1 if defined $pipe->{$n}->{'fh'};
+	}
+	last if $fds eq '';
+	
+	select($fds, undef, undef, undef);
+	
+	for my $n ('out', 'err')
+	{
+		if(vec($fds, $pipe->{$n}->{'fd'}, 1) == 1)
+		{
+			my $bytes = sysread $pipe->{$n}->{'fh'}, $pipe->{$n}->{'buf'}, 1024, length $pipe->{$n}->{'buf'};
+			if($bytes == 0 and not($!{EAGAIN} or $!{EWOULDBLOCK}))
+			{
+				# this stream is closed.
+				undef $pipe->{$n}->{'fh'};
+			}
+			process_stream($pipe->{$n});
+		}
+	}
+}
+
+
+__END__
+
+=pod
+
+=head1 NAME
+
+filteroutput - Run a command but filter its STDOUT and STDERR
+
+=head1 SYNOPSIS
+
+filteroutput [I<OPTIONS>] [--] I<COMMAND> [I<ARGS>]
+
+=head1 OPTIONS
+
+=over 4
+
+=item -F, --filter-file
+
+=item -o, --pass-stdout
+
+=item -e, --pass-stderr
+
+=item -O, --filter-stdout
+
+=item -E, --filter-stderr
+
+=back
+
+=head1 DESCRIPTION
+
+=head1 SIGNALS
+
+HUP
+
+=head1 SEE ALSO
+
+=cut
+
+EOF

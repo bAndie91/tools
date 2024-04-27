@@ -1,10 +1,12 @@
 #!/usr/bin/env perl
 
+use Data::Dumper;
 use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat/;
 use Fcntl qw/F_GETFL F_SETFL O_NONBLOCK/;
+use POSIX;
 
 
-$0 = 'filteroutput';
+$0 = 'stdfilt';
 
 
 @FilterFiles = ();
@@ -14,10 +16,12 @@ $0 = 'filteroutput';
 
 GetOptions(
 	'F|filter-file=s@' => \@FilterFiles,
-	'o|pass-stdout=s@' => sub { push @FilterStdout, {'pass'=>1, 'pattern'=>$_[1]}; },
-	'e|pass-stderr=s@' => sub { push @FilterStderr, {'pass'=>1, 'pattern'=>$_[1]}; },
-	'O|filter-stdout=s@' => sub { push @FilterStdout, {'pass'=>0, 'pattern'=>$_[1]}; },
-	'E|filter-stderr=s@' => sub { push @FilterStderr, {'pass'=>0, 'pattern'=>$_[1]}; },
+	'o|po|pass-stdout=s@' => sub { push @FilterStdout, {'pass'=>1, 'pattern'=>$_[1]}; },
+	'e|pe|pass-stderr=s@' => sub { push @FilterStderr, {'pass'=>1, 'pattern'=>$_[1]}; },
+	'O|fo|filter-stdout=s@' => sub { push @FilterStdout, {'pass'=>0, 'pattern'=>$_[1]}; },
+	'E|fe|filter-stderr=s@' => sub { push @FilterStderr, {'pass'=>0, 'pattern'=>$_[1]}; },
+	'p|pass=s@' =>   sub { push @$_, {'pass'=>1, 'pattern'=>$_[1]} for (\@FilterStdout, \@FilterStderr); },
+	'f|filter=s@' => sub { push @$_, {'pass'=>0, 'pattern'=>$_[1]} for (\@FilterStdout, \@FilterStderr); },
 )
 or pod2usage(-exitval=>2, -verbose=>99);
 
@@ -46,6 +50,13 @@ sub filter_pass
 	return $pass;
 }
 
+sub process_line
+{
+	my $line = shift;
+	my $stream = shift;
+	print {$stream->{'write_fh'}} $line if filter_pass $line, $stream->{'filter'};
+}
+
 sub process_stream
 {
 	my $stream = shift;
@@ -53,11 +64,12 @@ sub process_stream
 	{
 		my $nl = index $stream->{'buf'}, "\n";
 		last if $nl == -1;
+		$nl++;
 		
 		my $line = substr $stream->{'buf'}, 0, $nl;
-		print {$stream->{'fh'}} $line if filter_pass $line, $stream->{'filter'};
+		process_line $line, $stream;
 		
-		$stream->{'buf'} = substr $stream->{'buf'}, $nl+1;
+		$stream->{'buf'} = substr $stream->{'buf'}, $nl;
 	}
 }
 
@@ -67,12 +79,9 @@ pipe($stdout_r, $stdout_w) or die "$0: pipe: $!\n";
 pipe($stderr_r, $stderr_w) or die "$0: pipe: $!\n";
 
 
-my $pid = fork;
-if(not defined $pid)
-{
-	die "$0: fork: $!\n";
-}
-elsif($pid == 0)
+my $child_pid = fork // die "$0: fork: $!\n";
+
+if($child_pid == 0)
 {
 	open STDOUT, '>&', $stdout_w or die "$0: replace stdout: $!\n";
 	open STDERR, '>&', $stderr_w or die "$0: replace stderr: $!\n";
@@ -83,27 +92,33 @@ elsif($pid == 0)
 }
 
 
+my $child_status = undef;
+close STDIN;
+close $stdout_w;
+close $stderr_w;
 fcntl($stdout_r, F_SETFL, fcntl($stdout_r, F_GETFL, 0) | O_NONBLOCK);
 fcntl($stderr_r, F_SETFL, fcntl($stderr_r, F_GETFL, 0) | O_NONBLOCK);
+select STDERR; $|++;
+select STDOUT; $|++;
 
 $pipe = {
 	'out' => {
 		'fh' => $stdout_r,
+		'write_fh' => \*STDOUT,
 		'fd' => fileno $stdout_r,
 		'buf' => '',
 		'filter' => \@FilterStdout,
 	},
 	'err' => {
 		'fh' => $stderr_r,
+		'write_fh' => \*STDERR,
 		'fd' => fileno $stderr_r,
 		'buf' => '',
 		'filter' => \@FilterStderr,
 	},
 };
 
-
 $SIG{'PIPE'} = 'IGNORE';
-
 
 while(1)
 {
@@ -121,15 +136,26 @@ while(1)
 		if(vec($fds, $pipe->{$n}->{'fd'}, 1) == 1)
 		{
 			my $bytes = sysread $pipe->{$n}->{'fh'}, $pipe->{$n}->{'buf'}, 1024, length $pipe->{$n}->{'buf'};
-			if($bytes == 0 and not($!{EAGAIN} or $!{EWOULDBLOCK}))
+			if($bytes)
+			{
+				process_stream($pipe->{$n});
+			}
+			else
 			{
 				# this stream is closed.
 				undef $pipe->{$n}->{'fh'};
+				# process last unterminated line (if any)
+				process_line($pipe->{$n}->{'buf'}, $pipe->{$n}) if length $pipe->{$n}->{'buf'};
 			}
-			process_stream($pipe->{$n});
 		}
 	}
 }
+
+waitpid($child_pid, 0);
+$child_status = $?;
+$exit_status = WEXITSTATUS($child_status);
+$exit_status = 128 + WTERMSIG($child_status) if WIFSIGNALED($child_status);
+exit $exit_status;
 
 
 __END__
@@ -138,35 +164,48 @@ __END__
 
 =head1 NAME
 
-filteroutput - Run a command but filter its STDOUT and STDERR
+stdfilt - Run a command but filter its STDOUT and STDERR
 
 =head1 SYNOPSIS
 
-filteroutput [I<OPTIONS>] [--] I<COMMAND> [I<ARGS>]
+stdfilt [I<OPTIONS>] [--] I<COMMAND> [I<ARGS>]
 
 =head1 OPTIONS
 
 =over 4
 
-=item -F, --filter-file
+=item -F, --filter-file I<FILE>
 
-=item -o, --pass-stdout
+=item -o, -po, --pass-stdout I<PATTERN>
 
-=item -e, --pass-stderr
+=item -e, -pe, --pass-stderr I<PATTERN>
 
-=item -O, --filter-stdout
+=item -p, --pass I<PATTERN>
 
-=item -E, --filter-stderr
+=item -O, -fo, --filter-stdout I<PATTERN>
+
+=item -E, -fe, --filter-stderr I<PATTERN>
+
+=item -f, --filter I<PATTERN>
 
 =back
 
 =head1 DESCRIPTION
 
+Run I<COMMAND> and match each of its output lines (both stdout and stderr separately) against
+the given perl-compatible regexp patterns.
+
+=head1 FILTER FILE FORMAT
+
+
+
 =head1 SIGNALS
 
-HUP
+HUP - re-read filer files given at command line
 
 =head1 SEE ALSO
+
+grep(1)
 
 =cut
 

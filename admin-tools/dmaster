@@ -21,6 +21,10 @@ stops processes which are no longer in it (or I<ID> changed),
 and starts new ones.
 Those daemons whose I<COMMAND> I<ARGS> changed, are not restarted automatically.
 
+Automatically respawn a daemon when it exits.
+If a daemon exits too often, suppress it a little while.
+Default parameters: at most 5 spawns in 2 sec, hold up for 10 sec.
+
 =head1 FILES
 
 =over 4
@@ -28,6 +32,25 @@ Those daemons whose I<COMMAND> I<ARGS> changed, are not restarted automatically.
 =item F</etc/daemontab>
 
 Format is I<ID> I<COMMAND> I<ARGS> per each line.
+
+=back
+
+=head1 SIGNALS
+
+=over 4
+
+=item USR1
+
+Write internal state into F</var/run/shm/dmaster.state> file.
+
+=item TERM, INT
+
+Terminate managed daemons (always with B<TERM> signal).
+
+=item HUP
+
+Re-read B<daemontab>, stop daemons which are disappeared and start new ones.
+Leave running others.
 
 =back
 
@@ -46,8 +69,9 @@ no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 $0 = 'dmaster';
 $Root = $ENV{'XDG_CONFIG_HOME'} || '';
 %Daemon = ();
-$restart_burst_period = 2;
-$restart_burst_limit = 5;
+$respawn_burst_period = 2;
+$respawn_burst_limit = 5;
+$respawn_burst_hold = 10;
 
 
 sub logger
@@ -101,7 +125,7 @@ sub start_daemon
 	{
 		logger "started $id PID $pid";
 		$Daemon{$id}->{'pid'} = $pid;
-		append_fixsizelist \@{$Daemon{$id}->{'starttimes'}}, $restart_burst_limit, time;
+		append_fixsizelist \@{$Daemon{$id}->{'starttimes'}}, $respawn_burst_limit, time;
 	}
 }
 
@@ -191,7 +215,7 @@ sub handle_children
 				$id, $daemon_pid, $exitcode // 'none', $exitsignal // 'none';
 			$Daemon{$id}->{'exitcode'} = $exitcode;
 			$Daemon{$id}->{'exitsignal'} = $exitsignal;
-			append_fixsizelist \@{$Daemon{$id}->{'exittimes'}}, $restart_burst_limit, time;
+			append_fixsizelist \@{$Daemon{$id}->{'exittimes'}}, $respawn_burst_limit, time;
 			delete $Daemon{$id}->{'pid'};
 		}
 	}
@@ -214,8 +238,10 @@ sub wakeup_at_most
 
 $SIG{'HUP'} = sub { $do_reload = 1 unless $do_shutdown; };
 $SIG{'CHLD'} = sub { $do_handle_children = 1; };
-$SIG{'TERM'} = $SIG{'INT'} = sub { $do_shutdown = 1; };
+$SIG{'TERM'} = sub { $do_shutdown = 1; };
+$SIG{'INT'} = $SIG{'TERM'};
 $SIG{'ALRM'} = sub { };
+$SIG{'USR1'} = sub { $do_dump_state = 1; };
 
 
 logger "start";
@@ -251,6 +277,18 @@ while(1)
 		}
 	}
 	
+	if($do_dump_state)
+	{
+		$do_dump_state = 0;
+		my $dump_path = '/var/run/shm/dmaster.state';
+		open my $fh, '>', $dump_path or warn "$dump_path: $!\n";
+		if($fh)
+		{
+			print {$fh} Dumper \%Daemon;
+			close $fh;
+		}
+	}
+	
 	if($do_reload)
 	{
 		$do_reload = 0;
@@ -265,10 +303,12 @@ while(1)
 		{
 			if(exists $dmon->{'cmd_args'})
 			{
-				if(scalar @{$dmon->{'exittimes'}} >= $restart_burst_limit and $dmon->{'exittimes'}->[0] > time - $restart_burst_period)
+				if(scalar @{$dmon->{'exittimes'}} >= $respawn_burst_limit and $dmon->{'exittimes'}->[0] > time - $respawn_burst_period)
 				{
-					logger "daemon $id respawned too often, delay for $restart_burst_period sec";
-					wakeup_at_most $restart_burst_period;
+					my $hold = $dmon->{'exittimes'}->[0] + $respawn_burst_hold - time;
+					$hold = 1 if $hold < 1;  # you can't do alarm(0)
+					logger "daemon $id respawned too often, hold up for $hold sec";
+					wakeup_at_most $hold;
 				}
 				else
 				{

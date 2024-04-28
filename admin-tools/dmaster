@@ -31,7 +31,20 @@ Default parameters: at most 5 spawns in 2 sec, hold up for 10 sec.
 
 =item F</etc/daemontab>
 
-Format is I<ID> I<COMMAND> I<ARGS> per each line.
+Format is I<ID> I<COMMAND> I<ARGS>, delimited by any amount of space/tab, one line per each.
+I<ID> is an arbitrary word choosed by the user, to identify daemon commands across reloads.
+Command arguments may enclosed in double quotes (C<">), but not part of the argument. See:
+
+ d1 my-daemon --param="foo bar"
+
+is invalid (parsed as 2 parameters: C<--param="foo> and C<bar"> with dangling quotes).
+
+ d1 my-daemon "--param=foo bar"
+
+is what you want.
+
+It's not recommended to write complex scripts directly in daemontab.
+Put them in F</etc/daemons> directory instead.
 
 =back
 

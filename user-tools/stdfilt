@@ -254,7 +254,7 @@ will be passed, not filtered.
 
 =head1 SIGNALS
 
-HUP - re-read filer files given at command line
+HUP - re-read filter files given at command line
 
 =head1 SEE ALSO
 

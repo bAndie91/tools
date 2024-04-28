@@ -9,21 +9,31 @@ use POSIX;
 $0 = 'stdfilt';
 
 
-@FilterFiles = ();
-@FilterStdout = ();
-@FilterStderr = ();
+$Filters = {
+	'out' => [],
+	'err' => [],
+};
+@savedARGV = @ARGV;
 
 
-GetOptions(
-	'F|filter-file=s@' => \@FilterFiles,
-	'o|po|pass-stdout=s@' => sub { push @FilterStdout, {'pass'=>1, 'pattern'=>$_[1]}; },
-	'e|pe|pass-stderr=s@' => sub { push @FilterStderr, {'pass'=>1, 'pattern'=>$_[1]}; },
-	'O|fo|filter-stdout=s@' => sub { push @FilterStdout, {'pass'=>0, 'pattern'=>$_[1]}; },
-	'E|fe|filter-stderr=s@' => sub { push @FilterStderr, {'pass'=>0, 'pattern'=>$_[1]}; },
-	'p|pass=s@' =>   sub { push @$_, {'pass'=>1, 'pattern'=>$_[1]} for (\@FilterStdout, \@FilterStderr); },
-	'f|filter=s@' => sub { push @$_, {'pass'=>0, 'pattern'=>$_[1]} for (\@FilterStdout, \@FilterStderr); },
-)
-or pod2usage(-exitval=>2, -verbose=>99);
+sub process_args
+{
+	@ARGV = @savedARGV;
+	pop @{$Filters->{'out'}} while scalar @{$Filters->{'out'}};
+	pop @{$Filters->{'err'}} while scalar @{$Filters->{'err'}};
+	return GetOptions(
+		'F|filter-file=s@' => sub { process_file($_[1]); },
+		'o|po|pass-stdout=s@' => sub { push @{$Filters->{'out'}}, {'pass'=>1, 'pattern'=>$_[1]}; },
+		'e|pe|pass-stderr=s@' => sub { push @{$Filters->{'err'}}, {'pass'=>1, 'pattern'=>$_[1]}; },
+		'O|fo|filter-stdout=s@' => sub { push @{$Filters->{'out'}}, {'pass'=>0, 'pattern'=>$_[1]}; },
+		'E|fe|filter-stderr=s@' => sub { push @{$Filters->{'err'}}, {'pass'=>0, 'pattern'=>$_[1]}; },
+		'p|pass=s@' =>   sub { push @{$Filters->{$_}}, {'pass'=>1, 'pattern'=>$_[1]} for ('out', 'err'); },
+		'f|filter=s@' => sub { push @{$Filters->{$_}}, {'pass'=>0, 'pattern'=>$_[1]} for ('out', 'err'); },
+	);
+}
+
+
+process_args or pod2usage(-exitval=>2, -verbose=>99);
 
 if(not @ARGV)
 {
@@ -31,7 +41,32 @@ if(not @ARGV)
 }
 
 
-# TODO process @FilterFiles and append to FilterStd{out,err}
+sub process_file
+{
+	my $filepath = shift;
+	open my $fh, '<', $filepath or die "$filepath: $!\n";
+	my @channels = ['out', 'err'];
+	while(<$fh>)
+	{
+		chomp;
+		next if /^\s*(#|$)/;
+		if(/^\[std(out|err)\]$/)
+		{
+			@channels = [$1];
+			next;
+		}
+		if(/^\[\*\]$/)
+		{
+			@channels = ['out', 'err'];
+			next;
+		}
+		my $pass = 0;
+		$pass = 1 if s/^!\s*//;
+		my $pattern = $_;
+		push @{$Filters->{$_}}, {'pass'=>$pass, 'pattern'=>$pattern} for @channels;
+	}
+	close $fh;
+}
 
 
 sub filter_pass
@@ -42,11 +77,11 @@ sub filter_pass
 	
 	for my $filt (@$filters)
 	{
-		my $match = $line =~ $filt->{'pattern'};
-		last if not $match;
-		$pass = $filt->{'pass'};
+		if($line =~ $filt->{'pattern'})
+		{
+			$pass = $filt->{'pass'};
+		}
 	}
-	
 	return $pass;
 }
 
@@ -101,24 +136,27 @@ fcntl($stderr_r, F_SETFL, fcntl($stderr_r, F_GETFL, 0) | O_NONBLOCK);
 select STDERR; $|++;
 select STDOUT; $|++;
 
+
 $pipe = {
 	'out' => {
 		'fh' => $stdout_r,
 		'write_fh' => \*STDOUT,
 		'fd' => fileno $stdout_r,
 		'buf' => '',
-		'filter' => \@FilterStdout,
+		'filter' => $Filters->{'out'},
 	},
 	'err' => {
 		'fh' => $stderr_r,
 		'write_fh' => \*STDERR,
 		'fd' => fileno $stderr_r,
 		'buf' => '',
-		'filter' => \@FilterStderr,
+		'filter' => $Filters->{'err'},
 	},
 };
 
-$SIG{'PIPE'} = 'IGNORE';
+
+$SIG{'HUP'} = sub { $do_reload = 1; };
+
 
 while(1)
 {
@@ -129,7 +167,17 @@ while(1)
 	}
 	last if $fds eq '';
 	
+	$! = 0;
 	select($fds, undef, undef, undef);
+	my $errno = int $!;
+	
+	if($do_reload)
+	{
+		$do_reload = 0;
+		process_args;
+	}
+	
+	next if $errno;
 	
 	for my $n ('out', 'err')
 	{
@@ -197,7 +245,12 @@ the given perl-compatible regexp patterns.
 
 =head1 FILTER FILE FORMAT
 
+Each line is a filter pattern, or the literal string C<[stdout]>, C<[stderr]>, or C<[*]>,
+which indicates which standard fd will be filtered through the following patterns.
+If not indicated, C<[*]> (all fd) is implied.
 
+A pattern may start with an C<!> exclamation mark, in which case, the lines matching it,
+will be passed, not filtered.
 
 =head1 SIGNALS
 
@@ -205,7 +258,7 @@ HUP - re-read filer files given at command line
 
 =head1 SEE ALSO
 
-grep(1)
+grep(1), stdbuf(1), logwall(8)
 
 =cut
 

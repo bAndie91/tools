@@ -46,6 +46,31 @@ is what you want.
 It's not recommended to write complex scripts directly in daemontab.
 Put them in F</etc/daemons> directory instead.
 
+=item F</var/run/dmaster.sock>
+
+dmaster(1) listens on a Unix Domain socket (see unix(7)).
+When a client connects, internal state is dumped on the socket
+in B<Single Value per Line with Hierarchical Keys> format.
+
+Internal state includes all started daemon's B<PIDFD>,
+which may be copied by an other program by pidfd_getfd(2),
+in order to reliably send signals to it.
+After the internal state dump is closed by a line containing a lone C<END>,
+it reads one line on the management socket.
+Currently you can not control dmaster(1) this way (use signals for this, see L</SIGNALS>),
+but while it waits for that one line, does not do anything,
+so it's time for the management client side to call pidfd_getfd(2)
+to reliably copy the PIDFD representing a given daemon process.
+
+B<Note>, this also means that daemon management is paused until
+normal operation is resumed by sending a newline on the management socket.
+Due to this potential DoS vector, management socket is chmod(2) to 0660.
+
+=item F</var/run/shm/dmaster.state>
+
+Dump internal state to it.
+See USR1 signal below.
+
 =back
 
 =head1 SIGNALS
@@ -63,7 +88,23 @@ Terminate managed daemons (always with B<TERM> signal).
 =item HUP
 
 Re-read B<daemontab>, stop daemons which are disappeared and start new ones.
-Leave running others.
+Leave others running.
+
+=back
+
+=head1 ENVIRONMENT
+
+=over 4
+
+=item XDG_CONFIG_HOME
+
+Where to find C<daemontab>.
+Default is F</etc>.
+
+=item XDG_CACHE_HOME
+
+Where to create F<dmaster.sock>
+Default is F</var/run>.
 
 =back
 
@@ -248,7 +289,7 @@ sub handle_children
 	}
 }
 
-sub mrkv_dump
+sub svlhk_dump
 {
 	my $objref = shift;
 	my $prefix = shift;
@@ -269,7 +310,7 @@ sub mrkv_dump
 		my $idx = 0;
 		for my $elem (@$objref)
 		{
-			mrkv_dump($elem, "$prefix.$idx", $cb_ref);
+			svlhk_dump($elem, "$prefix.$idx", $cb_ref);
 			$idx++;
 		}
 	}
@@ -277,7 +318,7 @@ sub mrkv_dump
 	{
 		for my $key (keys %$objref)
 		{
-			mrkv_dump($objref->{$key}, "$prefix.$key", $cb_ref);
+			svlhk_dump($objref->{$key}, "$prefix.$key", $cb_ref);
 		}
 	}
 	else
@@ -293,12 +334,13 @@ sub mrkv_dump
 
 sub init_management_socket
 {
-	my $management_socket_path = chr(0).'dmaster-management-socket';
-	#my $management_socket_addr = sockaddr_un($management_socket_path);
-	my $management_socket_addr = pack('S', AF_UNIX) . $management_socket_path;
+	#my $management_socket_path = chr(0).'dmaster-management'.$ENV{'DMASTER_SOCKET_NAME_SUFFIX'};
+	#my $management_socket_addr = pack('S', AF_UNIX) . $management_socket_path;
+	my $management_socket_path = ($ENV{'XDG_CACHE_HOME'} || '/var/run').'/dmaster.sock';
+	my $management_socket_addr = sockaddr_un($management_socket_path);
 	socket(my $management_socket, AF_UNIX, SOCK_STREAM, 0) or die "socket: $!\n";
-	bind($management_socket, $management_socket_addr) or die "bind: $management_socket_file: $!\n";
-	#chmod(0660, $management_socket_file) or die "chmod: $management_socket_file: $!\n";
+	bind($management_socket, $management_socket_addr) or die "bind: $management_socket_path: $!\n";
+	chmod(0660, $management_socket_path) or die "chmod: $management_socket_path: $!\n";
 	listen($management_socket, SOMAXCONN) or die "listen: $!\n";
 	return $management_socket;
 }
@@ -343,7 +385,12 @@ while(1)
 	if(defined $management_client_addr)
 	{
 		print {$management_client_socket} "dmaster.pid	$$\n";
-		mrkv_dump(\%Daemon, 'daemon', sub { print {$management_client_socket} $_[0]; });
+		svlhk_dump(\%Daemon, 'daemon', sub { print {$management_client_socket} $_[0]; });
+		print {$management_client_socket} "END\n";
+		$management_client_socket->flush;
+		logger "holding on management command";
+		<$management_client_socket>;
+		logger "resume from management command";
 		close $management_client_socket;
 		undef $management_client_socket;
 	}

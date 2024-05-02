@@ -1,0 +1,72 @@
+#!/bin/bash
+
+true <<'EOF'
+=pod
+
+=head1 NAME
+
+pipeby - Run a command and pipe its output to an other one
+
+=head1 SYNOPSIS
+
+pipeby I<CMD_2> [I<ARGS> --] I<CMD_1> [I<ARGS>]
+
+=head1 DESCRIPTION
+
+Equivalent to this shell command:
+
+ CMD_1 | CMD_2
+
+=head1 RATIONALE
+
+It is simetimes more convenient to skip shell involvement.
+
+=head1 SEE ALSO
+
+pipexec(1)
+
+=cut
+
+EOF
+
+
+set -e
+set -o pipefail
+set -u
+
+if [ $# = 0 ]
+then
+	pod2text "$0" >&2
+	exit 1
+fi
+if [ "$1" = --help ]
+then
+	pod2text "$0"
+	exit 0
+fi
+
+declare -a cmd_1=()
+declare -a cmd_2=()
+
+cmd_2+=("$1")
+shift
+
+while [ $# != 0 ]
+do
+	case "$1" in
+	--)
+		shift
+		cmd_2+=("${cmd_1[@]}")
+		cmd_1=()
+		break
+		;;
+	*)
+		cmd_1+=("$1")
+		;;
+	esac
+	shift
+done
+
+cmd_1+=("$@")
+
+"${cmd_1[@]}" | "${cmd_2[@]}"

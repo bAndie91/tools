@@ -27,4 +27,4 @@ TOOLS ?=   2opml adr2html asterisk-log-separator awk-cut base58 base64url \
   randstr rcmod killp killpgrp killcmd killexe hlcal hlncal visymlinks \
   lynx-render mime-header-decode nopath query-alternatives cronrun \
   screendetach replcmd movesymlinks perlprintf substenv applyfilter \
-  recent-files-gtk pstab redirexec lpjobs stdfilt
+  recent-files-gtk pstab redirexec lpjobs stdfilt pipeby

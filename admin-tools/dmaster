@@ -254,17 +254,17 @@ sub mrkv_dump
 	my $prefix = shift;
 	my $cb_ref = shift;
 	
-	my $ref = ref $objref;
+	my $type = ref $objref;
 	
-	if($ref eq '')
+	if($type eq '')
 	{
 		$cb_ref->("$prefix	$objref\n");
 	}
-	elsif($ref eq 'SCALAR')
+	elsif($type eq 'SCALAR')
 	{
 		$cb_ref->("$prefix	$$objref\n");
 	}
-	elsif($ref eq 'ARRAY')
+	elsif($type eq 'ARRAY')
 	{
 		my $idx = 0;
 		for my $elem (@$objref)
@@ -273,7 +273,7 @@ sub mrkv_dump
 			$idx++;
 		}
 	}
-	elsif($ref eq 'HASH')
+	elsif($type eq 'HASH')
 	{
 		for my $key (keys %$objref)
 		{
@@ -282,7 +282,12 @@ sub mrkv_dump
 	}
 	else
 	{
-		$cb_ref->("$prefix	$ref\n");
+		$cb_ref->("$prefix	$type\n");
+		if($type eq 'Linux::FD::Pid')
+		{
+			my $fileno = $objref->fileno;
+			$cb_ref->("$prefix.fileno	$fileno\n");
+		}
 	}
 }
 
@@ -337,6 +342,7 @@ while(1)
 	
 	if(defined $management_client_addr)
 	{
+		print {$management_client_socket} "dmaster.pid	$$\n";
 		mrkv_dump(\%Daemon, 'daemon', sub { print {$management_client_socket} $_[0]; });
 		close $management_client_socket;
 		undef $management_client_socket;

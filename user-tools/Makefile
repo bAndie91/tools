@@ -83,7 +83,7 @@ install-tools: depcheck-all $(TOOLS_TARGET_FILES) $(TOOLS_TARGET_SYMLINKS)
 $(TOOLS_TARGET_FILES) $(TOOLS_TARGET_SYMLINKS): | $(TOOLS_TARGET_DIR)
 
 $(TOOLS_TARGET_FILES): $(TOOLS_TARGET_DIR)/%: % DEPCHECK/%
-	install $(notdir $@) $(TOOLS_TARGET_DIR)/
+	install --compare $(notdir $@) $(TOOLS_TARGET_DIR)/
 	@echo remove $@ >> uninstall.sh
 
 install-symlinks: $(TOOLS_TARGET_SYMLINKS)

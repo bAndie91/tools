@@ -67,6 +67,12 @@ Leave running others.
 
 =back
 
+=head1 EXAMPLE INSTALLATION
+
+Put this in your inittab(5):
+
+ dm:2345:respawn:loggerexec daemon dmaster /sbin/dmaster
+
 =head1 SEE ALSO
 
 supervisor(1), supervise(8), daemon(1), runit(1)
@@ -77,10 +83,13 @@ supervisor(1), supervise(8), daemon(1), runit(1)
 use Data::Dumper;
 use POSIX ":sys_wait_h";
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+use Socket;
+
+$pidfd_support = eval { use Linux::FD::Pid; 1; };
+warn "deprecating PIDFD support: $@\n" if $@;
 
 
 $0 = 'dmaster';
-$Root = $ENV{'XDG_CONFIG_HOME'} || '';
 %Daemon = ();
 $respawn_burst_period = 2;
 $respawn_burst_limit = 5;
@@ -127,6 +136,10 @@ sub start_daemon
 	my $pid = fork;
 	if($pid == 0)
 	{
+		close $management_socket;
+		close $_ for map {$Daemon->{$_}->{'pidfd'}} grep {exists $Daemon->{$_}->{'pidfd'}} keys %Daemon;
+		# leave STDIO there for convenience
+		
 		exec @$cmd_args;
 		exit 127;
 	}
@@ -138,6 +151,7 @@ sub start_daemon
 	{
 		logger "started $id PID $pid";
 		$Daemon{$id}->{'pid'} = $pid;
+		$Daemon{$id}->{'pidfd'} = Linux::FD::Pid->new($pid) if $pidfd_support;
 		append_fixsizelist \@{$Daemon{$id}->{'starttimes'}}, $respawn_burst_limit, time;
 	}
 }
@@ -181,7 +195,7 @@ sub read_daemon_inittab
 
 sub reload
 {
-	my $daemontab = $Root.'/etc/daemontab';
+	my $daemontab = ($ENV{'XDG_CONFIG_HOME'} || '/etc').'/daemontab';
 	logger "reloading $daemontab";
 	my %new_daemon = read_daemon_inittab $daemontab;
 	
@@ -234,6 +248,57 @@ sub handle_children
 	}
 }
 
+sub mrkv_dump
+{
+	my $objref = shift;
+	my $prefix = shift;
+	my $cb_ref = shift;
+	
+	my $ref = ref $objref;
+	
+	if($ref eq '')
+	{
+		$cb_ref->("$prefix	$objref\n");
+	}
+	elsif($ref eq 'SCALAR')
+	{
+		$cb_ref->("$prefix	$$objref\n");
+	}
+	elsif($ref eq 'ARRAY')
+	{
+		my $idx = 0;
+		for my $elem (@$objref)
+		{
+			mrkv_dump($elem, "$prefix.$idx", $cb_ref);
+			$idx++;
+		}
+	}
+	elsif($ref eq 'HASH')
+	{
+		for my $key (keys %$objref)
+		{
+			mrkv_dump($objref->{$key}, "$prefix.$key", $cb_ref);
+		}
+	}
+	else
+	{
+		$cb_ref->("$prefix	$ref\n");
+	}
+}
+
+sub init_management_socket
+{
+	my $management_socket_path = chr(0).'dmaster-management-socket';
+	#my $management_socket_addr = sockaddr_un($management_socket_path);
+	my $management_socket_addr = pack('S', AF_UNIX) . $management_socket_path;
+	socket(my $management_socket, AF_UNIX, SOCK_STREAM, 0) or die "socket: $!\n";
+	bind($management_socket, $management_socket_addr) or die "bind: $management_socket_file: $!\n";
+	#chmod(0660, $management_socket_file) or die "chmod: $management_socket_file: $!\n";
+	listen($management_socket, SOMAXCONN) or die "listen: $!\n";
+	return $management_socket;
+}
+
+
 $NextAlarm_ts = 0;
 
 sub wakeup_at_most
@@ -253,18 +318,29 @@ $SIG{'HUP'} = sub { $do_reload = 1 unless $do_shutdown; };
 $SIG{'CHLD'} = sub { $do_handle_children = 1; };
 $SIG{'TERM'} = sub { $do_shutdown = 1; };
 $SIG{'INT'} = $SIG{'TERM'};
-$SIG{'ALRM'} = sub { };
+$SIG{'ALRM'} = sub { 1; };
 $SIG{'USR1'} = sub { $do_dump_state = 1; };
+#$SIG{'PIPE'} = TODO
+
+
+logger "init";
+my $management_socket = init_management_socket();
 
 
 logger "start";
 reload;
 
-
 while(1)
 {
 	# go idle. but it will be interrupted by signals.
-	sleep 86400;
+	my $management_client_addr = accept(my $management_client_socket, $management_socket);
+	
+	if(defined $management_client_addr)
+	{
+		mrkv_dump(\%Daemon, 'daemon', sub { print {$management_client_socket} $_[0]; });
+		close $management_client_socket;
+		undef $management_client_socket;
+	}
 	
 	if($do_handle_children)
 	{
@@ -318,10 +394,10 @@ while(1)
 			{
 				if(scalar @{$dmon->{'exittimes'}} >= $respawn_burst_limit and $dmon->{'exittimes'}->[0] > time - $respawn_burst_period)
 				{
-					my $hold = $dmon->{'exittimes'}->[0] + $respawn_burst_hold - time;
-					$hold = 1 if $hold < 1;  # you can't do alarm(0)
-					logger "daemon $id respawned too often, hold up for $hold sec";
-					wakeup_at_most $hold;
+					my $hold_sec = $dmon->{'exittimes'}->[0] + $respawn_burst_hold - time;
+					$hold_sec = 1 if $hold_sec < 1;  # you can't do alarm(0)
+					logger "daemon $id respawned too often, hold up for $hold_sec sec";
+					wakeup_at_most $hold_sec;
 				}
 				else
 				{

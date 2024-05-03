@@ -1,14 +1,15 @@
 #!/usr/bin/env perl
 
 use POSIX;
-use Getopt::Long qw/:config no_ignore_case/;
+use Getopt::Long qw/:config no_ignore_case permute/;
 use Pod::Usage;
 
 $clone_status = 0;
 
 GetOptions(
-	'c|clone' => \$clone_status,
+	'c|clone!' => \$clone_status,
 	'help|?' => sub{ pod2usage(-exitval=>0, -verbose=>99); },
+	'<>' => sub{ unshift @ARGV, @_; die '!FINISH'; },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
 system @ARGV;
@@ -39,7 +40,7 @@ reportcmdstatus - Textually show how the given command finished (exit status/sig
 
 =head1 SYNOPSIS
 
-reportcmdstatus [-c] <COMMAND> [<ARGS>]
+reportcmdstatus [-c] [--] <COMMAND> [<ARGS>]
 
 =head1 OPTIONS
 

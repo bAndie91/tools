@@ -1,30 +1,180 @@
-TOOLS ?=   2opml adr2html asterisk-log-separator awk-cut base58 base64url \
-  bencode2json cdexec chattr-cow chattr-nocow chromium_cookie_decrypt.py \
-  chshebang convert_chromium_cookies_to_netscape.sh corner_time \
-  cut.awk daemonctl dataurl2bin debdiff descpids dfbar digasn diu dlnew \
-  dump_php_session.php eat errorlevel error_reporting.php fcomplete \
-  fc-search-codepoint fdupes-hardlink ff fgat find-by-date findnewestfile \
-  findoldestfile fixlogfiledatetime fixRFC822filemtime fmtkv foreach \
-  g_filename_to_uri git-checkout-sparse gitdiff grepdatetime Head \
-  header.sed indent2tree inisort is_gzip jobsel json2bencode json2msgpack \
-  kt LevelDB lines screens lnto locale-validator lpset ls2html lsata \
-  lsenv mime_extract mkdeb moz_bookmarks msg msgpack2json multithrottler \
-  mysql-fix-orphan-privileges.php noacute nocomment nthash.py ocspverify \
-  organizebydate palemoon-current-url parsel partial paths2indent \
-  perl-repl pipekill PMbwmon PMdirindex PMhexdiff PMnslist PMpwgen \
-  PMrecdiff pyzor-files qrwifi pvalve renamemanual repeat \
-  reportcmdstatus rsacrypt rsync-semichroot rsysrq screenconsole \
-  screen-notify screenreattach sockio ssh-agent-finder \
-  straceall strip-ansi-seq swap symlinks2dot tabularize Tail takeown taslis \
-  tests text2img-dataurl touchx ttinput uchmod unicodestyle upsidedown \
-  url_decode url_encode url_encode_bf url-parts vidir-sanitize vifiles \
-  waitpid whisper-retention-info wikibot xdg-autostart xml2json \
-  levenshtein-distance jaro-metric jaro-winkler-metric loggerexec \
-  logrotate-counters logto pdfflop pngmetatext set-sys-path subst_sudo_user \
-  terminaltitle timestamper set-xcursor-lock-and-run mkmagnetlink htmlentities \
-  pfx2pem rdfindreport symlinks-analyze rn filterexec trackrun oded cled \
-  mail-extract-addresses mail-extract-raw-headers fzf-preview w3m-render \
-  randstr rcmod killp killpgrp killcmd killexe hlcal hlncal visymlinks \
-  lynx-render mime-header-decode nopath query-alternatives cronrun \
-  screendetach replcmd movesymlinks perlprintf substenv applyfilter \
-  recent-files-gtk pstab redirexec lpjobs stdfilt pipeby
+TOOLS ?= \
+  2opml \
+  adr2html \
+  applyfilter \
+  asterisk-log-separator \
+  awk-cut \
+  base58 \
+  base64url \
+  bencode2json \
+  cdexec \
+  chattr-cow \
+  chattr-nocow \
+  chromium_cookie_decrypt.py \
+  chshebang \
+  cled \
+  convert_chromium_cookies_to_netscape.sh \
+  corner_time \
+  cronrun \
+  cut.awk \
+  daemonctl \
+  dataurl2bin \
+  debdiff \
+  descpids \
+  dfbar \
+  digasn \
+  diu \
+  dlnew \
+  dump_php_session.php \
+  eat \
+  errorlevel \
+  error_reporting.php \
+  fcomplete \
+  fc-search-codepoint \
+  fdupes-hardlink \
+  ff \
+  fgat \
+  filterexec \
+  find-by-date \
+  findnewestfile \
+  findoldestfile \
+  fixlogfiledatetime \
+  fixRFC822filemtime \
+  fmtkv \
+  foreach \
+  fzf-preview \
+  g_filename_to_uri \
+  git-checkout-sparse \
+  gitdiff \
+  grepdatetime \
+  Head \
+  header.sed \
+  hlcal \
+  hlncal \
+  htmlentities \
+  indent2tree \
+  inisort \
+  is_gzip \
+  jaro-metric \
+  jaro-winkler-metric \
+  jobsel \
+  json2bencode \
+  json2msgpack \
+  killcmd \
+  killexe \
+  killp \
+  killpgrp \
+  kt \
+  LevelDB \
+  levenshtein-distance \
+  lines \
+  lnto \
+  locale-validator \
+  loggerexec \
+  logrotate-counters \
+  logto \
+  lpjobs \
+  lpset \
+  ls2html \
+  lsata \
+  lsenv \
+  lynx-render \
+  mail-extract-addresses \
+  mail-extract-raw-headers \
+  mime_extract \
+  mime-header-decode \
+  mkdeb \
+  mkmagnetlink \
+  movesymlinks \
+  moz_bookmarks \
+  msg \
+  msgpack2json \
+  multithrottler \
+  mysql-fix-orphan-privileges.php \
+  noacute \
+  nocomment \
+  nopath \
+  nthash.py \
+  ocspverify \
+  oded \
+  organizebydate \
+  palemoon-current-url \
+  parsel \
+  partial \
+  paths2indent \
+  pdfflop \
+  perlprintf \
+  perl-repl \
+  pfx2pem \
+  pipeby \
+  pipekill \
+  PMbwmon \
+  PMdirindex \
+  PMhexdiff \
+  PMnslist \
+  PMpwgen \
+  PMrecdiff \
+  pngmetatext \
+  pstab \
+  pvalve \
+  pyzor-files \
+  qrwifi \
+  query-alternatives \
+  randstr \
+  rcmod \
+  rdfindreport \
+  recent-files-gtk \
+  redirexec \
+  renamemanual \
+  repeat \
+  replcmd \
+  reportcmdstatus \
+  rn \
+  rsacrypt \
+  rsync-semichroot \
+  rsysrq \
+  screenconsole \
+  screendetach \
+  screen-notify \
+  screenreattach \
+  screens \
+  set-sys-path \
+  set-xcursor-lock-and-run \
+  sockio \
+  ssh-agent-finder \
+  stdfilt \
+  straceall \
+  strip-ansi-seq \
+  substenv \
+  subst_sudo_user \
+  swap \
+  symlinks2dot \
+  symlinks-analyze \
+  tabularize \
+  Tail \
+  takeown \
+  taslis \
+  terminaltitle \
+  tests \
+  text2img-dataurl \
+  timestamper \
+  touchx \
+  trackrun \
+  ttinput \
+  uchmod \
+  unicodestyle \
+  upsidedown \
+  url_decode \
+  url_encode \
+  url_encode_bf \
+  url-parts \
+  vidir-sanitize \
+  vifiles \
+  visymlinks \
+  w3m-render \
+  waitpid \
+  whisper-retention-info \
+  wikibot \
+  xdg-autostart \
+  xml2json \
+

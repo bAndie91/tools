@@ -90,6 +90,7 @@ paths2indent - Transform list of filesystem paths on input into an indented list
 pdfflop - Flop a PDF file's pages
 perl-repl - Read-Evaluate-Print-Loop wrapper for perl(1)
 pfx2pem - Convert PFX (PKCS#12) certificate file to PEM format
+pipeby - Run a command and pipe its output to an other one
 pipekill - Send signal to a process on the other end of the given pipe filedescriptor
 pngmetatext - Put metadata text into PNG file
 pvalve - Control how much a given command should run by an other command's exit code
@@ -111,6 +112,7 @@ screens - List all GNU/Screen sessions accessible by the user and all of their i
 set-sys-path - Set PATH according to /etc/environment and run the given command
 set-xcursor-lock-and-run - Set X11 cursor to a padlock and run a command
 ssh-agent-finder - Find a working ssh agent on the system so you get the same in each of your logon sessions
+stdfilt - Run a command but filter its STDOUT and STDERR
 strip-ansi-seq - Dumb script removing more-or-less any ANSI escape sequences from the input stream
 subst_sudo_user - Sudo helper program
 substenv - Substitute environment variables in parameters and run the resulting command

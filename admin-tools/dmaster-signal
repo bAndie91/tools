@@ -1,0 +1,107 @@
+#!/usr/bin/env perl
+
+use Pod::Usage;
+use Socket;
+use Config;
+@signal_names = split ' ', $Config{'sig_name'};
+@signal_numbers{@signal_names} = split ' ', $Config{'sig_num'};
+require "syscall.ph";
+
+$0 = 'dmaster-signal';
+$daemon_id = shift @ARGV;
+$signal = shift @ARGV;
+
+unless($daemon_id and defined $signal)
+{
+	pod2usage(-exitval=>2, -verbose=>99);
+}
+
+$signal_num = $signal_numbers{$signal} // $signal;
+die "$0: unknown signal: $signal\n" unless $signal_num =~ /^\d+$/;
+
+
+$management_socket_path = ($ENV{'XDG_CACHE_HOME'} || '/var/run').'/dmaster.sock';
+$management_socket_addr = sockaddr_un($management_socket_path);
+socket($management_socket, AF_UNIX, SOCK_STREAM, 0) or die "socket: $!\n";
+connect($management_socket, $management_socket_addr) or die "connect: $management_socket_path: $!\n";
+
+while(<$management_socket>)
+{
+	chomp;
+	last if /^END$/;
+	if(/^dmaster\.pid\s+(\d+)$/)
+	{
+		$dmaster_pid = $1;
+	}
+	elsif(/^daemon\.(.+)\.pidfd\.fileno\s+(\d+)$/ and $1 eq $daemon_id)
+	{
+		$target_pidfd = $2;
+	}
+}
+
+if(not $dmaster_pid)
+{
+	die "$0: could not find dmaster pid\n";
+}
+if(not $target_pidfd)
+{
+	die "$0: could not find daemon's pidfd: $daemon_id\n";
+}
+
+
+$flags = 0;
+$! = 0;
+$dmaster_pidfd = syscall SYS_pidfd_open(), int $dmaster_pid, $flags;
+if($dmaster_pidfd == -1)
+{
+	die "pidfd_open: $!\n";
+}
+
+
+$flags = 0;
+$! = 0;
+$pidfd = syscall SYS_pidfd_getfd(), int $dmaster_pidfd, int $target_pidfd, $flags;
+if($pidfd == -1)
+{
+	die "pidfd_getfd: $!\n";
+}
+
+
+print {$management_socket} "\n";
+close $management_socket;
+
+
+$flags = 0;
+$! = 0;
+$ret = syscall SYS_pidfd_send_signal(), int $pidfd, int $signal_num, undef, $flags;
+if($ret == -1)
+{
+	die "pidfd_send_signal: $!\n";
+}
+
+exit 0;
+
+
+
+__END__
+
+=pod
+
+=head1 NAME
+
+dmaster-signal - Send a signal to a daemon managed by dmaster
+
+=head1 SYNOPSIS
+
+dmaster-signal <DAEMON-ID> <SIGNAL>
+
+=head1 DESCRIPTION
+
+dmaster-signal(1) utilizes PIDFD to reliably send signal to the specified daemon
+managed by dmaster(1).
+
+=head1 SEE ALSO
+
+dmaster(1), pidfd_send_signal(2)
+
+=cut

@@ -1,0 +1,5 @@
+#!/bin/bash
+
+sock=${XDG_CACHE_HOME:-/var/run}/dmaster.sock
+
+nc -U "$sock" <<< x

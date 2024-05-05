@@ -14,20 +14,23 @@ endef
 	@echo remove $@ >> uninstall.sh
 
 
-install-dmaster: /sbin/dmaster /usr/share/man/man8/dmaster.8.xz
+install-dmaster: /sbin/dmaster /sbin/dmaster-signal /sbin/dmaster-dump /usr/share/man/man8/dmaster.8.xz /usr/share/man/man8/dmaster-signal.8.xz 
 	@echo "Don't forget to install /sbin/dmaster as a system service (eg. put in /etc/inittab)"
 .PHONY: install-dmaster
 
-/sbin/dmaster: dmaster
+/sbin/dmaster /sbin/dmaster-signal /sbin/dmaster-dump: /sbin/%: %
 	install $< $@
 
-/usr/share/man/man8/dmaster.8.xz: dmaster
+/usr/share/man/man8/dmaster.8.xz /usr/share/man/man8/dmaster-signal.8.xz: /usr/share/man/man8/%.8.xz: %
 	pod2man --name="$<" --section 8 --utf8 "$<" | xz > "$@.tmp" &&\
 	mv -f "$@.tmp" "$@"
 
 uninstall-dmaster:
 	$(call remove,/sbin/dmaster)
+	$(call remove,/sbin/dmaster-signal)
+	$(call remove,/sbin/dmaster-dump)
 	$(call remove,/usr/share/man/man8/dmaster.1.xz)
+	$(call remove,/usr/share/man/man8/dmaster-signal.1.xz)
 .PHONY: uninstall-dmaster
 
 

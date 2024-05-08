@@ -13,6 +13,11 @@ endef
 	install $< $@
 	@echo remove $@ >> uninstall.sh
 
+uninstall-locale-validator:
+	$(call remove,/etc/profile.d/locale-validator.sh)
+.PHONY: uninstall-locale-validator
+
+
 
 install-dmaster: /sbin/dmaster /usr/share/man/man8/dmaster.8.xz
 	@echo "Don't forget to install /sbin/dmaster as a system service (eg. put in /etc/inittab)"
@@ -31,5 +36,19 @@ uninstall-dmaster:
 .PHONY: uninstall-dmaster
 
 
-install-all: install-dmaster /etc/profile.d/locale-validator.sh
+
+install-dhcpdiscover: /sbin/dhcpdiscover
+.PHONY: install-dhcpdiscover
+/sbin/dhcpdiscover: dhcpdiscover
+	install $< $@
+uninstall-dhcpdiscover:
+	$(call remove,/sbin/dhcpdiscover)
+.PHONY: uninstall-dhcpdiscover
+
+
+
+install-all: install-dmaster /etc/profile.d/locale-validator.sh install-dhcpdiscover
 .PHONY: install-all
+
+uninstall-all: uninstall-dmaster uninstall-locale-validator uninstall-dhcpdiscover
+.PHONY: uninstall-all

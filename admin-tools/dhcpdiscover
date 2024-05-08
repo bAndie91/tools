@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import random
-from scapy.all import conf, Ether, IP, UDP, BOOTP, DHCP, DHCPTypes, sendp, srp, mac2str, get_if_hwaddr
+from scapy.all import conf, Ether, IP, UDP, BOOTP, DHCP, DHCPTypes, sendp, srp, mac2str, str2mac, get_if_hwaddr
 import sys
 import re
 
@@ -9,6 +9,13 @@ import re
 def fmt_dhcpoptval(name, val):
 	if name == 'message-type':
 		val = DHCPTypes[val]
+	return esc_nonprint(val)
+
+def fmt_bootpfield(bootp, name, val):
+	if name == 'chaddr':
+		val = str2mac(val[0:bootp.hlen])
+	elif name in ['sname', 'file']:
+		val = val[0:val.find('\x00')]
 	return esc_nonprint(val)
 
 def esc_nonprint(s):
@@ -29,8 +36,12 @@ conf.checkIPaddr = False
 ans, unans = srp(packet, iface=iface, verbose=0, timeout=1.0, nofilter=1)
 
 reply = ans.res[0][1]
-dhcp_reply = reply.getlayer(DHCP)
-#dhcp_options = dict([x for x in dhcp_reply.options if isinstance(x, tuple)])
+bootp_msg = reply.getlayer(BOOTP)
+dhcp_msg = reply.getlayer(DHCP)
+
+print ''.join(["%s\t%s\n" % (field, fmt_bootpfield(bootp_msg, field, val)) for field, val in bootp_msg.fields.iteritems()]),
+
+#dhcp_options = dict([x for x in dhcp_msg.options if isinstance(x, tuple)])
 #dhcp_message_type = DHCPTypes[dhcp_options['message-type']]
-dhcp_options = [x for x in dhcp_reply.options if isinstance(x, tuple) and len(x) == 2]
-print ''.join(["%s\t%s\n" % (optname, fmt_dhcpoptval(optname, optval)) for optname, optval in dhcp_options]),
+dhcp_options = [x for x in dhcp_msg.options if isinstance(x, tuple) and len(x) == 2]
+print ''.join(["option.%s\t%s\n" % (optname, fmt_dhcpoptval(optname, optval)) for optname, optval in dhcp_options]),

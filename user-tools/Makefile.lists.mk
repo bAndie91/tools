@@ -106,6 +106,7 @@ TOOLS ?= \
   perlprintf \
   perl-repl \
   pfx2pem \
+  pfxln \
   pipeby \
   pipekill \
   PMbwmon \

@@ -1,0 +1,21 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+pfxln - Prefix lines from STDIN
+
+=head1 SYNOPSIS
+
+pfxln [I<PREFIX>]
+
+=cut
+
+
+$pfx = $ARGV[0] // "\t";
+
+while(<STDIN>)
+{
+	print "$pfx$_";
+}

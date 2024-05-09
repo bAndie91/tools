@@ -15,6 +15,9 @@ then
 	if [ -z "$coords" ]
 	then
 		selection=$(xrectsel -p)
+		rc=$?
+		[ $rc = 0 ] || exit $rc
+		
 		coords=$(echo "$selection" | sed -ne 1p)
 		
 		if [ -n "$coords" ]

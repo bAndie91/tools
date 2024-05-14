@@ -126,8 +126,8 @@ use POSIX ":sys_wait_h";
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 use Socket;
 
-$pidfd_support = eval { use Linux::FD::Pid; 1; };
-warn "deprecating PIDFD support: $@\n" if $@;
+$pidfd_support = eval q{ use Linux::FD::Pid; 1; };
+warn "deprecating PIDFD support: $@" if $@;
 
 
 $0 = 'dmaster';

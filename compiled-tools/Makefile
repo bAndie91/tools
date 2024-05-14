@@ -117,3 +117,13 @@ install-manpages: $(MANPAGE_FILES) $(SYSTEM_MANPAGES_PATH)/lastbcsv$(MANPAGE_FIL
 	/etc/cron.daily/man-db
 
 .PHONY: install-manpages
+
+
+
+
+rebootlogon: rebootlogon.c
+	gcc $< -o $@
+
+/sbin/rebootlogon: rebootlogon
+	install -o root -g root -m 4444 $< $@
+	setfacl -m u:reboot:r-x $@

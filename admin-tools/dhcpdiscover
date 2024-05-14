@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
 import random
 from scapy.all import conf, Ether, IP, UDP, BOOTP, DHCP, DHCPTypes, sendp, srp, mac2str, get_if_hwaddr
 import sys
@@ -15,7 +16,18 @@ def esc_nonprint(s):
 	return re.sub(r'[\x00-\x1F\\\x7F-\xFF]', lambda m: "\\x%02X" % ord(m.group(0)), str(s))
 
 
+if len(sys.argv) < 2 or sys.argv[1] == '--help':
+	print("""Usage: dhcpdiscover <IFACE> [<TIMEOUT>]
+send DHCP discover messages on the IFACE interface,
+and print response message's details, if gets one within TIMEOUT seconds.
+""", end='')
+	sys.exit(1)
+
 iface = sys.argv[1]
+try:
+	timeout = float(sys.argv[2])
+except:
+	timeout = 1.0
 
 packet = (
 	Ether(dst="ff:ff:ff:ff:ff:ff") /
@@ -26,11 +38,16 @@ packet = (
 )
 
 conf.checkIPaddr = False
-ans, unans = srp(packet, iface=iface, verbose=0, timeout=1.0, nofilter=1)
+ans, unans = srp(packet, iface=iface, verbose=0, timeout=timeout, nofilter=1)
 
-reply = ans.res[0][1]
+try:
+	reply = ans.res[0][1]
+except IndexError:
+	print("no reply", file=sys.stderr)
+	sys.exit(2)
+
 dhcp_reply = reply.getlayer(DHCP)
 #dhcp_options = dict([x for x in dhcp_reply.options if isinstance(x, tuple)])
 #dhcp_message_type = DHCPTypes[dhcp_options['message-type']]
 dhcp_options = [x for x in dhcp_reply.options if isinstance(x, tuple) and len(x) == 2]
-print ''.join(["%s\t%s\n" % (optname, fmt_dhcpoptval(optname, optval)) for optname, optval in dhcp_options]),
+print(''.join(["%s\t%s\n" % (optname, fmt_dhcpoptval(optname, optval)) for optname, optval in dhcp_options]), end='')

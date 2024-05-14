@@ -19,7 +19,7 @@ uninstall-locale-validator:
 
 
 
-install-dmaster: /sbin/dmaster /sbin/dmaster-signal /sbin/dmaster-dump /usr/share/man/man8/dmaster.8.xz /usr/share/man/man8/dmaster-signal.8.xz 
+install-dmaster: check-dmaster /sbin/dmaster /sbin/dmaster-signal /sbin/dmaster-dump /usr/share/man/man8/dmaster.8.xz /usr/share/man/man8/dmaster-signal.8.xz 
 	@echo "Don't forget to install /sbin/dmaster as a system service (eg. put in /etc/inittab)"
 .PHONY: install-dmaster
 
@@ -29,6 +29,10 @@ install-dmaster: /sbin/dmaster /sbin/dmaster-signal /sbin/dmaster-dump /usr/shar
 /usr/share/man/man8/dmaster.8.xz /usr/share/man/man8/dmaster-signal.8.xz: /usr/share/man/man8/%.8.xz: %
 	pod2man --name="$<" --section 8 --utf8 "$<" | xz > "$@.tmp" &&\
 	mv -f "$@.tmp" "$@"
+
+check-dmaster:
+	perl -e 'use Linux::FD::Pid; 1;'
+.PHONY: check-dmaster
 
 uninstall-dmaster:
 	$(call remove,/sbin/dmaster)

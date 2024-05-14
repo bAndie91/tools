@@ -18,6 +18,7 @@ TOOLS = \
   td-trans-fixcol \
   td-trans-ls \
   td-trans-mount \
+  td-trans-passwd td-trans-group td-trans-shadow td-trans-gshadow \
   vcf2td \
 
 

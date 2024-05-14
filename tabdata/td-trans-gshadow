@@ -1,0 +1,3 @@
+#!/bin/bash
+
+tr : "\t" | td-add-headers GROUP PASSWORD ADMINS MEMBERS

@@ -409,6 +409,7 @@ def act_main_toggle(*X):
 		win_main.hide()
 	else:
 		win_main.show()
+		cal0.gotoday()
 
 def act_main_hide(*X):
 	win_main.hide()

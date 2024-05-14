@@ -1,0 +1,3 @@
+#!/bin/bash
+
+tr : "\t" | td-add-headers LOGIN PASSWORD UID GID GECOS HOME SHELL

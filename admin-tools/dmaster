@@ -125,6 +125,8 @@ use Data::Dumper;
 use POSIX ":sys_wait_h";
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 use Socket;
+use Config;
+@signal_names = split ' ', $Config{'sig_name'};
 
 $pidfd_support = eval q{ use Linux::FD::Pid; 1; };
 warn "deprecating PIDFD support: $@" if $@;
@@ -266,6 +268,13 @@ sub reload
 	}
 }
 
+sub errstr
+{
+	my $errno = shift;
+	$! = $errno;
+	return $^E;
+}
+
 sub handle_children
 {
 	for my $id (keys %Daemon)
@@ -279,8 +288,8 @@ sub handle_children
 		{
 			my $exitcode = WIFEXITED($status) ? WEXITSTATUS($status) : undef;
 			my $exitsignal = WIFSIGNALED($status) ? WTERMSIG($status) : undef;
-			logger sprintf "daemon %s PID %d deceased, exit status %s signal %s",
-				$id, $daemon_pid, $exitcode // 'none', $exitsignal // 'none';
+			logger sprintf "daemon %s PID %d deceased, exit status %s (%s) signal %s (%s)",
+				$id, $daemon_pid, $exitcode // 'none', errstr($exitcode), $exitsignal // 'none', $signal_names[$exitsignal];
 			$Daemon{$id}->{'exitcode'} = $exitcode;
 			$Daemon{$id}->{'exitsignal'} = $exitsignal;
 			append_fixsizelist \@{$Daemon{$id}->{'exittimes'}}, $respawn_burst_limit, time;

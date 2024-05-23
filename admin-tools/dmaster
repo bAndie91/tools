@@ -83,7 +83,8 @@ Write internal state into F</var/run/shm/dmaster.state> file.
 
 =item TERM, INT
 
-Terminate managed daemons (always with B<TERM> signal).
+Terminate managed daemons (always with B<TERM> signal),
+wait for them to exit, then exit dmaster(1) itself.
 
 =item HUP
 
@@ -105,6 +106,20 @@ Default is F</etc>.
 
 Where to create F<dmaster.sock>
 Default is F</var/run>.
+
+=item DAEMONS_RESPAWN_BURST_PERIOD
+
+Measure this much time (seconds) to detect respawn-burst.
+
+=item DAEMONS_RESPAWN_BURST_LIMIT
+
+If a daemon respawns this many times within DAEMONS_RESPAWN_BURST_PERIOD,
+consider it a respawn-burst, and hold it back a while.
+
+=item DAEMONS_RESPAWN_BURST_HOLD
+
+How much time (seconds) to wait before starting a daemon
+after a respawn-burst.
 
 =back
 
@@ -134,9 +149,9 @@ warn "deprecating PIDFD support: $@" if $@;
 
 $0 = 'dmaster';
 %Daemon = ();
-$respawn_burst_period = 2;
-$respawn_burst_limit = 5;
-$respawn_burst_hold = 10;
+$respawn_burst_period = $ENV{'DAEMONS_RESPAWN_BURST_PERIOD'} // 2;
+$respawn_burst_limit =  $ENV{'DAEMONS_RESPAWN_BURST_LIMIT'} // 5;
+$respawn_burst_hold =   $ENV{'DAEMONS_RESPAWN_BURST_HOLD'} // 10;
 
 
 sub logger

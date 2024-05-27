@@ -22,11 +22,11 @@ do not show headers
 
 show headers (default)
 
-=item -i, --ignore-nonexisting-columns
+=item -i, --ignore-non-existing-columns
 
 do not treat non-existing (missing or typo) column names as failure
 
-=item -w, --warn-nonexisting-columns
+=item -w, --warn-non-existing-columns
 
 only show warning on non-existing (missing or typo) column names, but
 don't fail

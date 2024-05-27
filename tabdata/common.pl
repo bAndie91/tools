@@ -14,6 +14,7 @@ $OptAddExtraColumns = 1;
 $OptMinColumnSpacing = 2;
 $OptMaxColumns = undef;
 @OptPredefColumns = ();
+$OptWarnNonNumericRValue = 1;
 $OptFailNonNumericRValue = 1;
 
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
@@ -24,10 +25,12 @@ GetOptions(
 	'h|header' => sub { $OptShowHeader = 1; },
 	'H|no-header' => sub { $OptShowHeader = 0; },
 	
-	'i|ignore-nonexisting-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 0; },
-	'w|warn-nonexisting-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 1; },
+	'i|ignore-non-existing-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 0; },
+	'w|warn-non-existing-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 1; },
 	'strict-columns' => sub { $OptWarnBadColumnNames = 1; $OptFailBadColumnNames = 1; $OptFailBadNegativeColumnNames = 1; },
-	'N|lax-non-numeric|no-fail-non-numeric' => sub { $OptFailNonNumericRValue = 0; },
+	
+	'N|no-fail-non-numeric' => sub { $OptFailNonNumericRValue = 0; },
+	'W|no-warn-non-numeric' => sub { $OptWarnNonNumericRValue = 0; },
 	
 	'm|min-column-spacing=i' => \$OptMinColumnSpacing,
 	'c|max-columns=i' => \$OptMaxColumns,

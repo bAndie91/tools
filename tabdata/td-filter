@@ -221,7 +221,7 @@ else
 			die "$0: unknown operator: $operator\n";
 		}
 		
-		if($operator ~~ [qw/== != <= >= < >/] and $rvalue !~ /^[+-]?\d+(.\d+|)(E\d+|)$/i)
+		if($operator ~~ [qw/== != <= >= < >/] and $rvalue !~ /^[+-]?[0-9]\d*(.\d+|)(E[+-]?\d+|)$/i)
 		{
 			warn "$0: operator ($operator) is numeric but r-value ($rvalue) is not\n" if $OptWarnNonNumericRValue;
 			exit -1 if $OptFailNonNumericRValue;

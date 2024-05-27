@@ -50,6 +50,10 @@ do not treat non-existing (missing or typo) column names as failure
 
 only show warning on non-existing (missing or typo) column names, but don't fail
 
+=item -N, --lax-non-numeric, --no-fail-non-numeric
+
+do not fail when a non-numeric r-value is given to a numeric operator
+
 =back
 
 =head1 OPERATORS
@@ -211,6 +215,11 @@ else
 		unless($operator ~~ [qw/== != <= >= < > =~ !~ eq ne gt lt is-one-of contains contains-one-of/])
 		{
 			die "$0: unknown operator: $operator\n";
+		}
+		
+		if($operator ~~ [qw/== != <= >= < >/] and $rvalue !~ /^[+-]?\d+(.\d+|)(E\d+|)$/i)
+		{
+			($OptFailNonNumericRValue ? \&CORE::die : \&CORE::warn)->("$0: operator ($operator) is numeric but r-value ($rvalue) is not\n");
 		}
 		
 		push @Filter, {'field'=>$column, 'operator'=>$operator, 'negation'=>$negation, 'value'=>$rvalue, 'wholeword'=>$wholeword};

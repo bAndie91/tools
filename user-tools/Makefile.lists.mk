@@ -144,6 +144,7 @@ TOOLS ?= \
   sockio \
   ssh-agent-finder \
   stdfilt \
+  stdmux \
   straceall \
   strip-ansi-seq \
   substenv \

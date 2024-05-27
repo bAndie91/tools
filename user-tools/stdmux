@@ -1,0 +1,158 @@
+#!/usr/bin/env perl
+
+use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat/;
+use POSIX;
+use Pod::Usage;
+
+
+$0 = 'stdmux';
+
+
+$FileDesc = {
+	1 => {
+		'prefix' => "1",
+	},
+	2 => {
+		'prefix' => "2",
+	},
+};
+
+
+GetOptions(
+	'o|stdout=s' => \$FileDesc->{1}->{'prefix'},
+	'e|stderr=s' => \$FileDesc->{2}->{'prefix'},
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+if(not @ARGV)
+{
+	pod2usage(-exitval=>2, -verbose=>99);
+}
+
+
+
+
+sub process_stream
+{
+	my $fdesc = shift;
+	while(1)
+	{
+		my $nl = index $fdesc->{'buf'}, "\n";
+		last if $nl == -1;
+		$nl++;
+		
+		my $line = substr $fdesc->{'buf'}, 0, $nl;
+		print $fdesc->{'prefix'}.$line;
+		
+		$fdesc->{'buf'} = substr $fdesc->{'buf'}, $nl;
+	}
+}
+
+
+
+
+pipe($stdout_r, $stdout_w) or die "$0: pipe: $!\n";
+pipe($stderr_r, $stderr_w) or die "$0: pipe: $!\n";
+
+
+my $child_pid = fork // die "$0: fork: $!\n";
+
+if($child_pid == 0)
+{
+	open STDOUT, '>&', $stdout_w or die "$0: replace stdout: $!\n";
+	open STDERR, '>&', $stderr_w or die "$0: replace stderr: $!\n";
+	select STDERR; $|++;
+	select STDOUT; $|++;
+	exec @ARGV;
+	exit 127;
+}
+
+
+my $child_status = undef;
+close STDIN;
+close $stdout_w;
+close $stderr_w;
+fcntl($stdout_r, F_SETFL, fcntl($stdout_r, F_GETFL, 0) | O_NONBLOCK);
+fcntl($stderr_r, F_SETFL, fcntl($stderr_r, F_GETFL, 0) | O_NONBLOCK);
+select STDERR; $|++;
+select STDOUT; $|++;
+
+
+
+$FileDesc->{1}->{'fh'} = $stdout_r;
+$FileDesc->{1}->{'fileno'} = fileno $stdout_r;
+$FileDesc->{2}->{'fh'} = $stderr_r;
+$FileDesc->{2}->{'fileno'} = fileno $stderr_r;
+
+
+
+while(1)
+{
+	$fds = '';
+	for my $fd (keys %$FileDesc)
+	{
+		vec($fds, $FileDesc->{$fd}->{'fileno'}, 1) = 1 if defined $FileDesc->{$fd}->{'fh'};
+	}
+	last if $fds eq '';
+	
+	$! = 0;
+	select($fds, undef, undef, undef);
+	my $errno = int $!;
+	
+	next if $errno;
+	
+	for my $fd (keys %$FileDesc)
+	{
+		my $fdesc = $FileDesc->{$fd};
+		
+		if(vec($fds, $fdesc->{'fileno'}, 1) == 1)
+		{
+			my $bytes = sysread $fdesc->{'fh'}, $fdesc->{'buf'}, 1024, length $fdesc->{'buf'};
+			if($bytes)
+			{
+				process_stream($fdesc);
+			}
+			else
+			{
+				# this stream is closed.
+				undef $fdesc->{'fh'};
+				# echo last unterminated line (if any)
+				print $fdesc->{'prefix'}.$fdesc->{'buf'} if length $fdesc->{'buf'};
+			}
+		}
+	}
+}
+
+waitpid($child_pid, 0);
+$child_status = $?;
+$exit_status = WEXITSTATUS($child_status);
+$exit_status = 128 + WTERMSIG($child_status) if WIFSIGNALED($child_status);
+exit $exit_status;
+
+
+__END__
+
+=pod
+
+=head1 NAME
+
+stdmux - Multiplex the given command's STDOUT and STDERR by prefixing their lines
+
+=head1 SYNOPSIS
+
+stdmux [-o I<STDOUT_PREFIX> | -e I<STDERR_PREFIX>] [--] I<COMMAND> [I<ARGS>]
+
+=head1 OPTIONS
+
+=over 4
+
+=back
+
+=head1 USAGE EXAMPLE
+
+  mux_output=`stdmux command`
+  output_text=`echo "$mux_output" | sed -ne 's/^1//p'`
+  error_text=`echo "$mux_output" | sed -ne 's/^2//p'`
+
+=cut
+
+EOF

@@ -1,11 +1,21 @@
 #!/bin/bash
 
 inode=$1
-#file=$2
-#file=${file%% -> *}
-#path=${FZF_PREVIEW_DIRECTORY:+$FZF_PREVIEW_PATH/}$file
-# TODO FIXME hardlinks in the same directory
-path=`find "$FZF_PREVIEW_DIRECTORY" -maxdepth 1 -inum $inode -print -quit`
+
+if [ "$inode" = 1 ]
+then
+	# it's a mountpoint.
+	filename=$2
+	path="$FZF_PREVIEW_DIRECTORY/$filename"
+else
+	# note, possibly this `find` does not yield the same file which given to us,
+	# due to hardlinks, but generally it does not alter previewing much.
+	path=`find "$FZF_PREVIEW_DIRECTORY" -maxdepth 1 -inum "$inode" -print -quit`
+	
+	# filename contains the "-> target" part if it's a symlink to "target"
+	#filename=${filename%% -> *}
+fi
+
 mime=`file -bL --mime-type "$path"`
 
 
@@ -19,6 +29,30 @@ ornate_per_line()
 		echo -n "$ansi_codes$line$ansi_reset"
 		echo
 	done
+}
+
+strip_ctrl_chars()
+{
+	sed -e 's/\[\x00-\x1F\x7F\]//g'
+}
+
+concat_major_minor()
+{
+	# concat char- and block-special file's major and minor device numbers
+	# to unite their respective columns.
+	# note, we keep all the spaces before the major and minor numbers,
+	# although this is one space more than needed to pad off the previous column,
+	# but other files (not char- or block-special ones) in the directory are
+	# also padded to account the one extra space after the comma between the major
+	# and the minor numbers.
+	sed -e 's/^\([cb]\S\+\s\+\S\+\s\+\)\([0-9]\+\),\(\s\+\)\([0-9]\+\)/\1\3\2:\4/'
+}
+
+reorder_ls_columns()
+{
+	# remove permissions and n_links columns and
+	# put date and time before size.
+	sed -e "s/\(\S\+\s\+\S\+\)\(\s\+\S\+\)\s\+\(\S\+\s\+\S\+\)/\3\2/"
 }
 
 
@@ -57,16 +91,15 @@ message/rfc822)
 *)
 	if [ -d "$path" ]
 	then
-		ls -lA --time-style=long-iso --quoting-style=escape --indicator-style=slash --color=always "$path/" |\
-		sed -e 1d |\
-		sed -e "s/\(\S\+\(\s\+\S\+\)\{3\}\)\(\s\+\S\+\)\(\s\+\S\+\s\+\S\+\)/\4\3/" |\
-		head -n $FZF_PREVIEW_LINES
+		ls -lAhgo ${LS_SORT_FLAGS[$LS_SORT_ORDER]} --time-style=long-iso --indicator-style=slash --color=always "$path/" |\
+		lines 2-EOF |\
+		concat_major_minor |\
+		reorder_ls_columns
 	elif [ -c "$path" -o -p "$path" ]
 	then
-		true
+		file "$path"
 	else
-		head -n $FZF_PREVIEW_LINES "$path" |\
-		sed -e 's/\[\x00-\x1F\x7F\]//g'
+		head -n ${FZF_PREVIEW_LINES:--0} "$path" | strip_ctrl_chars
 	fi
 	;;
 esac

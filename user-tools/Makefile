@@ -71,6 +71,10 @@ DEPCHECK/lines:
 	perl -MARGV::readonly -e 1
 DEPCHECK/parsel:
 	python3 -c 'import parsel; import cssselect'
+DEPCHECK/xml2json:
+	python -c 'import xmltodict'
+DEPCHECK/palemoon-current-url:
+	type jq
 
 
 install-all: \

@@ -1,7 +1,6 @@
 TOOLS ?= \
   2opml \
   adr2html \
-  applyfilter \
   asterisk-log-separator \
   awk-cut \
   base58 \
@@ -33,6 +32,7 @@ TOOLS ?= \
   fc-search-codepoint \
   fdupes-hardlink \
   ff \
+  ffilt \
   fgat \
   filterexec \
   find-by-date \

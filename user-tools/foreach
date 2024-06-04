@@ -14,19 +14,25 @@ foreach [I<OPTIONS>] I<COMMAND> [I<ARGS> ...]
 =head1 DESCRIPTION
 
 Take each input line from stdin as B<DATA>, and run I<COMMAND> with B<DATA> appended to the end of I<ARGS> as a single argument.
+
 If C<{}> is there in I<ARGS> then it's substituted with B<DATA> rather than append to the end,
 unless I<--no-placeholder> is given, because then C<{}> is read literally.
-Additionally parse B<DATA> into fields and add each of them to the end of I<ARGS> if I<--fields> is given.
+Additionally, parse B<DATA> into fields and add each of them to the end of I<ARGS> if I<--fields> is given.
+Numbered placeholders, like C<{0}>, C<{1}>, ... are substituted with the respective field's value.
 
 So if you have not specified any I<ARGS> in the command line and type both I<--data> and I<--fields>,
 then B<DATA> goes into argv[1], and the first field goes into argv[2], second to argv[3] and so on.
 If have not given I<--data> nor I<--fields>, then I<--data> is implied.
 
 If called with I<--sh> option, I<COMMAND> is run within a shell context;
-input line goes to C<$DATA>, individual fields go to C<${FIELD[@]}>.
+input line goes to C<$DATA>, individual fields go to C<${FIELD[@]}> (0-indexed).
 
-Set I<-d> B<DELIM> if you want to split B<DATA> not by C<$IFS> but by other delimiter,
-eg. C<$'\t'> (tab).
+Both in command and shell (--sh) modes, individual fields are available in
+C<$F0>, C<$F1>, ... environment variables.
+
+Set I<-d> B<DELIM> if you want to split B<DATA> not by C<$IFS> but by other delimiter chars,
+eg. C<-d ",:"> for command and colon.
+There is also C<-t>/C<--tab> option to set delimiter to TAB for your convenience.
 
 =head1 OPTIONS
 
@@ -83,6 +89,11 @@ Rather exit with the said command's exit status code.
  ls -l --time-style +%FT%T%z | foreach --data --fields sh -c 'echo size: $5, file: $7'
  ls -l --time-style +%FT%T%z | foreach --sh 'echo size: ${FIELD[4]}, file: ${FIELD[6]}'
 
+=head1 LIMITS
+
+Placeholders for field values (C<{0}>, C<{1}>, ...) are considered from 0 up to 99.
+There must be a limit somewhere, otherwise I had to write a more complex replace routine.
+
 =head1 CAVEATS
 
 Placeholder C<{}> is substituted in all I<ARGS> anywhere, not just stand-alone C<{}> arguments,
@@ -91,7 +102,7 @@ So be careful using it in shell command arguments like C<sh -e 'echo "data is: {
 
 =head1 SEE ALSO
 
-xargs(1)
+xargs(1), xe(1), apply(1), xapply(1) L<https://www.databits.net/~ksb/msrc/local/bin/xapply/xapply.html>
 
 =cut
 
@@ -183,8 +194,20 @@ declare -a FOREACH_COMMAND=("$@")
 
 while read -r DATA
 do
+	export DATA
 	declare -a FIELD=()
 	IFS=${FOREACH_DELIM+$FOREACH_DELIM}${FOREACH_DELIM-$IFS} read -r -a FIELD <<< "$DATA"
+	
+	for ((idx = 0; idx < ${#FIELD[@]}; idx++))
+	do
+		export F$idx="${FIELD[$idx]}"
+	done
+	# unset old F$idx variables
+	while declare -p F$idx >/dev/null 2>/dev/null
+	do
+		unset F$idx
+		let idx++
+	done
 	
 	FOREACH_COMMAND_STATUS=0
 	
@@ -200,6 +223,15 @@ do
 				arg=${arg//$placeholder/$DATA}
 				placeholder_found=yes
 			fi
+			for ((idx = 0; idx < 100; idx++))
+			do
+				if [[ $arg =~ \{$idx\} ]]
+				then
+					placeholder="{$idx}"
+					arg=${arg//$placeholder/${FIELD[$idx]}}
+					placeholder_found=yes
+				fi
+			done
 			cmd_and_args+=("$arg")
 		done
 	else

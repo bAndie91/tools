@@ -49,20 +49,25 @@ sub flush_record
 %ColumnNumber = ();
 %record = ();
 $record_num = 0;
+$header_sent = 0;
 
 while(my $line = <STDIN>)
 {
 	chomp $line;
 	if($line eq '')
 	{
-		if($record_num == 0)
+		if(%record)
 		{
-			print join($FS, @Headers).$RS;
+			if(not $header_sent)
+			{
+				print join($FS, @Headers).$RS;
+				$header_sent = 1;
+			}
+			
+			flush_record(\%ColumnNumber, \%record);
+			%record = ();
+			$record_num++;
 		}
-		
-		flush_record(\%ColumnNumber, \%record);
-		%record = ();
-		$record_num++;
 	}
 	else
 	{

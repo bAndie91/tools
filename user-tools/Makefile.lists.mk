@@ -89,6 +89,7 @@ TOOLS ?= \
   moz_bookmarks \
   msg \
   msgpack2json \
+  multicmd \
   multithrottler \
   mysql-fix-orphan-privileges.php \
   noacute \

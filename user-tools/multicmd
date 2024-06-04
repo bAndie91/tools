@@ -1,0 +1,79 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+multicmd - Run multiple commands in series
+
+=head1 SYNOPSIS
+
+multicmd I<COMMAND> I<ARGS> ";" I<COMMAND> I<ARGS> ";" ...
+
+=head1 OPTIONS
+
+=over 4
+
+=item -d, --delimiter I<STRING>
+
+Set command delimiter to I<STRING>.
+Default is a literal C<;> semicolon.
+Probably need to shell-escape.
+
+=back
+
+=head1 EXIT STATUS
+
+multicmd(1) exit with the exit code of the last command.
+
+=cut
+
+use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat/;
+use Pod::Usage;
+use Data::Dumper;
+use POSIX;
+
+$Delimiter = ';';
+
+GetOptions(
+	'd|delimiter=s' => \$Delimiter,
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+if(not @ARGV)
+{
+	pod2usage(-exitval=>2, -verbose=>99);
+}
+
+@cmd_args = ([]);
+$cmd_idx = 0;
+
+for my $arg (@ARGV)
+{
+	if($arg eq $Delimiter)
+	{
+		$cmd_idx++;
+		$cmd_args[$cmd_idx] = [];
+	}
+	else
+	{
+		push @{$cmd_args[$cmd_idx]}, $arg;
+	}
+}
+
+for my $cmd_ref (@cmd_args)
+{
+	system @$cmd_ref;
+}
+
+$last_status = ${^CHILD_ERROR_NATIVE};
+
+if(WIFSIGNALED($last_status))
+{
+	$status = 128 + WTERMSIG($last_status);
+}
+else
+{
+	$status = WEXITSTATUS($last_status);
+}
+
+exit $status;

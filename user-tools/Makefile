@@ -74,7 +74,7 @@ DEPCHECK/parsel:
 DEPCHECK/xml2json:
 	python -c 'import xmltodict'
 DEPCHECK/palemoon-current-url:
-	type jq
+	which jq
 
 
 install-all: \

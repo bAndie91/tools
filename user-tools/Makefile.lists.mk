@@ -175,6 +175,7 @@ TOOLS ?= \
   visymlinks \
   w3m-render \
   waitpid \
+  wget-mirror \
   whisper-retention-info \
   wikibot \
   xdg-autostart \

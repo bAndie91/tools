@@ -1,0 +1,15 @@
+#!/bin/bash
+
+url=$1
+shift
+wget_args=("$@")
+
+{
+	url_noproto=${url#*://}
+	url_noproto_nodomain_noleadingslash=${url_noproto#*/}
+	url_path_noleadingslash=${url_noproto_nodomain_noleadingslash%%\?*}
+	slashes=${url_path_noleadingslash//[!\/]}
+	depth=${#slashes}
+}
+
+exec wget --recursive --no-parent --timestamping --reject-regex='/(index\.html|)\?.+' --no-host-directories --cut-dirs=$depth "$url" "${wget_args[@]}"

@@ -52,11 +52,11 @@ less verbose
 
 =over 4
 
-=item 115
+=item B<115>
 
 command started
 
-=item 114
+=item B<114>
 
 partial output shown
 

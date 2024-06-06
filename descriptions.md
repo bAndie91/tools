@@ -2,7 +2,6 @@
 |---|---|
 | [2opml](user-tools/2opml) | Convert list of URLs to OPML.
 | [adr2html](user-tools/adr2html) | Convert Opera Hostlist 2.0 bookmarks to HTML
-| [applyfilter](user-tools/applyfilter) | Filter a file via a command's STDIO and write back to it
 | [asterisk-log-separator](user-tools/asterisk-log-separator) | Split up Asterisk PBX log file into multiple files based on which process wrote each part
 | [awk-cut](user-tools/awk-cut) | Select fields from input stream with awk
 | [base58](user-tools/base58) | Encode to (decode from) Base58
@@ -27,11 +26,14 @@
 | [digasn](user-tools/digasn) | Query Autonom System Number (ASN) from DNS
 | [diu](user-tools/diu) | Display Inode usage, similar to du(1) for space usage
 | [dlnew](user-tools/dlnew) | Download web resource if local copy is older
+| [dmaster](admin-tools/dmaster) | Manage continuously running processes
+| [dmaster-signal](admin-tools/dmaster-signal) | Send a signal to a daemon managed by dmaster
 | [eat](user-tools/eat) | Read and echo back input (like cat(1)) until interrupted (ie. ignore end-of-file)
 | [errorlevel](user-tools/errorlevel) | Exit with the given status code
 | [fcomplete](user-tools/fcomplete) | Complete a smaller file with the data from a bigger one
 | [fc-search-codepoint](user-tools/fc-search-codepoint) | Print the names of available X11 fonts containing the given code point(s)
 | [fdupes-hardlink](user-tools/fdupes-hardlink) | Make hardlinks from identical files as reported by fdupes(1)
+| [ffilt](user-tools/ffilt) | Filter a file via a command's STDIO and write back to it
 | [ff](user-tools/ff) | Find files horizontally, ie. a whole directory level at a time, across subtrees
 | [fgat](user-tools/fgat) | Execute command in foreground at a given time
 | [filterexec](user-tools/filterexec) | Echo those arguments with which the given command returns zero.
@@ -72,6 +74,7 @@
 | [loggerexec](user-tools/loggerexec) | Run a command and send STDOUT and STDERR to syslog
 | [logrotate-counters](user-tools/logrotate-counters) | Increment numbers in file names
 | [logto](user-tools/logto) | Run a command and append its STDOUT and STDERR to a file
+| [lpjobs](user-tools/lpjobs) | Show printer queue jobs (wrapper for lpq and lpstat)
 | [lsata](user-tools/lsata) | List ATA devices on the system
 | [lsenv](user-tools/lsenv) | List environment variables of a process
 | [mail-extract-raw-headers](user-tools/mail-extract-raw-headers) | Get named headers from RFC822-format input.
@@ -97,6 +100,8 @@
 | [pdfflop](user-tools/pdfflop) | Flop a PDF file's pages
 | [perl-repl](user-tools/perl-repl) | Read-Evaluate-Print-Loop wrapper for perl(1)
 | [pfx2pem](user-tools/pfx2pem) | Convert PFX (PKCS#12) certificate file to PEM format
+| [pfxln](user-tools/pfxln) | Prefix lines from STDIN
+| [pipeby](user-tools/pipeby) | Run a command and pipe its output to an other one
 | [pipekill](user-tools/pipekill) | Send signal to a process on the other end of the given pipe filedescriptor
 | [PMbwmon](user-tools/PMbwmon) | Poor man's bandwidth monitor
 | [PMdirindex](user-tools/PMdirindex) | Poor man's directory index generator, output HTML
@@ -110,6 +115,7 @@
 | [qrwifi](user-tools/qrwifi) | Generate a string, used in WiFi-setup QR codes, containing a hotspot name and password
 | [randstr](user-tools/randstr) | Generate random string from a given set of characters and with a given length.
 | [rcmod](user-tools/rcmod) | Run a given command and modify its Return Code according to the rules given by the user
+| [redirexec](user-tools/redirexec) | Execute a command with some file descriptiors redirected.
 | [relpath](compiled-tools/relpath.c) | Calculate the shortest relative path between directories
 | [remove](compiled-tools/remove.c) | Remove file and directoy alike
 | [renamemanual](user-tools/renamemanual) | Interactive file rename tool
@@ -128,6 +134,8 @@
 | [set-xcursor-lock-and-run](user-tools/set-xcursor-lock-and-run) | Set X11 cursor to a padlock and run a command
 | [set-xcursor-lock-and-run](xwin-tools/set-xcursor-lock-and-run) | Set X11 mouse pointer to a lock icon and run the given command
 | [ssh-agent-finder](user-tools/ssh-agent-finder) | Find a working ssh agent on the system so you get the same in each of your logon sessions
+| [stdfilt](user-tools/stdfilt) | Run a command but filter its STDOUT and STDERR
+| [stdmux](user-tools/stdmux) | Multiplex the given command's STDOUT and STDERR by prefixing their lines
 | [strip-ansi-seq](user-tools/strip-ansi-seq) | Dumb script removing more-or-less any ANSI escape sequences from the input stream
 | [substenv](user-tools/substenv) | Substitute environment variables in parameters and run the resulting command
 | [subst_sudo_user](user-tools/subst_sudo_user) | Sudo helper program

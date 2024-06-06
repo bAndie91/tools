@@ -17,7 +17,7 @@ do
 			remote_url=`GIT_DIR=$repo/.git git remote get-url "$remote" 2>/dev/null`
 			if [ -n "$remote_url" ]
 			then
-				if [[ $remote_url =~ /([^/]+)/([^/.]+)(/|\.git|)$ ]]
+				if [[ $remote_url =~ [/:]([^/]+)/([^/]+)/?$ ]]
 				then
 					author=${BASH_REMATCH[1]}
 					break

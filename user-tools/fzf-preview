@@ -80,14 +80,10 @@ application/*)
 	file -bL "$path"
 	;;
 image/*)
-	# credits to Junegunn Choi <https://github.com/junegunn/fzf> /bin/fzf-preview.sh
-	dim=${FZF_PREVIEW_COLUMNS}x${FZF_PREVIEW_LINES}
-	chafa -f sixel -s "$dim" "$path"
-	echo
+	identify "$path"
 	;;
-video/*)
-	;;
-audio/*)
+video/*|audio/*)
+	mediainfo "$path"
 	;;
 message/rfc822)
 	emlv "$path"

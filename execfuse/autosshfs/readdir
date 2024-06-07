@@ -72,8 +72,9 @@ mount_sshfs_async()
 	local port=$2
 	local user=$3
 	local host=$4
-	local target=$5
-	lock_nb "mount+$conn" setsid sshfs -o Port=$port,ControlMaster=no,transform_symlinks,reconnect "$user@$host:/" "$target" >/dev/null 2>&1 &
+	local hostname=$5
+	local target=$6
+	lock_nb "mount+$conn" setsid sshfs -o Port=$port,ControlMaster=no,transform_symlinks,reconnect,Hostname="$hostname" "$user@$host:/" "$target" >/dev/null 2>&1 &
 	# -o sftp_server='sudo /usr/lib/openssh/sftp-server'
 }
 
@@ -152,13 +153,14 @@ then
 		do
 			if [ "/$conn" = "$1" ]
 			then
-				if [[ $conn =~ ^([^@]+)@([^\(]+)\([^\)]+\):([0-9]+) ]]
+				if [[ $conn =~ ^([^@]+)@([^\(]+)\(([^\)]+)\):([0-9]+) ]]
 				then
 					user=${BASH_REMATCH[1]}
 					host=${BASH_REMATCH[2]}
-					port=${BASH_REMATCH[3]}
+					hostname=${BASH_REMATCH[3]}
+					port=${BASH_REMATCH[4]}
 					
-					mount_sshfs_async "$conn" "$port" "$user" "$host" "$EXECFUSE_MOUNTPOINT$1"
+					mount_sshfs_async "$conn" "$port" "$user" "$host" "$hostname" "$EXECFUSE_MOUNTPOINT$1"
 					exit 0
 				fi
 			fi

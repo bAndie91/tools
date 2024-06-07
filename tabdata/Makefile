@@ -25,7 +25,7 @@ TOOLS = \
 TARGET_TOOLS = $(foreach filename,$(TOOLS),$(BIN_DIR)/$(filename))
 
 
-install-all: $(TARGET_TOOLS) $(LIB_DIR)/common.pl install-manpages
+install-all: depcheck $(TARGET_TOOLS) $(LIB_DIR)/common.pl install-manpages
 
 
 $(TARGET_TOOLS): $(BIN_DIR)/%: %
@@ -39,6 +39,14 @@ $(LIB_DIR)/common.pl: common.pl $(LIB_DIR)
 $(LIB_DIR):
 	mkdir -p $@
 	@echo remove $@ >> uninstall.sh
+
+.PHONY: depcheck
+depcheck:
+	perl -MSwitch -e 1
+	perl -MList::MoreUtils -e 1
+	perl -MPod::Usage -e 1
+	perl -MMIME::QuotedPrint -e 1
+	perl -MEncode -e 1
 
 
 REPO_ROOT = ..

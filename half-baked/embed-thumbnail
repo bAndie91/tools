@@ -1,0 +1,50 @@
+#!/bin/bash
+
+set -e
+set -o pipefail
+set -u
+
+. /usr/lib/tool/bash-utils
+
+for mediafile in "$@"
+do
+	pathbasename=${mediafile%.*}
+	ext=${mediafile##*.}
+	mediafile_new=${pathbasename}-embedtn.$ext
+	tn_found=''
+	
+	for tn_ext in webp png jpg
+	do
+		tn_path=$pathbasename.$tn_ext
+		if [ -s "$tn_path" ]
+		then
+			tn_path_new=$pathbasename.png
+			
+			case $tn_ext in
+			webp)
+				dwebp "$tn_path" -o "$tn_path_new"
+				;;
+			jpg)
+				convert "$tn_path" "$tn_path_new"
+				;;
+			png)
+				true;;
+			*)
+				false;;
+			esac
+			
+			AtomicParsley "$mediafile" --artwork "$tn_path_new" -o "$mediafile_new"
+			mv "$mediafile_new" "$mediafile"
+			[ ! -e "$tn_path_new" ] || rm "$tn_path_new"
+			[ ! -e "$tn_path" ] || rm "$tn_path"
+			
+			tn_found=1
+			break
+		fi
+	done
+	
+	if [ ! $tn_found ]
+	then
+		warnx "thumbnail not found for $mediafile"
+	fi
+done

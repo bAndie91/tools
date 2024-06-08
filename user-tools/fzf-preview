@@ -80,10 +80,10 @@ application/*)
 	file -bL "$path"
 	;;
 image/*)
+	identify "$path"
 	;;
-video/*)
-	;;
-audio/*)
+video/*|audio/*)
+	mediainfo "$path"
 	;;
 message/rfc822)
 	emlv "$path"

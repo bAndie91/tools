@@ -5,11 +5,11 @@ true <<'EOF'
 
 =head1 NAME
 
-applyfilter - Filter a file via a command's STDIO and write back to it
+ffilt - Filter a file via a command's STDIO and write back to it
 
 =head1 SYNOPSIS
 
-applyfilter I<FILE> I<COMMAND> [I<ARGS>]
+ffilt I<FILE> I<COMMAND> [I<ARGS>]
 
 =head1 DESCRIPTION
 

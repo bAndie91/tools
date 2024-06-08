@@ -34,7 +34,6 @@ sub normalize_path_2
 	my $path = shift;
 	# reduce self-dir elements
 	$path =~ s{/\.(/|$)}{/}g;
-	#$path =~ s{/[^/]+/\.\.(/|$)}{/}g;
 	# reduce root-parent elements
 	1 while $path =~ s{^/\.\.(/|$)}{/};
 	return $path;
@@ -54,104 +53,88 @@ sub gettype
 	else { return "normal" }
 }
 
-sub add_path_to_nodes
+sub get_ancestors
 {
 	my $path = shift;
-	my $ftype = gettype($path);
-	$node{$path} = {
-		'basename' => basename($path),
-		'shape' => $shape_by_type{$ftype},
-	};
+	my @ancestors;
+	my @elems = split /\//, $path;
+	for my $depth (1 .. ($#elems-1))
+	{
+		push @ancestors, join '/', @elems[0..$depth];
+	}
+	return @ancestors;
+}
+
+sub add_symlink_target
+{
+	my $path = shift;
+	my $hashref = shift;
+	
+	my $target = readlink $path;
+	my $target_abs;
+	if($target =~ /^\//)
+	{
+		$target_abs = $target;
+	}
+	else
+	{
+		$target_abs = dirname($path) . '/' . $target;
+	}
+	$target_abs = normalize_path($target_abs);
+	$hashref->{$target_abs} = 1 unless exists $hashref->{$target_abs};
 }
 
 
 for my $path (@ARGV)
 {
-	$path = normalize_path_1($path);
-	# make absolute path
 	if($path !~ /^\//) { $path = getcwd . '/' . $path; }
-	$path = normalize_path_2($path);
+	$path = normalize_path($path);
 	$paths_to_traverse{$path} = 1;
-	# TODO resolve parent-dir elements
+	$paths_given_at_cli{$path} = 1;
 }
 
 
-$node{'/'} = {
-	'basename' => '/',
-	'shape' => $shape_by_type{"dir"},
-};
+$node{'/'} = {};
 
 
 while(grep {$paths_to_traverse{$_}} keys %paths_to_traverse)
 {
 	for my $path (grep {$paths_to_traverse{$_}} keys %paths_to_traverse)
 	{
-		my $is_physical = 1;
-		my @elems = split /\//, $path;
-		$max_depth = scalar @elems if scalar @elems > $max_depth;
-		for my $depth (1 .. $#elems)
+		for my $ancestor (get_ancestors($path))
 		{
-			my $elem = $elems[$depth];
-			my $ancestor = join '/', @elems[0..$depth];
-			if($elem eq '..')
+			my $basename = basename($ancestor);
+			if($basename eq '..')
 			{
-				my $cwd = getcwd;
-				if(chdir $ancestor)
-				{
-					$resolved_path{$ancestor} = getcwd;
-				}
-				else
-				{
-					$resolved_path{$ancestor} = join('/', @elems[0..($depth-2)]) || '/';
-				}
-				chdir $cwd or die;
+				# we don't get here via symlinked dirs, because we stop walking through the path when a symlink is found, see below.
+				# so it's safe to go back the same path where we got here.
+				$ancestor =~ s{/[^/]+/\.\.$}{};
 			}
-			while(my ($prefix, $rest) = $ancestor =~ m{^(.*?/\.\.)(/.*|$)})
+			
+			$node{$ancestor} = {} unless exists $node{$ancestor};
+			
+			if(-l $ancestor)
 			{
-				$ancestor = $resolved_path{$prefix}.$rest;
-			}
-			if(not exists $node{$ancestor})
-			{
-				add_path_to_nodes($ancestor);
-				my $realpath = realpath($ancestor);
-				if(-l $ancestor)
-				{
-					$is_physical = 0;
-					my $target = readlink $ancestor;
-					$node{$ancestor}->{'target'} = $target;
-					my $target_abs = $target;
-					if($target !~ /^\//) { $target_abs = dirname($ancestor) . '/' . $target; }
-					$target_abs = normalize_path($target_abs);
-					# TODO resolve parent-dir elements
-					$node{$ancestor}->{'target_abs_path'} = $target_abs;
-					$paths_to_traverse{$target_abs} = 1 unless exists $paths_to_traverse{$target_abs};
-					if(not defined $realpath)
-					{
-						# broken symlink
-						$realpath = $target_abs;
-					}
-					$symlinks{$ancestor} = $realpath;
-				}
-				$paths_to_traverse{$realpath} = 1 unless exists $paths_to_traverse{$realpath};
+				add_symlink_target($ancestor, \%paths_to_traverse);
+				$soft_links{$ancestor} = 1;
+				last;
 			}
 		}
-		$node{$path}->{'is_physical'} = $is_physical;
+		
+		if($paths_given_at_cli{$path})
+		{
+			$node{$path}->{'emphasis'} = 1;
+		}
+		
+		if(-l $path)
+		{
+			add_symlink_target($path, \%paths_to_traverse);
+		}
+		
 		$paths_to_traverse{$path} = 0;
 	}
 }
 
-for my $path (keys %node)
-{
-	my $parent = dirname $path;
-	if(-l $parent)
-	{
-		delete $node{$path};
-	}
-	else
-	{
-		$phy_pedigree{$path} = $parent;
-	}
-}
 
 
 $\ = $LF;
@@ -162,41 +145,54 @@ print "digraph \"symlinks\" {
 	bgcolor=transparent;
 	node [fontsize=10,width=.1,height=.1];";
 
+for my $path (keys %node)
+{
+	$node{$path}->{'basename'} = basename($path);
+}
+
 for my $path (sort {$node{$a}->{'basename'} cmp $node{$b}->{'basename'}} keys %node)
 {
 	my $basename = $node{$path}->{'basename'};
-	my $shape = $node{$path}->{'shape'};
-	print "\"$path\" [label=\"$basename\",shape=\"$shape\"];"
+	my $shape = $shape_by_type{gettype($path)};
+	my $attrs;
+	if($node{$path}->{'emphasis'}) { $attrs .= ",style=\"bold\""; }
+	print "\"$path\" [label=\"$basename\",shape=\"$shape\"$attrs];"
 }
 
-for my $depth (2..$max_depth)
+my $level = 2;
+while(1)
 {
-	print "  { rank=\"same\";";
-	for my $path (grep {scalar(split /\//, $_) == $depth} keys %node)
+	my @same_rank_nodes = grep {scalar(split /\//, $_) == $level} keys %node;
+	last if scalar @same_rank_nodes == 0;
+	if(scalar @same_rank_nodes > 1)
 	{
-		print "    \"$path\";";
+		print "  { rank=\"same\";";
+		for my $path (@same_rank_nodes)
+		{
+			print "    \"$path\";";
+		}
+		print "  }";
 	}
-	print "  }";
+	$level++;
 }
 
-for my $child (keys %phy_pedigree)
+for my $child (keys %solid_edge)
 {
-	my $parent = $phy_pedigree{$child};
+	my $parent = $solidedge{$child};
 	my $attrs;
 	if(!-l $child and !-e $child) { $attrs .= ",style=\"dashed\""; }
 	print "\"$parent\" -> \"$child\" [color=\"black\"$attrs]";
 }
 
-for my $symlink_abs_path (keys %symlinks)
+for my $symlink_node_path (keys %soft_links)
 {
-	my $target = $node{$symlink_abs_path}->{'target'};
-	my $target_abs_path = $node{$symlink_abs_path}->{'target_abs_path'};
-	my $target_realpath = $symlinks{$symlink_abs_path};
+	my $target_node_path = $soft_links{$symlink_node_path};
 	my $attrs;
-	if($target !~ /^\// or !$node{$target_abs_path}->{'is_physical'}) { $attrs .= ",label=\"$target\""; }
+	#TODOif($target !~ /^\// or !$node{$target_abs_path}->{'is_physical'}) { 
+	$attrs .= ",label=\"$target\"";
 	my $color = "blue";
-	if(!-e $symlink_abs_path) { $color = "red"; } 
-	print "\"$symlink_abs_path\" -> \"$target_realpath\" [color=\"$color\",fontcolor=\"$color\"$attrs]";
+	if(!-e $symlink_node_path) { $color = "red"; } 
+	print "\"$symlink_abs_path\" -> \"$target_node_path\" [color=\"$color\",fontcolor=\"$color\"$attrs]";
 }
 
 print "}";

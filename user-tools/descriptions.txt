@@ -9,7 +9,6 @@ PMpwgen - Poor man's password generator
 PMrecdiff - Poor man's directory tree difference viewer, comparing file names and sizes recursively
 Tail - output as many lines from the end of files as many lines on the terminal currently
 adr2html - Convert Opera Hostlist 2.0 bookmarks to HTML
-applyfilter - Filter a file via a command's STDIO and write back to it
 asterisk-log-separator - Split up Asterisk PBX log file into multiple files based on which process wrote each part
 awk-cut - Select fields from input stream with awk
 base58 - Encode to (decode from) Base58
@@ -38,6 +37,7 @@ fc-search-codepoint - Print the names of available X11 fonts containing the give
 fcomplete - Complete a smaller file with the data from a bigger one
 fdupes-hardlink - Make hardlinks from identical files as reported by fdupes(1)
 ff - Find files horizontally, ie. a whole directory level at a time, across subtrees
+ffilt - Filter a file via a command's STDIO and write back to it
 fgat - Execute command in foreground at a given time
 filterexec - Echo those arguments with which the given command returns zero.
 find-by-date - Find files with GNU find(1) but with easier to comprehend time interval formats
@@ -90,6 +90,7 @@ paths2indent - Transform list of filesystem paths on input into an indented list
 pdfflop - Flop a PDF file's pages
 perl-repl - Read-Evaluate-Print-Loop wrapper for perl(1)
 pfx2pem - Convert PFX (PKCS#12) certificate file to PEM format
+pfxln - Prefix lines from STDIN
 pipeby - Run a command and pipe its output to an other one
 pipekill - Send signal to a process on the other end of the given pipe filedescriptor
 pngmetatext - Put metadata text into PNG file
@@ -113,6 +114,7 @@ set-sys-path - Set PATH according to /etc/environment and run the given command
 set-xcursor-lock-and-run - Set X11 cursor to a padlock and run a command
 ssh-agent-finder - Find a working ssh agent on the system so you get the same in each of your logon sessions
 stdfilt - Run a command but filter its STDOUT and STDERR
+stdmux - Multiplex the given command's STDOUT and STDERR by prefixing their lines
 strip-ansi-seq - Dumb script removing more-or-less any ANSI escape sequences from the input stream
 subst_sudo_user - Sudo helper program
 substenv - Substitute environment variables in parameters and run the resulting command

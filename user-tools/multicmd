@@ -8,7 +8,10 @@ multicmd - Run multiple commands in series
 
 =head1 SYNOPSIS
 
-multicmd I<COMMAND> I<ARGS> ";" I<COMMAND> I<ARGS> ";" ...
+multicmd I<COMMAND-1> I<ARGS-1> ";" I<COMMAND-2> I<ARGS-2> ";" ...
+
+Run I<COMMAND-1>, I<COMMAND-2>, ... I<COMMAND-n> after each other,
+similarly like shells would do, except not involving any shell.
 
 =head1 OPTIONS
 
@@ -21,6 +24,23 @@ Default is a literal C<;> semicolon.
 Probably need to shell-escape.
 
 =back
+
+=head1 CAVEATS
+
+Note, that C<;> (or the non-default delimiter set by B<--delimiter>) is a shell meta-char
+in your shell, so you need to escape/quote it, but it's a separate literal argument
+when you call multicmd(1) in other layers (eg. execve(2)),
+so don't just stick to the preceding word. Ie:
+
+B<WRONG>: multicmd date\; ls
+
+B<WRONG>: multicmd 'date; ls'
+
+B<WRONG>: multicmd 'date ; ls'
+
+B<CORRECT>: multicmd date \; ls
+
+B<CORRECT>: multicmd date ';' ls
 
 =head1 EXIT STATUS
 

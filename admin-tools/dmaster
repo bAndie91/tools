@@ -129,6 +129,10 @@ Put this in your inittab(5):
 
  dm:2345:respawn:loggerexec daemon dmaster /sbin/dmaster
 
+This one removes the socket file in case of it's left there:
+
+ dm:2345:respawn:multicmd rm /var/run/dmaster.sock ; loggerexec daemon dmaster dmaster
+
 =head1 SEE ALSO
 
 supervisor(1), supervise(8), daemon(1), runit(1)

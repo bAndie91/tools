@@ -46,7 +46,7 @@ uninstall-dmaster:
 
 
 
-install-dhcpdiscover: /sbin/dhcpdiscover
+install-dhcpdiscover: depcheck-dhcpdiscover /sbin/dhcpdiscover
 .PHONY: install-dhcpdiscover
 /sbin/dhcpdiscover: dhcpdiscover
 	install $< $@
@@ -54,6 +54,9 @@ uninstall-dhcpdiscover:
 	$(call remove,/sbin/dhcpdiscover)
 .PHONY: uninstall-dhcpdiscover
 
+.PHONY: depcheck-dhcpdiscover
+depcheck-dhcpdiscover:
+	python -c 'import scapy'
 
 
 install-all: install-dmaster /etc/profile.d/locale-validator.sh install-dhcpdiscover

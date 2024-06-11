@@ -60,20 +60,11 @@ for my $arg (@ARGV)
 	}
 }
 
+$last_cmd_ref = pop @cmd_args;
+
 for my $cmd_ref (@cmd_args)
 {
 	system @$cmd_ref;
 }
 
-$last_status = ${^CHILD_ERROR_NATIVE};
-
-if(WIFSIGNALED($last_status))
-{
-	$status = 128 + WTERMSIG($last_status);
-}
-else
-{
-	$status = WEXITSTATUS($last_status);
-}
-
-exit $status;
+exec @$last_cmd_ref;

@@ -45,7 +45,7 @@ TOOLS ?= \
   fzf-preview \
   g_filename_to_uri \
   git-checkout-sparse \
-  gitdiff \
+  git_diff \
   grepdatetime \
   Head \
   header.sed \

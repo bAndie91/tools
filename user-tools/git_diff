@@ -5,7 +5,7 @@ true <<EOF
 
 =head1 NAME
 
-gitdiff - View two files' diff by git-diff(1), even not under git version control
+git_diff - View two files' diff by git-diff(1), even not under git version control
 
 =cut
 

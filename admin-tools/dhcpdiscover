@@ -9,7 +9,7 @@ import re
 
 def fmt_dhcpoptval(name, val):
 	if name == 'message-type':
-		val = DHCPTypes[val]
+		val = DHCPTypes[int(val)]
 	return esc_nonprint(val)
 
 def fmt_bootpfield(bootp, name, val):
@@ -20,7 +20,17 @@ def fmt_bootpfield(bootp, name, val):
 	return esc_nonprint(val)
 
 def esc_nonprint(s):
-	return re.sub(r'[\x00-\x1F\\\x7F-\xFF]', lambda m: "\\x%02X" % ord(m.group(0)), str(s))
+	return re.sub(r'[\x00-\x1F\\\x7F-\xFF]', lambda m: "\\x%02X" % ord(m.group(0)), s)
+
+def stringy(x):
+	if isinstance(x, str):
+		return x
+	elif isinstance(x, bytes):
+		# latin1 decodes any octet.
+		return x.decode('iso-8859-1')
+	elif isinstance(x, int):
+		return str(x)
+	return str(x)
 
 
 if len(sys.argv) < 2 or sys.argv[1] == '--help':
@@ -57,9 +67,9 @@ except IndexError:
 bootp_msg = reply.getlayer(BOOTP)
 dhcp_msg = reply.getlayer(DHCP)
 
-print(''.join(["%s\t%s\n" % (field, fmt_bootpfield(bootp_msg, field, val)) for field, val in bootp_msg.fields.iteritems()]), end='')
+print(''.join(["%s\t%s\n" % (field, fmt_bootpfield(bootp_msg, field, stringy(val))) for field, val in bootp_msg.fields.items()]), end='')
 
 #dhcp_options = dict([x for x in dhcp_msg.options if isinstance(x, tuple)])
 #dhcp_message_type = DHCPTypes[dhcp_options['message-type']]
 dhcp_options = [x for x in dhcp_msg.options if isinstance(x, tuple) and len(x) == 2]
-print(''.join(["option.%s\t%s\n" % (optname, fmt_dhcpoptval(optname, optval)) for optname, optval in dhcp_options]), end='')
+print(''.join(["option.%s\t%s\n" % (optname, fmt_dhcpoptval(optname, stringy(optval))) for optname, optval in dhcp_options]), end='')

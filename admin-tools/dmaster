@@ -131,7 +131,7 @@ Put this in your inittab(5):
 
 This one removes the socket file in case of it's left there:
 
- dm:2345:respawn:multicmd rm /var/run/dmaster.sock ; loggerexec daemon dmaster dmaster
+ dm:2345:respawn:@multicmd rm /var/run/dmaster.sock ; loggerexec daemon dmaster dmaster
 
 =head1 SEE ALSO
 

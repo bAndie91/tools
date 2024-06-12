@@ -88,3 +88,6 @@ for my $cmd_ref (@cmd_args)
 }
 
 exec @$last_cmd_ref;
+
+# if command not found:
+exit 127;

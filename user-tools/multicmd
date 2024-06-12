@@ -55,13 +55,41 @@ use POSIX;
 
 $Delimiter = ';';
 
-GetOptions(
-	'd|delimiter=s' => \$Delimiter,
-) or pod2usage(-exitval=>2, -verbose=>99);
+sub parameter_error
+{
+	pod2usage(-exitval=>2, -verbose=>99);
+}
+
+while(@ARGV)
+{
+	my $arg = shift @ARGV;
+	if(my ($opt, $optval) = $arg =~ /^(-d|--delimiter)(?:=(.+)|)$/)
+	{
+		if(not defined $optval)
+		{
+			$optval = shift @ARGV or parameter_error();
+		}
+		$Delimiter = $optval;
+	}
+	elsif($arg =~ /^--help$/)
+	{
+		pod2usage(-exitval=>0, -verbose=>99);
+	}
+	elsif($arg =~ /^-/)
+	{
+		warn "$0: unknown option: $arg\n";
+		parameter_error();
+	}
+	else
+	{
+		unshift @ARGV, $arg;
+		last;
+	}
+}
 
 if(not @ARGV)
 {
-	pod2usage(-exitval=>2, -verbose=>99);
+	parameter_error();
 }
 
 @cmd_args = ([]);

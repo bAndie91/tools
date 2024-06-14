@@ -76,6 +76,11 @@ DEPCHECK/xml2json:
 DEPCHECK/palemoon-current-url:
 	which jq
 
+.PHONY: try-satisfy-dependencies
+try-satisfy-dependencies:
+	cpan ARGV::readonly
+	apt install python3-parsel python3-cssselect python3-xmltodict jq
+
 
 install-all: \
   /usr/lib/tool/bash-utils \

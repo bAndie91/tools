@@ -48,6 +48,10 @@ depcheck:
 	perl -MMIME::QuotedPrint -e 1
 	perl -MEncode -e 1
 
+.PHONY: try-satisfy-dependencies
+try-satisfy-dependencies:
+	apt install libswitch-perl
+
 
 REPO_ROOT = ..
 

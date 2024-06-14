@@ -2,4 +2,4 @@
 
 sock=${XDG_CACHE_HOME:-/var/run}/dmaster.sock
 
-nc -U "$sock" <<< x
+nc.openbsd -U "$sock" <<< x

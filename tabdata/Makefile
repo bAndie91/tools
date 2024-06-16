@@ -42,6 +42,7 @@ $(LIB_DIR):
 
 .PHONY: depcheck
 depcheck:
+	$(info Checking dependencies...)
 	perl -MSwitch -e 1
 	perl -MList::MoreUtils -e 1
 	perl -MPod::Usage -e 1
@@ -50,7 +51,7 @@ depcheck:
 
 .PHONY: try-satisfy-dependencies
 try-satisfy-dependencies:
-	apt install libswitch-perl
+	apt install libswitch-perl liblist-moreutils-perl
 
 
 REPO_ROOT = ..

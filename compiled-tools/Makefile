@@ -16,8 +16,7 @@ POD_FILES = $(filter $(wildcard *.pod),$(foreach tool,$(TOOLS),$(tool).pod))
 
 
 default:
-	@echo may be interested in: all install-all install-manpages
-	@false
+	$(error may be interested in: all install-all install-manpages)
 
 all: $(TOOLS) netbulk lastbcsv
 install-all: $(NORMAL_TARGET_FILES) $(SPECIAL_TARGET_FILES) install-manpages

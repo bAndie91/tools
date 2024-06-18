@@ -1,7 +1,7 @@
+#!/bin/bash
 
 set -e
 
-cd idokep-cache/
 httrack -%v2 --continue --include-query-string=0 --purge-old=0 --keep-alive --can-go-down --can-go-up --stay-on-same-dir \
 	--depth=1 -%P --near --index=0 --path . \
 	-%c100 --update \

@@ -4,7 +4,7 @@ set -e
 
 httrack -%v2 --continue --include-query-string=0 --purge-old=0 --keep-alive --can-go-down --can-go-up --stay-on-same-dir \
 	--depth=1 -%P --near --index=0 --path . \
-	-%c100 --update \
+	-A10000000 -%c100 --update \
 	https://www.idokep.hu/idojaras/Mak%C3%B3 https://www.idokep.hu/elorejelzes/Mak%C3%B3 \
 	'-*' '+*.idokep.hu/*' '-www.idokep.hu/keptar/users/*' '-www.idokep.hu/keptar/income/vago/*'
 

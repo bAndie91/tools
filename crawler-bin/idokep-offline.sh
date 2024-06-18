@@ -8,7 +8,10 @@ httrack -%v2 --continue --include-query-string=0 --purge-old=0 --keep-alive --ca
 	https://www.idokep.hu/idojaras/Mak%C3%B3 https://www.idokep.hu/elorejelzes/Mak%C3%B3 \
 	'-*' '+*.idokep.hu/*' '-www.idokep.hu/keptar/users/*' '-www.idokep.hu/keptar/income/vago/*'
 
+perl -pe 's{^<html.*}{<html>}' -i index.html
+
 cd www.idokep.hu
+
 cat css/*.css | perl -ne 'for $m (m{url\("?(?!"?data:)(.+?)[?#")]}g){ print "$m\n" }' |\
 sd '^\.\./+' '' |\
 sd '^/+' '' |\

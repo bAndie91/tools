@@ -1,0 +1,81 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+a8e - Abbreviate words in the input stream
+
+=head1 SYNOPSIS
+
+a8e [I<OPTIONS>]
+
+Abbreviate words by leaving the first and last letter of them
+and replace internal letters by the number indicating how many were they.
+Like l10n, i18n, and a11y the conventional abbreviation of
+localization, internationalization, and accessibility respectively.
+
+=head1 OPTIONS
+
+=over 4
+
+=item -m, --minlength I<N>
+
+Abbreviate words at least I<N> (default 4) char long.
+Useful to be greater than the boundary letters kept (see B<-l>, B<-t>, and B<-k>) plus one.
+
+=item -l, --leading-letters I<N>
+
+=item -t, --trailing-letters I<N>
+
+=item -k, --keep-letters I<N>
+
+Set how many letter to keep at the beginning of words by B<-l>,
+or at the end by B<-t>, or set both at once by B<-k>
+(default is 1 for both)
+
+=item -r, --word-pattern I<REGEX>
+
+What counts as a word? (default B<[a-zA-Z]+>)
+
+=back
+
+=cut
+
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat/;
+use Pod::Usage;
+
+$0 = "a8e";
+
+$min_length = 4;
+$keep_leading_letters = 1;
+$keep_trailing_letters = 1;
+$word_pattern = qr/[a-zA-Z]+/;
+
+GetOptions(
+	'm|minlength=i' => \$min_length,
+	'l|leading-letters=i' => \$keep_leading_letters,
+	't|trailing-letters=i' => \$keep_trailing_letters,
+	'k|keep-letters=i' => sub{ $keep_leading_letters = $keep_trailing_letters = $_[1]; },
+	'r|word-pattern=s' => \$word_pattern,
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+
+while(<STDIN>)
+{
+	while(s/(.*?)($word_pattern)//)
+	{
+		my ($pre, $word) = ($1, $2);
+		print $pre;
+		if(length $word >= $min_length)
+		{
+			my $abbrev = substr($word, 0, $keep_leading_letters) . (length($word)-$keep_leading_letters-$keep_trailing_letters) . substr($word, -$keep_trailing_letters);
+			print $abbrev;
+		}
+		else
+		{
+			print $word;
+		}
+	}
+	print;
+}

@@ -1,5 +1,6 @@
 TOOLS ?= \
   2opml \
+  a8e \
   adr2html \
   asterisk-log-separator \
   awk-cut \

@@ -23,7 +23,7 @@ sub process_args
 	pop @{$Filters->{'out'}} while scalar @{$Filters->{'out'}};
 	pop @{$Filters->{'err'}} while scalar @{$Filters->{'err'}};
 	return GetOptions(
-		'F|filter-file=s@' => sub { process_file($_[1]); },
+		'F|filter-file=s@' => sub { process_filter_file($_[1]); },
 		'o|po|pass-stdout=s@' => sub { push @{$Filters->{'out'}}, {'pass'=>1, 'pattern'=>$_[1]}; },
 		'e|pe|pass-stderr=s@' => sub { push @{$Filters->{'err'}}, {'pass'=>1, 'pattern'=>$_[1]}; },
 		'O|fo|filter-stdout=s@' => sub { push @{$Filters->{'out'}}, {'pass'=>0, 'pattern'=>$_[1]}; },
@@ -42,7 +42,7 @@ if(not @ARGV)
 }
 
 
-sub process_file
+sub process_filter_file
 {
 	my $filepath = shift;
 	open my $fh, '<', $filepath or die "$filepath: $!\n";
@@ -50,7 +50,8 @@ sub process_file
 	while(<$fh>)
 	{
 		chomp;
-		next if /^\s*(#|$)/;
+		s/^\s*//;
+		next if /^(#|$)/;
 		if(/^\[std(out|err)\]$/)
 		{
 			@channels = [$1];
@@ -242,12 +243,14 @@ stdfilt [I<OPTIONS>] [--] I<COMMAND> [I<ARGS>]
 =head1 DESCRIPTION
 
 Run I<COMMAND> and match each of its output lines (both stdout and stderr separately) against
-the given perl-compatible regexp patterns.
+the given perl-compatible regexp (see perlre(1)) patterns.
 
 =head1 FILTER FILE FORMAT
 
-Each line is a filter pattern, or the literal string C<[stdout]>, C<[stderr]>, or C<[*]>,
-which indicates which standard fd will be filtered through the following patterns.
+Empty and comment lines (starting with C<#> hashmark) are ignored as well as leading whitespace.
+Each line is either a filter pattern,
+or the literal string C<[stdout]>, C<[stderr]>, or C<[*]>,
+which indicates which standard fd will be filtered through the subsequent patterns.
 If not indicated, C<[*]> (all fd) is implied.
 
 A pattern may start with an C<!> exclamation mark, in which case, the lines matching it,
@@ -259,7 +262,7 @@ HUP - re-read filter files given at command line
 
 =head1 SEE ALSO
 
-grep(1), stdbuf(1), logwall(8)
+grep(1), stdbuf(1), logwall(8), perlre(1)
 
 =cut
 

@@ -5,9 +5,6 @@ use POSIX;
 use Pod::Usage;
 
 
-$0 = 'stdmux';
-
-
 $FileDesc = {
 	1 => {
 		'prefix' => "1",

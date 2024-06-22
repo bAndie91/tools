@@ -7,9 +7,6 @@ use POSIX;
 use Pod::Usage;
 
 
-$0 = 'stdfilt';
-
-
 $Filters = {
 	'out' => [],
 	'err' => [],

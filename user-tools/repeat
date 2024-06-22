@@ -9,7 +9,7 @@ repeat - Run a give command repeatedly
 
 =head1 SYNOPSIS
 
-repeat <COMMAND> [<ARGS>]
+repeat I<COMMAND> [I<ARGS>]
 
 =head1 ENVIRONMENT
 
@@ -18,12 +18,18 @@ repeat <COMMAND> [<ARGS>]
 =item REPEAT_TIMES
 
 How many times to repeat the given command.
-Default is infinite.
+Default is -1 which means infinite.
 
 =item REPEAT_COUNT
 
-How many time the command has been ran.
-The command itself can access this variable to read.
+How many times the command has been ran.
+It is not a variable repeat(1) itself takes as input,
+but passes to I<COMMAND> for its information.
+
+=item REPEAT_UNTIL
+
+Stop repeat(1) if I<COMMAND> exists with this return code.
+By default the return code is not checked.
 
 =item REPEAT_DELAY
 
@@ -43,7 +49,7 @@ EOF
 
 if [ "$1" = --help -o $# = 0 ]
 then
-	echo "Usage: [REPEAT_TIMES=num] [REPEAT_DELAY=interval] repeat <COMMAND> [<ARGS>]"
+	echo "Usage: [REPEAT_TIMES=num] [REPEAT_DELAY=interval] [REPEAT_UNTIL=code] repeat <COMMAND> [<ARGS>]"
 	exit 0
 fi
 
@@ -54,6 +60,10 @@ REPEAT_COUNT=0
 while [ $REPEAT_TIMES = -1 -o $REPEAT_COUNT -lt $REPEAT_TIMES ]
 do
 	"$@"
+	if [ $? = "$REPEAT_UNTIL" ]
+	then
+		break
+	fi
 	REPEAT_COUNT=$[REPEAT_COUNT + 1]
 	sleep ${REPEAT_DELAY:-0}
 done

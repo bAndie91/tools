@@ -43,7 +43,7 @@ sub process_filter_file
 {
 	my $filepath = shift;
 	open my $fh, '<', $filepath or die "$filepath: $!\n";
-	my @channels = ['out', 'err'];
+	my @channels = ('out', 'err');
 	while(<$fh>)
 	{
 		chomp;
@@ -51,12 +51,12 @@ sub process_filter_file
 		next if /^(#|$)/;
 		if(/^\[std(out|err)\]$/)
 		{
-			@channels = [$1];
+			@channels = ($1);
 			next;
 		}
 		if(/^\[\*\]$/)
 		{
-			@channels = ['out', 'err'];
+			@channels = ('out', 'err');
 			next;
 		}
 		my $pass = 0;

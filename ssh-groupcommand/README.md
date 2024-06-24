@@ -11,7 +11,7 @@ Using `sh.ssh` as login shell enables sysadmins to:
   - but don't allow it here anyone only for certain groups
 - users still can write their files including `~/.ssh/rc`
 - allow both password and pubkey auth
-  - because running `~/.ssh/rc` can only by disable globally or per-pubkey
+  - because running `~/.ssh/rc` can only be disabled globally or per-pubkey
 - while not worrying about arbitrary commands called by `~/.ssh/rc`
   - because it is not allowed here only for certain groups
 

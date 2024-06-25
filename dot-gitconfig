@@ -159,6 +159,7 @@
 	# commit info
 	
 	is-there-something-to-commit = ! "[ -n \"$(git status -s --porcelain --untracked-files=no)\" ]"
+	is-there-anything-to-commit = is-there-something-to-commit
 	commit-if-there-is-something = ! "fn(){ ! git is-there-something-to-commit || git commit-tracked "$@"; }; fn"
 
 	# merges
@@ -169,6 +170,7 @@
 	# push
 	
 	push-branch = ! "fn(){ branch=$(git symbolic-ref --quiet --short HEAD); if [ -z \"$branch\" ]; then echo \"not on a branch\" >&2; return 1; fi; remote=$(git config --get \"branch.$branch.remote\"); git push \"${remote:-origin}\" \"$branch\"; }; fn"
+	push-all = ! "fn(){ for remote in $(git remote); do git push \"$@\" \"$remote\"; done; }; fn"
 
 	# stash
 	
@@ -183,3 +185,19 @@
 	
 	note = ! "fn(){ if [ -z \"$*\" ]; then git notes show; else git notes append -m \"$*\"; fi; }; fn"
 	notes-list = log --format=format:'%C(yellow)commit %H%C(reset) %C(red)%d%C(reset)%nDate: %C(cyan)%ai%C(reset) (%ar)%nAuthor: %C(bold yellow)%an%C(reset) <%ae>%nNote: %N%n%n%s%n'
+
+	# submodules
+	
+	# automatically add submodules according to .gitmodules file
+	submodule-auto-add = ! "fn(){ git config -f .gitmodules --get-regexp '^submodule\\..*\\.path$' |"\
+		"while read path_key local_path; do"\
+		"	url_key=$(echo $path_key | sed -e 's/\\.path/.url/');"\
+		"	url=$(git config -f .gitmodules --get \"$url_key\");"\
+		"	remotename_key=$(echo $path_key | sed -e 's/\\.path/.remotename/');"\
+		"	remotename=$(git config -f .gitmodules --get \"$remotename_key\");"\
+		"   export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=clone.defaultRemoteName GIT_CONFIG_VALUE_0=$remotename;"\
+		"	gitparams=\"submodule add \"$@\" $url $local_path\";"\
+		"   echo + GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=$GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0=$GIT_CONFIG_VALUE_0 git $gitparams >&2;"\
+		"	git $gitparams;"\
+		"done; }; fn"
+

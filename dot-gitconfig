@@ -195,9 +195,13 @@
 		"	url=$(git config -f .gitmodules --get \"$url_key\");"\
 		"	remotename_key=$(echo $path_key | sed -e 's/\\.path/.remotename/');"\
 		"	remotename=$(git config -f .gitmodules --get \"$remotename_key\");"\
-		"   export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=clone.defaultRemoteName GIT_CONFIG_VALUE_0=$remotename;"\
-		"	gitparams=\"submodule add \"$@\" $url $local_path\";"\
-		"   echo + GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=$GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0=$GIT_CONFIG_VALUE_0 git $gitparams >&2;"\
+		"	branch_key=$(echo $path_key | sed -e 's/\\.path/.branch/');"\
+		"	branch=$(git config -f .gitmodules --get \"$branch_key\");"\
+		"	[ -z \"$branch\" ] && param_branch='' || param_branch=\"-b $branch\";"\
+		"	config_vars=\"GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=clone.defaultRemoteName GIT_CONFIG_VALUE_0=$remotename\";"\
+		"	gitparams=\"submodule add $param_branch \"$@\" $url $local_path\";"\
+		"	export $config_vars;"\
+		"	echo + $config_vars git $gitparams >&2;"\
 		"	git $gitparams;"\
 		"done; }; fn"
 

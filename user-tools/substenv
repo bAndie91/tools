@@ -33,6 +33,10 @@ Use a real shell for it.
 Sometimes you don't want a shell to be in the picture when composing commands,
 yet need to weave some environment variable into it.
 
+=head1 SEE ALSO
+
+envsubst(1) from gettext-base package
+
 =cut
 
 

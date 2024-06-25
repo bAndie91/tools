@@ -193,15 +193,21 @@
 		"while read path_key local_path; do"\
 		"	url_key=$(echo $path_key | sed -e 's/\\.path/.url/');"\
 		"	url=$(git config -f .gitmodules --get \"$url_key\");"\
-		"	remotename_key=$(echo $path_key | sed -e 's/\\.path/.remotename/');"\
-		"	remotename=$(git config -f .gitmodules --get \"$remotename_key\");"\
 		"	branch_key=$(echo $path_key | sed -e 's/\\.path/.branch/');"\
 		"	branch=$(git config -f .gitmodules --get \"$branch_key\");"\
 		"	[ -z \"$branch\" ] && param_branch='' || param_branch=\"-b $branch\";"\
-		"	config_vars=\"GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=clone.defaultRemoteName GIT_CONFIG_VALUE_0=$remotename\";"\
 		"	gitparams=\"submodule add $param_branch \"$@\" $url $local_path\";"\
-		"	export $config_vars;"\
-		"	echo + $config_vars git $gitparams >&2;"\
+		"	echo + git $gitparams >&2;"\
 		"	git $gitparams;"\
+		"	remotename_key=$(echo $path_key | sed -e 's/\\.path/.remotename/');"\
+		"	remotename=$(git config -f .gitmodules --get \"$remotename_key\");"\
+		"	if [ -n \"$remotename\" ]; then "\
+		"		export local_path remotename;"\
+		"		git submodule foreach '"\
+		"			[ \"$sm_path\" != \"$local_path\" ] && exit;"\
+		"			git remote | grep -qFx \"$remotename\" && exit;"\
+		"			git remote rename origin \"$remotename\";"\
+		"		';"\
+		"	fi;"\
 		"done; }; fn"
 

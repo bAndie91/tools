@@ -26,50 +26,56 @@ be called ("origin" or the tracking remote of superproject's current branch,
 see git-submodule(1) for details). Add B<remotename> option to the submodule's section
 in F<.gitmodules> to achieve this.
 
-=head1 LIMITATIONS
+=head1 CAVEATS
+
+Does not fail if a submodule can not be added, but continues with the next one.
 
 =cut
 
 EOF
 
 
-set -e
-set -o pipefail
+set -e -o pipefail
 set -u
 
 
-gitdir=`git rev-parse --git-dir 2>/dev/null`
+reporoot=`git rev-parse --show-toplevel`
 
 _gitconf()
 {
-	git config -f "$gitdir"/.gitmodules --get "$1"
+	git config -f "$reporoot"/.gitmodules --get "$1" || true
 }
 
-git config -f "$gitdir"/.gitmodules --get-regexp '^submodule\..*\.path$' |\
+git config -f "$reporoot"/.gitmodules --get-regexp '^submodule\..*\.path$' |\
 	while read -r path_key local_path
 	do
-		url_key=${path_key/.path/.url}
-		branch_key=${path_key/.path/.branch}
-		
-		url=`_gitconf "$url_key"`
-		branch=`_gitconf "$branch_key"`
-		
-		gitparams=(submodule add ${branch:+-b "$branch"} "$@" "$url" "$local_path")
-		echo "+ git $gitparams" >&2
-		git $gitparams
-		
-		# set the submodule's origin remote name to the one configured 
-		# in submodule.<SM_NAME>.remotename - if any
-		
-		remotename_key=${path_key/.path/.remotename}
-		remotename=`_gitconf "$remotename_key"`
-		
-		if [ -n "$remotename" ]
-		then
-			local_path=$local_path remotename=$remotename git submodule foreach '
-				[ "$sm_path" != "$local_path" ] && exit;
-				git remote | grep -qFx "$remotename" && exit;
-				git remote rename origin "$remotename";
-			'
-		fi
+		set +e +o pipefail
+		(
+			set -e -o pipefail
+			
+			url_key=${path_key/.path/.url}
+			branch_key=${path_key/.path/.branch}
+			
+			url=`_gitconf "$url_key"`
+			branch=`_gitconf "$branch_key"`
+			
+			gitparams=(submodule add ${branch:+-b "$branch"} "$@" "$url" "$local_path")
+			echo "+ git ${gitparams[*]}" >&2
+			git "${gitparams[@]}"
+			
+			# set the submodule's origin remote name to the one configured 
+			# in submodule.<SM_NAME>.remotename - if any
+			
+			remotename_key=${path_key/.path/.remotename}
+			remotename=`_gitconf "$remotename_key"`
+			
+			if [ -n "$remotename" ]
+			then
+				local_path=$local_path remotename=$remotename git submodule foreach '
+					[ "$sm_path" != "$local_path" ] && exit;
+					git remote | grep -qFx "$remotename" && exit;
+					git remote rename origin "$remotename";
+				'
+			fi
+		)
 	done

@@ -47,6 +47,7 @@ TOOLS ?= \
   g_filename_to_uri \
   git-checkout-sparse \
   git_diff \
+  git-submodule-auto-add \
   grepdatetime \
   Head \
   header.sed \

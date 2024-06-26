@@ -1,0 +1,75 @@
+#!/bin/bash
+
+true <<'EOF'
+=pod
+
+=head1 NAME
+
+git-submodule-auto-add - Automatically add submodules to a git repo according to .gitmodules file
+
+=head1 SYNOPSIS
+
+git submodule-auto-add [I<OPTIONS>]
+
+=head1 OPTIONS
+
+Those which git-submodule(1) B<add> accepts.
+
+=head1 DESCRIPTION
+
+Call as many C<git submodule add ...> commands as many submodules are defined in
+F<.gitmodules> file in the current repo's root.
+Automatically adding submodules this way.
+
+An extra feature is to able to define on which name the submodule's remote should
+be called ("origin" or the tracking remote of superproject's current branch,
+see git-submodule(1) for details). Add B<remotename> option to the submodule's section
+in F<.gitmodules> to achieve this.
+
+=head1 LIMITATIONS
+
+=cut
+
+EOF
+
+
+set -e
+set -o pipefail
+set -u
+
+
+gitdir=`git rev-parse --git-dir 2>/dev/null`
+
+_gitconf()
+{
+	git config -f "$gitdir"/.gitmodules --get "$1"
+}
+
+git config -f "$gitdir"/.gitmodules --get-regexp '^submodule\..*\.path$' |\
+	while read -r path_key local_path
+	do
+		url_key=${path_key/.path/.url}
+		branch_key=${path_key/.path/.branch}
+		
+		url=`_gitconf "$url_key"`
+		branch=`_gitconf "$branch_key"`
+		
+		gitparams=(submodule add ${branch:+-b "$branch"} "$@" "$url" "$local_path")
+		echo "+ git $gitparams" >&2
+		git $gitparams
+		
+		# set the submodule's origin remote name to the one configured 
+		# in submodule.<SM_NAME>.remotename - if any
+		
+		remotename_key=${path_key/.path/.remotename}
+		remotename=`_gitconf "$remotename_key"`
+		
+		if [ -n "$remotename" ]
+		then
+			local_path=$local_path remotename=$remotename git submodule foreach '
+				[ "$sm_path" != "$local_path" ] && exit;
+				git remote | grep -qFx "$remotename" && exit;
+				git remote rename origin "$remotename";
+			'
+		fi
+	done

@@ -1,0 +1,146 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+td-ls - ls(1)-like file list but more machine-parseable
+
+=head1 SYNOPSIS
+
+td-ls [I<OPTIONS>] [I<PATHS>]
+
+=head1 OPTIONS, ls(1)-compatible
+
+=over 4
+
+=item -a (implied)
+
+=item -g
+
+=item -G, --no-group
+
+=item -i, --inode
+
+=item -l (implied)
+
+=item -N, --literal (implied)
+
+=item -n, --numeric-uid-gid
+
+=item -o
+
+=item --time=[atime, access, use, ctime, status, birth, creation, mtime, modification]
+
+=item -R, --recursive
+
+=back
+
+=head1 OPTIONS, not ls(1)-compatible
+
+=over 4
+
+=item --devnum
+
+=item -H, --no-header
+
+=item --no-symlink-target
+
+=back
+
+=head1 DESCRIPTION
+
+Header names are a bit different than td-trans-ls(1) produces, but this is intentional,
+because fields by these 2 tools have slightly different meaning.
+td-trans-ls(1) is less smart because it just transforms ls(1)'s output and
+does not always know what is in the input exactly; while td-ls(1) itself controls
+what data goes to the output.
+
+No color support.
+
+=head1 ENVIRONMENT
+
+=over 4
+
+=item QUOTING_STYLE
+
+=back
+
+=head1 SEE ALSO
+
+td-select(1), td-filter(1), td-trans-ls(1)
+
+=cut
+
+
+use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat/;
+use Pod::Usage;
+use Data::Dumper;
+
+%field_macro = qw/devnum %D inode %i perms %M links %n username %u userid %U groupname %g groupid %G size %s 
+	basename %f relpath %p dirpath %h symlinktarget %l/;
+
+%time_types = qw/atime a access a use a ctime c status c birth b creation b mtime m modification m/;
+
+@depthopts = qw/-mindepth 1 -maxdepth 1/;
+$show_inode = 0;
+$show_devnum = 0;
+$uidgid_numeric = 0;
+$hide_user = 0;
+$hide_group = 0;
+$recursive = 0;
+$show_symlink_target = 1;
+$show_header = 1;
+$time_type = 'm';
+@extra_fields = ();
+@extra_macros = ();
+
+GetOptions(
+	'-l' => sub{},
+	'i|inode' => \$show_inode,
+	'devnum' => \$show_devnum,
+	'n|numeric-uid-gid' => \$uidgid_numeric,
+	'G|no-group' => \$hide_group,
+	'g' => \$hide_user,
+	'o' => \$hide_group,
+	'symlink-target' => \$show_symlink_target,
+	'R|recursive' => \$recursive,
+	'header' => \$show_header,
+	'c' => sub{ $time_type = 'c'; },
+	'u' => sub{ $time_type = 'a'; },
+	'time=s' => sub{ $time_type = $time_types{$_[1]} or die "$0: unknown time type: $_[0]\n"; },
+	'add-field=s@' => \@extra_fields,
+	'add-field-macro=s@' => \@extra_macros,
+	'help|?' => sub{ pod2usage(-exitval=>0, -verbose=>99); },
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+
+@depthopts = () if $recursive;
+
+@fields = ();
+push @fields, 'devnum' if $show_devnum;
+push @fields, 'inode' if $show_inode;
+push @fields, 'perms', 'links';
+push @fields, ($uidgid_numeric ? 'uid' : 'username') if not $hide_user;
+push @fields, ($uidgid_numeric ? 'gid' : 'groupname') if not $hide_group;
+push @fields, 'size';
+push @fields, $time_types{$time_type}.'time';
+push @fields, ($recursive ? 'relpath' : 'basename');
+push @fields, 'symlinktarget' if $show_symlink_target;
+push @fields, @extra_fields;
+
+@field_macros = map {$field_macro{$_}} @fields;
+push @field_macros, @extra_macros;
+
+print join("\t", map {uc} @fields)."\n" if $show_header;
+exec 'find', @ARGV, @depthopts, '-printf', join("\t", @field_macros)."\n";
+
+__END__
+
+TODO QUOTING_STYLE
+TODO time fields
+TODO --time-style=TIME_STYLE
+	full-iso, long-iso, iso, locale, or +FORMAT.
+	FORMAT1<newline>FORMAT2
+	TIME_STYLE prefixed with 'posix-' 
+TODO add known find(1) macros by name

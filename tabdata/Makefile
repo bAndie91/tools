@@ -12,6 +12,7 @@ TOOLS = \
   td-filter \
   td-group \
   td-keepheader \
+  td-ls \
   td-pivot \
   td-select \
   td-trans \

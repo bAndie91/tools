@@ -46,11 +46,37 @@ td-ls [I<OPTIONS>] [I<PATHS>]
 
 =item --no-symlink-target
 
+=item --add-field I<FIELD-NAME>
+
+Append extra fields after the time field.
+May be added multiple times.
+See field names by B<--help-field-names> option.
+
+=item --add-field-macro I<FORMAT>
+
+Append extra fields after other extra fields added by B<--add-field> option, if any,
+otherwise after the time field.
+For valid I<FORMAT>s, see B<-printf> section in find(1).
+
+=item --help-field-names
+
+Show valid field names to be used for B<--add-field> option.
+
 =back
 
 =head1 DESCRIPTION
 
-Header names are a bit different than td-trans-ls(1) produces, but this is intentional,
+Columns are similar to good old ls(1):
+PERMS (symbolic representation),
+LINKS,
+USERNAME (USERID if B<-n> option is given),
+GROUPNAME (GROUPID if B<-n> option is given),
+SIZE (in bytes),
+time field is either ATIME, CTIME, or default MTIME (in full-iso format),
+BASENAME,
+and SYMLINKTARGET.
+
+Column names are a bit different than td-trans-ls(1) produces, but this is intentional,
 because fields by these 2 tools have slightly different meaning.
 td-trans-ls(1) is less smart because it just transforms ls(1)'s output and
 does not always know what is in the input exactly; while td-ls(1) itself controls
@@ -63,6 +89,13 @@ No color support.
 =over 4
 
 =item QUOTING_STYLE
+
+=item TIME_STYLE
+
+B<TIME_STYLE> is ignored as well as I<--time-style> option.
+Always show date-time in C<%F %T %z> strftime(3) format!
+It's simply the most superior.
+Equivalent to B<TIME_STYLE=full-iso>.
 
 =back
 
@@ -77,8 +110,13 @@ use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat/;
 use Pod::Usage;
 use Data::Dumper;
 
-%field_macro = qw/devnum %D inode %i perms %M links %n username %u userid %U groupname %g groupid %G size %s 
-	basename %f relpath %p dirpath %h symlinktarget %l/;
+%field_macro = (qw/devnum %D inode %i perms %M links %n username %u userid %U groupname %g groupid %G size %s 
+	basename %f relpath %p dirpath %h symlinktarget %l
+	depth %d fstype %F perms-octal %m ftype %y ltype %Y/,
+	'atime', '%AF %AT %Az',
+	'btime', '%BF %BT %Bz',
+	'ctime', '%CF %CT %Cz',
+	'mtime', '%TF %TT %Tz');
 
 %time_types = qw/atime a access a use a ctime c status c birth b creation b mtime m modification m/;
 
@@ -96,51 +134,59 @@ $time_type = 'm';
 @extra_macros = ();
 
 GetOptions(
-	'-l' => sub{},
+	'l' => sub{},
 	'i|inode' => \$show_inode,
 	'devnum' => \$show_devnum,
 	'n|numeric-uid-gid' => \$uidgid_numeric,
 	'G|no-group' => \$hide_group,
 	'g' => \$hide_user,
 	'o' => \$hide_group,
-	'symlink-target' => \$show_symlink_target,
+	'symlink-target!' => \$show_symlink_target,
 	'R|recursive' => \$recursive,
-	'header' => \$show_header,
+	'header!' => \$show_header,
 	'c' => sub{ $time_type = 'c'; },
 	'u' => sub{ $time_type = 'a'; },
 	'time=s' => sub{ $time_type = $time_types{$_[1]} or die "$0: unknown time type: $_[0]\n"; },
 	'add-field=s@' => \@extra_fields,
 	'add-field-macro=s@' => \@extra_macros,
 	'help|?' => sub{ pod2usage(-exitval=>0, -verbose=>99); },
+	'help-field-names' => sub{ print "$_\n" for sort keys %field_macro; exit 0; },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
 
 @depthopts = () if $recursive;
-
 @fields = ();
+@wide_fields = ();
+
 push @fields, 'devnum' if $show_devnum;
 push @fields, 'inode' if $show_inode;
 push @fields, 'perms', 'links';
 push @fields, ($uidgid_numeric ? 'uid' : 'username') if not $hide_user;
 push @fields, ($uidgid_numeric ? 'gid' : 'groupname') if not $hide_group;
 push @fields, 'size';
-push @fields, $time_types{$time_type}.'time';
-push @fields, ($recursive ? 'relpath' : 'basename');
-push @fields, 'symlinktarget' if $show_symlink_target;
+push @fields, $time_type.'time';
 push @fields, @extra_fields;
 
-@field_macros = map {$field_macro{$_}} @fields;
-push @field_macros, @extra_macros;
+push @wide_fields, ($recursive ? 'relpath' : 'basename');
+push @wide_fields, 'symlinktarget' if $show_symlink_target;
 
-print join("\t", map {uc} @fields)."\n" if $show_header;
+@field_macros = ();
+push @field_macros, map {$field_macro{$_}} @fields;
+push @field_macros, @extra_macros;
+push @field_macros, map {$field_macro{$_}} @wide_fields;
+
+if($show_header)
+{
+	@header = ();
+	push @header, map {uc} @fields;
+	push @header, map {uc} @extra_macros;
+	push @header, map {uc} @wide_fields;
+	print join("\t", @header)."\n";
+}
+
 exec 'find', @ARGV, @depthopts, '-printf', join("\t", @field_macros)."\n";
+
 
 __END__
 
 TODO QUOTING_STYLE
-TODO time fields
-TODO --time-style=TIME_STYLE
-	full-iso, long-iso, iso, locale, or +FORMAT.
-	FORMAT1<newline>FORMAT2
-	TIME_STYLE prefixed with 'posix-' 
-TODO add known find(1) macros by name

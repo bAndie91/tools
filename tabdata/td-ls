@@ -24,8 +24,6 @@ td-ls [I<OPTIONS>] [I<PATHS>]
 
 =item -l (implied)
 
-=item -N, --literal (implied)
-
 =item -n, --numeric-uid-gid
 
 =item -o
@@ -48,15 +46,15 @@ td-ls [I<OPTIONS>] [I<PATHS>]
 
 =item --add-field I<FIELD-NAME>
 
-Append extra fields after the time field.
-May be added multiple times.
+Add extra fields by name.
 See field names by B<--help-field-names> option.
+May be added multiple times.
 
 =item --add-field-macro I<FORMAT>
 
-Append extra fields after other extra fields added by B<--add-field> option, if any,
-otherwise after the time field.
+Add extra fields by find(1)-style format specification.
 For valid I<FORMAT>s, see B<-printf> section in find(1).
+May be added multiple times.
 
 =item --help-field-names
 
@@ -84,11 +82,28 @@ what data goes to the output.
 
 No color support.
 
+=head1 FORMAT
+
+Output format is tabular data: a table, in which fields are delimited by TAB
+and records by newline (LF).
+
+Meta chars may occur in some fields (path, filename, symlink target, etc),
+these are escaped this (perl-compatible) way:
+
+ | Raw char  | Substituted to |
+ |-----------|----------------|
+ | ESC       | \e             |
+ | TAB       | \t             |
+ | LF        | \n             |
+ | CR        | \r             |
+ | Backslash | \\             |
+
+Other control chars (charcode below 32 in ASCII)
+including NUL, vertical-tab, and form-feed are left as-is.
+
 =head1 ENVIRONMENT
 
 =over 4
-
-=item QUOTING_STYLE
 
 =item TIME_STYLE
 
@@ -119,6 +134,13 @@ use Data::Dumper;
 	'mtime', '%TF %TT %Tz');
 
 %time_types = qw/atime a access a use a ctime c status c birth b creation b mtime m modification m/;
+
+sub to_tabdata_field
+{
+	my $arbitrary_data = shift;
+	my $tabdata = $arbitrary_data =~ s/[\t\n\r\e\\]/'\\'.{"\t"=>'t', "\n"=>'n', "\r"=>'r', "\e"=>'e', "\\"=>'\\'}->{$&}/ger;
+	return $tabdata;
+}
 
 @depthopts = qw/-mindepth 1 -maxdepth 1/;
 $show_inode = 0;
@@ -156,7 +178,6 @@ GetOptions(
 
 @depthopts = () if $recursive;
 @fields = ();
-@wide_fields = ();
 
 push @fields, 'devnum' if $show_devnum;
 push @fields, 'inode' if $show_inode;
@@ -165,28 +186,51 @@ push @fields, ($uidgid_numeric ? 'uid' : 'username') if not $hide_user;
 push @fields, ($uidgid_numeric ? 'gid' : 'groupname') if not $hide_group;
 push @fields, 'size';
 push @fields, $time_type.'time';
+push @fields, ($recursive ? 'relpath' : 'basename');
+push @fields, 'symlinktarget' if $show_symlink_target;
 push @fields, @extra_fields;
-
-push @wide_fields, ($recursive ? 'relpath' : 'basename');
-push @wide_fields, 'symlinktarget' if $show_symlink_target;
 
 @field_macros = ();
 push @field_macros, map {$field_macro{$_}} @fields;
 push @field_macros, @extra_macros;
-push @field_macros, map {$field_macro{$_}} @wide_fields;
+
+$FS = "\t";
+$RS = "\n";
 
 if($show_header)
 {
 	@header = ();
 	push @header, map {uc} @fields;
-	push @header, map {uc} @extra_macros;
-	push @header, map {uc} @wide_fields;
-	print join("\t", @header)."\n";
+	push @header, @extra_macros;
+	print join($FS, @header).$RS;
 }
 
-exec 'find', @ARGV, @depthopts, '-printf', join("\t", @field_macros)."\n";
+# since we can't ask find(1) to escape meta chars properly
+# (replaces all LF/TAB/ESC/… uniformly to "?" if output is a terminal, and
+# does not escapes anything if output is pipe or file),
+# and there probably will be data fields which may contain arbitrary bytes,
+# eg. paths, file names, link targets, etc,
+# we delimit fields by NUL
+# (NUL hopefully won't be in them).
+# Then escape them properly
+# and output in tabular data format to the user.
 
+open $fh, '-|', 'find', @ARGV, @depthopts, '-printf', join("\\0", @field_macros)."\\0" or die "$0: $!\n";
 
-__END__
+$/ = "\0";
 
-TODO QUOTING_STYLE
+RECORD:
+while(1)
+{
+	FIELD:
+	for my $colnum (0..$#field_macros)
+	{
+		my $arbitrary_data = <$fh>;
+		last RECORD if $arbitrary_data eq '';
+		chomp $arbitrary_data;
+		my $tabular_data = to_tabdata_field($arbitrary_data);
+		print $FS if $colnum > 0;
+		print $tabular_data;
+	}
+	print $RS;
+}

@@ -1,0 +1,92 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+td-sort - Sort tabular data by the columns given by name
+
+=head1 USAGE
+
+td-sort <OPTIONS>
+
+=head1 OPTIONS
+
+All those which are accepted by sort(1),
+except you don't need to refer to columns by ordinal number,
+but by name.
+
+=over 4
+
+=item -k, --key=I<KEYDEF>
+
+sort(1) defines I<KEYDEF> as C<F[.C][OPTS][,F[.C][OPTS]]>,
+where B<F> is the (1-based) field number.
+However with td-sort(1) you may refer to fields by name.
+But since B<F> is no longer consists only of digits,
+but is an arbitrary string,
+it's may be ambiguous where the name ends.
+So you may enclose them in round/square/curly/angle brackets.
+Choose the one which does not occur in the column name.
+
+You don't need to even type B<-k>, because a lone I<COLUMN-NAME>
+is interpreted as "B<-k> I<F>" where I<F> is the corresponding field number.
+
+=cut
+
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+use Data::Dumper;
+
+
+sub replace_colnames_in_string
+{
+	my $s = shift;
+	$s =~ s/(\((?'name'[^)]+)\)|\[(?'name'[^]]+)\]|\{(?'name'[^}]+)\}|<(?'name'[^>]+)>|(?'name'[^.,]+))(?'rest'(\.\d+)?[^,]*)/replace_colname($+{'name'}).$+{'rest'}/eg;
+	return $s;
+}
+
+sub replace_colname
+{
+	my $name = shift;
+	my $colnum = $Header{$name};
+	if(not defined $colnum)
+	{
+		my $cols = join ", ", @Header;
+		die "$0: $name: no such column. known columns: $cols\n"
+	}
+	$colnum += 1;
+	return $colnum;
+}
+
+
+$Header = sys_read_line();
+process_header($Header);
+
+
+@sort_args = ('--field-separator='."\t",);
+
+
+while(@ARGV)
+{
+	my $arg = shift @ARGV;
+	
+	if($arg =~ /^(--key=)(.+)$/)
+	{
+		$arg = $1.replace_colnames_in_string($2);
+	}
+	elsif($prev_arg ~~ ['-k', '--key'])
+	{
+		$arg = replace_colnames_in_string($arg);
+	}
+	elsif($arg !~ /^-/)
+	{
+		$arg = '--key=' . replace_colnames_in_string($arg);
+	}
+	
+	push @sort_args, $arg;
+	$prev_arg = $arg;
+}
+
+print $Header.$RS;
+exec 'sort', @sort_args;

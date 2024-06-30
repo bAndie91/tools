@@ -21,9 +21,7 @@ do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 die "$0: no COMMAND given\n" unless @ARGV;
 
-$header = '';
-$header .= $c while sysread(STDIN, $c, 1) and $c ne $RS;
-print $header.$RS;
+$header = sys_read_line();
 
 exec @ARGV;
 die "$!: @ARGV\n";

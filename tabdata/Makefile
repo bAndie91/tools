@@ -15,6 +15,7 @@ TOOLS = \
   td-ls \
   td-pivot \
   td-select \
+  td-sort \
   td-trans \
   td-trans-fixcol \
   td-trans-ls \

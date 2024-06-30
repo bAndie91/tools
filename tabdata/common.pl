@@ -70,6 +70,19 @@ sub process_header
 	}
 }
 
+sub sys_read_line
+{
+	# read data from STDIN until $RS (usually newline) or EOF, whichever comes first.
+	# and return with data.
+	# $RS is consumed by not returned.
+	# useful if the rest of STDIN will not be processed by the current process.
+	
+	my $line = '';
+	my $c;
+	$line .= $c while sysread(STDIN, $c, 1) and $c ne $RS;
+	return $line;
+}
+
 sub read_record
 {
 	my $fd = shift;

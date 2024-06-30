@@ -48,6 +48,15 @@ shells, grouped by shell path.
   
   # change header name "USER" to "USERS"
   td-alter USERS=USER | td-select +ALL -USER
+  
+B<Output>:
+  
+  | SHELL             | USERS                                        |
+  | /bin/bash         | user1 user2 nova root                        |
+  | /bin/false        | fetchmail hplip sddm speech-dispatcher sstpc |
+  | /bin/sync         | sync                                         |
+  | /sbin/rebootlogon | reboot                                       |
+  | /usr/sbin/nologin | _apt avahi avahi-autoipd backup bin daemon   |
 
 =head1 CAVEATS
 

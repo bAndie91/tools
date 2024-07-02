@@ -10,6 +10,7 @@ my $DIRSEP = '/';
 
 GetOptions(
 	's|sort!' => \$do_sort,
+	'd|separator|dir-separator=s' => \$DIRSEP,
 	't|stop=s' => \$stop_pattern,
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
@@ -31,14 +32,18 @@ while(my $line = <STDIN>)
 		$sep = $suffix = '';
 	}
 	
-	my @elements = split /$DIRSEP/, $path;
-	$elements[$#elements] .= $sep . $suffix;
+	my @elements = split /\Q$DIRSEP\E/, $path;
+	$elements[$#elements] .= $sep . $suffix if @elements;
 	
 	for my $element (@elements)
 	{
 		next if $element eq '';
-		$ref->{$element} = {} if not exists $ref->{$element};
-		$ref = $ref->{$element};
+		$ref->{'children'}->{$element} = {
+			'index' => (scalar keys %{$ref->{'children'}}),
+			'name' => $element,
+			'children' => {},
+		} if not exists $ref->{'children'}->{$element};
+		$ref = $ref->{'children'}->{$element};
 	}
 }
 
@@ -46,10 +51,10 @@ sub output
 {
 	my $indent = shift;
 	my $ref = shift;
-	for my $key ($do_sort ? (sort keys %$ref) : (keys %$ref))
+	for my $child (sort {$do_sort ? ($a->{'name'} cmp $b->{'name'}) : ($a->{'index'} <=> $b->{'index'})} values %{$ref->{'children'}})
 	{
-		printf "%s%s\n", "\t"x$indent, $key;
-		output($indent+1, $ref->{$key});
+		printf "%s%s\n", "\t"x$indent, $child->{'name'};
+		output($indent+1, $child);
 	}
 }
 
@@ -78,9 +83,11 @@ Output: leaf file names indented by as many tabs as deep the file is on the tree
 
 =over 4
 
-=item -s, --sort
+=item -d, --separator I<CHAR>
 
 =item -t, --stop I<PATTERN>
+
+=item -s, --sort
 
 =back
 

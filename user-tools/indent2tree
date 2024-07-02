@@ -1,35 +1,57 @@
 #!/usr/bin/env perl
 
-$spaces_prev = 0;
+use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat/;
+use Pod::Usage;
+
+$char_vert = '│';
+$char_hori = '──';
+$char_chld = '├';
+$char_last = '└';
+
+GetOptions(
+	'v|vertical=s' => \$char_vert,
+	'h|horizontal=s' => \$char_hori,
+	'c|child=s' => \$char_chld,
+	'l|last=s' => \$char_last,
+	'a|ascii!' => sub {
+		$char_vert = '|';
+		$char_hori = '--';
+		$char_chld = '+';
+		$char_last = '`';
+	},
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+
+$indent_prev = 0;
 $level = 0;
-%level_spaces = (0=>0);
+%level_indent = (0=>0);
 $Tree = { subtree=>[], };
 $ForkPoint = $Tree;
 
 while(<STDIN>)
 {
-	s/^(\s*)//;
-	$spaces = length $1;
-	s/\r?\n//;
+	s/^(\t*)//;
+	$indent = length $1;
+	chomp;
 	$data = $_;
 	while(/\\$/)
 	{
 		$data =~ s/\\$/\n/;
 		$_ = <STDIN>;
-		s/^\s{$spaces}//;
-		s/\r?\n//;
+		s/^\t{$indent}//;
+		chomp;
 		$data .= $_;
 	}
 	
-	if($spaces > $spaces_prev)
+	if($indent > $indent_prev)
 	{
 		$level++;
-		$level_spaces{$level} = $spaces;
+		$level_indent{$level} = $indent;
 		$ForkPoint = $ForkPoint->{subtree}->[$#{$ForkPoint->{subtree}}];
 	}
-	elsif($spaces < $spaces_prev)
+	elsif($indent < $indent_prev)
 	{
-		while($spaces < $level_spaces{$level})
+		while($indent < $level_indent{$level})
 		{
 			$level--;
 			$ForkPoint = $ForkPoint->{parent};
@@ -37,12 +59,9 @@ while(<STDIN>)
 	}
 	
 	push @{$ForkPoint->{subtree}}, {data=>$data, parent=>$ForkPoint, subtree=>[]};
-	#print Dumper $Tree;
 	
-	$spaces_prev = $spaces;
+	$indent_prev = $indent;
 }
-
-#print Dumper $Tree; exit;
 
 
 sub print_subtree
@@ -64,17 +83,17 @@ sub print_subtree
 		}
 		else
 		{
-			my $linenumber = 0;
+			my $childindex = 0;
 			
-			for my $line (split /\n/, $node->{data})
+			for my $data (split /\n/, $node->{data})
 			{
 				printf "%s%s %s\n",
 					$sidebranches,
-					$linenumber == 0
+					$childindex == 0
 						? ($last ? '└' : '├').'──'
 						: ($last ? ' ' : '│').'  ',
-					$line;
-				$linenumber++;
+					$data;
+				$childindex++;
 			}
 			
 			print_subtree($node->{subtree}, $level+1, $sidebranches . ($last ? '    ' : '│   '));
@@ -95,11 +114,29 @@ __END__
 
 indent2tree - Makes TAB-indented text into ascii tree chart
 
+=head1 OPTIONS
+
+=over 4
+
+=item -a, --ascii
+
+=item -v, --vertical I<CHAR>
+
+=item -h, --horizontal I<CHAR>
+
+=item -c, --child I<CHAR>
+
+=item -l, --last I<CHAR>
+
+=back
+
 =head1 DESCRIPTION
 
-Input: lines with leading tabs representing the depth in the tree
+Input: lines with leading tabs representing the depth in the tree.
+Multiline records are supported by terminating lines (all but the last one) by backslash.
 
-Output: ascii tree chart with drawing chars
+Output: tree diagramm with (ascii or unicode) drawing chars.
+Set custom drawing chars by B<-v>, B<-h>, B<-c>, and B<-l> options.
 
 =head1 SEE ALSO
 

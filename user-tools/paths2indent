@@ -1,20 +1,34 @@
 #!/usr/bin/env perl
 
 use Getopt::Long;
+use Pod::Usage;
 
 my $do_sort = 0;
+my $stop_pattern = undef;
 my $DIRSEP = '/';
 
 GetOptions(
 	's|sort!' => \$do_sort,
-) or die;
+	't|stop=s' => \$stop_pattern,
+) or pod2usage(-exitval=>2, -verbose=>99);
 
 my %parsed;
 
-while(my $path = <STDIN>)
+while(my $line = <STDIN>)
 {
+	chomp $line;
 	my $ref = \%parsed;
-	$path =~ s/\n$//;
+	my ($path, $sep, $suffix);
+	
+	if(defined $stop_pattern)
+	{
+		($path, $sep, $suffix) = split /($stop_pattern)/, $line, 2;
+	}
+	else
+	{
+		$path = $line;
+		$sep = $suffix = '';
+	}
 	
 	for my $element (split /$DIRSEP/, $path)
 	{
@@ -30,7 +44,7 @@ sub output
 	my $ref = shift;
 	for my $key ($do_sort ? (sort keys %$ref) : (keys %$ref))
 	{
-		printf "%s%s\n", ' 'x$indent, $key;
+		printf "%s%s\n", "\t"x$indent, $key;
 		output($indent+1, $ref->{$key});
 	}
 }
@@ -44,13 +58,31 @@ __END__
 
 =head1 NAME
 
-paths2indent - Transform list of filesystem paths on input into an indented list of their leaf elements
+paths2indent - Transform list of filesystem paths to an indented list of the leaf elements
+
+=head1 SYNOPSIS
+
+paths2indent [I<OPTIONS>]
 
 =head1 DESCRIPTION
 
 Input: list of file paths line-by-line
 
-Output: leaf file name with leading tabs representing the depth on the tree
+Output: leaf file names indented by as many tabs as deep the file is on the tree
+
+=head1 OPTIONS
+
+=over 4
+
+=item -s, --sort
+
+=item -t, --stop I<PATTERN>
+
+=back
+
+=head1 LIMITATIONS
+
+Can not have empty path elements (ie. consecutive slashes).
 
 =head1 SEE ALSO
 

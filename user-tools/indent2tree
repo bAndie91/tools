@@ -90,13 +90,13 @@ sub print_subtree
 				printf "%s%s %s\n",
 					$sidebranches,
 					$childindex == 0
-						? ($last ? '└' : '├').'──'
-						: ($last ? ' ' : '│').'  ',
+						? ($last ? $char_last : $char_chld).$char_hori
+						: ($last ? ' '        : $char_vert).'  ',
 					$data;
 				$childindex++;
 			}
 			
-			print_subtree($node->{subtree}, $level+1, $sidebranches . ($last ? '    ' : '│   '));
+			print_subtree($node->{subtree}, $level+1, $sidebranches . ($last ? '    ' : $char_vert.'   '));
 		}
 		
 		$pos++;

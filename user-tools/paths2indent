@@ -2,6 +2,7 @@
 
 use Getopt::Long;
 use Pod::Usage;
+use Data::Dumper;
 
 my $do_sort = 0;
 my $stop_pattern = undef;
@@ -30,7 +31,10 @@ while(my $line = <STDIN>)
 		$sep = $suffix = '';
 	}
 	
-	for my $element (split /$DIRSEP/, $path)
+	my @elements = split /$DIRSEP/, $path;
+	$elements[$#elements] .= $sep . $suffix;
+	
+	for my $element (@elements)
 	{
 		next if $element eq '';
 		$ref->{$element} = {} if not exists $ref->{$element};

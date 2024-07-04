@@ -14,7 +14,7 @@ Various bash/perl/python/etc scripts, native cli programms and libs for convenie
 - [tools to interact with other graphical programs and Xorg](xwin-tools/descriptions.txt)
 - many other...
 
-See also [descriptions](descriptions.txt).
+See also [descriptions](descriptions.md).
 
 ## install and uninstall
 

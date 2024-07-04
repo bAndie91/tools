@@ -7,23 +7,33 @@ true <<EOF
 
 renamemanual - Interactive file rename tool
 
+=head1 SYNOPSIS
+
+renamemanual I<FILE> [I<FILE> [...]]
+
+=head1 DESCRIPTION
+
+Prompt for the user for new names for the files given in arguments.
+Won't overwrite existing files,
+rather keep asking the new name until it can be renamed to (without overwriting an existing file).
+Skip a file by entering empty name.
+
+=head1 SEE ALSO
+
+mv(1), rename(1), file-rename(1p) (prename(1)), rename.ul (rename(1)), rename.td(1)
+
 =cut
 
 EOF
 
-usage()
-{
-	echo "Usage: $0 <FILE> [<FILE> [...]]"
-}
-
 if [ $# = 0 ]
 then
-	usage >&2
+	pod2text "$0" >&2
 	exit -1
 fi
 if [ "$1" = --help ]
 then
-	usage
+	pod2text "$0"
 	exit 0
 fi
 

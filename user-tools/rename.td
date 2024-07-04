@@ -3,6 +3,9 @@
 #  This script was developed by Robin Barker (Robin.Barker@npl.co.uk),
 #  from Larry Wall's original script eg/rename from the perl source.
 #
+#  Then further developed by A Hrubak and renamed to rename.td,
+#  because he was not aware of newer versions, like file-rename(1p) (alias prename).
+#
 #  This script is free software; you can redistribute it and/or modify it
 #  under the same terms as Perl itself.
 #
@@ -98,33 +101,28 @@ __END__
 
 =head1 NAME
 
-rename - rename multiple files by a Perl expression
+rename.td - rename multiple files by a Perl expression
 
 =head1 SYNOPSIS
 
-B<rename> S<[ B<-v>[B<v>] ]> S<[ B<-n> ]> S<[ B<-f> ]> I<perlexpr> S<[ I<files> ]>
+rename.td S<[ B<-v>[B<v>] ]> S<[ B<-n> ]> S<[ B<-f> ]> I<perlexpr> S<[ I<files> ]>
 
 =head1 DESCRIPTION
 
-C<rename>
-renames the filenames supplied according to the rule specified as the
-first argument.
-The I<perlexpr> 
-argument is a Perl expression which is expected to modify the C<$_>
+B<rename.td> renames the filenames supplied according to the rule specified as the first argument.
+The I<perlexpr> argument is a Perl expression which is expected to modify the C<$_>
 string in Perl for at least some of the filenames specified.
-If a given filename is not modified by the expression, it will not be
-renamed.
-If no filenames are given on the command line, filenames will be read
-via standard input.
+If a given filename is not modified by the expression, it will not be renamed.
+If no filenames are given on the command line, filenames will be read via standard input.
 
 For example, to rename all files matching C<*.bak> to strip the extension,
 you might say
 
-	rename 's/\.bak$//' *.bak
+	rename.td 's/\.bak$//' *.bak
 
 To translate uppercase names to lower, you'd use
 
-	rename 'y/A-Z/a-z/' *
+	rename.td 'y/A-Z/a-z/' *
 
 =head1 OPTIONS
 
@@ -154,11 +152,19 @@ Each subsequent line describes a file in this way:
 
 =item 1st field - status
 
-KEEP (no change in file name, shown in B<-vv> mode), 
-SKIP (destination already exists, not in B<--force> mode),
-WOULD (would be attempted to rename, in B<--dry-run> mode),
-OK (successfully renamed),
-ERR I<nnn> (error happened during rename, error code is I<nnn>).
+=over 8
+
+=item B<KEEP> - no change in file name, shown in B<-vv> mode
+
+=item B<SKIP> - destination already exists, not in B<--force> mode
+
+=item B<WOULD> - would be attempted to rename, in B<--dry-run> mode
+
+=item B<OK> - successfully renamed
+
+=item B<ERR I<nnn>> - error happened during rename, error code is I<nnn>
+
+=back
 
 =item 2nd field - old file name
 
@@ -174,9 +180,11 @@ No environment variables are used.
 
 Larry Wall (author of the original)
 
+Robin Barker 
+
 =head1 SEE ALSO
 
-mv(1), perl(1)
+mv(1), perl(1), file-rename(1p) (prename(1)), rename.ul (rename(1)), renamemanual(1)
 
 =head1 DIAGNOSTICS
 

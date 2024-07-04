@@ -130,6 +130,7 @@ TOOLS ?= \
   recent-files-gtk \
   redirexec \
   renamemanual \
+  rename.td \
   repeat \
   replcmd \
   reportcmdstatus \

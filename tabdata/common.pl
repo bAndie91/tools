@@ -102,4 +102,11 @@ sub escape_tabdata
 	return $tabdata;
 }
 
+sub unescape_tabdata
+{
+	my $tabdata = shift;
+	my $raw = $tabdata =~ s/\\[tnre\\]/eval "\"$&\""/ger;
+	return $raw;
+}
+
 1;

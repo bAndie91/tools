@@ -23,7 +23,7 @@ do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 sub html_escape
 {
 	my $str = shift;
-	$str =~ s/[><&]/'&' . {'>'=>'gt', '<'=>'lt', '&'=>'amp'}->{$&} . ';'/eg;
+	$str =~ s/[><&\t]/'&' . {'>'=>'gt', '<'=>'lt', '&'=>'amp', "\t"=>'Tab'}->{$&} . ';'/eg;
 	$str =~ s/\n/<br>/g;
 	return $str;
 }

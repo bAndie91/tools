@@ -127,6 +127,9 @@ td-select(1), td-filter(1), td-trans-ls(1)
 use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat/;
 use Pod::Usage;
 use Data::Dumper;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
 
 %field_macro = (qw/devnum %D inode %i perms %M links %n username %u userid %U groupname %g groupid %G size %s 
 	basename %f relpath %p dirpath %h symlinktarget %l
@@ -138,12 +141,6 @@ use Data::Dumper;
 
 %time_types = qw/atime a access a use a ctime c status c birth b creation b mtime m modification m/;
 
-sub to_tabdata_field
-{
-	my $arbitrary_data = shift;
-	my $tabdata = $arbitrary_data =~ s/[\t\n\r\e\\]/'\\'.{"\t"=>'t', "\n"=>'n', "\r"=>'r', "\e"=>'e', "\\"=>'\\'}->{$&}/ger;
-	return $tabdata;
-}
 
 @depthopts = qw/-mindepth 1 -maxdepth 1/;
 $show_inode = 0;
@@ -236,7 +233,7 @@ while(1)
 		my $arbitrary_data = <$fh>;
 		last RECORD if $arbitrary_data eq '';
 		chomp $arbitrary_data;
-		my $tabular_data = to_tabdata_field($arbitrary_data);
+		my $tabular_data = escape_tabdata($arbitrary_data);
 		print $FS if $colnum > 0;
 		print $tabular_data;
 	}

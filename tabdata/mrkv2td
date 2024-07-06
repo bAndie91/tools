@@ -17,10 +17,12 @@ and it's usual for all records to have all fields anyways.
 
 =over 4
 
-=item -s, --separator REGEXP
+=item -s, --separator I<REGEXP>
 
 Regexp which separates field name from cell data in MRKV stream.
 Default is TAB (C<\t>).
+
+=item -g, --multiline-glue I<STRING>
 
 =back
 
@@ -31,6 +33,7 @@ td2mrkv(1)
 =cut
 
 $OptSeparatorRegexp = "\t";
+$OptMultilineGlue = "\\n";
 
 use Data::Dumper;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
@@ -41,6 +44,12 @@ sub flush_record
 {
 	my $colnum = shift;
 	my $record = shift;
+	
+	if(not $header_sent)
+	{
+		print join($FS, sort { $colnum->{$a} <=> $colnum->{$b} } keys %$colnum).$RS;
+		$header_sent = 1;
+	}
 	
 	print join($FS, map { $record->{$_} } sort { $colnum->{$a} <=> $colnum->{$b} } keys %$record).$RS;
 }
@@ -58,12 +67,6 @@ while(my $line = <STDIN>)
 	{
 		if(%record)
 		{
-			if(not $header_sent)
-			{
-				print join($FS, @Headers).$RS;
-				$header_sent = 1;
-			}
-			
 			flush_record(\%ColumnNumber, \%record);
 			%record = ();
 			$record_num++;
@@ -72,7 +75,15 @@ while(my $line = <STDIN>)
 	else
 	{
 		my ($field, $cell) = split /$OptSeparatorRegexp/, $line, 2;
-		$record{$field} = $cell;
+		$cell = escape_tabdata($cell);
+		if(exists $record{$field})
+		{
+			$record{$field} .= $OptMultilineGlue . $cell;
+		}
+		else
+		{
+			$record{$field} = $cell;
+		}
 		
 		if($record_num == 0)
 		{

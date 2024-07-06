@@ -2,6 +2,7 @@
 
 $0 =~ s/^.*\/([^\/]+)$/$1/;
 
+# Note: review escape_tabdata subroutine before you think about changing $FS and $RS fundamental variables.
 $FS = "\t";
 $RS = $/ = "\n";
 @Header = ();
@@ -36,6 +37,7 @@ GetOptions(
 	'c|max-columns=i' => \$OptMaxColumns,
 	
 	's|separator=s' => \$OptSeparatorRegexp,
+	'g|multiline-glue=s' => \$OptMultilineGlue,
 	
 	'x|extra-columns' => sub { $OptAddExtraColumns = 1; },
 	'X|no-extra-columns' => sub { $OptAddExtraColumns = 0; },
@@ -90,6 +92,14 @@ sub read_record
 	chomp $line;
 	my @record = split $FS, $line;
 	return @record;
+}
+
+sub escape_tabdata
+{
+	my $arbitrary_data = shift;
+	# Note, may be wrong if $FS or $RS are changed.
+	my $tabdata = $arbitrary_data =~ s/[\t\n\r\e\\]/'\\'.{"\t"=>'t', "\n"=>'n', "\r"=>'r', "\e"=>'e', "\\"=>'\\'}->{$&}/ger;
+	return $tabdata;
 }
 
 1;

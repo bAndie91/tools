@@ -471,6 +471,43 @@ while(1)
 			exit;
 		}
 	}
+	else
+	{
+		if($do_reload)
+		{
+			$do_reload = 0;
+			reload;
+		}
+		
+		# check if daemons need respawn
+		for my $id (keys %Daemon)
+		{
+			my $dmon = $Daemon{$id};
+			if(not exists $dmon->{'pid'})
+			{
+				if(exists $dmon->{'cmd_args'})
+				{
+					if(scalar @{$dmon->{'exittimes'}} >= $respawn_burst_limit and $dmon->{'exittimes'}->[0] > time - $respawn_burst_period)
+					{
+						my $hold_sec = $dmon->{'exittimes'}->[0] + $respawn_burst_hold - time;
+						$hold_sec = 1 if $hold_sec < 1;  # alarm(0) takes int but alarm(0) means cancel
+						logger "daemon $id respawned too often, hold up for $hold_sec sec";
+						wakeup_at_most $hold_sec;
+					}
+					else
+					{
+						start_daemon $id;
+					}
+				}
+				else
+				{
+					# it's ended and command deleted, so
+					# we no longer manage this daemon
+					delete $Daemon{$id};
+				}
+			}
+		}
+	}
 	
 	if($do_dump_state)
 	{
@@ -481,41 +518,6 @@ while(1)
 		{
 			print {$fh} Dumper \%Daemon;
 			close $fh;
-		}
-	}
-	
-	if($do_reload)
-	{
-		$do_reload = 0;
-		reload;
-	}
-	
-	# check if daemons need respawn
-	for my $id (keys %Daemon)
-	{
-		my $dmon = $Daemon{$id};
-		if(not exists $dmon->{'pid'})
-		{
-			if(exists $dmon->{'cmd_args'})
-			{
-				if(scalar @{$dmon->{'exittimes'}} >= $respawn_burst_limit and $dmon->{'exittimes'}->[0] > time - $respawn_burst_period)
-				{
-					my $hold_sec = $dmon->{'exittimes'}->[0] + $respawn_burst_hold - time;
-					$hold_sec = 1 if $hold_sec < 1;  # you can't do alarm(0)
-					logger "daemon $id respawned too often, hold up for $hold_sec sec";
-					wakeup_at_most $hold_sec;
-				}
-				else
-				{
-					start_daemon $id;
-				}
-			}
-			else
-			{
-				# it's ended and command deleted, so
-				# we no longer manage this daemon
-				delete $Daemon{$id};
-			}
 		}
 	}
 }

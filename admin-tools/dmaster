@@ -145,6 +145,7 @@ use POSIX ":sys_wait_h";
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 use Socket;
 use Config;
+require 'syscall.ph';
 @signal_names = split ' ', $Config{'sig_name'};
 
 $pidfd_support = eval q{ use Linux::FD::Pid; 1; };
@@ -174,18 +175,34 @@ sub append_fixsizelist
 	}
 }
 
+sub getpgid
+{
+	my $pid = shift;
+	return syscall(SYS_getpgid(), int $pid);
+}
+
 sub stop_daemon
 {
-	my $id = shift;
-	my $pid = $Daemon{$id}->{'pid'};
+	my $did = shift;
+	my $pid = $Daemon{$did}->{'pid'};
 	if(defined $pid)
 	{
-		logger "terminating $id PID $pid";
-		kill 'TERM', $pid;
+		my $pgid = getpgid($pid);
+		if($pgid == $pid)
+		{
+			logger "daemon $did is a process group leader, terminating PGID $pgid";
+			$kid = -$pid;
+		}
+		else
+		{
+			logger "terminating $did PID $pid";
+			$kid = $pid;
+		}
+		kill 'TERM', $kid;
 	}
 	else
 	{
-		logger "daemon $id has no PID";
+		logger "daemon $did has no PID";
 	}
 }
 

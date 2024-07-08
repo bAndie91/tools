@@ -85,6 +85,7 @@ Write internal state into F</var/run/shm/dmaster.state> file.
 
 Terminate managed daemons (always with B<TERM> signal),
 wait for them to exit, then exit dmaster(1) itself.
+If a daemon is a process group leader, sends signal to the whole process group.
 
 =item HUP
 
@@ -408,7 +409,7 @@ sub wakeup_at_most
 
 $SIG{'HUP'} = sub { $do_reload = 1 unless $do_shutdown; };
 $SIG{'CHLD'} = sub { $do_handle_children = 1; };
-$SIG{'TERM'} = sub { $do_shutdown = 1; };
+$SIG{'TERM'} = sub { $shutdown_signalname = $_[0]; $do_shutdown = 1; };
 $SIG{'INT'} = $SIG{'TERM'};
 $SIG{'ALRM'} = sub { 1; };
 $SIG{'USR1'} = sub { $do_dump_state = 1; };
@@ -416,7 +417,8 @@ $SIG{'USR1'} = sub { $do_dump_state = 1; };
 
 
 logger "init";
-my $management_socket = init_management_socket();
+$management_socket = init_management_socket();
+$shutdown_signalname = undef;
 
 
 logger "start";
@@ -448,6 +450,12 @@ while(1)
 	
 	if($do_shutdown)
 	{
+		if(not $prev_do_shutdown)
+		{
+			logger "got SIG$shutdown_signalname, exiting...";
+			$prev_do_shutdown = $do_shutdown;
+		}
+		
 		my $subprocesses = 0;
 		for my $id (keys %Daemon)
 		{

@@ -144,6 +144,10 @@ stdmux [-o I<STDOUT_PREFIX> | -e I<STDERR_PREFIX>] [--] I<COMMAND> [I<ARGS>]
 
 =back
 
+=head1 EXIT STATUS
+
+stdmux(1) exits with the I<COMMAND>'s exit status.
+
 =head1 USAGE EXAMPLE
 
   mux_output=`stdmux command`

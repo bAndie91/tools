@@ -19,7 +19,7 @@ $OptWarnNonNumericRValue = 1;
 $OptFailNonNumericRValue = 1;
 
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
-use Getopt::Long qw/:config no_ignore_case bundling pass_through require_order no_getopt_compat/;
+use Getopt::Long qw/:config no_ignore_case bundling pass_through require_order no_getopt_compat no_auto_abbrev/;
 use Pod::Usage;
 
 GetOptions(

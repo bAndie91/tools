@@ -1,0 +1,60 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+csv2td - Transform CSV to tabular data format.
+
+=head1 DESCRIPTION
+
+Read CSV data on STDIN.
+Output tabular data on STDOUT.
+
+=head1 OPTIONS
+
+Any option which Text::CSV(3pm) takes.
+See C<Text::CSV->known_attributes> for extensive list.
+Example:
+
+  csv2td --sep=';' --blank-is-undef=0 --binary
+
+becomes:
+
+  Text::CSV->new({sep=>";", blank_is_undef=>0, binary=>1})
+
+=head1 SEE ALSO
+
+csv2(1), mrkv2td(1)
+
+=cut
+
+
+use Text::CSV qw/csv/;
+use Data::Dumper;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
+
+%csv_opts = ();
+
+for (@ARGV)
+{
+	if(my ($optname, $value) = /^--([^=]+)(?:=(.*)|)$/)
+	{
+		$value = 1 if not defined $value;
+		$optname =~ s/-/_/g;
+		$csv_opts{$optname} = $value;
+	}
+	else
+	{
+		die "$0: unknown argument: $_\n";
+	}
+}
+
+$Data = csv(in=>\*STDIN, %csv_opts);
+
+for my $row (@$Data)
+{
+	print join($FS, map {escape_tabdata($_)} @$row).$RS;
+}

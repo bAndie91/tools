@@ -3,6 +3,7 @@ BIN_DIR = /usr/tool
 LIB_DIR = /usr/lib/tool/perl5/tabdata
 
 TOOLS = \
+  csv2td \
   mrkv2td \
   td2html \
   td2mrkv \
@@ -50,10 +51,11 @@ depcheck:
 	perl -MPod::Usage -e 1
 	perl -MMIME::QuotedPrint -e 1
 	perl -MEncode -e 1
+	perl -MText::CSV -e 1
 
 .PHONY: try-satisfy-dependencies
 try-satisfy-dependencies:
-	apt install libswitch-perl liblist-moreutils-perl
+	apt install libswitch-perl liblist-moreutils-perl libtext-csv-perl
 
 
 REPO_ROOT = ..

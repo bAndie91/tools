@@ -45,6 +45,7 @@ TOOLS ?= \
   foreach \
   fzf-preview \
   g_filename_to_uri \
+  gitconfigexec \
   git-checkout-sparse \
   git_diff \
   git-submodule-auto-add \

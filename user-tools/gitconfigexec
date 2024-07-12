@@ -1,0 +1,44 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+gitconfigexec - Change git settings for a given command run only
+
+=head1 SYNOPSIS
+
+gitconfigexec I<KEY>=I<VALUE> [I<KEY>=I<VALUE> [...]] [--] I<COMMAND> I<ARGS>
+
+=head1 DESCRIPTION
+
+I<KEY> is a valid git config option (see git-config(1)).
+Set B<GIT_CONFIG_COUNT>, B<GIT_CONFIG_KEY_I<n>>, and B<GIT_CONFIG_VALUE_I<n>>
+environment variables, so git(1) takes them as session-override settings.
+
+=cut
+
+
+while(@ARGV)
+{
+	my $arg = shift @ARGV;
+	if($arg eq '--')
+	{
+		last;
+	}
+	if(my ($cfg_name, $cfg_value) = $arg =~ /^([^=]+)=(.*)$/)
+	{
+		my $idx = int $ENV{'GIT_CONFIG_COUNT'};
+		$ENV{"GIT_CONFIG_KEY_$idx"} = $cfg_name;
+		$ENV{"GIT_CONFIG_VALUE_$idx"} = $cfg_value;
+		$ENV{'GIT_CONFIG_COUNT'}++;
+	}
+	else
+	{
+		unshift @ARGV, $arg;
+		last;
+	}
+}
+
+# remaining arguments are the command and its arguments
+exec @ARGV;

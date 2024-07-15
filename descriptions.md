@@ -1,6 +1,7 @@
 |   |   |
 |---|---|
 | [2opml](user-tools/2opml) | Convert list of URLs to OPML.
+| [a8e](user-tools/a8e) | Abbreviate words in the input stream
 | [adr2html](user-tools/adr2html) | Convert Opera Hostlist 2.0 bookmarks to HTML
 | [asterisk-log-separator](user-tools/asterisk-log-separator) | Split up Asterisk PBX log file into multiple files based on which process wrote each part
 | [awk-cut](user-tools/awk-cut) | Select fields from input stream with awk
@@ -45,7 +46,9 @@
 | [fmtkv](user-tools/fmtkv) | Tranform key=value (each optionally double-quoted) pairs into 1 pair by 1 line on the output
 | [foreach](user-tools/foreach) | Run an OS or shell command on each input line, similar to xargs(1)
 | [g_filename_to_uri](user-tools/g_filename_to_uri) | Mimic g_filename_to_uri() GLib function creating a file:// url from path string
-| [gitdiff](user-tools/gitdiff) | View two files' diff by git-diff(1), even not under git version control
+| [gitconfigexec](user-tools/gitconfigexec) | Change git settings for a given command run only
+| [git_diff](user-tools/git_diff) | View two files' diff by git-diff(1), even not under git version control
+| [git-submodule-auto-add](user-tools/git-submodule-auto-add) | Automatically add submodules to a git repo according to .gitmodules file
 | [grandparentexe](compiled-tools/grandparentexe.c) | Display the grandparent process executable path of the current process
 | [header.sed](user-tools/header.sed) | Echo the input stream up to the first empty line (usual end-of-header marker)
 | [Head](user-tools/Head) | output as many lines from the first part of files as many lines on the terminal currently
@@ -86,6 +89,7 @@
 | [movesymlinks](user-tools/movesymlinks) | Rename file and correct its symlinks to keep point to it.
 | [moz_bookmarks](user-tools/moz_bookmarks) | Read Mozilla bookmarks database and display titles and URLs line-by-line
 | [msg](user-tools/msg) | Write to given user's open terminals
+| [multicmd](user-tools/multicmd) | Run multiple commands in series
 | [multithrottler](user-tools/multithrottler) | Run given command if not reached the defined rate limit
 | [mysql-fix-orphan-privileges.php](user-tools/mysql-fix-orphan-privileges.php) | Suggest SQL commands to clean up unused records in system tables which hold permission data
 | [noacute](user-tools/noacute) | Strip diacritics (acute, umlaut, ...) from letters on the input stream
@@ -96,7 +100,7 @@
 | [palemoon-current-url](user-tools/palemoon-current-url) | Display the webpage's URL which is currently open in Palemoon web browser
 | [parsel](user-tools/parsel) | Select parts of a HTML document based on CSS selectors
 | [partial](user-tools/partial) | Show an earlier started long-running command's partial output
-| [paths2indent](user-tools/paths2indent) | Transform list of filesystem paths on input into an indented list of their leaf elements
+| [paths2indent](user-tools/paths2indent) | Transform list of filesystem paths to an indented list of the leaf elements
 | [pdfflop](user-tools/pdfflop) | Flop a PDF file's pages
 | [perl-repl](user-tools/perl-repl) | Read-Evaluate-Print-Loop wrapper for perl(1)
 | [pfx2pem](user-tools/pfx2pem) | Convert PFX (PKCS#12) certificate file to PEM format
@@ -119,6 +123,7 @@
 | [relpath](compiled-tools/relpath.c) | Calculate the shortest relative path between directories
 | [remove](compiled-tools/remove.c) | Remove file and directoy alike
 | [renamemanual](user-tools/renamemanual) | Interactive file rename tool
+| [rename.td](user-tools/rename.td) | rename multiple files by a Perl expression
 | [repeat](user-tools/repeat) | Run a give command repeatedly
 | [replcmd](user-tools/replcmd) | Wrap any command in a REPL interface
 | [reportcmdstatus](user-tools/reportcmdstatus) | Textually show how the given command finished (exit status/signal)

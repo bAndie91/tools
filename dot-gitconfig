@@ -12,6 +12,10 @@
 [merge]
 	ff = false
 
+[gc]
+	reflogexpire = never
+	reflogexpireunreachable = never
+
 [diff]
 	renames = copies
 	algorithm = patience

@@ -146,6 +146,7 @@ TOOLS ?= \
   screens \
   set-sys-path \
   set-xcursor-lock-and-run \
+  singleinstance \
   sockio \
   ssh-agent-finder \
   stdfilt \

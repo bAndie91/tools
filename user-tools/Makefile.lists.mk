@@ -183,6 +183,7 @@ TOOLS ?= \
   wget-mirror \
   whisper-retention-info \
   wikibot \
+  withpidfile \
   xdg-autostart \
   xml2json \
 

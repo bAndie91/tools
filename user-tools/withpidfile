@@ -1,0 +1,13 @@
+#!/bin/sh
+
+if [ $# -lt 2 ]
+then
+	echo "Usage: withpidfile <PIDFILE> <COMMAND> [<ARGS>]" >&2
+	exit 1
+fi
+
+set -e
+
+echo $$ > "$1"
+shift
+exec "$@"

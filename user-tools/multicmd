@@ -8,7 +8,7 @@ multicmd - Run multiple commands in series
 
 =head1 SYNOPSIS
 
-multicmd I<COMMAND-1> I<ARGS-1> ";" I<COMMAND-2> I<ARGS-2> ";" ...
+multicmd [I<OPTIONS>] [--] I<COMMAND-1> I<ARGS-1> ";" I<COMMAND-2> I<ARGS-2> ";" ...
 
 Run I<COMMAND-1>, I<COMMAND-2>, ... I<COMMAND-n> after each other,
 similarly like shells would do, except not involving any shell.
@@ -22,6 +22,16 @@ similarly like shells would do, except not involving any shell.
 Set command delimiter to I<STRING>.
 Default is a literal C<;> semicolon.
 Probably need to shell-escape.
+If you want C<--> (double dash) for delimiter, to avoid confusion, put it as:
+C<--delimiter=-->.
+
+=item -e, --errexit
+
+Exit if a command did not run successfully (ie. non-zero exit status or signaled)
+and do not run further commands.
+Similar to bash(1)'s errexit (set -e) mode.
+multicmd(1)'s exit code will be the failed command exit code
+(128+B<n> if terminated by a signal B<n>).
 
 =back
 
@@ -48,48 +58,24 @@ multicmd(1) exit with the exit code of the last command.
 
 =cut
 
-use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat/;
+
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order pass_through/;
 use Pod::Usage;
 use Data::Dumper;
 use POSIX;
 
 $Delimiter = ';';
+$Errexit = 0;
 
-sub parameter_error
-{
-	pod2usage(-exitval=>2, -verbose=>99);
-}
-
-while(@ARGV)
-{
-	my $arg = shift @ARGV;
-	if(my ($opt, $optval) = $arg =~ /^(-d|--delimiter)(?:=(.+)|)$/)
-	{
-		if(not defined $optval)
-		{
-			$optval = shift @ARGV or parameter_error();
-		}
-		$Delimiter = $optval;
-	}
-	elsif($arg =~ /^--help$/)
-	{
-		pod2usage(-exitval=>0, -verbose=>99);
-	}
-	elsif($arg =~ /^-/)
-	{
-		warn "$0: unknown option: $arg\n";
-		parameter_error();
-	}
-	else
-	{
-		unshift @ARGV, $arg;
-		last;
-	}
-}
+GetOptions(
+	'd|delimiter=s' => \$Delimiter,
+	'e|errexit!' => \$Errexit,
+	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+) or pod2usage(-exitval=>2, -verbose=>99);
 
 if(not @ARGV)
 {
-	parameter_error();
+	pod2usage(-exitval=>2, -verbose=>99);
 }
 
 @cmd_args = ([]);
@@ -108,14 +94,37 @@ for my $arg (@ARGV)
 	}
 }
 
+# filter out empty commands
+@cmd_args = grep {@$_} @cmd_args;
+
 $last_cmd_ref = pop @cmd_args;
 
 for my $cmd_ref (@cmd_args)
 {
 	system @$cmd_ref;
+	my $error_code = ${^CHILD_ERROR_NATIVE};
+	my $sys_errmsg = $!;
+	my $sys_errno = int $!;
+	my $exit_status = 0;
+	
+	if($error_code == -1)
+	{
+		warn "$0: $cmd_ref->[0]: $sys_errmsg\n";
+		$exit_status = 125 + $sys_errno;  # "file not found" becomes 127.
+	}
+	else
+	{
+		if(WIFSIGNALED($error_code)) { $exit_status = 128 + WTERMSIG($error_code); }
+		else { $exit_status = WEXITSTATUS($error_code); }
+	}
+	
+	if($Errexit and $exit_status != 0)
+	{
+		exit $exit_status;
+	}
 }
 
 exec @$last_cmd_ref;
 
-# if command not found:
+# if last command not found:
 exit 127;

@@ -98,6 +98,7 @@ TOOLS ?= \
   noacute \
   nocomment \
   nopath \
+  notashell \
   nthash.py \
   ocspverify \
   oded \

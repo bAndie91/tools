@@ -1,0 +1,12 @@
+#!/usr/bin/env perl
+
+if(scalar @ARGV != 2 or $ARGV[0] != '-c')
+{
+	warn "notashell: Supposed to be called as 'notashell -c CommandString'\n";
+}
+
+$CommandString = $ARGV[1];
+
+@cmd_args = split /\s+/, $CommandString;
+
+exec {$cmd_args[0]} @cmd_args;

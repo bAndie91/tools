@@ -121,7 +121,7 @@ if($child_pid == 0)
 	open STDERR, '>&', $stderr_w or die "$0: replace stderr: $!\n";
 	select STDERR; $|++;
 	select STDOUT; $|++;
-	exec @ARGV;
+	exec {$ARGV[0]} @ARGV;
 	exit 127;
 }
 

@@ -53,7 +53,7 @@ for my $redir (@redirs)
 	dup2(fileno $fh, $redir->{'fd'}) or die "$0: can not duplicate fd of $redir->{'file'}: $!\n";
 }
 
-exec @command;
+exec {$command[0]} @command;
 
 
 __END__

@@ -183,7 +183,7 @@ if(defined $Zonefile)
 		
 		if($allowed)
 		{
-			exec $Command, @Args;
+			exec {$Command} $Command, @Args;
 			warnx "failed to exec: $Command\n";
 			exit 127;
 		}

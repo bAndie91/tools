@@ -48,5 +48,5 @@ for my $arg (@ARGV)
 	push @run_cmd, $arg;
 }
 
-exec @run_cmd;
+exec {$run_cmd[0]} @run_cmd;
 exit 127;

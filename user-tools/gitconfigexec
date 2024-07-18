@@ -41,4 +41,4 @@ while(@ARGV)
 }
 
 # remaining arguments are the command and its arguments
-exec @ARGV;
+exec {$ARGV[0]} @ARGV;

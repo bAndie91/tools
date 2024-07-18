@@ -127,7 +127,7 @@ for my $cmd_ref (@cmd_args)
 	}
 }
 
-exec @$last_cmd_ref;
+exec {$last_cmd_ref->[0]} @$last_cmd_ref;
 
 # if last command not found:
 exit 127;

@@ -53,14 +53,24 @@ if (!@ARGV) {
     chomp(@ARGV);
 }
 
-print join "\t", "STATUS", "OLD", "NEW";
-print "\n";
+$header_emitted = 0;
+$highest_errno = 0;
 
-for (@ARGV) {
+sub emit_header
+{
+	return if $header_emitted;
+	print join "\t", "STATUS", "OLD", "NEW";
+	print "\n";
+}
+
+for (@ARGV)
+{
     my $was = $_;
     eval $op;
     die $@ if $@;
+    
     my $status;
+    
     if($was eq $_)
     {
         $status = "KEEP" if $verbose >= 2;
@@ -68,7 +78,6 @@ for (@ARGV) {
     elsif (-e $_ and !$force)
     {
     	$status = "SKIP";
-        #warn  "\"$was\" not renamed, \"$_\" already exists\n";
     }
     else
     {
@@ -86,16 +95,20 @@ for (@ARGV) {
             {
             	my $errno = int $!;
             	$status = "ERR $errno";
+            	$highest_errno = $errno if $errno > $highest_errno;
             }
         }
-        #print "\"$was\" ".($no_act?"would be ":'')."renamed to \"$_\"\n" if $verbose;
     }
+    
     if(defined $status)
     {
+    	emit_header;
 	    print join "\t", $status, $was, $_;
     	print "\n";
     }
 }
+
+exit $highest_errno;
 
 __END__
 
@@ -107,9 +120,11 @@ rename.td - rename multiple files by a Perl expression
 
 rename.td S<[ B<-v>[B<v>] ]> S<[ B<-n> ]> S<[ B<-f> ]> I<perlexpr> S<[ I<files> ]>
 
+cat files.list | rename.td S<[ B<-v>[B<v>] ]> S<[ B<-n> ]> S<[ B<-f> ]> I<perlexpr>
+
 =head1 DESCRIPTION
 
-B<rename.td> renames the filenames supplied according to the rule specified as the first argument.
+B<rename.td> renames the files supplied according to the rule specified as the first argument.
 The I<perlexpr> argument is a Perl expression which is expected to modify the C<$_>
 string in Perl for at least some of the filenames specified.
 If a given filename is not modified by the expression, it will not be renamed.
@@ -132,9 +147,13 @@ To translate uppercase names to lower, you'd use
 
 Verbose: print names of files successfully renamed.
 
+=item B<-vv>
+
+Verbose extra: print names of files of which name is not changed.
+
 =item B<-n>, B<--dry-run>, B<--no-act>
 
-No Action: show what files would have been renamed.
+No Action: show what files would have been renamed, or skipped.
 
 =item B<-f>, B<--force>
 
@@ -172,6 +191,11 @@ Each subsequent line describes a file in this way:
 
 =back
 
+=head1 EXIT STATUS
+
+Zero when all rename succeeded, otherwise the highest error number of all the failed renames, if any.
+See rename(2) for these error numbers.
+
 =head1 ENVIRONMENT
 
 No environment variables are used.
@@ -184,7 +208,7 @@ Robin Barker
 
 =head1 SEE ALSO
 
-mv(1), perl(1), file-rename(1p) (prename(1)), rename.ul (rename(1)), renamemanual(1)
+mv(1), perl(1), rename(2), file-rename(1p) (prename(1)), rename.ul (rename(1)), renamemanual(1)
 
 =head1 DIAGNOSTICS
 

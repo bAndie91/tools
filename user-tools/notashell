@@ -10,3 +10,6 @@ $CommandString = $ARGV[1];
 @cmd_args = split /\s+/, $CommandString;
 
 exec {$cmd_args[0]} @cmd_args;
+($errno, $errstr) = (int $!, $!);
+warn "$cmd_args[0]: $errstr\n";
+exit 125+$errno;

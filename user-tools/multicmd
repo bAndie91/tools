@@ -73,6 +73,9 @@ GetOptions(
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
+# Getopt's pass_through mode leaves "--" there
+shift @ARGV if $ARGV[0] eq '--';
+
 if(not @ARGV)
 {
 	pod2usage(-exitval=>2, -verbose=>99);

@@ -14,7 +14,7 @@ else
 	}
 	
 	$CommandString = $ARGV[1];
-	@cmd_args = split /\s+/, $CommandString;
+	@cmd_args = split / /, $CommandString;
 	$progname = $cmd_args[0];
 	$ENV{'NOTASHELL_REDIRECT'} = 0;
 	

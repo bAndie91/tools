@@ -1,15 +1,24 @@
 #!/usr/bin/env perl
 
-if(scalar @ARGV != 2 or $ARGV[0] != '-c')
+if($ENV{'NOTASHELL_ALLOW_REAL_SHELL'})
 {
-	die "notashell: Supposed to be called as 'notashell -c CommandString'\n";
+	my $basename = $0 =~ s/.*\/([^\/]+)$/$1/r;
+	exec {"/var/lib/notashell/real-" . $basename} $basename, @ARGV;
+}
+else
+{
+	if(scalar @ARGV != 2 or $ARGV[0] != '-c')
+	{
+		die "notashell: Supposed to be called as 'notashell -c CommandString'\n";
+	}
+	
+	$CommandString = $ARGV[1];
+	@cmd_args = split /\s+/, $CommandString;
+	$ENV{'NOTASHELL_ALLOW_REAL_SHELL'} = 1;
+	
+	exec {$cmd_args[0]} @cmd_args;
 }
 
-$CommandString = $ARGV[1];
-
-@cmd_args = split /\s+/, $CommandString;
-
-exec {$cmd_args[0]} @cmd_args;
 ($errno, $errstr) = (int $!, $!);
 warn "$cmd_args[0]: $errstr\n";
 exit 125+$errno;

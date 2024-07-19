@@ -1,0 +1,20 @@
+#!/bin/bash
+
+set -e
+
+if [ "$1" = --inner ]
+then
+	mkdir -p /var/lib/notashell
+	for shell in sh bash
+	do
+		true > /var/lib/notashell/real-$shell
+		mount -o bind /bin/$shell /var/lib/notashell/real-$shell
+		mount -o bind /usr/tool/notashell /bin/$shell
+	done
+	
+	shift
+	export NOTASHELL_ALLOW_REAL_SHELL=0
+	exec "$@"
+else
+	exec unshare --mount -- "$0" --inner "$@"
+fi

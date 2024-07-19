@@ -5,15 +5,21 @@ set -e
 if [ "$1" = --inner ]
 then
 	mkdir -p /var/lib/notashell
-	for shell in sh bash
+	
+	shellnames=(sh dash bash)
+	
+	for shell in "${shellnames[@]}"
 	do
-		true > /var/lib/notashell/real-$shell
+		[ -f /var/lib/notashell/real-$shell ] || true > /var/lib/notashell/real-$shell
 		mount -o bind /bin/$shell /var/lib/notashell/real-$shell
+	done
+	for shell in "${shellnames[@]}"
+	do
 		mount -o bind /usr/tool/notashell /bin/$shell
 	done
 	
 	shift
-	export NOTASHELL_ALLOW_REAL_SHELL=0
+	export NOTASHELL_REDIRECT=1
 	exec "$@"
 else
 	exec unshare --mount -- "$0" --inner "$@"

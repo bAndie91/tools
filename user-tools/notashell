@@ -1,8 +1,9 @@
 #!/usr/bin/env perl
 
-if($ENV{'NOTASHELL_ALLOW_REAL_SHELL'})
+if(not $ENV{'NOTASHELL_REDIRECT'})
 {
 	my $basename = $0 =~ s/.*\/([^\/]+)$/$1/r;
+	$progname = $basename;
 	exec {"/var/lib/notashell/real-" . $basename} $basename, @ARGV;
 }
 else
@@ -14,11 +15,12 @@ else
 	
 	$CommandString = $ARGV[1];
 	@cmd_args = split /\s+/, $CommandString;
-	$ENV{'NOTASHELL_ALLOW_REAL_SHELL'} = 1;
+	$progname = $cmd_args[0];
+	$ENV{'NOTASHELL_REDIRECT'} = 0;
 	
 	exec {$cmd_args[0]} @cmd_args;
 }
 
 ($errno, $errstr) = (int $!, $!);
-warn "$cmd_args[0]: $errstr\n";
+warn "$progname: $errstr\n";
 exit 125+$errno;

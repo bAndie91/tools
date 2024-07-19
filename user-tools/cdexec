@@ -14,6 +14,10 @@ cdexec [--home | <B<DIRECTORY>>] [--] <B<COMMAND>> [<B<ARGS>>]
 Run a given command in the given directory.
 Set the target directory to the command's self directory if not given.
 
+=head1 SEE ALSO
+
+execline-cd by execlineb(1)
+
 =cut
 
 EOF

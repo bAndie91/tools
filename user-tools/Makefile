@@ -75,6 +75,10 @@ DEPCHECK/xml2json:
 	python -c 'import xmltodict'
 DEPCHECK/palemoon-current-url:
 	which jq
+DEPCHECK/dbus-call:
+	perl -MNet::DBus -e 1
+	perl -MXML::Hash::LX -e 1
+	perl -MJSON -e 1
 
 .PHONY: try-satisfy-dependencies
 try-satisfy-dependencies:

@@ -17,12 +17,12 @@ Perl expression.
 
 In I<EXPR>, you may refer to other columns by C<$F{NAME}> where I<NAME> is the column name;
 or by C<$F[INDEX]> where I<INDEX> is the 0-based column index number;
-or in case of uppercase alpha-numberic field names, simply by C<COLUMN>
+or in case of uppercase alpha-numeric field names, simply by bareword C<COLUMN>
 (because these are set up as subroutines internally).
 Topic variable (C<$_>) is set to the current value of I<COLUMN>.
 
-You can create new columns simply by referring to a I<COLUMN> name does not yet exist.
-You can use an earlier defined I<COLUMN>'s value in a subsequent I<EXPR>.
+You can create new columns simply by referring to a I<COLUMN> name that does not yet exist.
+You can refer to an earlier defined I<COLUMN> in subsequent I<EXPR> expressions.
 
 =head1 EXAMPLES
 

@@ -1,0 +1,142 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+dbus-call - Browse DBus and call its methods
+
+=head1 SYNOPSIS
+
+dbus-call [I<OPTIONS>] [I<SERVICE> [I<OBJECT> [I<INTERFACE> [I<METHOD> [I<ARGUMENTS>]]]]]
+
+=head1 DESCRIPTION
+
+May leave out any parameters from the right,
+in which case possible values for the first left-out parameter are listed.
+
+=head1 OPTIONS
+
+=over 4
+
+=item --system
+
+Connect to the system DBus.
+
+=item --session
+
+Connect to the session DBus.
+
+=back
+
+=cut
+
+use Net::DBus;
+use JSON;
+use Data::Dumper;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
+use Pod::Usage;
+use XML::Hash::LX;
+
+
+GetOptions(
+	'system' => sub{ $Bus = Net::DBus->system; },
+	'session' => sub{ $Bus = Net::DBus->session; },
+	'help' => sub{ pod2usage(-exitval=>0, -verbose=>99); },
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+
+$Bus = Net::DBus->find unless defined $Bus;
+
+sub dbus_call
+{
+	my ($servicename, $objpath, $interface, $methodname, @methodargs) = @_;
+	$interface = $servicename if not defined $interface;
+	my $service = $Bus->get_service($servicename);
+	my $object = $service->get_object($objpath, $interface);
+	# TODO: convert arguments in @methodargs to the appropriative data type
+	return $object->$methodname(@methodargs);
+}
+
+
+($ServiceName, $ObjPath, $Interface, $MethodName, @MethodArgs) = @ARGV;
+
+
+if(not defined $ServiceName)
+{
+	my $services = dbus_call("org.freedesktop.DBus", "/org/freedesktop/DBus", undef, "ListNames");
+	$\ = "\n";
+	print $_ for @$services;
+	exit;
+}
+
+sub discover_service
+{
+	my $servicename = shift;
+	my $basepath = shift;
+	my $thispath = $basepath || "/";
+	
+	my @objs = ();
+	my $xmlstr = dbus_call($servicename, $thispath, "org.freedesktop.DBus.Introspectable", "Introspect");
+	my $xmlhash = xml2hash($xmlstr, attr=>'--', array=>1);
+	
+	for my $node (@{$xmlhash->{'node'}})
+	{
+		for my $node (@{$node->{'node'}})
+		{
+			my $nodename = $node->{'--name'};
+			my $path = "$basepath/$nodename";
+			push @objs, {
+				'_type' => 'node',
+				'objpath' => $path,
+			};
+			push @objs, discover_service($servicename, $path);
+		}
+		for my $interface (@{$node->{'interface'}})
+		{
+			my $ifacename = $interface->{'--name'};
+			for my $callable (@{$interface->{'method'}}, @{$interface->{'signal'}})
+			{
+				my @args = @{$callable->{'arg'}};
+				push @objs, {
+					'_type' => 'method',  # TODO: distinguish methods from signals
+					'objpath' => $thispath,
+					'interface' => $ifacename,
+					'method' => $callable->{'--name'},
+					'input' => [grep {$_->{'--direction'} ne 'out'} @args],
+					'output' => [grep {$_->{'--direction'} eq 'out'} @args],
+				};
+			}
+		}
+	}
+	return @objs;
+}
+
+sub describe_arguments
+{
+	my $arglistref = shift;
+	return "(" . join(", ", map {sprintf "%s:%s", $_->{'--type'}, $_->{'--name'}} @$arglistref) . ")";
+}
+
+if(not defined $ObjPath or not defined $Interface or not defined $MethodName)
+{
+	my $td_headers_shown = 0;
+	for my $obj (discover_service($ServiceName, $ObjPath || ""))
+	{
+		$\ = "\n";
+		#print Dumper $obj;
+		if($obj->{'_type'} eq 'method')
+		{
+			next if defined $Interface and $Interface ne $obj->{'interface'};
+			
+			if(not $td_headers_shown) { print join "\t", qw/OBJECT INTERFACE METHOD INPUT OUTPUT/; $td_headers_shown = 1; }
+			my $methodargs_description = describe_arguments($obj->{'input'});
+			my $returnvalues_description = describe_arguments($obj->{'output'});
+			print join "\t", $obj->{'objpath'}, $obj->{'interface'}, $obj->{'method'}, $methodargs_description, $returnvalues_description;
+		}
+	}
+	exit;
+}
+
+$reply = dbus_call($ServiceName, $ObjPath, $Interface, $MethodName, @MethodArgs);
+print encode_json($reply);

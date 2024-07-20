@@ -19,12 +19,14 @@ TOOLS ?= \
   cut.awk \
   daemonctl \
   dataurl2bin \
+  dbus-call \
   debdiff \
   descpids \
   dfbar \
   digasn \
   diu \
   dlnew \
+  dnsmasq-dbus-nameservers \
   dump_php_session.php \
   eat \
   errorlevel \

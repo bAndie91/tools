@@ -13,8 +13,25 @@ vcf2td - Transform VCF to tabular data format.
 =item -C I<COLUMN> -C I<COLUMN> ...
 
 Predefine columns.
-Useful if the first record does not contain all fields.
-By default vcf2td(1) makes the header out of fields found in the first record.
+Useful if the first record does not contain all fields
+which are otherwise occur in the whole data stream.
+By default, vcf2td(1) recognize fields which are in the first record in the VCF input,
+does not read ahead more records before sending the header.
+
+=item -i, --ignore-non-existing-columns
+
+Don't fail and don't warn when ecountering new field names.
+
+Tabular data format declares all of the field names in the column headers,
+so it can not introduce new columns later on in the data stream
+(unless some records were buffered which are not currently).
+However in VCF, each record may have fields different from the first record.
+That's why vcf2td(1) fails itself by default
+if it encounters a field it can not convert to tabular.
+
+=item -w, --warn-non-existing-columns
+
+Only warns on new fields, but don't fail.
 
 =back
 
@@ -51,7 +68,8 @@ while(<STDIN>)
 				}
 				else
 				{
-					die "$0: column not defined: $field_name\n";
+					warn "$0: column not defined: $field_name\n" if $OptWarnBadColumnNames;
+					die if $OptFailBadColumnNames;
 				}
 			}
 		}

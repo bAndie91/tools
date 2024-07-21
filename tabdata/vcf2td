@@ -35,6 +35,22 @@ Only warns on new fields, but don't fail.
 
 =back
 
+=head1 COMMON vCard fields
+
+=over 4
+
+=item N
+
+B<N> is for a contact's name, different parts separated by C<;> semicolon.
+vcf2td(1) simplifies the B<N> field by removing excess semicolons.
+If you need one or more name parts precisely,
+request the B<N.family>, B<N.given>, B<N.middle>, B<N.prefixes> fields
+by the B<-C> option if you want,
+but this name partitioning method is not quite internationally useful,
+use the B<FN> (full name) field for persons' names as much as you can.
+
+=back
+
 =cut
 
 

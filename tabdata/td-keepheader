@@ -23,5 +23,8 @@ die "$0: no COMMAND given\n" unless @ARGV;
 
 $header = sys_read_line();
 
+$|++;
+print $header . $RS;
+
 exec @ARGV;
 die "$!: @ARGV\n";

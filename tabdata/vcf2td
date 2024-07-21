@@ -106,10 +106,10 @@ while(<STDIN>)
 		{
 			if($RN == 0)
 			{
-				print join($FS, @columns) . $RS;
+				print join($FS, map {escape_tabdata($_)} @columns) . $RS;
 			}
 			
-			print join($FS, map {$record{$_}} @columns) . $RS;
+			print join($FS, map {escape_tabdata($record{$_})} @columns) . $RS;
 			
 			%record = ();
 			$RN++;

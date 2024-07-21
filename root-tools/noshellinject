@@ -1,0 +1,66 @@
+#!/bin/bash
+
+# This script, noshellinject, creates a mount namespace,
+# in which common shell commands (/bin/sh, /bin/bash, ...) are bind-mounted over with "notashell".
+#
+# notashell(1) is a program with non-interactive shell interface (ie. "sh -c commandLine"),
+# and which intentionally does not understands any shell syntax or meta character,
+# rather takes the first word of the supposed command-line (passed after the "-c" option)
+# and executes it as a single command with all of the rest of the command-line as its arguments.
+#
+# This is useful when you have a program which normally calls some command via shell (eg. system(3)),
+# with user-controlled parts in it, ie. data from an untrusted source,
+# thus potentially vulnerable to shell-injection.
+# Like incrond(8), which triggered me to make this defense tool.
+# These kind of programs usually try to defend by escaping user input,
+# but it often turns out that the re-implemented shell-escape mechanism was bad or incomplete.
+#
+# Using notashell enables you to fully evade shell-injection attacks.
+# Since if you control the beginning of the command line,
+# you can validate untrusted parameters by a wrapper program (script)
+# and do the useful processing there or call an other program now with verified and trusted parameters.
+# No need to think on "is it safe to run by shell?" or quotation-mark forests ever again.
+#
+# notashell(1) bypasses shell only when the program started by this script
+# directly executes an over-mounted shell (notashell switches NOTASHELL_REDIRECT environment off).
+# So in your untrusted-argument-validator script and any of its subprocesses,
+# sh(1)/bash(1) may be called at your convenience.
+# This is safe, because it's your control what you pass to them from the validator.
+#
+# One notable thing in its mechanics is that this re-enablement of real shells
+# is done not by switching back to the original mount namespace,
+# because the neglegent program (which calls system(3) inconsiderately) may
+# switch privilege level so its child process can not switch namespaces,
+# but by keep calling notashell(1) in guise of sh(1)/bash(1)
+# but no longer having NOTASHELL_REDIRECT makes notashell(1) call the real boys
+# from /var/lib/notashell where they were previously saved (bind-mounted).
+# Therefore, don't allow users to change NOTASHELL_REDIRECT environment either.
+
+set -e
+
+if [ "$1" = --inner ]
+then
+	mkdir -p /var/lib/notashell
+	
+	# may extend if the neglegent program calls something else as shell
+	shellnames=(sh dash bash)
+	
+	for shell in "${shellnames[@]}"
+	do
+		# can only bind-mount existing paths
+		[ -f /var/lib/notashell/real-$shell ] || true > /var/lib/notashell/real-$shell
+		# save the real shell for later use
+		mount -o bind /bin/$shell /var/lib/notashell/real-$shell
+	done
+	
+	for shell in "${shellnames[@]}"
+	do
+		mount -o bind /usr/tool/notashell /bin/$shell
+	done
+	
+	shift
+	export NOTASHELL_REDIRECT=1
+	exec "$@"
+else
+	exec unshare --mount -- "$0" --inner "$@"
+fi

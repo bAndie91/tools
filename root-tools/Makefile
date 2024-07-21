@@ -1,14 +1,14 @@
 
 TOOLS_TARGET_DIR = /usr/tool
 
-TOOLS = anacron-peruser hidedir nf_condition sshwho swapoff-progress syncifstate
+TOOLS = anacron-peruser hidedir nf_condition sshwho swapoff-progress syncifstate noshellinject
 
 TOOLS_TARGET_FILES := $(addprefix $(TOOLS_TARGET_DIR)/,$(TOOLS))
 
 
 install-all: $(TOOLS_TARGET_FILES) /usr/sbin/sendmail.cron /usr/sbin/sendmail.atd install-sendmail-smtp
 
-$(TOOLS_TARGET_FILES):
+$(TOOLS_TARGET_FILES): $(TOOLS_TARGET_DIR)/%: %
 	install $(notdir $@) $(TOOLS_TARGET_DIR)/
 	@echo remove $@ >> uninstall.sh
 

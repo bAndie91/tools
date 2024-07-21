@@ -33,7 +33,7 @@ td2mrkv(1)
 =cut
 
 $OptSeparatorRegexp = "\t";
-$OptMultilineGlue = "\\n";
+$OptMultilineGlue = "\n";
 
 use Data::Dumper;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
@@ -47,11 +47,11 @@ sub flush_record
 	
 	if(not $header_sent)
 	{
-		print join($FS, sort { $colnum->{$a} <=> $colnum->{$b} } keys %$colnum).$RS;
+		print join($FS, map {escape_tabdata($_)} sort { $colnum->{$a} <=> $colnum->{$b} } keys %$colnum).$RS;
 		$header_sent = 1;
 	}
 	
-	print join($FS, map { $record->{$_} } sort { $colnum->{$a} <=> $colnum->{$b} } keys %$record).$RS;
+	print join($FS, map { escape_tabdata($record->{$_}) } sort { $colnum->{$a} <=> $colnum->{$b} } keys %$record).$RS;
 }
 
 @Headers = ();
@@ -75,7 +75,6 @@ while(my $line = <STDIN>)
 	else
 	{
 		my ($field, $cell) = split /$OptSeparatorRegexp/, $line, 2;
-		$cell = escape_tabdata($cell);
 		if(exists $record{$field})
 		{
 			$record{$field} .= $OptMultilineGlue . $cell;

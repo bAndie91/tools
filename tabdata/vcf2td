@@ -33,6 +33,12 @@ if it encounters a field it can not convert to tabular.
 
 Only warns on new fields, but don't fail.
 
+=item -g, --multivalue-glue I<STR>
+
+A string to glue repeated fields' values together
+when the repeated fields are handled by uniting their content into one tabdata column.
+Default is newline.
+
 =back
 
 =head1 COMMON vCard fields
@@ -130,7 +136,14 @@ while(<STDIN>)
 			$data =~ s/^;//;
 		}
 		
-		$record{$field_name} = $data;
+		if(exists $record{$field_name})
+		{
+			$record{$field_name} .= $OptMultilineGlue.$data;
+		}
+		else
+		{
+			$record{$field_name} = $data;
+		}
 		
 		if($field_name eq 'END')
 		{

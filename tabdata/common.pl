@@ -37,7 +37,7 @@ GetOptions(
 	'c|max-columns=i' => \$OptMaxColumns,
 	
 	's|separator=s' => \$OptSeparatorRegexp,
-	'g|multiline-glue=s' => \$OptMultilineGlue,
+	'g|multiline-glue|multivalue-glue=s' => \$OptMultilineGlue,
 	
 	'x|extra-columns' => sub { $OptAddExtraColumns = 1; },
 	'X|no-extra-columns' => sub { $OptAddExtraColumns = 0; },

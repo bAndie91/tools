@@ -70,6 +70,7 @@ while(<STDIN>)
 				{
 					warn "$0: column not defined: $field_name\n" if $OptWarnBadColumnNames;
 					die if $OptFailBadColumnNames;
+					next;
 				}
 			}
 		}

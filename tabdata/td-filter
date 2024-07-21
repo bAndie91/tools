@@ -213,7 +213,8 @@ else
 		if($operator ~~ [qw/contains contains-one-of/] and $ARGV[0] eq 'whole' and $ARGV[1] eq 'word')
 			{ $wholeword = 1; shift @ARGV; shift @ARGV; }
 		
-		my $rvalue = shift @ARGV or die "$0: missing r-value for: $column $operator\n";
+		my $rvalue = shift @ARGV;
+		die "$0: missing r-value for: $column $operator\n" if not defined $rvalue;
 		
 		
 		unless($operator ~~ [qw/== != <= >= < > =~ !~ eq ne gt lt is-one-of contains contains-one-of/])

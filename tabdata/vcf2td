@@ -60,6 +60,8 @@ use the B<FN> (full name) field for persons' names as much as you can.
 =cut
 
 
+$OptMultilineGlue = "\n";
+
 use Data::Dumper;
 use Encode;
 use MIME::QuotedPrint;

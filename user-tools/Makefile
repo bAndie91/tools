@@ -83,7 +83,9 @@ DEPCHECK/dbus-call:
 .PHONY: try-satisfy-dependencies
 try-satisfy-dependencies:
 	cpan ARGV::readonly
-	apt install python3-parsel python3-cssselect python3-xmltodict jq
+	apt install \
+		python3-parsel python3-cssselect python3-xmltodict jq \
+		libnet-dbus-perl libxml-hash-lx-perl libjson-perl
 
 
 install-all: \

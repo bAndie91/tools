@@ -46,6 +46,7 @@ no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 @columns = @OptPredefColumns;
+@warned_fields = ();
 %record = ();
 $RN = 0;
 
@@ -68,7 +69,11 @@ while(<STDIN>)
 				}
 				else
 				{
-					warn "$0: column not defined: $field_name\n" if $OptWarnBadColumnNames;
+					unless($field_name ~~ @warned_fields)
+					{
+						warn "$0: column not defined: $field_name\n" if $OptWarnBadColumnNames;
+						push @warned_fields, $field_name;
+					}
 					die if $OptFailBadColumnNames;
 					next;
 				}

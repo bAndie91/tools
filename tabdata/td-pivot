@@ -24,8 +24,10 @@ do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 @data = ();
 $max_col = 0;
 
-while(my @row = read_record(\*STDIN))
+while(not eof STDIN)
 {
+	my @row = read_record(\*STDIN);
+	
 	my $cols = scalar @row - 1;
 	$max_col = $cols if $cols > $max_col;
 	push @data, [@row];

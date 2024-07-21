@@ -68,7 +68,7 @@ while(<STDIN>)
 {
 	s/\r?\n//;
 	
-	if(my($field, $data) = /^(.+?):(.*)$/)
+	if(my($field, $data) = /^(\S[^:]*):(.*)$/)
 	{
 		my($field_name, @params) = split /;/, $field;
 		my %param = map {split /=/, $_, 2} @params;

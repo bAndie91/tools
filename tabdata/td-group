@@ -84,8 +84,10 @@ $group_key = undef;
 $prev_group_key = undef;
 @group_members = ();
 
-while(my @row = read_record(\*STDIN))
+while(not eof STDIN)
 {
+	my @row = read_record(\*STDIN);
+	
 	$group_key = $row[0];
 	output_last_group if defined $prev_group_key and $group_key ne $prev_group_key;
 	for my $cell_num (1..$#row)

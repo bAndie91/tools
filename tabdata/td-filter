@@ -156,6 +156,7 @@ td-filter(1) does not need I<R-VALUE> to be quoted or escaped, however your shel
 
 use Switch;
 use List::MoreUtils qw/all any none/;
+use Data::Dumper;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
@@ -253,8 +254,10 @@ if($OptShowHeader and length $HeaderLine)
 	print $HeaderLine.$RS;
 }
 
-while(my @Field = read_record(\*STDIN))
+while(not eof STDIN)
 {
+	my @Field = read_record(\*STDIN);
+	
 	if(defined $Expr)
 	{
 		my @F = @Field;

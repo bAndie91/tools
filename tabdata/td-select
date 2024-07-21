@@ -70,8 +70,10 @@ process_header(scalar <STDIN>);
 
 @Columns = ();
 
-while($arg = shift @ARGV)
+while(@ARGV)
 {
+	my $arg = shift @ARGV;
+	
 	if($arg =~ /^--/)
 	{
 		die "$0: unknown parameter: $arg\n";
@@ -125,8 +127,10 @@ if($OptShowHeader and @Columns)
 
 
 # display selected data fields
-while(my @Input = read_record(\*STDIN))
+while(not eof STDIN)
 {
+	my @Input = read_record(\*STDIN);
+	
 	@Output = ();
 	
 	for my $col (@Columns)

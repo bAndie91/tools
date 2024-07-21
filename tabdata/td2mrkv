@@ -36,8 +36,10 @@ do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 process_header(scalar <STDIN>);
 
 
-while(my @Field = read_record(\*STDIN))
+while(not eof STDIN)
 {
+	my @Field = read_record(\*STDIN);
+	
 	for my $idx (0..$#Header)
 	{
 		printf "%s%s%s\n", $Header[$idx], $OptSeparator, $Field[$idx];

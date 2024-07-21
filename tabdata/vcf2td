@@ -50,6 +50,20 @@ do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 %record = ();
 $RN = 0;
 
+
+sub write_record
+{
+	my $record = shift;
+	
+	if($RN == 0)
+	{
+		print join($FS, map {escape_tabdata($_)} @columns) . $RS;
+	}
+	
+	print join($FS, map {escape_tabdata($record->{$_})} @columns) . $RS;
+}
+
+
 while(<STDIN>)
 {
 	s/\r?\n//;
@@ -104,16 +118,16 @@ while(<STDIN>)
 		
 		if($field_name eq 'END')
 		{
-			if($RN == 0)
-			{
-				print join($FS, map {escape_tabdata($_)} @columns) . $RS;
-			}
-			
-			print join($FS, map {escape_tabdata($record{$_})} @columns) . $RS;
-			
+			write_record(\%record);
 			%record = ();
 			$RN++;
 			next;
 		}
 	}
+}
+
+# write last incomplete record
+if(%record)
+{
+	write_record(\%record);
 }

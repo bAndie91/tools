@@ -29,9 +29,81 @@ You may change or redefine it to control what will be the arguments of the execu
 B<$ExecName> is the command's name or path (C<$CommandArgs[0]> by default) what will be executed at the end.
 You may change this one too, and it's does not need to be aligned with C<$CommandArgs[0]>.
 
+You are also given some utility functions to use in custom.pl at your dispense:
+B<stripQuotes()>, B<setupIORedirects()>.
+B<stripQuotes()> currently just return the supplied string without surrounding single and double quotes.
+
+B<setupIORedirects()> scans the supplied list for common shell IO redirection syntax,
+setup these redirection on the current process,
+and return the input list without those elements which are found to be describing a redirection.
+Recognized representation:
+
+=over 2
+
+=item operators: write (>), append (>>)
+
+=item an integer before the operator; optional, defaults are the same as in sh(1)
+
+=item filename just right after the operator or in the next argument;
+strings matching to B<[a-zA-Z0-9_,./]+> are considered filenames only.
+
+=back
+
 Don't forget to exit from custom.pl with a true value.
 
 =cut
+
+
+use POSIX qw/dup2/;
+
+
+sub stripQuotes
+{
+	my $s = shift;
+	$s =~ s/^([''""])(.*)\g1$/$2/;
+	return $s;
+}
+
+sub setupIORedirects
+{
+	my @cmdargs = @_;
+	my @return = ();
+	my $filename_chars = 'a-zA-Z0-9_,./';
+	
+	while(@cmdargs)
+	{
+		my $arg = shift @cmdargs;
+		my $arg_consumed = 0;
+		if(my ($fd, $redirop, $target) = $arg =~ /^(\d*)(>|>>)([$filename_chars]*)$/)
+		{
+			if($target eq '')
+			{
+				my $nextarg = shift @cmdargs;
+				if($nextarg =~ /^[$filename_chars]+$/)
+				{
+					$target = $nextarg;
+				}
+				else
+				{
+					unshift @cmdargs, $nextarg;
+				}
+			}
+			if($target ne '')
+			{
+				if($fd eq '')
+				{
+					$fd = 0 if $redirop =~ /^</;
+					$fd = 1 if $redirop =~ /^>/;
+				}
+				open my $fh, $redirop, $target or die "$0: $target: open: $!\n";
+				dup2(fileno $fh, $fd) or die "$0: $target: dup2: $!\n";
+				$arg_consumed = 1;
+			}
+		}
+		push @return, $arg unless $arg_consumed;
+	}
+	return @return;
+}
 
 
 $ParserHookPath = "/etc/notashell/custom.pl";

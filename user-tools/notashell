@@ -1,6 +1,40 @@
 #!/usr/bin/env perl
 
-$CustomShellPath = "/etc/notashell/customshell";
+=pod
+
+=head1 NAME
+
+notashell - A non-interactive shell lacking of any shell syntax
+
+=head1 SYNOPSIS
+
+notashell -c I<COMMANDLINE>
+
+=head1 DESCRIPTION
+
+TODO
+
+=head1 FILES
+
+Customize how I<COMMANDLINE> is parsed by F</etc/notashell/custom.pl>.
+If this file exists, notashell(1) executes it inside its main context,
+so in custom.pl you can build in custom logic.
+There are some perl variables accessible:
+B<$CommandString>, B<@CommandArgs>, and B<$ExecName>.
+
+B<$CommandString> is just the I<COMMANDLINE> and recommended that only read it in custom.pl,
+because changing it does not affect what will be executed.
+B<@CommandArgs> is I<COMMANDLINE> split into parts by spaces.
+You may change or redefine it to control what will be the arguments of the executed command at the end.
+B<$ExecName> is the command's name or path (C<$CommandArgs[0]> by default) what will be executed at the end.
+You may change this one too, and it's does not need to be aligned with C<$CommandArgs[0]>.
+
+Don't forget to exit from custom.pl with a true value.
+
+=cut
+
+
+$ParserHookPath = "/etc/notashell/custom.pl";
 
 if(not $ENV{'NOTASHELL_INTERCEPT'})
 {
@@ -16,19 +50,23 @@ else
 	}
 	
 	$CommandString = $ARGV[1];
+	@CommandArgs = split / /, $CommandString;
+	$ExecName = $CommandArgs[0];
+	
+	if(-e $ParserHookPath)
+	{
+		my $hook_result = do $ParserHookPath;
+		if(not defined $hook_result)
+		{
+			die "$ParserHookPath: $@: $!\n";
+		}
+	}
+	
+	$progname = $ExecName;
 	$ENV{'NOTASHELL_INTERCEPT'} = 0;
 	$ENV{'NOTASHELL_ORIGINAL_COMMAND'} = $CommandString;
 	
-	if(-x $CustomShellPath)
-	{
-		exec {$CustomShellPath} @cmd_args;
-	}
-	else
-	{
-		@cmd_args = split / /, $CommandString;
-		$progname = $cmd_args[0];
-		exec {$cmd_args[0]} @cmd_args;
-	}
+	exec {$ExecName} @CommandArgs;
 }
 
 ($errno, $errstr) = (int $!, $!);

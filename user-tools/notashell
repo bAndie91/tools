@@ -1,10 +1,12 @@
 #!/usr/bin/env perl
 
-if(not $ENV{'NOTASHELL_REDIRECT'})
+$CustomShellPath = "/etc/notashell/customshell";
+
+if(not $ENV{'NOTASHELL_INTERCEPT'})
 {
 	my $basename = $0 =~ s/.*\/([^\/]+)$/$1/r;
 	$progname = $basename;
-	exec {"/var/lib/notashell/real-" . $basename} $basename, @ARGV;
+	exec {"/var/lib/notashell/real-" . $basename} $0, @ARGV;
 }
 else
 {
@@ -14,11 +16,19 @@ else
 	}
 	
 	$CommandString = $ARGV[1];
-	@cmd_args = split / /, $CommandString;
-	$progname = $cmd_args[0];
-	$ENV{'NOTASHELL_REDIRECT'} = 0;
+	$ENV{'NOTASHELL_INTERCEPT'} = 0;
+	$ENV{'NOTASHELL_ORIGINAL_COMMAND'} = $CommandString;
 	
-	exec {$cmd_args[0]} @cmd_args;
+	if(-x $CustomShellPath)
+	{
+		exec {$CustomShellPath} @cmd_args;
+	}
+	else
+	{
+		@cmd_args = split / /, $CommandString;
+		$progname = $cmd_args[0];
+		exec {$cmd_args[0]} @cmd_args;
+	}
 }
 
 ($errno, $errstr) = (int $!, $!);

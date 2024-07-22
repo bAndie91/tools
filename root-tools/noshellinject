@@ -22,7 +22,7 @@
 # No need to think on "is it safe to run by shell?" or quotation-mark forests ever again.
 #
 # notashell(1) bypasses shell only when the program started by this script
-# directly executes an over-mounted shell (notashell switches NOTASHELL_REDIRECT environment off).
+# directly executes an over-mounted shell (notashell switches NOTASHELL_INTERCEPT environment off).
 # So in your untrusted-argument-validator script and any of its subprocesses,
 # sh(1)/bash(1) may be called at your convenience.
 # This is safe, because it's your control what you pass to them from the validator.
@@ -32,9 +32,9 @@
 # because the neglegent program (which calls system(3) inconsiderately) may
 # switch privilege level so its child process can not switch namespaces,
 # but by keep calling notashell(1) in guise of sh(1)/bash(1)
-# but no longer having NOTASHELL_REDIRECT makes notashell(1) call the real boys
+# but no longer having NOTASHELL_INTERCEPT makes notashell(1) call the real boys
 # from /var/lib/notashell where they were previously saved (bind-mounted).
-# Therefore, don't allow users to change NOTASHELL_REDIRECT environment either.
+# Therefore, don't allow users to change NOTASHELL_INTERCEPT environment either.
 
 set -e
 
@@ -59,7 +59,7 @@ then
 	done
 	
 	shift
-	export NOTASHELL_REDIRECT=1
+	export NOTASHELL_INTERCEPT=1
 	exec "$@"
 else
 	exec unshare --mount -- "$0" --inner "$@"

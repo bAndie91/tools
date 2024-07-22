@@ -3,26 +3,10 @@
 # This script, noshellinject, creates a mount namespace,
 # in which common shell commands (/bin/sh, /bin/bash, ...) are bind-mounted over with "notashell".
 #
-# notashell(1) is a program with non-interactive shell interface (ie. "sh -c commandLine"),
-# and which intentionally does not understands any shell syntax or meta character,
-# rather takes the first word of the supposed command-line (passed after the "-c" option)
-# and executes it as a single command with all of the rest of the command-line as its arguments.
+# Using notashell(1) is supposed to prevent shell-injections.
 #
-# This is useful when you have a program which normally calls some command via shell (eg. system(3)),
-# with user-controlled parts in it, ie. data from an untrusted source,
-# thus potentially vulnerable to shell-injection.
-# Like incrond(8), which triggered me to make this defense tool.
-# These kind of programs usually try to defend by escaping user input,
-# but it often turns out that the re-implemented shell-escape mechanism was bad or incomplete.
-#
-# Using notashell enables you to fully evade shell-injection attacks.
-# Since if you control the beginning of the command line,
-# you can validate untrusted parameters by a wrapper program (script)
-# and do the useful processing there or call an other program now with verified and trusted parameters.
-# No need to think on "is it safe to run by shell?" or quotation-mark forests ever again.
-#
-# notashell(1) bypasses shell only when the program started by this script
-# directly executes an over-mounted shell (notashell switches NOTASHELL_INTERCEPT environment off).
+# notashell(1) bypasses shell only when the program, which is called by noshellinject, does
+# directly execute an over-mounted shell (notashell switches NOTASHELL_INTERCEPT environment off).
 # So in your untrusted-argument-validator script and any of its subprocesses,
 # sh(1)/bash(1) may be called at your convenience.
 # This is safe, because it's your control what you pass to them from the validator.

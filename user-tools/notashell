@@ -12,7 +12,26 @@ notashell -c I<COMMANDLINE>
 
 =head1 DESCRIPTION
 
-TODO
+notashell(1) is a program with non-interactive shell interface (ie. C<sh -c commandLine>),
+and intentionally does not understand any shell syntax or meta character,
+rather takes the first word of I<COMMANDLINE> and executes it as a single command
+with all of the rest of I<COMMANDLINE> as its arguments.
+
+This is useful when you have a program which normally calls some other commands via shell (eg. system(3)),
+notably with user-controlled parts in it, ie. data from an untrusted source.
+This potentially makes the call vulnerable to shell-injection.
+Like incrond(8), which triggered the author to make this defense tool.
+
+These kind of programs usually try to guard by escaping user input,
+but it often turns out that the re-implemented shell-escape mechanism was bad or incomplete.
+
+Using notashell(1) enables you to fully evade shell-injection attacks.
+Since if you control at least the first word of I<COMMANDLINE>,
+you can trustworthly call a program (wrapper script) in which the supplied I<COMMANDLINE>
+can be re-examined, accepted, rejected, rewritten, etc.
+and pass the execution forward now with varified user input.
+
+No need to think on "is it safe to run by shell?" or quotation-mark/escape-backslash forests ever again.
 
 =head1 FILES
 
@@ -38,14 +57,20 @@ setup these redirection on the current process,
 and return the input list without those elements which are found to be describing a redirection.
 Recognized representation:
 
-=over 2
+=over 4
 
-=item operators: write (>), append (>>)
+=item operators: 
 
-=item an integer before the operator; optional, defaults are the same as in sh(1)
+write (B<< > >>) and append (B<< > >>B<< > >>)
 
-=item filename just right after the operator or in the next argument;
-strings matching to B<[a-zA-Z0-9_,./]+> are considered filenames only.
+=item an integer before the operator; 
+
+optional, defaults are the same as in sh(1)
+
+=item filename 
+
+just right after the operator or in the next argument;
+strings only matching to B<[a-zA-Z0-9_,./]+> are considered filenames.
 
 =back
 

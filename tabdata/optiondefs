@@ -1,0 +1,23 @@
+%OptionDefs = (
+	'h|header' => sub { $OptShowHeader = 1; },
+	'H|no-header' => sub { $OptShowHeader = 0; },
+
+	'i|ignore-non-existing-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 0; },
+	'w|warn-non-existing-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 1; },
+	'strict-columns' => sub { $OptWarnBadColumnNames = 1; $OptFailBadColumnNames = 1; $OptFailBadNegativeColumnNames = 1; },
+	
+	'N|no-fail-non-numeric' => sub { $OptFailNonNumericRValue = 0; },
+	'W|no-warn-non-numeric' => sub { $OptWarnNonNumericRValue = 0; },
+	
+	'm|min-column-spacing=i' => \$OptMinColumnSpacing,
+	'c|max-columns=i' => \$OptMaxColumns,
+	
+	's|separator=s' => \$OptSeparatorRegexp,
+	'g|multiline-glue|multivalue-glue|glue=s' => \$OptMultilineGlue,
+	
+	'x|extra-columns' => sub { $OptAddExtraColumns = 1; },
+	'X|no-extra-columns' => sub { $OptAddExtraColumns = 0; },
+	
+	'C|columns=s@' => \@OptPredefColumns,
+	'f|field=s' => \$OptFieldName,
+);

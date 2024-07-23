@@ -9,6 +9,7 @@ TOOLS = \
   td2mrkv \
   td-add-headers \
   td-alter \
+  td-breakup \
   td-disamb-headers \
   td-filter \
   td-group \
@@ -19,9 +20,12 @@ TOOLS = \
   td-sort \
   td-trans \
   td-trans-fixcol \
+  td-trans-group \
+  td-trans-gshadow \
   td-trans-ls \
   td-trans-mount \
-  td-trans-passwd td-trans-group td-trans-shadow td-trans-gshadow \
+  td-trans-passwd \
+  td-trans-shadow \
   vcf2td \
 
 

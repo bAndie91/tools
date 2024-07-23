@@ -8,7 +8,7 @@ td-group - Collapse sorted tabular data stream's rows with equivalent first fiel
 
 =head1 SYNOPSIS
 
-td-group [<OPTIONS>]
+td-group [I<OPTIONS>]
 
 =head1 DESCRIPTION
 
@@ -24,9 +24,9 @@ reorder the columns by td-select(1). Eg. C<td-select OTHERCOLUMN +REST>.
 
 =over 4
 
-=item -s, --separator STR
+=item -g, --glue I<STR>
 
-Separator character or string between joined cell data.
+Delimiter character or string between joined cell data.
 Default is space.
 
 =back
@@ -44,7 +44,7 @@ shells, grouped by shell path.
   td-add-headers USER X UID GID GECOS HOME SHELL |\
   
   # put the shell in the first column, and sort, then group
-  td-select SHELL USER | td-keepheader sort | td-group -s ' ' |\
+  td-select SHELL USER | td-keepheader sort | td-group -g ' ' |\
   
   # change header name "USER" to "USERS"
   td-alter USERS=USER | td-select +ALL -USER
@@ -65,7 +65,7 @@ Have to sort input data first.
 =cut
 
 
-$OptSeparator = " ";
+$OptMultilineGlue = " ";
 
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
@@ -76,7 +76,7 @@ print scalar <STDIN>;
 
 sub output_last_group
 {
-	print $prev_group_key . $FS . join($FS, map { join $OptSeparator, @$_ } @group_members) . $RS;
+	print $prev_group_key . $FS . join($FS, map { join $OptMultilineGlue, @$_ } @group_members) . $RS;
 	@group_members = ();
 }
 

@@ -26,7 +26,7 @@ This may be prevented by --no-extra-columns option.
 
 =item -x, --extra-columns
 
-Name columns too which are not given name in the command parameters.
+Give a name also to those columns which are not given name in the command parameters.
 
 =item -X, --no-extra-columns
 
@@ -39,6 +39,12 @@ Do not add more columns than specified in the command parameters.
 who | tr-trans | td-add-headers USER TTY DATE TIME COMMENT
 
 =cut
+
+$OptAddExtraColumns = 1;
+%OptionDefs = (
+	'x|extra-columns' => sub { $OptAddExtraColumns = 1; },
+	'X|no-extra-columns' => sub { $OptAddExtraColumns = 0; },
+);
 
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";

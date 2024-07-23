@@ -10,7 +10,7 @@ td2mrkv - Transform tabular data into multi-record key-value (MRKV) format.
 
 =over 4
 
-=item -s, --separator STR
+=item -s, --separator I<STR>
 
 String to separate field name from content.
 Default is TAB (C<\t>).
@@ -28,6 +28,9 @@ mrkv2td(1), td2html(1)
 =cut
 
 $OptSeparator = "\t";
+%OptionDefs = (
+	's|separator=s' => \$OptSeparator,
+);
 
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";

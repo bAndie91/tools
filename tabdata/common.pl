@@ -3,51 +3,21 @@
 $0 =~ s/^.*\/([^\/]+)$/$1/;
 
 # Note: review escape_tabdata subroutine before you think about changing $FS and $RS fundamental variables.
+# Note: review "split $FS" calls if you ever change $FS to a single space char. "split ' '" is handled specially by Perl.
 $FS = "\t";
 $RS = $/ = "\n";
 @Header = ();
 %Header = ();
-$OptShowHeader = 1;
-$OptWarnBadColumnNames = 1;
-$OptFailBadColumnNames = 1;
-$OptFailBadNegativeColumnNames = 0;
-$OptAddExtraColumns = 1;
-$OptMinColumnSpacing = 2;
-$OptMaxColumns = undef;
-@OptPredefColumns = ();
-$OptWarnNonNumericRValue = 1;
-$OptFailNonNumericRValue = 1;
 
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 use Getopt::Long qw/:config no_ignore_case bundling pass_through require_order no_getopt_compat no_auto_abbrev/;
 use Pod::Usage;
 
 GetOptions(
-	'h|header' => sub { $OptShowHeader = 1; },
-	'H|no-header' => sub { $OptShowHeader = 0; },
-	
-	'i|ignore-non-existing-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 0; },
-	'w|warn-non-existing-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 1; },
-	'strict-columns' => sub { $OptWarnBadColumnNames = 1; $OptFailBadColumnNames = 1; $OptFailBadNegativeColumnNames = 1; },
-	
-	'N|no-fail-non-numeric' => sub { $OptFailNonNumericRValue = 0; },
-	'W|no-warn-non-numeric' => sub { $OptWarnNonNumericRValue = 0; },
-	
-	'm|min-column-spacing=i' => \$OptMinColumnSpacing,
-	'c|max-columns=i' => \$OptMaxColumns,
-	
-	's|separator=s' => \$OptSeparatorRegexp,
-	'g|multiline-glue|multivalue-glue=s' => \$OptMultilineGlue,
-	
-	'x|extra-columns' => sub { $OptAddExtraColumns = 1; },
-	'X|no-extra-columns' => sub { $OptAddExtraColumns = 0; },
-	
-	'C|columns=s@' => \@OptPredefColumns,
-	
 	'help|?' => sub{ pod2usage(-exitval=>0, -verbose=>99); },
+	%OptionDefs,
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
-# TODO separate GetOptions() per td-* tool
 
 if('--' ~~ @ARGV and $ARGV[0] ne '--')
 {

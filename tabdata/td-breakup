@@ -31,7 +31,7 @@ More illustratively:
   | /bin/bash   | user2         |
   | /bin/dash   | user3         |
   | /bin/dash   | user4         |
-  | /bin/sh     | root          |  
+  | /bin/sh     | root          |
 
 =head1 OPTIONS
 

@@ -51,6 +51,12 @@ show headers (default)
 
 =cut
 
+$OptShowHeader = 1;
+%OptionDefs = (
+	'h|header' => sub { $OptShowHeader = 1; },
+	'H|no-header' => sub { $OptShowHeader = 0; },
+);
+
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 

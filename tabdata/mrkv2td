@@ -34,6 +34,10 @@ td2mrkv(1)
 
 $OptSeparatorRegexp = "\t";
 $OptMultilineGlue = "\n";
+%OptionDefs = (
+	's|separator=s' => \$OptSeparatorRegexp,
+	'g|multiline-glue=s' => \$OptMultilineGlue,
+);
 
 use Data::Dumper;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';

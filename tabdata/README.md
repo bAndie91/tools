@@ -6,14 +6,22 @@ Each line consists of some fields of text which are separated by tab
 (`0x09`, `\t`) char.
 Fields also make up columns labelled by the fields of the first line,
 making it effectively a header line.
-You guessed, newline and tab (`\n`, `\t`) chars can not be represented
-without additional encoding in this format. Consider it a feature, not a
-lack thereof.
+You guessed, newline and tab (`\n`, `\t`) chars can not be in the cells
+as raw data, but need to encode/escape somehow.
+Escaping rules in Tabdata:
+
+ | Raw char  | Tabdata escape sequence |
+ |-----------|-------------------------|
+ | ESC       | Backslash "e"           |
+ | TAB       | Backslash "t"           |
+ | LF        | Backslash "n"           |
+ | CR        | Backslash "r"           |
+ | Backslash | Backslash Backslash     |
 
 Objective of Tabdata is to provide user-friendly
 (guru/admin/poweruser-friendly) means to do everyday data processing
-complementing (not superseding) well-established toolsets:
-use Tabdata in compination with  coreutils, moreutils, util-linux, ...
+tasks, complementing (not superseding) well-established toolsets:
+use Tabdata in combination with coreutils, moreutils, util-linux, ...
 tools.
 
 Focus is on text as being primarily for humans, not machines.
@@ -24,6 +32,11 @@ Tabdata tools, to process arbitrary bytestream as well.
 # Tool Descriptions
 
 [descriptions.txt](descriptions.txt)
+
+# Compare to CSV
+
+Tabdata is very similar to CSV, except it has well-defined field- and record separators
+and a well-defined encoding schema.
 
 # Similar tools/projects
 

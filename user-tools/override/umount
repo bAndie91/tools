@@ -1,0 +1,43 @@
+#!/bin/bash
+
+if [ "$UID" = 0 ]
+then
+	exec /bin/umount "$@"
+fi
+
+declare -a umount_args
+declare -a fusermount_args
+umount_args=()
+fusermount_args=()
+prm1=''
+
+while [ -n "$1" ]
+do
+	umount_args+=("$1")
+	case "$1" in
+	-l)	fusermount_args+=(-z);;
+	-*)	true;;
+	*)	if [ -z "$prm1" ]
+		then
+			prm1=$1
+		fi;;
+	esac
+	shift
+done
+
+fusermount -u "${fusermount_args[@]}" "$prm1"
+err=$?
+if [ $err != 0 ]
+then
+	echo "trying umount ${umount_args[@]}" >&2
+	/bin/umount "${umount_args[@]}"
+	err=$?
+	if [ $err != 0 ]
+	then
+		echo "Device is possibly used by:" >&2
+		echo "===========================" >&2
+		#fuser -v "$prm1" >&2
+		lsof -nPw "$prm1" >&2
+	fi
+fi
+exit $err

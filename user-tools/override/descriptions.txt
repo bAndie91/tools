@@ -1,3 +1,2 @@
 chmod - Call system's chmod(1) just warns if one of the files have ACL permissions set.
-rename - rename multiple files by a Perl expression
 write - Wrapper for bsd-write, write(1), write to all terminals of the given user

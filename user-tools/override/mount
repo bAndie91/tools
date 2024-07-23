@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# mount(8) accepts relative paths in fstab,
+# so in your private ~/.fstab, you only need to point to your mount sources and targets as paths relative to your $HOME dir.
+
+cd || exit $?
+
+/bin/mount --fstab ~/.fstab "$@"
+err=$?
+
+if [ $err != 0 ]
+then
+	echo "trying system fstab" >&2
+	exec /bin/mount "$@"
+fi
+
+exit $err

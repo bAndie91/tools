@@ -1,247 +1,229 @@
-#!/bin/bash
+#!/usr/bin/env perl
 
-host=gateway.localhost
-user=''
-pass=''
+use Switch;
+use Data::Dumper;
+use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat require_order/;
+use Pod::Usage;
+use IPC::Run qw/run/;
+use JSON;
 
-declare -A infoparam=([ip]="IP Address" [gw]="Default Gateway" [dns1]="Primary DNS" [dns2]="Secondary DNS")
-
-while [ -n "$1" ]
-do
-	case "$1" in
-	-h)
-		shift
-		host=$1
-		;;
-	-u)
-		shift
-		user=$1
-		;;
-	-P)
-		shift
-		pass=$1
-		;;
-	--)
-		shift
-		break
-		;;
-	-*)
-		echo Unknown option: $1 >&2
-		exit 1
-		;;
-	*)
-		break
-		;;
-	esac
-	shift
-done
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 
-invalidparameters()
+$host = "gateway.localdomain";
+$user = '';
+$pass = '';
+
+=pod
+
+=head1 SYNOPSIS
+
+ZXHN-H108L [-h I<HOST>] [-u I<USER>] [-P I<PASS>] I<COMMAND>
+
+=head1 COMMANDS
+
+=over 4
+
+=item reboot
+
+=item info [ip|gw|dns1|dns2|downlink|uplink]
+
+=item log
+
+=item pfwd
+
+=item pfwd I<app_name> I<start_port>[-I<end_port>] I<dest_ip> [TCP|UDP|ALL]
+
+=item pfwd --remove [--id I<num> | --name I<app_name> | --match-name I<pattern> | --port I<start_port>]
+
+=back
+
+=cut
+
+GetOptions(
+	'h|host=s' => \$host,
+	'u|user=s' => \$user,
+	'P|pass=s' => \$pass,
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+if(not @ARGV)
 {
-	echo "Invalid parameters." >&2
-	exit 1
-}
-dispatch()
-{
-	local path=$1
-	shift
-	curl -sS -u "$user:$pass" "http://$host$path" --connect-timeout 4 --max-time 5 "$@"
+	pod2usage(-exitval=>2, -verbose=>99);
 }
 
-case "$1" in
-reboot)
-	dispatch /Forms/tools_system_1 -d restoreFlag=0 -L |\
-	grep -o "The system is restarting. Please wait..."
-	;;
-log)
-	dispatch /status/syslog.log
-	;;
-pfwd)
-	fetch_pfwd()
+sub dispatch;
+
+sub dispatch
+{
+	my $path = shift;
+	my $param = shift;
+	my @curl_args = map {('-d', $_.'='.$param->{$_})} keys %$param;
+	my $resp;
+	run ['curl', '-sS', '-u', "$user:$pass", "http://$host$path", '--connect-timeout', '4', '--max-time', '5', @curl_args, @_], \undef, \$resp;
+	return $resp;
+}
+
+sub fetch_pfwd
+{
+	my $html = dispatch "/advanced/adv_nat_virsvr.htm";
+	my $resp;
+	run ['pup', 'table table td.tabdata:not([width]) json{}'], \$html, \$resp;
+	return $resp;
+}
+
+@pfwd_fields = qw/id label proto start_port end_port dest/;
+
+sub pfwd_table
+{
+	my $pfwd_table_json = fetch_pfwd();
+	my $html_elements = decode_json $pfwd_table_json;
+	my @pfwd_lines = map { $_->{'text'} } @$html_elements;
+	my @pfwd = ();
+	for my $line_num (0 .. $#pfwd_lines)
 	{
-		dispatch /advanced/adv_nat_virsvr.htm |\
-		pup 'table table td.tabdata:not([width]) text{}'
+		my $line = $pfwd_lines[$line_num];
+		$line =~ s/^\s*//;
+		$line =~ s/\s*$//;
+		my $pfwd_row_num = int($line_num / 6);
+		my $pfwd_col_num = $line_num % 6;
+		$pfwd[$pfwd_row_num][$pfwd_col_num] = $line;
 	}
-	
-	if [ -z "$2" ]
-	then
-		fetch_pfwd |\
-		{
-		x=1
-		y=0
-		while read num; read name; read proto; read port1; read port2; read dst;
-		do
-			nums+=("$num")
-			names+=("$name")
-			protos+=("$proto")
-			ports1+=("$port1")
-			ports2+=("$port2")
-			dsts+=("$dst")
-			[ ${#name} -gt $x ] && x=${#name}
-			[ "${port1}" != "${port2}" -a ${#port2} -gt $y ] && y=${#port2}
-		done
-		[ $y -gt 0 ] && let y++
-		for i in ${!ports1[@]}
-		do
-			if [ ${ports1[i]} != 0 ]
-			then
-				[ "${ports1[i]}" = "${ports2[i]}" ] && port2= || port2=-${ports2[i]}
-				printf "%2d %-${x}s %3s %5d%-${y}s => %s\\n" "${nums[i]}" "${names[i]}" "${protos[i]}" "${ports1[i]}" "$port2" "${dsts[i]}"
-			fi
-		done
-		}
-	elif [ "$2" = --remove ]
-	then
-		remove_id()
-		{
-			echo "Remove pfwd #$1 ..." >&2
-			dispatch /Forms/adv_nat_virsvr_1 \
-				-d VIRTUALSVR_index=$1 \
-				-d VIRTUALSVR_IndexFlag=2
-		}
-		shift
-		shift
-		case "$1" in
-		--id)
-			remove_id "$2"
-			;;
-		--name|--match-name|--port)
-			fetch_pfwd |\
-			while read num; read name; read proto; read port1; read port2; read dst;
-			do
-				case "$1" in
-				--name)	[ "$name" = "$2" ];;
-				--match-name) [[ "$name" =~ "$2" ]];;
-				--port) [ "$port1" = "$2" ];;
-				esac
-				if [ $? = 0 ]
-				then
-					remove_id "$num"
-				fi
-			done
-			;;
-		*)	invalidparameters;;
-		esac
-	else
-		shift
-		name=$1
-		[[ "$2" =~ ^[0-9]+(-[0-9]+)?$ ]] || invalidparameters
-		port1=${2%%-*}
-		port2=${2##*-}
-		[ -n "$3" ] || invalidparameters
-		dst=$3
-		proto=${4^^}
-		[ -z "$proto" -o "$proto" = TCP -o "$proto" = UDP -o "$proto" = ALL ] || invalidparameters
+	return @pfwd;
+}
+
+sub pfwd_hashlist
+{
+	my @pfwd = pfwd_table();
+	my @pfwd = map { my $tr = $_; my $hr = {}; $hr->{$pfwd_fields[$_]} = $tr->[$_] for 0 .. $#pfwd_fields; $hr } @pfwd;
+	return @pfwd;
+}
+
+switch(shift @ARGV)
+{
+	case "reboot"
+	{
+		$resp = dispatch "/Forms/tools_system_1", {restoreFlag=>0}, "-L";
+		$resp =~ /The system is restarting. Please wait./;
+		print "$&\n";
+	}
+	case "log"
+	{
+		$resp = dispatch "/status/syslog.log";
+		print $resp;
+	}
+	case "pfwd"
+	{
+		my ($remove, $remove_id, $remove_name, $remove_name_pattern, $remove_start_port);
 		
-		idx=$(
-			fetch_pfwd |\
-			while read num; read name; read proto; read port1; read port2; read dst;
-			do
-				if [ "$port1" = 0 ]
-				then
-					echo $num
-					break
-				fi
-			done
+		GetOptions(
+			'remove' => \$remove,
+			'id=i' => \$remove_id,
+			'name=s' => \$remove_name,
+			'match-name=s' => \$remove_name_pattern,
+			'port=i' => \$remove_start_port,
 		)
+		or pod2usage(-exitval=>2, -verbose=>99);
 		
-		if [ -z "$idx" ]
-		then
-			echo "No more slot." >&2
-			exit 2
-		fi
-		
-		echo "Add pfwd #$idx ..." >&2
-		dispatch /Forms/adv_nat_virsvr_1 \
-			-d VIRTUALSVR_index=$idx \
-			-d VIRTUALSVR_IndexFlag=0 \
-			-d VIRTUALSVR_Application="$name" \
-			-d VIRTUALSVR_App_idx=- \
-			-d VSProtocolIndex="${proto:-ALL}" \
-			-d VIRTUALSVR_startPort=$port1 \
-			-d VIRTUALSVR_endPort=$port2 \
-			-d VIRTUALSVR_localIP="$dst" \
-			-i |\
-		grep -Eq '^Location:.*error'
-		if [ ${PIPESTATUS[1]} = 0 ]
-		then
-			echo "Remote Error." >&2
-			exit 2
-		else
-			exit 0
-		fi
-	fi
-	;;
-info)
-	req_param=$2
-	dispatch /status/status_deviceinfo.htm |\
-	{
-	stage=''
-	while read line
-	do
-		for str in WAN IPv6 ADSL
-		do
-			if expr + "$line" : ".*$str" >/dev/null
-			then
-				stage=$str
-				break
-			fi
-		done
-		if [ "$stage" != WAN -a "$stage" != ADSL ]
-		then
-			continue
-		fi
-		
-		if expr + "$line" : ".*Data Rate" >/dev/null
-		then
-			IFS=' <' read downlink_kbitps junk
-			IFS=' <' read uplink_kbitps junk
-			case "$req_param" in
-			downlink)	echo "$downlink_kbitps"; break;;
-			uplink)		echo "$uplink_kbitps"; break;;
-			'')
-				echo "Downlink rate	$downlink_kbitps kbit/s"
-				echo "Uplink rate	$uplink_kbitps kbit/s"
-				continue
-				;;
-			esac
-		fi
-		
-		for this_param in "${!infoparam[@]}"
-		do
-			if [ -n "$req_param" -a "$req_param" != "$this_param" ]
-			then
-				continue
-			fi
+		if($remove)
+		{
+			if(not defined $remove_id)
+			{
+				my @pfwd = pfwd_hashlist();
+				if(defined $remove_name)			{ ($remove_id) = map {$_->{'id'}} grep {$_->{'label'} eq $remove_name} @pfwd }
+				elsif(defined $remove_name_pattern)	{ ($remove_id) = map {$_->{'id'}} grep {$_->{'label'} =~ $remove_name_pattern} @pfwd }
+				elsif(defined $remove_start_port)	{ ($remove_id) = map {$_->{'id'}} grep {$_->{'start_port'} eq $remove_start_port} @pfwd }
+			}
 			
-			param_label=${infoparam[$this_param]}
-			if expr + "$line" : ".*$param_label" >/dev/null
-			then
-				IFS='<' read data junk
-				if [ -n "$req_param" ]
-				then
-					echo "$data"
-					break 2
-				else
-					echo "$param_label	$data"
-					break
-				fi
-			fi
-		done
-	done
+			if(defined $remove_id)
+			{
+				warn "Removing pfwd #$remove_id ...\n";
+				dispatch "/Forms/adv_nat_virsvr_1", {VIRTUALSVR_index=>$remove_id, VIRTUALSVR_IndexFlag=>2};
+			}
+			else
+			{
+				die "not found\n";
+			}
+		}
+		elsif(@ARGV)
+		{
+			my ($label, $portrange, $dest_ip, $proto) = @ARGV;
+			my ($start_port, $end_port);
+			if($portrange =~ /^(\d+)-(\d+)$/)
+			{
+				$start_port = $1;
+				$end_port = $2;
+			}
+			else
+			{
+				pod2usage(-exitval=>2, -verbose=>99) unless $portrange =~ /^\d+$/;
+				$start_port = $end_port = $portrange;
+			}
+			$proto = 'ALL' unless $proto;
+			$proto = uc $proto;
+			pod2usage(-exitval=>2, -verbose=>99) unless $proto ~~ ['TCP', 'UDP', 'ALL'];
+			
+			my @pfwd = pfwd_hashlist();
+			
+			my ($next_id) = map {$_->{'id'}} grep {$_->{'start_port'} eq 0} @pfwd;
+			die "no more slot\n" unless $next_id;
+			
+			warn "Adding pfwd #$next_id ...\n";
+			my $httpresp = dispatch "/Forms/adv_nat_virsvr_1", {
+				VIRTUALSVR_index=>$next_id,
+				VIRTUALSVR_IndexFlag=>0,
+				VIRTUALSVR_Application=>$label,
+				VIRTUALSVR_App_idx=>'-',
+				VSProtocolIndex=>$proto,
+				VIRTUALSVR_startPort=>$start_port,
+				VIRTUALSVR_endPort=>$end_port,
+				VIRTUALSVR_localIP=>$dest_ip,
+			}, '-i';
+			
+			if($httpresp =~ /^Location:.*error/m)
+			{
+				warn "$&\n";
+				exit 1;
+			}
+		}
+		else
+		{
+			my @pfwd = pfwd_table();
+			print join("\t", @pfwd_fields)."\n";
+			for my $row (@pfwd)
+			{
+				print join("\t", @$row)."\n";
+			}
+		}
 	}
-	;;
-*)
-	echo "Usage $0 [-h <host>] [-u <user>] [-P <pass>]
-Commands:
-  reboot
-  info
-  info [ip|gw|dns1|dns2|downlink|uplink]
-  log
-  pfwd
-  pfwd <app_name> <start_port>[-end_port] <dest_ip> [TCP|UDP|ALL]
-  pfwd --remove [--id num | --name app_name | --match-name pattern | --port start_port]" >&2
-	exit 1
-	;;
-esac
+	case "info"
+	{
+		my $requested_info = shift @ARGV;
+		my %info;
+		my $html = dispatch "/status/status_deviceinfo.htm";
+		
+		if($html =~ /WAN.*?IP Address.*?\n\s*(?'ip'[^<\s]+).*Default Gateway.*?\n\s*(?'gw'[^<\s]+).*Primary DNS.*?\n\s*(?'dns1'[^<\s]+).*Secondary DNS.*?\n\s*(?'dns2'[^<\s]+).*Data Rate.*?\n\s*(?'downlink'[^<]+).*?\n\s*(?'uplink'[^<]+)/s)
+		{
+			$info{$_} = $+{$_} for keys %+;
+		}
+		
+		$info{'downlink'} = int $info{'downlink'};
+		$info{'uplink'} = int $info{'uplink'};
+		
+		if(defined $requested_info)
+		{
+			print $info{$requested_info}."\n";
+		}
+		else
+		{
+			my %unit = (qw{downlink kbit/s uplink kbit/s});
+			for my $k (qw/ip gw dns1 dns2 downlink uplink/)
+			{
+				print "$k\t$info{$k}\t$unit{$k}\n";
+			}
+		}
+	}
+	else
+	{
+		pod2usage(-exitval=>2, -verbose=>99);
+	}
+}

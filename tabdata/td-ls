@@ -128,6 +128,7 @@ use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat/;
 use Pod::Usage;
 use Data::Dumper;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+$TabdataCommonSkipGetopt = 1;
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 

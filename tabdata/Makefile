@@ -9,10 +9,10 @@ TOOLS = \
   td2mrkv \
   td-add-headers \
   td-alter \
-  td-breakup \
+  td-expand \
   td-disamb-headers \
   td-filter \
-  td-group \
+  td-collapse \
   td-keepheader \
   td-ls \
   td-pivot \

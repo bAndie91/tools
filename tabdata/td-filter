@@ -152,7 +152,26 @@ Operators may be preceeded by I<not>, I<does not>, I<do not> to negate their eff
 If there is no I<COLUMN> column in the input data, it's silently considered empty.
 td-filter(1) does not need I<R-VALUE> to be quoted or escaped, however your shell may do.
 
+=head1 REFERENCES
+
+td-filter(1) is analogous to SQL WHERE.
+
 =cut
+
+
+$OptShowHeader = 1;
+$OptWarnBadColumnNames = 1;
+$OptFailBadColumnNames = 1;
+$OptWarnNonNumericRValue = 1;
+$OptFailNonNumericRValue = 1;
+%OptionDefs = (
+	'H|no-header' => sub { $OptShowHeader = 0; },
+	'h|header' => sub { $OptShowHeader = 1; },
+	'i|ignore-non-existing-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 0; },
+	'w|warn-non-existing-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 1; },
+	'N|no-fail-non-numeric' => sub { $OptFailNonNumericRValue = 0; },
+	'W|no-warn-non-numeric' => sub { $OptWarnNonNumericRValue = 0; },
+);
 
 use Switch;
 use List::MoreUtils qw/all any none/;

@@ -28,8 +28,6 @@ sub html_escape
 	return $str;
 }
 
-$td_attr = "valign=\"top\"";
-
 print "<table border=\"1\">\n";
 
 print "<tr>";
@@ -44,8 +42,8 @@ while($row = <STDIN>)
 {
 	chomp $row;
 	print "<tr>";
-	print "<td $td_attr>";
-	print join("</td><td $td_attr>", map {html_escape(unescape_tabdata($_))} split $FS, $row);
+	print "<td>";
+	print join("</td><td>", map {html_escape(unescape_tabdata($_))} split $FS, $row);
 	print "</td>";
 	print "</tr>\n";
 }

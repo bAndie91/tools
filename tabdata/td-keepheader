@@ -27,4 +27,6 @@ $|++;
 print $header . $RS;
 
 exec @ARGV;
-die "$!: @ARGV\n";
+($errno, $errstr) = (int $!, $!);
+warn "$ARGV[0]: $errstr\n";
+exit 125+$errno;

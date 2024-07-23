@@ -4,11 +4,11 @@
 
 =head1 NAME
 
-td-breakup - Generate multiple rows from each one row in a Tabular data stream.
+td-expand - Generate multiple rows from each one row in a Tabular data stream.
 
 =head1 SYNOPSIS
 
-td-breakup [-f I<FIELD>] [-s I<SEPARATOR>]
+td-expand [-f I<FIELD>] [-s I<SEPARATOR>]
 
 =head1 DESCRIPTION
 
@@ -24,9 +24,9 @@ More illustratively:
   | /bin/dash   | user3 user4   |
   | /bin/sh     | root          |
   
-  td-breakup -f USERS -s ' '
+  td-expand -f USERS -s ' ' | td-alter USER=USERS | td-select +ALL -USERS
   
-  | SHELL       | USERS         |
+  | SHELL       | USER          |
   | /bin/bash   | user1         |
   | /bin/bash   | user2         |
   | /bin/dash   | user3         |
@@ -49,14 +49,18 @@ Default is space.
 
 =back
 
+=head1 SEE ALSO
+
+td-collapse(1) is a kind of inverse to td-expand(1).
+
 =cut
 
 
 $OptFieldName = undef;
 $OptSeparatorRegexp = " ";
 %OptionDefs = (
-	's|separator=s' => \$OptSeparatorRegexp,
 	'f|field=s' => \$OptFieldName,
+	's|separator=s' => \$OptSeparatorRegexp,
 );
 
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
@@ -64,7 +68,7 @@ do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 
 process_header(scalar <STDIN>);
-print join($FS, @header).$RS;
+print join($FS, @Header).$RS;
 
 while(not eof STDIN)
 {

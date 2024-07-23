@@ -29,10 +29,7 @@ no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 @Headers = ("DEVICE", "MOUNTPOINT", "TYPE", "OPTIONS", "LABEL");
-if($OptShowHeader and @Headers)
-{
-	print join($FS, @Headers).$RS;
-}
+print join($FS, @Headers).$RS;
 
 while(<STDIN>)
 {
@@ -41,7 +38,7 @@ while(<STDIN>)
 	if(/^(?<DEVICE>\S+) on (?<MOUNTPOINT>\S+) type (?<TYPE>\S+) \((?<OPTIONS>.*?)\)(?: \[(?<LABEL>.*?)\]|)$/)
 	{
 		@Fields = map {$+{$_}} @Headers;
-		print join($FS, @Fields).$/;
+		print join($FS, @Fields).$RS;
 	}
 	else
 	{

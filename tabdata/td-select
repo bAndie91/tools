@@ -8,7 +8,7 @@ td-select - Show only the specified columns from the input tabular data stream.
 
 =head1 USAGE
 
-td-select [<OPTIONS>] [--] [-]<COLUMN> [[-]<COLUMN> [...]]
+td-select [I<OPTIONS>] [--] [-]I<COLUMN> [[-]I<COLUMN> [...]]
 
 =head1 OPTIONS
 
@@ -41,27 +41,55 @@ remove the named column from the output.
 
 =head1 DESCRIPTION
 
-COLUMN is either a column name, optionally prefixed with hyphen,
-in which case the given column will not be shown,
-ie. removed from the shown columns,
+I<COLUMN> is either a column name,
 or one of these special keywords:
 
-  +ALL    - all columns
-  +REST   - the rest of columns not given yet in the parameter list
+=over 4
+
+=item +ALL
+
+all columns
+
+=item +REST
+
+the rest of columns not given yet in the parameter list
+
+=back
+
+I<COLUMN> is optionally prefixed with minus (C<->),
+in which case the given column will not be shown,
+ie. removed from the shown columns.
 
 So if you want to show all columns except one or two:
 
   td-select +ALL -PASSWD
 
-If you want to put a given column to the first place and left others intact:
+If you want to put a given column (say "KEY") to the first place and left others intact:
 
-  td-select ID +REST
+  td-select KEY +REST
 
 =head1 EXAMPLE
 
   ls -l | td-trans-ls | td-select -- NAME +REST -INODE -LINKS -MAJOR -MINOR
 
+=head1 REFERENCES
+
+"Select" in td-select comes from SQL.
+Similarly to SQL, td-select(1) is to choose some of the columns and return them in the given order.
+
 =cut
+
+$OptShowHeader = 1;
+$OptWarnBadColumnNames = 1;
+$OptFailBadColumnNames = 1;
+$OptFailBadNegativeColumnNames = 0;
+%OptionDefs = (
+	'h|header' => sub { $OptShowHeader = 1; },
+	'H|no-header' => sub { $OptShowHeader = 0; },
+	'i|ignore-non-existing-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 0; },
+	'w|warn-non-existing-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 1; },
+	'strict-columns' => sub { $OptWarnBadColumnNames = 1; $OptFailBadColumnNames = 1; $OptFailBadNegativeColumnNames = 1; },
+);
 
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
@@ -122,7 +150,7 @@ if($OptShowHeader and @Columns)
 	{
 		push @Output, defined $Header{$col} ? $Header[$Header{$col}] : '';
 	}
-	print join($FS, @Output).$/;
+	print join($FS, @Output).$RS;
 }
 
 
@@ -138,5 +166,5 @@ while(not eof STDIN)
 		push @Output, defined $Header{$col} ? $Input[$Header{$col}] : '';
 	}
 	
-	print join($FS, @Output).$/;
+	print join($FS, @Output).$RS;
 }

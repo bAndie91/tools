@@ -1,6 +1,5 @@
 #!/usr/bin/env perl
 
-
 =pod
 
 =head1 NAME
@@ -11,15 +10,20 @@ td-trans - Transform whitespace-delimited into TAB-delimited lines ignoring sorr
 
 =over 4
 
-=item -c, --max-columns I<NUM>
+=item -m, --max-columns I<NUM>
 
 Maximum number of columns.
 The I<NUM>th column may have any whitespace.
-By default it's equivalent to the number of fields in the header (first line).
+By default it's the number of fields in the header (first line).
 
 =back
 
 =cut
+
+$OptMaxColumns = undef;
+%OptionDefs = (
+	'm|max-columns=i' => \$OptMaxColumns,
+);
 
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";

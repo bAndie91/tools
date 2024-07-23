@@ -9,7 +9,7 @@ csv2td - Transform CSV to tabular data format.
 =head1 DESCRIPTION
 
 Read CSV data on STDIN.
-Output tabular data on STDOUT.
+Output tabular data to STDOUT.
 
 =head1 OPTIONS
 

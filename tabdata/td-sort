@@ -8,7 +8,7 @@ td-sort - Sort tabular data by the columns given by name
 
 =head1 USAGE
 
-td-sort <OPTIONS>
+td-sort I<OPTIONS>
 
 =head1 OPTIONS
 
@@ -31,6 +31,12 @@ Choose the one which does not occur in the column name.
 
 You don't need to even type B<-k>, because a lone I<COLUMN-NAME>
 is interpreted as "B<-k> I<F>" where I<F> is the corresponding field number.
+
+=back
+
+=head1 REFERENCES
+
+td-sort(1) is analogous to SQL ORDER BY.
 
 =cut
 
@@ -64,7 +70,7 @@ $Header = sys_read_line();
 process_header($Header);
 
 
-@sort_args = ('--field-separator='."\t",);
+@sort_args = ('--field-separator='.$FS,);
 
 
 while(@ARGV)
@@ -88,5 +94,10 @@ while(@ARGV)
 	$prev_arg = $arg;
 }
 
+$|++;
 print $Header.$RS;
+
 exec 'sort', @sort_args;
+($errno, $errstr) = (int $!, $!);
+warn "sort: $errstr\n";
+exit 125+$errno;

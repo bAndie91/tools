@@ -8,7 +8,7 @@ td-add-headers - Add headers to the tabular data stream and pass through the row
 
 =head1 SYNOPSIS
 
-td-add-headers <COLNAME_1> <COLNAME_2> ...
+td-add-headers I<COLNAME_1> I<COLNAME_2> ...
 
 =head1 DESCRIPTION
 

@@ -10,7 +10,7 @@ vcf2td - Transform VCF to tabular data format.
 
 =over 4
 
-=item -C I<COLUMN> -C I<COLUMN> ...
+=item [-c|--column] I<COLUMN> [-c|--column] I<COLUMN> ...
 
 Predefine columns.
 Useful if the first record does not contain all fields
@@ -39,9 +39,16 @@ A string to glue repeated fields' values together
 when the repeated fields are handled by uniting their content into one tabdata column.
 Default is newline.
 
+Note, eventhough newline is the default glue, but
+if you want to be explicit about it (or want to set an other glue I<STR> expressed often by some backslash sequence),
+C<vcf2td -g "\n" ...> probably won't quite work as one may expect (depending on one's shell),
+because the shell passes the "backslash" + "n" 2-chars string,
+instead of a string consisting just 1 "newline" char.
+So, in bash, put it as C<vcf2td -g $'\n' ...>.
+
 =back
 
-=head1 COMMON vCard fields
+=head1 COMMON vCard FIELDS
 
 =over 4
 
@@ -51,7 +58,7 @@ B<N> is for a contact's name, different parts separated by C<;> semicolon.
 vcf2td(1) simplifies the B<N> field by removing excess semicolons.
 If you need one or more name parts precisely,
 request the B<N.family>, B<N.given>, B<N.middle>, B<N.prefixes> fields
-by the B<-C> option if you want,
+by the B<-c> option if you want,
 but this name partitioning method is not quite internationally useful,
 use the B<FN> (full name) field for persons' names as much as you can.
 
@@ -60,7 +67,16 @@ use the B<FN> (full name) field for persons' names as much as you can.
 =cut
 
 
-$OptMultilineGlue = "\n";
+$OptMultiValueGlue = "\n";
+$OptWarnBadColumnNames = 1;
+$OptFailBadColumnNames = 1;
+@OptPredefColumns = ();
+%OptionDefs = (
+	'g|multivalue-glue=s' => \$OptMultiValueGlue,
+	'i|ignore-non-existing-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 0; },
+	'w|warn-non-existing-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 1; },
+	'c|column=s@' => \@OptPredefColumns,
+);
 
 use Data::Dumper;
 use Encode;
@@ -140,7 +156,7 @@ while(<STDIN>)
 		
 		if(exists $record{$field_name})
 		{
-			$record{$field_name} .= $OptMultilineGlue.$data;
+			$record{$field_name} .= $OptMultiValueGlue.$data;
 		}
 		else
 		{

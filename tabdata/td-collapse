@@ -1,0 +1,116 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+td-collapse - Collapse multiple tabular data records with equivalent keys into one.
+
+=head1 SYNOPSIS
+
+td-collapse [I<OPTIONS>]
+
+=head1 DESCRIPTION
+
+It goes row-by-row on a sorted tabular data stream
+and if 2 or more subsequent rows' first (key) cell are
+the same then collapse them into one row.
+This is done by joining corresponding cells' data from each row into one
+cell, effectively keeping every column's data in the same column.
+
+If you want to group by an other column, not the first one, then first
+reorder the columns by td-select(1). Eg. C<td-select KEYCOLUMN +REST>.
+
+=head1 OPTIONS
+
+=over 4
+
+=item -g, --glue I<STR>
+
+Delimiter character or string between joined cell data.
+Default is space.
+
+=back
+
+=head1 EXAMPLES
+
+This pipeline shows which users are using each of the configured default
+shells, grouped by shell path.
+
+  # get the list of users
+  getent passwd |\
+  
+  # transform into tabular data stream
+  tr : "\t" |\
+  td-add-headers USER X UID GID GECOS HOME SHELL |\
+  
+  # put the shell in the first column, and sort, then collapse
+  td-select SHELL USER | td-keepheader sort | td-collapse -g ' ' |\
+  
+  # change header name "USER" to "USERS"
+  td-alter USERS=USER | td-select +ALL -USER
+  
+B<Output>:
+  
+  | COUNT | SHELL             | USERS                                        |
+  | 4     | /bin/bash         | user1 user2 nova root                        |
+  | 5     | /bin/false        | fetchmail hplip sddm speech-dispatcher sstpc |
+  | 1     | /bin/sync         | sync                                         |
+  | 1     | /sbin/rebootlogon | reboot                                       |
+  | 6     | /usr/sbin/nologin | _apt avahi avahi-autoipd backup bin daemon   |
+
+=head1 CAVEATS
+
+Have to sort input data first.
+
+=head1 SEE ALSO
+
+td-expand(1) is a kind of inverse to td-collapse(1).
+
+=head1 REFERENCES
+
+td-collapse(1) roughly translates to SELECT COUNT(*) + GROUP_CONCAT() + GROUP BY in SQL.
+
+=cut
+
+
+$OptGlue = " ";
+%OptionDefs = (
+	'g|glue=s' => \$OptGlue,
+);
+
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
+process_header(scalar <STDIN>);
+unshift @Header, "COUNT";
+print join($FS, @Header).$RS;
+
+
+sub output_last_group
+{
+	print $collapsed_rows . $FS . $prev_group_key . $FS . join($FS, map { join $OptGlue, @$_ } @group_members) . $RS;
+	@group_members = ();
+	$collapsed_rows = 0;
+}
+
+$group_key = undef;
+$prev_group_key = undef;
+@group_members = ();
+$collapsed_rows = 0;
+
+while(not eof STDIN)
+{
+	my @input_row = read_record(\*STDIN);
+	
+	$group_key = $input_row[0];
+	output_last_group if defined $prev_group_key and $group_key ne $prev_group_key;
+	for my $cell_num (1..$#input_row)
+	{
+		push @{$group_members[$cell_num-1]}, $input_row[$cell_num];
+	}
+	$collapsed_rows++;
+	$prev_group_key = $group_key;
+}
+
+END { output_last_group; }

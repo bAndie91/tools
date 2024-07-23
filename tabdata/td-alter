@@ -49,12 +49,18 @@ show headers (default)
 
 =back
 
+=head1 REFERENCES
+
+"Alter" in td-alter comes from SQL.
+td-alter(1) can change the "table" column layout.
+But contrary to SQL's ALTER TABLE, td-alter(1) can modify the records too, so akin to SQL UPDATE as well.
+
 =cut
 
 $OptShowHeader = 1;
 %OptionDefs = (
-	'h|header' => sub { $OptShowHeader = 1; },
 	'H|no-header' => sub { $OptShowHeader = 0; },
+	'h|header' => sub { $OptShowHeader = 1; },
 );
 
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';

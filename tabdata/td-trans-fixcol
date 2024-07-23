@@ -31,6 +31,14 @@ This allows the input data to have column names with single spaces.
 =cut
 
 
+$OptShowHeader = 1;
+$OptMinColumnSpacing = 2;
+%OptionDefs = (
+	'h|header' => sub { $OptShowHeader = 1; },
+	'H|no-header' => sub { $OptShowHeader = 0; },
+	'm|min-column-spacing=i' => \$OptMinColumnSpacing,
+);
+
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 

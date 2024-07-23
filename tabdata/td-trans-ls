@@ -12,7 +12,7 @@ ls -l | td-trans-ls
 
 =head1 DETAILS
 
-supported ls(1) options which affect its output format:
+Supported ls(1) options which affect its output format:
 
 =over 4
 
@@ -26,7 +26,7 @@ supported ls(1) options which affect its output format:
 
 =back
 
-unsupported options:
+Unsupported options:
 
 =over 4
 

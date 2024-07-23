@@ -2,15 +2,15 @@
 
 Tabular Data program suit (Tabdata) is a set of CLI tools (`td-*`) to
 manipulate line-based data stream (text).
-Each line represent a data *row*, also known as *record*,
-which consists of some *cells*,
+Each line represent a data **row**, also known as **record**,
+which consists of some **cells**,
 which are just strings separated by TAB (`0x09`, `\t`) char.
-This way each *cell* holds the *value* of a *field*.
-*Field* is a bit abstract part of Tabdata,
-it refers to either to a *cell* in a given column position determined by field name - when speaking of it in the context of a row,
-or to a whole *column* when speaking about the whole data stream.
-So *fields* make up the *columns* labelled by the field's name in the first *row*.
-Which makes the first row effectively the *header*.
+This way each **cell** holds the **value** of a **field**.
+**Field** is a bit abstract part of Tabdata,
+it refers to either to a **cell** in a given column position determined by field name - when speaking of it in the context of a row,
+or to a whole **column** when speaking about the whole data stream.
+So **fields** make up the **columns** labelled by the field's name in the first **row**.
+Which makes the first row effectively the **header**.
 
 You guessed, newline and tab (`\n`, `\t`) chars can not be in the cells
 as raw data, but need to encode/escape somehow.

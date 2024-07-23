@@ -1,0 +1,86 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+td-breakup - Generate multiple rows from each one row in a Tabular data stream.
+
+=head1 SYNOPSIS
+
+td-breakup [-f I<FIELD>] [-s I<SEPARATOR>]
+
+=head1 DESCRIPTION
+
+It goes row-by-row and splits the given I<FIELD> at I<SEPARATOR> chars,
+creates as many rows on the output as many parts I<FIELD> is split into,
+fills the I<FIELD> column in each row by one of the parts,
+and fills all other columns in all resulted rows with the corresponding column's data in the input.
+
+More illustratively:
+
+  | SHELL       | USERS         |
+  | /bin/bash   | user1 user2   |
+  | /bin/dash   | user3 user4   |
+  | /bin/sh     | root          |
+  
+  td-breakup -f USERS -s ' '
+  
+  | SHELL       | USERS         |
+  | /bin/bash   | user1         |
+  | /bin/bash   | user2         |
+  | /bin/dash   | user3         |
+  | /bin/dash   | user4         |
+  | /bin/sh     | root          |  
+
+=head1 OPTIONS
+
+=over 4
+
+=item -f, --field I<FIELD>
+
+Which field to break up.
+Default is always the first one.
+
+=item -s, --separator I<PATTERN>
+
+Regexp pattern to split I<FIELD> at.
+Default is space.
+
+=back
+
+=cut
+
+
+$OptFieldName = undef;
+$OptSeparatorRegexp = " ";
+%OptionDefs = (
+	's|separator=s' => \$OptSeparatorRegexp,
+	'f|field=s' => \$OptFieldName,
+);
+
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
+
+process_header(scalar <STDIN>);
+print join($FS, @header).$RS;
+
+while(not eof STDIN)
+{
+	my @row = read_record(\*STDIN);
+	
+	if(not defined $OptFieldName)
+	{
+		$OptFieldName = $Header[0];
+	}
+	
+	my @parts = split /$OptSeparatorRegexp/, $row[$Header{$OptFieldName}];
+	
+	for my $part (@parts)
+	{
+		my @row_copy = @row;
+		$row_copy[$Header{$OptFieldName}] = $part;
+		print join($FS, @row_copy) . $RS;
+	}
+}

@@ -20,16 +20,16 @@ with all of the rest of I<COMMANDLINE> as its arguments.
 This is useful when you have a program which normally calls some other commands via shell (eg. system(3)),
 notably with user-controlled parts in it, ie. data from an untrusted source.
 This potentially makes the call vulnerable to shell-injection.
-Like incrond(8), which triggered the author to make this defense tool.
+Like incrond(8) since 2015, which triggered the author to make this defense tool.
 
 These kind of programs usually try to guard by escaping user input,
 but it often turns out that the re-implemented shell-escape mechanism was bad or incomplete.
 
-Using notashell(1) enables you to fully evade shell-injection attacks.
+Using notashell(1) enables you to fully evade this type of shell-injection attacks.
 Since if you control at least the first word of I<COMMANDLINE>,
 you can trustworthly call a program (wrapper script) in which the supplied I<COMMANDLINE>
 can be re-examined, accepted, rejected, rewritten, etc.
-and pass the execution forward now with varified user input.
+and pass the execution forward now with verified user input.
 
 No need to think on "is it safe to run by shell?" or quotation-mark/escape-backslash forests ever again.
 
@@ -75,6 +75,18 @@ strings only matching to B<[a-zA-Z0-9_,./]+> are considered filenames.
 =back
 
 Don't forget to exit from custom.pl with a true value.
+
+B<Typical custom.pl script>:
+
+  @CommandArgs = setupIORedirects(@CommandArgs);
+  @CommandArgs = map {stripQuotes($_)} @CommandArgs;
+  1;
+
+=head1 SETUP
+
+You probably need a tool to force the neglegent program (which is the attack vector to shell-injection)
+to run notashell(1) in place of normal shell (sh(1), bash(1)).
+See for example B<noshellinject> tool to accomplish this (in F<../root-tools> directory in notashell's source git repo).
 
 =cut
 

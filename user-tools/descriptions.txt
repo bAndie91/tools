@@ -26,6 +26,7 @@ cronrun - convenience features to run commands in task scheduler environment
 cut.awk - Output only the selected fields from the input stream, parameters follow awk(1) syntax
 daemonctl - Manage preconfigured libslack daemon(1) daemons more conveniently
 dataurl2bin - Decode "data:..." URLs from input stream and output the raw binary data
+dbus-call - Browse DBus and call its methods
 debdiff - Display differences between 2 Debian packages (*.deb files)
 descpids - List all descendant process PIDs of the given process(es)
 dfbar - Display disk space usage with simple bar chart (as reported by df(1))
@@ -85,6 +86,7 @@ mysql-fix-orphan-privileges.php - Suggest SQL commands to clean up unused record
 noacute - Strip diacritics (acute, umlaut, ...) from letters on the input stream
 nocomment - remove comment lines from input stream
 nopath - Run command by disregarding some PATH directories
+notashell - A non-interactive shell lacking of any shell syntax
 oded - On-disk editor - edit text files by commands directly from shell
 organizebydate - Rename files based on their date-time
 palemoon-current-url - Display the webpage's URL which is currently open in Palemoon web browser

@@ -7,6 +7,59 @@ true <<EOF
 
 tabularize - Takes TAB-delimited lines of text and outputs formatted table.
 
+=head1 SYNOPSIS
+
+I<COMMAND> | tabularize [I<OPTIONS>]
+
+=head1 OPTIONS
+
+=over 4
+
+=item -a, --ascii
+
+7-bit ascii borders
+
+=item -u, --unicode
+
+borders with nice graphical chars
+
+=item -H, --no-horizontal
+
+no horizontal lines in the output
+
+=item -M, --no-margins
+
+no margins, ie. no right-most and left-most vertical borders
+
+=item -v, --output-vertical-separator I<CHAR>
+
+vertical separator character(s) in the output
+
+=item -r, --align-right I<NUM>
+
+align these columns (0-indexed) to the right,
+others are auto-detected and if deemed to contain numeric data,
+only then aligned to the right.
+this option is repeatable.
+
+=item -l, --align-left I<NUM>
+
+similar to --align-right option
+
+=back
+
+=head1 ENVIRONMENT
+
+=over 4
+
+=item PAGER
+
+If B<$PAGER> is set and standard output is a terminal
+and the resulting table is wider than the terminal,
+then pipe the table through B<$PAGER>.
+
+=back
+
 =cut
 
 EOF
@@ -88,22 +141,7 @@ case "$1" in
         bottomCross=$1
 	;;
 -h|--help)
-	echo "Usage: some_command | tabularize [<options>]
-Takes TAB-delimited lines of text and outputs formatted table.
-Options:
- -a, --ascii    7-bit ascii borders
- -u, --unicode  borders with nice graphical chars
- -H, --no-horizontal
-                no horizontal lines in the output
- -M, --no-margins
-                no margins, ie. no right-most and left-most vertical borders
- -v, --output-vertical-separator CHAR
-                vertical separator character(s) in the output
- -r, --align-right NUM
-                align these columns (0-indexed) to the right, others are
-                auto-detected. this option is repeatable.
- -l, --align-left NUM
-                similar to --align-right option"
+	pod2text "$0"
 	exit
 	;;
 -*)
@@ -245,32 +283,47 @@ then
 fi
 
 
-# print the table
-
-line_no=1
-while read -r line
-do
-	if [ $line_no = 1 ]
-	then
-		echo -n "$topGrid"
-	else
-		echo -n "$innerGrid"
-	fi
-	
-	explode $'\t' "$line"
-	printf_args=()
-	for column in "${!column_width[@]}"
+print_table_g()
+{
+	line_no=1
+	while read -r line
 	do
-		[ $column -lt ${#EXPLODE_ARRAY[@]} ] && cell=${EXPLODE_ARRAY[$column]} || cell=''
-		chars=${#cell}
-		bytes=`LANG=C; echo "${#cell}"`
-		swidth=$[ ${column_width[$column]} + ( $bytes - $chars ) ]
-		[ ${columnAlignment[$column]} = left ] && swidth=-$swidth
-		printf_args+=($swidth "$cell")
-	done
-	printf -- "$cellFmt\n" "${printf_args[@]}"
+		if [ $line_no = 1 ]
+		then
+			echo -n "$topGrid"
+		else
+			echo -n "$innerGrid"
+		fi
+		
+		explode $'\t' "$line"
+		printf_args=()
+		for column in "${!column_width[@]}"
+		do
+			[ $column -lt ${#EXPLODE_ARRAY[@]} ] && cell=${EXPLODE_ARRAY[$column]} || cell=''
+			chars=${#cell}
+			bytes=`LANG=C; echo "${#cell}"`
+			swidth=$[ ${column_width[$column]} + ( $bytes - $chars ) ]
+			[ ${columnAlignment[$column]} = left ] && swidth=-$swidth
+			printf_args+=($swidth "$cell")
+		done
+		printf -- "$cellFmt\n" "${printf_args[@]}"
+		
+		let line_no++
+	done <<<"$text"
 	
-	let line_no++
-done <<<"$text"
+	echo -n "$bottomGrid"
+}
 
-echo -n "$bottomGrid"
+
+if [ -t 1 -a -n "$PAGER" ]
+then
+	terminal_cols=`tput cols`
+	table_width=${#topGrid}
+	if [ "${terminal_cols:-0}" -le $table_width ]
+	then
+		print_table_g | exec "$PAGER"
+		exit ${PIPESTATUS[1]}
+	fi
+fi
+
+print_table_g

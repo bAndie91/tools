@@ -81,6 +81,7 @@
 	prev = checkout HEAD~1
 	next = ! "fn(){ git checkout $(git rev-list --all --children | grep ^$(git show -s --format=%H) | cut -f2 -d' ' -s); }; fn"
 	co = checkout
+	timeback = ! "fn(){ commit=`git rev-list -n 1 --first-parent --before=\"$1\" HEAD --`; git checkout $commit; }; fn"
 
     # creating refs
 

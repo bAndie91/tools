@@ -5,13 +5,17 @@
 
 cd || exit $?
 
-/bin/mount --fstab ~/.fstab "$@"
-err=$?
-
-if [ $err != 0 ]
+if [ -e ~/.fstab ]
 then
-	echo "trying system fstab" >&2
-	exec /bin/mount "$@"
+	/bin/mount --fstab ~/.fstab "$@"
+	err=$?
+	
+	if [ "$err" = 0 ]
+	then
+		exit 0
+	else
+		echo "trying system fstab" >&2
+	fi
 fi
 
-exit $err
+exec /bin/mount "$@"

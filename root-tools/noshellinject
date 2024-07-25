@@ -31,7 +31,7 @@ then
 	
 	for shell in "${shellnames[@]}"
 	do
-		# can only bind-mount existing paths
+		# can bind-mount existing paths only
 		[ -f /var/lib/notashell/real-$shell ] || true > /var/lib/notashell/real-$shell
 		# save the real shell for later use
 		mount -o bind /bin/$shell /var/lib/notashell/real-$shell

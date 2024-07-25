@@ -34,8 +34,8 @@ then
 	err=$?
 	if [ $err != 0 ]
 	then
-		echo "Device is possibly used by:" >&2
-		echo "===========================" >&2
+		echo "Mountpoint is possibly used by:" >&2
+		echo "===============================" >&2
 		#fuser -v "$prm1" >&2
 		lsof -nPw "$prm1" >&2
 	fi

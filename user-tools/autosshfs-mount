@@ -31,7 +31,7 @@ then
 	
 	mountpoint=$mountpoint_basedir/$host
 	mkdir -p "$mountpoint"
-	exec sshfs -o Port=$port,ControlMaster=no,transform_symlinks,reconnect,Hostname="$hostname" "$user@$host:/" "$mountpoint"
+	exec sshfs -o allow_root,auto_unmount,Port=$port,ControlMaster=no,transform_symlinks,reconnect,Hostname="$hostname" "$user@$host:/" "$mountpoint"
 else
 	echo "$0: can not parse connection params: $connection_params" >&2
 	exit 2

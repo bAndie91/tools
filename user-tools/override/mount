@@ -5,7 +5,18 @@
 
 cd || exit $?
 
-if [ -e ~/.fstab ]
+try_homefstab=yes
+
+for arg in "$@"
+do
+	if [ ".$arg" = .--fstab ]
+	then
+		try_homefstab=no
+		break
+	fi
+done
+
+if [ $try_homefstab = yes -a -e ~/.fstab ]
 then
 	/bin/mount --fstab ~/.fstab "$@"
 	err=$?

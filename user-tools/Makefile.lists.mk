@@ -3,6 +3,7 @@ TOOLS ?= \
   a8e \
   adr2html \
   asterisk-log-separator \
+  autosshfs-mount \
   awk-cut \
   base58 \
   base64url \

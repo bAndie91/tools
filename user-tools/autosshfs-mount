@@ -1,0 +1,38 @@
+#!/bin/bash
+
+set -e
+set -o pipefail
+
+mountpoint_basedir=$1
+
+if [ ! -d "$mountpoint_basedir" ]
+then
+	echo "$0: supposed basedir is not a directory: $mountpoint_basedir" >&2
+	exit 1
+fi
+
+connection_params=$2
+connection_params=${connection_params##*/}
+
+# connection_params is in form of:
+# %r@%n(%h):%p
+# relevant ssh config option: ControlPath /home/.../somewhere/%r@%n(%h):%p
+# see man ssh_config(5) for details.
+#
+# example incrontab:
+# /home/.../somewhere IN_CREATE autosshfs-mount mnt/ssh $#
+
+if [[ $connection_params =~ ^([^@]+)@([^\(]+)\(([^\)]+)\):([0-9]+) ]]
+then
+	user=${BASH_REMATCH[1]}
+	host=${BASH_REMATCH[2]}
+	hostname=${BASH_REMATCH[3]}
+	port=${BASH_REMATCH[4]}
+	
+	mountpoint=$mountpoint_basedir/$host
+	mkdir -p "$mountpoint"
+	exec sshfs -o Port=$port,ControlMaster=no,transform_symlinks,reconnect,Hostname="$hostname" "$user@$host:/" "$mountpoint"
+else
+	echo "$0: can not parse connection params: $connection_params" >&2
+	exit 2
+fi

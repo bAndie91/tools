@@ -145,7 +145,7 @@ sub setupIORedirects
 
 $ParserHookPath = "/etc/notashell/custom.pl";
 
-if(not $ENV{'NOTASHELL_INTERCEPT'})
+if($ENV{'NOTASHELL_INTERCEPT'} eq "0")
 {
 	my $basename = $0 =~ s/.*\/([^\/]+)$/$1/r;
 	$progname = $basename;

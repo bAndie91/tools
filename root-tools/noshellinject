@@ -32,6 +32,23 @@ propagtype()
 	findmnt --noheadings --output PROPAGATION "$1"
 }
 
+bind_mount_symlink()
+{
+	local src=$1
+	local target=$2
+	
+	if type bindmount-v2 >/dev/null 2>&1
+	then
+		bindmount-v2 "$src" "$target"
+	elif [ ! -L "$src" ]
+	then
+		mount --bind "$src" "$target"
+	else
+		echo "$0: $src is a symlink, which may unexpectedly leak out to the parent namespace if bind-mounted. stop." >&2
+		return 1
+	fi
+}
+
 if [ "$1" = --inner ]
 then
 	mkdir -p "$real_shells_dir"
@@ -51,13 +68,13 @@ then
 	nsenter -t $PPID -m umount -l "$real_shells_dir"
 	
 	# bind-mount this dir over itself to be able to make private mounts under it
-	mount --bind /bin /bin
+	bind_mount_symlink /bin /bin
 	mount --make-private /bin
 	
 	# over-mount shells to be able to intercept "sh -c commandLine" type calls
 	for shell in "${shellnames[@]}"
 	do
-		mount --bind /usr/tool/notashell /bin/$shell
+		bind_mount_symlink /usr/tool/notashell /bin/$shell
 	done
 	
 	# after sub-mounts are mounted, clean up the parent mount from the parent namespace

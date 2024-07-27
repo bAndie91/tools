@@ -22,29 +22,57 @@
 
 set -e
 
+# where to save (bind-mount) read shell executables from /bin
+real_shells_dir=/var/lib/notashell
+# may extend if the neglegent program calls something else as shell
+shellnames=(sh dash bash)
+
+propagtype()
+{
+	findmnt --noheadings --output PROPAGATION "$1"
+}
+
 if [ "$1" = --inner ]
 then
-	mkdir -p /var/lib/notashell
-	
-	# may extend if the neglegent program calls something else as shell
-	shellnames=(sh dash bash)
+	mkdir -p "$real_shells_dir"
+	# bind-mount this dir over itself to be able to make private mounts under it
+	mount --bind "$real_shells_dir" "$real_shells_dir"
+	mount --make-private "$real_shells_dir"
 	
 	for shell in "${shellnames[@]}"
 	do
 		# can bind-mount existing paths only
-		[ -f /var/lib/notashell/real-$shell ] || true > /var/lib/notashell/real-$shell
+		[ -f "$real_shells_dir/real-$shell" ] || true > "$real_shells_dir/real-$shell"
 		# save the real shell for later use
-		mount -o bind /bin/$shell /var/lib/notashell/real-$shell
+		mount --bind /bin/$shell "$real_shells_dir/real-$shell"
 	done
 	
+	# after sub-mounts are mounted, clean up the parent mount from the parent namespace
+	nsenter -t $PPID -m umount -l "$real_shells_dir"
+	
+	# bind-mount this dir over itself to be able to make private mounts under it
+	mount --bind /bin /bin
+	mount --make-private /bin
+	
+	# over-mount shells to be able to intercept "sh -c commandLine" type calls
 	for shell in "${shellnames[@]}"
 	do
-		mount -o bind /usr/tool/notashell /bin/$shell
+		mount --bind /usr/tool/notashell /bin/$shell
 	done
+	
+	# after sub-mounts are mounted, clean up the parent mount from the parent namespace
+	nsenter -t $PPID -m umount -l /bin
 	
 	shift
 	export NOTASHELL_INTERCEPT=1
 	exec "$@"
 else
-	exec unshare --mount -- "$0" --inner "$@"
+	propagation=`propagtype /`
+	if [ "$propagation" != shared ]
+	then
+		echo "$0: mount events propagation of the root directory is $propagation, not shared." >&2
+		exit 1
+	fi
+	
+	exec unshare --mount --propagation=shared -- "$0" --inner "$@"
 fi

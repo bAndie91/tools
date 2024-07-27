@@ -145,7 +145,12 @@ sub setupIORedirects
 
 $ParserHookPath = "/etc/notashell/custom.pl";
 
-if($ENV{'NOTASHELL_INTERCEPT'} eq "0")
+if(scalar(@ARGV) == 2 and $ARGV[0] eq '-c')
+{
+	$sh_c_invocation = 1;
+}
+
+if($ENV{'NOTASHELL_INTERCEPT'} eq "0" or not $sh_c_invocation)
 {
 	my $basename = $0 =~ s/.*\/([^\/]+)$/$1/r;
 	$progname = $basename;
@@ -153,11 +158,6 @@ if($ENV{'NOTASHELL_INTERCEPT'} eq "0")
 }
 else
 {
-	if(scalar @ARGV != 2 or $ARGV[0] != '-c')
-	{
-		die "notashell: Supposed to be called as 'notashell -c CommandString'\n";
-	}
-	
 	$CommandString = $ARGV[1];
 	@CommandArgs = split / /, $CommandString;
 	$ExecName = $CommandArgs[0];

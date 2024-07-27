@@ -29,9 +29,21 @@ then
 	hostname=${BASH_REMATCH[3]}
 	port=${BASH_REMATCH[4]}
 	
-	mountpoint=$mountpoint_basedir/$host
-	mkdir -p "$mountpoint"
-	exec sshfs -o allow_root,auto_unmount,Port=$port,ControlMaster=no,transform_symlinks,reconnect,Hostname="$hostname" "$user@$host:/" "$mountpoint"
+	hash=`echo -n "$user$host$hostname$port" | md5sum | cut -c 1-32`
+	exec {lockfd}>> /tmp/autosshfs-mount-$hash.lock
+	
+	if flock --no-fork --exclusive --timeout 10 $lockfd
+	then
+		mountpoint="$mountpoint_basedir/$user@$host($hostname,$port)"
+		mkdir -p "$mountpoint"
+		if ! mountpoint "$mountpoint"
+		then
+			sshfs -o allow_root,auto_unmount,Port=$port,ControlMaster=no,transform_symlinks,reconnect,Hostname="$hostname" "$user@$host:/" "$mountpoint"
+		fi
+	else
+		echo "$0: can not acquire lock" >&2
+		exit 3
+	fi
 else
 	echo "$0: can not parse connection params: $connection_params" >&2
 	exit 2

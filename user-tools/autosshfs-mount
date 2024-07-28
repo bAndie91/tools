@@ -38,7 +38,12 @@ then
 		mkdir -p "$mountpoint"
 		if ! mountpoint "$mountpoint"
 		then
-			sshfs -o allow_root,auto_unmount,Port=$port,ControlMaster=no,transform_symlinks,reconnect,Hostname="$hostname" "$user@$host:/" "$mountpoint"
+			sshfs -o allow_root,auto_unmount,Port=$port,ControlMaster=no,transform_symlinks,reconnect,Hostname="$hostname" "$user@$host:/" "$mountpoint" {lockfd}>&-
+			err=$?
+			if [ $err != 0 ]
+			then
+				echo "$0: sshfs error $err" >&2
+			fi
 		fi
 	else
 		echo "$0: can not acquire lock" >&2

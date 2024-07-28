@@ -34,8 +34,10 @@ then
 	
 	if flock --no-fork --exclusive --timeout 10 $lockfd
 	then
-		mountpoint="$mountpoint_basedir/$user@$host($hostname,$port)"
+		mountname="$user@$host($hostname,$port)"
+		mountpoint="$mountpoint_basedir/$mountname"
 		mkdir -p "$mountpoint"
+		ln -snfT "$mountname" "$mountpoint_basedir/$host"
 		if ! mountpoint "$mountpoint"
 		then
 			sshfs -o allow_root,auto_unmount,Port=$port,ControlMaster=no,transform_symlinks,reconnect,Hostname="$hostname" "$user@$host:/" "$mountpoint" {lockfd}>&-

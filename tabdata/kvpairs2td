@@ -1,0 +1,110 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+td2kvpairs - Transform tabular data into key-value pairs
+
+=head1 OPTIONS
+
+=over 4
+
+=item -i, --ignore-non-existing-columns
+
+=item -w, --warn-non-existing-columns
+
+=item [-c|--column] I<COLUMN> [-c|--column] I<COLUMN> ...
+
+=item -r, --restcolumn I<NAME>
+
+Name of the column where the rest of the input line will be put
+which is not part of key-value pairs.
+Default is B<_REST>.
+
+=back
+
+=head1 SEE ALSO
+
+td2mrkv(1), kvpairs2td(1)
+
+=cut
+
+
+sub collapse_whitespace
+{
+	my $s = shift;
+	$s =~ s/\s+/ /g;
+	return $s;
+}
+
+$OptWarnBadColumnNames = 1;
+$OptFailBadColumnNames = 1;
+@OptPredefColumns = ();
+$OptRestColumnName = "_REST";
+%OptionDefs = (
+	'i|ignore-non-existing-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 0; },
+	'w|warn-non-existing-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 1; },
+	'c|column=s@' => \@OptPredefColumns,
+	'r|restcolumn=s' => \$OptRestColumnName,
+);
+
+use Data::Dumper;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
+@Headers = ();
+$RN = 0;
+$rest_column_idx = undef;
+
+while(my $line = <STDIN>)
+{
+	chomp $line;
+	my @record = ();
+	
+	while($line =~ s/(^|(?'spacebefore'\s*))((?'key'\S+)|(?'keyquote'[""''])(?'key'.+?)\g{keyquote})=((?'value'\S*)|(?'valuequote'[""''])(?'value'.*?)\g{valuequote})((?'spaceafter'\s*)|$)/collapse_whitespace($+{'spacebefore'}.$+{'spaceafter'})/e)
+	{
+		my ($key, $value) = ($+{'key'}, $+{'value'});
+		
+		if($RN == 0)
+		{
+			push @Headers, $key;
+		}
+		
+		my $cell_set = 0;
+		my $colinstances = 0;
+		for my $colidx (0 .. $#Headers)
+		{
+			if($Headers[$colidx] eq $key)
+			{
+				$colinstances++;
+				if(not defined $record[$colidx])
+				{
+					$record[$colidx] = $value;
+					$cell_set = 1;
+					last;
+				}
+			}
+		}
+		
+		if(not $cell_set)
+		{
+			$colinstances++;
+			warn "$0: column (instance $colinstances) is not initialized: $key\n" if $OptWarnBadColumnNames;
+			exit 3 if $OptFailBadColumnNames;
+		}
+	}
+	
+	if($RN == 0)
+	{
+		push @Headers, @OptPredefColumns, $OptRestColumnName;
+		$rest_column_idx = $#Headers;
+		print join($FS, @Headers).$RS;
+	}
+	
+	$record[$rest_column_idx] = $line;
+	
+	print join($FS, @record).$RS;
+	
+	$RN++;
+}

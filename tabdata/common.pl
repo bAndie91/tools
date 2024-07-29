@@ -81,4 +81,25 @@ sub unescape_tabdata
 	return $raw;
 }
 
+sub kvpair_escape
+{
+	my $s = shift;
+	if($s =~ /[""'' ]/)
+	{
+		$s =~ s/[\x00-\x1F\x7F""\\]/sprintf '\\x%02X', ord $&/eg;
+		$s = "\"$s\"";
+	}
+	return $s;
+}
+
+sub kvpair_unescape
+{
+	my $s = shift;
+	if($s =~ /^(?'quote'[""''])(?'value'.*?)\g{quote}$/)
+	{
+		$s = $+{'value'} =~ s/\\x([[:xdigit:]]{2})/chr hex $1/egir;
+	}
+	return $s;
+}
+
 1;

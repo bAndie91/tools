@@ -1,0 +1,49 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+td2kvpairs - Transform tabular data into key-value pairs
+
+=head1 OPTIONS
+
+=over 4
+
+=item -r, --prefix-field I<NAME>
+
+Put this field's content before the list of key-value pairs.
+Default is B<_REST>.
+Prefix and the key-value pairs are separated by a space char,
+if there is any prefix.
+
+=back
+
+=head1 SEE ALSO
+
+td2mrkv(1), kvpairs2td(1)
+
+=cut
+
+$OptPrefixField = "_REST";
+%OptionDefs = (
+	'r|prefix-field|prefixfield=s' => \$OptPrefixField,
+);
+
+use Data::Dumper;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
+process_header(scalar <STDIN>);
+
+while(not eof STDIN)
+{
+	my @input = read_record(\*STDIN);
+	my $prefix = '';
+	if(exists $Header{$OptPrefixField})
+	{
+		$prefix = $input[$Header{$OptPrefixField}];
+		$prefix =~ s/(\S)$/$1 /;
+	}
+	print $prefix . join(' ', map { sprintf "%s=%s", kvpair_escape($_), kvpair_escape($input[$Header{$_}]) } grep {$_ ne $OptPrefixField} @Header) . "\n";
+}

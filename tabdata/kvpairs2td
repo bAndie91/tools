@@ -4,7 +4,7 @@
 
 =head1 NAME
 
-td2kvpairs - Transform tabular data into key-value pairs
+kvpairs2td - Transform lines of key-value pairs to tabular data stream
 
 =head1 OPTIONS
 
@@ -26,7 +26,7 @@ Default is B<_REST>.
 
 =head1 SEE ALSO
 
-td2mrkv(1), kvpairs2td(1)
+td2mrkv(1), td2kvpairs(1)
 
 =cut
 

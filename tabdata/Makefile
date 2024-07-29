@@ -4,8 +4,10 @@ LIB_DIR = /usr/lib/tool/perl5/tabdata
 
 TOOLS = \
   csv2td \
+  kvpairs2td \
   mrkv2td \
   td2html \
+  td2kvpairs \
   td2mrkv \
   td-add-headers \
   td-alter \

@@ -14,7 +14,11 @@ kvpairs2td - Transform lines of key-value pairs to tabular data stream
 
 =item -w, --warn-non-existing-columns
 
-=item [-c|--column] I<COLUMN> [-c|--column] I<COLUMN> ...
+=item -c, --column I<COLUMN>
+
+Indicate that there will be a column by the name I<COLUMN>.
+This is useful if the first record does not have I<COLUMN>.
+This option is repeatable.
 
 =item -r, --restcolumn I<NAME>
 

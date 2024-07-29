@@ -10,13 +10,14 @@ vcf2td - Transform VCF to tabular data format.
 
 =over 4
 
-=item [-c|--column] I<COLUMN> [-c|--column] I<COLUMN> ...
+=item -c, --column I<COLUMN>
 
-Predefine columns.
+Indicate that there will be a column by the name I<COLUMN>.
 Useful if the first record does not contain all fields
 which are otherwise occur in the whole data stream.
 By default, vcf2td(1) recognize fields which are in the first record in the VCF input,
 does not read ahead more records before sending the header.
+This option is repeatable.
 
 =item -i, --ignore-non-existing-columns
 

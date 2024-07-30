@@ -130,15 +130,15 @@ case "$1" in
 -v|--output-vertical-separator)
 	shift
 	verticalBar=$1
-        topleftCorner=$1
-        toprightCorner=$1
-        bottomleftCorner=$1
-        bottomrightCorner=$1
-        leftCross=$1
-        middleCross=$1
-        rightCross=$1
-        topCross=$1
-        bottomCross=$1
+	topleftCorner=$1
+	toprightCorner=$1
+	bottomleftCorner=$1
+	bottomrightCorner=$1
+	leftCross=$1
+	middleCross=$1
+	rightCross=$1
+	topCross=$1
+	bottomCross=$1
 	;;
 -h|--help)
 	pod2text "$0"
@@ -237,6 +237,7 @@ set -u
 
 # compose the format string
 
+table_width=0
 cellFmt=''
 topFmt=''
 innerFmt=''
@@ -255,6 +256,8 @@ do
 		fi
 	fi
 	
+	table_width=$[table_width + (column == 0 ? (0${margins:+1} ? ${#verticalBar} : 0) : ${#verticalBar}) + ${column_width[$column]}]
+	
 	cellFmt="${cellFmt:-${margins:+$verticalBar}}${sequentColumn:+$verticalBar}%*s"
 	topFmt="${topFmt:-${margins:+$topleftCorner}}${sequentColumn:+$topCross}%${column_width[$column]}s"
 	innerFmt="${innerFmt:-${margins:+$leftCross}}${sequentColumn:+$middleCross}%${column_width[$column]}s"
@@ -263,6 +266,7 @@ do
 	
 	sequentColumn=yes
 done
+table_width=$[table_width + (0${margins:+1} ? ${#verticalBar} : 0)]
 cellFmt="$cellFmt${margins:+$verticalBar}"
 topFmt="$topFmt${margins:+$toprightCorner}"
 innerFmt="$innerFmt${margins:+$rightCross}"
@@ -318,7 +322,6 @@ print_table_g()
 if [ -t 1 -a -n "$PAGER" ]
 then
 	terminal_cols=`tput cols`
-	table_width=${#topGrid}
 	if [ "${terminal_cols:-0}" -le $table_width ]
 	then
 		print_table_g | exec "$PAGER"

@@ -248,7 +248,6 @@ sub get_next_data_number
 				debug_msg "crashed $record_num\n";
 				return $record_num;
 			}
-			# TODO re-examine in-progress records sometime
 		}
 		if($OptRetry and ($result =~ /^!/ or ($result =~ /^\s*\d+$/ and $result > 0)))
 		{
@@ -304,6 +303,6 @@ while(1)
 	record_status($LineNum, deriv_processing_status($status));
 	close $Results_fh;
 	
-	close $inprogress_fh;
 	unlink $InprogressFile;
+	close $inprogress_fh;
 }

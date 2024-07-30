@@ -66,8 +66,9 @@ while(my $line = <STDIN>)
 	chomp $line;
 	my @record = ();
 	
-	while($line =~ s/(^|(?'spacebefore'\s*))((?'key'\S+)|(?'keyquote'[""''])(?'key'.+?)\g{keyquote})=((?'value'\S*)|(?'valuequote'[""''])(?'value'.*?)\g{valuequote})((?'spaceafter'\s*)|$)/collapse_whitespace($+{'spacebefore'}.$+{'spaceafter'})/e)
+	while($line =~ s/(^|(?'spacebefore'\s*))((?'keyquote'[""''])(?'key'.+?)\g{keyquote}|(?'key'[^\s=]+))=((?'valuequote'[""''])(?'value'.*?)\g{valuequote}|(?'value'\S*))((?'spaceafter'\s*)|$)/collapse_whitespace($+{'spacebefore'}.$+{'spaceafter'})/e)
 	{
+		#warn Dumper \%+;
 		my ($key, $value) = ($+{'key'}, $+{'value'});
 		
 		if($RN == 0)

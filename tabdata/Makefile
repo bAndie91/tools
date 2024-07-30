@@ -16,6 +16,7 @@ TOOLS = \
   td-filter \
   td-collapse \
   td-keepheader \
+  td-lpstat \
   td-ls \
   td-pivot \
   td-select \

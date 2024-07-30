@@ -1,0 +1,75 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+td-lpstat - lpstat(1) wrapper to output printers status in Tabular Data format
+
+=cut
+
+
+%OptionDefs = (
+);
+
+use Data::Dumper;
+use DateTime::Format::Strptime;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
+$datetime_parser = new DateTime::Format::Strptime(pattern=>'%b %d %T %Y', on_error=>'croak', locale=>'C');
+
+$ENV{'LANG'} = 'C';
+open $pipe, '-|', 'lpstat', '-d', '-p', '-a';
+while(<$pipe>)
+{
+	chomp;
+	if(/^system default destination: (.+)$/)
+	{
+		$default_printer = $1;
+	}
+	elsif(/^printer (?'PRINTER'\S+) ((?'STAGE'.*?)\.  (?'STATUS'enabled)|(?'STATUS'.+)) since \S+ (?'datetime'\S+ \d+ \S+ \d+)( -)?$/)
+	{
+		$last_printer = $+{'PRINTER'};
+		my $stage = $+{'STAGE'};
+		$Printer{$last_printer} = {
+			'PRINTER' => $last_printer,
+			'STATUS' => $+{'STATUS'},
+			'SINCE' => $datetime_parser->parse_datetime($+{'datetime'})->strftime('%F %T'),
+		};
+		
+		$stage =~ s/^is //;
+		if($stage =~ /^now printing .*-(\d+)$/)
+		{
+			$stage = 'printing';
+			$Printer{$last_printer}->{'JOB'} = $1;
+		}
+		$Printer{$last_printer}->{'STAGE'} = $stage;
+	}
+	elsif(/^\s+(.+?)$/ and defined $last_printer)
+	{
+		my $reason = $1;
+		$Printer{$last_printer}->{'REASON'} .= "\n" if exists $Printer{$last_printer}->{'REASON'};
+		$Printer{$last_printer}->{'REASON'} .= $1;
+	}
+	elsif(/^(?'PRINTER'\S+) (?'ACCEPTANCE'not accepting|accepting) requests since \S+ (?'datetime'\S+ \d+ \S+ \d+)( -)?/)
+	{
+		$Printer{$+{'PRINTER'}}->{'ACCEPTANCE'} = $+{'ACCEPTANCE'};
+		$Printer{$+{'PRINTER'}}->{'ACCEPTANCE_SINCE'} = $datetime_parser->parse_datetime($+{'datetime'})->strftime('%F %T');
+	}
+	else
+	{
+		warn "$0: can not parse: $_\n";
+	}
+}
+
+#warn Dumper \%Printer;
+
+@Headers = qw/PRINTER DEFAULT STATUS SINCE STAGE JOB ACCEPTANCE ACCEPTANCE_SINCE REASON/;
+print join($FS, @Headers).$RS;
+
+for my $printer (sort {$a cmp $b} keys %Printer)
+{
+	$Printer{$printer}->{'DEFAULT'} = $printer eq $default_printer ? "yes" : "no";
+	print join($FS, map {escape_tabdata($Printer{$printer}->{$_})} @Headers).$RS;
+}

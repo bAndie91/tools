@@ -250,6 +250,12 @@ sub get_next_data_number
 			}
 			# TODO re-examine in-progress records sometime
 		}
+		if($OptRetry and ($result =~ /^!/ or ($result =~ /^\s*\d+$/ and $result > 0)))
+		{
+			$FirstUnprocessed = $record_num;
+			debug_msg "retry $record_num\n";
+			return $record_num;
+		}
 		
 		$record_num++;
 	}

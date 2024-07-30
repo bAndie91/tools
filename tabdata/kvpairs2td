@@ -12,6 +12,8 @@ kvpairs2td - Transform lines of key-value pairs to tabular data stream
 
 =item -i, --ignore-non-existing-columns
 
+Do not fail when encounters a new field after the first record.
+
 =item -w, --warn-non-existing-columns
 
 =item -c, --column I<COLUMN>
@@ -26,6 +28,11 @@ Name of the column where the rest of the input line will be put
 which is not part of key-value pairs.
 Default is B<_REST>.
 
+=item -u, --unknown-to-rest
+
+Put unknown (non-existing) fields in the "rest" column
+(see B<-r> option).
+
 =back
 
 =head1 SEE ALSO
@@ -35,22 +42,17 @@ td2mrkv(1), td2kvpairs(1)
 =cut
 
 
-sub collapse_whitespace
-{
-	my $s = shift;
-	$s =~ s/\s+/ /g;
-	return $s;
-}
-
 $OptWarnBadColumnNames = 1;
 $OptFailBadColumnNames = 1;
 @OptPredefColumns = ();
 $OptRestColumnName = "_REST";
+$OptUnknownToRest = 0;
 %OptionDefs = (
 	'i|ignore-non-existing-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 0; },
 	'w|warn-non-existing-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 1; },
 	'c|column=s@' => \@OptPredefColumns,
 	'r|restcolumn=s' => \$OptRestColumnName,
+	'u|unknown-to-rest' => \$OptUnknownToRest,
 );
 
 use Data::Dumper;
@@ -61,15 +63,19 @@ do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 $RN = 0;
 $rest_column_idx = undef;
 
-while(my $line = <STDIN>)
+while(my $Line = <STDIN>)
 {
-	chomp $line;
+	chomp $Line;
 	my @record = ();
+	my $Rest = '';
 	
-	while($line =~ s/(^|(?'spacebefore'\s*))((?'keyquote'[""''])(?'key'.+?)\g{keyquote}|(?'key'[^\s=]+))=((?'valuequote'[""''])(?'value'.*?)\g{valuequote}|(?'value'\S*))((?'spaceafter'\s*)|$)/collapse_whitespace($+{'spacebefore'}.$+{'spaceafter'})/e)
+	while($Line =~ /(^|(?'spacebefore'\s*))((?'keyquote'[""''])(?'key'.+?)\g{keyquote}|(?'key'[^\s=]+))=((?'valuequote'[""''])(?'value'.*?)\g{valuequote}|(?'value'\S*))((?'spaceafter'\s*)|$)/)
 	{
-		#warn Dumper \%+;
-		my ($key, $value) = ($+{'key'}, $+{'value'});
+		#warn Dumper [$`, \%+, $'];
+		$Rest .= $` . $+{'spacebefore'};
+		$Line = $';
+		my ($key, $value) = (kvpair_unescape($+{'key'}), kvpair_unescape($+{'value'}));
+		my $spaceafter = $+{'spaceafter'};
 		
 		if($RN == 0)
 		{
@@ -96,7 +102,14 @@ while(my $line = <STDIN>)
 		{
 			$colinstances++;
 			warn "$0: column (instance $colinstances) is not initialized: $key\n" if $OptWarnBadColumnNames;
-			exit 3 if $OptFailBadColumnNames;
+			if($OptUnknownToRest)
+			{
+				$Rest .= kvpair_escape($key) . '=' . kvpair_escape($value) . $spaceafter;
+			}
+			else
+			{
+				exit 3 if $OptFailBadColumnNames;
+			}
 		}
 	}
 	
@@ -107,9 +120,9 @@ while(my $line = <STDIN>)
 		print join($FS, @Headers).$RS;
 	}
 	
-	$record[$rest_column_idx] = $line;
+	$record[$rest_column_idx] = $Rest . $Line;
 	
-	print join($FS, @record).$RS;
+	print join($FS, map {escape_tabdata($_)} @record) . $RS;
 	
 	$RN++;
 }

@@ -17,7 +17,7 @@ pass each piece of B<DATA> to I<COMMAND> as the last argument,
 then record the exit status.
 Can be well parallelized.
 
-Use a wrapper script for I<COMMAND> if you want to:
+Use a wrapper command/script for I<COMMAND> if you want either of these:
 
 =over 4
 
@@ -51,15 +51,25 @@ Processing status is either:
 
 =over 4
 
-=item all spaces - processing not yet started
+=item all spaces
 
-=item periods - in progress
+processing not yet started
 
-=item digits (possibly padded by spaces) - result status (exit code)
+=item periods
 
-=item exclamation mark (C<!>) followed by hexadecimal digits - termination signal (I<COMMAND> teminated abnormally)
+in progress
 
-=item EOF (ie. fewer lines than input data) - processing not yet started
+=item digits (possibly padded by spaces)
+
+result status (exit code)
+
+=item exclamation mark (C<!>) followed by hexadecimal digits
+
+termination signal (I<COMMAND> teminated abnormally)
+
+=item EOF (ie. fewer lines than input data)
+
+processing not yet started
 
 =back
 
@@ -77,6 +87,7 @@ use Data::Dumper;
 use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
 use IPC::Run qw/run/;
 use POSIX;
+use Pod::Usage;
 
 $OptRetry = 0;
 
@@ -87,9 +98,10 @@ GetOptions(
 
 pod2usage(-exitval=>2, -verbose=>99) unless scalar @ARGV >= 2;
 
-sub get_next_data
+
+sub debug_msg
 {
-	
+	#warn @_;
 }
 
 sub deriv_processing_status
@@ -132,56 +144,85 @@ sub extend_resultsfile
 	
 	seek $fh, 0, SEEK_END;
 	my $size = tell $fh;
-	# round down to the nearest complete record
-	$size = int($size / $ResultsRecordLength);
+	my $endpos_last_complete_record = int($size / $ResultsRecordLength) * $ResultsRecordLength;
+	my $records_to_append = ($extended_size - $endpos_last_complete_record) / $ResultsRecordLength;
+	debug_msg "go to offset $endpos_last_complete_record to extend by $records_to_append records\n";
 	seek $fh, $size, SEEK_SET;
 	# fill up with empty status records
-	print {$Results_fh} "   \n" x (($extended_size - $size) / $ResultsRecordLength) or die "$0: write: $fname: $!\n";
+	print {$Results_fh} "   \n" x $records_to_append or die "$0: write: $fname: $!\n";
 }
 
 sub record_status
 {
 	my $linenum = shift;
-	my $status = shift;  # must be ($ResultsRecordLength - 1) bytes!
+	my $status = shift;
+	die "$0: size mismatch: length(\"$status\") != $ResultsRecordLength - 1\n" if length($status) != $ResultsRecordLength - 1;
+	
 	my $offset = $linenum * $ResultsRecordLength;
+	debug_msg "go to offset $offset to record data # $linenum 's status \"$status\"\n";
 	seek $Results_fh, $offset, SEEK_SET;
 	if(eof $Results_fh)
 	{
+		debug_msg "eof\n";
 		# results file is not big enough, let's extend
 		extend_resultsfile($Results_fh, $offset);
+		seek $Results_fh, $offset, SEEK_SET;
 	}
-	seek $Results_fh, $offset, SEEK_SET;
-	print {$Results_fh} "$status\n" die "$0: write: $ResultsFile: $!\n";
+	print {$Results_fh} "$status\n" or die "$0: write: $ResultsFile: $!\n";
 }
 
 sub input_data
 {
+	# TODO use index file, if exists, to seek in.
+	
 	my $asked_line = shift;
 	my $fh = fopen $InputFile, {no_create=>1,};
 	my $linenum = 0;
-	while(my $line = <$InputFile>)
+	my $data = undef;
+	while(my $line = <$fh>)
 	{
 		if($linenum == $asked_line)
 		{
-			close $fh;
-			return $line;
+			$data = $line;
+			chomp $data;
+			last;
 		}
+		$linenum++;
 	}
 	close $fh;
-	return undef;
+	return $data;
 }
 
 sub count_input_records
 {
+	# TODO use index file, if exists.
+	
 	my $fh = fopen $InputFile, {no_create=>1,};
 	my $linenum = 0;
-	$linenum++ while <$InputFile>;
+	$linenum++ while scalar <$fh>;
 	close $fh;
 	return $linenum;
 }
 
-sub get_next_data
+sub processing_lockfile_name
 {
+	my $processing_number = shift;
+	return "$InputFile.uniproc.$processing_number";
+}
+
+sub still_in_progress
+{
+	my $processing_number = shift;
+	my $lockfile = processing_lockfile_name($processing_number);
+	open my $fh, '<', $lockfile or return 0;
+	my $lock_ok = flock $fh, LOCK_EX|LOCK_NB;
+	close $fh;
+	return not $lock_ok;
+}
+
+sub get_next_data_number
+{
+	debug_msg "go to offset ".($FirstUnprocessed*$ResultsRecordLength)." to read status of record # $FirstUnprocessed\n";
 	seek $Results_fh, $FirstUnprocessed*$ResultsRecordLength, SEEK_SET;
 	
 	my $record_num = $FirstUnprocessed;
@@ -189,32 +230,43 @@ sub get_next_data
 	while(1)
 	{
 		my $nbytes = read $Results_fh, $result, $ResultsRecordLength;
+		debug_msg "read only $nbytes bytes \"$result\" at record $record_num\n" if $nbytes < $ResultsRecordLength;
 		last if $nbytes < $ResultsRecordLength;
 		chomp $result;
 		
 		if($result eq '   ')
 		{
 			$FirstUnprocessed = $record_num;
-			return ($record_num, input_data($record_num));
+			debug_msg "uninitialized $record_num\n";
+			return $record_num;
 		}
 		if($result eq '...')
 		{
 			# check if still locked
-			# TODO
+			if(not still_in_progress($record_num))
+			{
+				debug_msg "crashed $record_num\n";
+				return $record_num;
+			}
+			# TODO re-examine in-progress records sometime
 		}
 		
 		$record_num++;
 	}
 	
 	# check here if there are more input data than result records
-	my $input_records = count_input_records;
+	my $input_records = count_input_records();
 	if($record_num < $input_records)
 	{
 		extend_resultsfile($Results_fh, $input_records * $ResultsRecordLength);
-		TODO FirstUnprocessed
-		TODO return
+		$FirstUnprocessed = $record_num;
+		debug_msg "new $record_num\n";
+		return $record_num;
 	}
-	TODO no more input data
+	
+	# no more input data
+	debug_msg "no more input. input_records=$input_records\n";
+	return undef;
 }
 
 
@@ -228,16 +280,18 @@ $Results_fh = undef;
 while(1)
 {
 	$Results_fh = fopen $ResultsFile, {rw=>1, lock=>1};
-	my ($LineNum, $Data) = get_next_data;
+	my $LineNum = get_next_data_number();
 	last if not defined $LineNum;
 	
-	my $InprogressFile = "$InputFile.uniproc.$LineNum";
+	my $Data = input_data($LineNum);
+	
+	my $InprogressFile = processing_lockfile_name($LineNum);
 	my $inprogress_fh = fopen $InprogressFile, {rw=>1, lock=>1};
 	
 	record_status($LineNum, '...');
 	close $Results_fh;
 	
-	run [$Command, @Args];
+	run [$Command, @Args, $Data];
 	my $status = $?;
 	
 	$Results_fh = fopen $ResultsFile, {rw=>1, lock=>1};

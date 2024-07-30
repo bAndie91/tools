@@ -1,0 +1,48 @@
+#!/bin/bash
+
+# this wrapper mount script makes relative device paths to absolute.
+# some mount fs types needs them to be absolute, but I'd like to keep
+# the option to be able to mount different devices in different directories,
+# only their relative paths being the same.
+
+set -e
+set -u
+
+mount_opts=()
+
+dev=$1
+shift
+moutpoint=$1
+shift
+
+while [ $# -gt 0 ]
+do
+	case "$1" in
+	(-t)
+		shift
+		fstype=$1
+		if [[ $fstype =~ abshelper\.(.+) ]]
+		then
+			fstype_encoded=${BASH_REMATCH[1]}
+			fstype=${fstype_encoded//\//.}
+		fi
+		if [[ $fstype =~ ([^.]+) ]]
+		then
+			fstype_master=${BASH_REMATCH[1]}
+		else
+			fstype_master=$fstype
+		fi
+		;;
+	(*)
+		mount_opts+=("$1")
+		;;
+	esac
+	shift
+done
+
+if [ "${dev:0:1}" != / ]
+then
+	dev=$PWD/$dev
+fi
+
+exec /sbin/"mount.$fstype_master" "$dev" "$moutpoint" -t "$fstype" "${mount_opts[@]}"

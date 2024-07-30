@@ -1,5 +1,5 @@
 
-TOOLS = mount.bindfs mount.posixovlfs mount.xattrovlfs mount.fusefile \
+TOOLS = mount.bindfs mount.posixovlfs mount.xattrovlfs mount.fusefile mount.abshelper \
   mount.restic
 
 TARGETS = $(foreach name,$(TOOLS),/sbin/$(name))
@@ -15,3 +15,6 @@ install-all: $(TARGETS)
 $(TARGETS): /sbin/%: %
 	install --compare $< $@
 	@echo remove $@ >> uninstall.sh
+
+
+# TODO: discover usage of /sbin/fs.d and /sbin/fs directories.

@@ -24,7 +24,8 @@ set -e
 
 # where to save (bind-mount) read shell executables from /bin
 real_shells_dir=/var/lib/notashell
-# may extend if the neglegent program calls something else as shell
+# may extend if the neglegent program calls something else as shell.
+# all are presumed to be in /bin.
 shellnames=(sh dash bash)
 
 propagtype()
@@ -51,6 +52,8 @@ bind_mount_symlink()
 
 if [ "$1" = --inner ]
 then
+	echo "$0: creating private bind-mount on $real_shells_dir to save real shells" >&2
+	
 	mkdir -p "$real_shells_dir"
 	# bind-mount this dir over itself to be able to make private mounts under it
 	mount --bind "$real_shells_dir" "$real_shells_dir"
@@ -64,9 +67,13 @@ then
 		mount --bind /bin/$shell "$real_shells_dir/real-$shell"
 	done
 	
+	echo "$0: umount $real_shells_dir from the parent namespace" >&2
 	# after sub-mounts are mounted, clean up the parent mount from the parent namespace
 	nsenter -t $PPID -m umount -l "$real_shells_dir"
 	
+
+	echo "$0: creating private bind-mount on /bin to intercept shells" >&2
+
 	# bind-mount this dir over itself to be able to make private mounts under it
 	bind_mount_symlink /bin /bin
 	mount --make-private /bin
@@ -77,6 +84,7 @@ then
 		bind_mount_symlink /usr/tool/notashell /bin/$shell
 	done
 	
+	echo "$0: umount /bin from the parent namespace" >&2
 	# after sub-mounts are mounted, clean up the parent mount from the parent namespace
 	nsenter -t $PPID -m umount -l /bin
 	
@@ -90,6 +98,8 @@ else
 		echo "$0: mount events propagation of the root directory is $propagation, not shared." >&2
 		exit 1
 	fi
+	
+	echo "$0: creating new mount-namespace to intercept shell executions" >&2
 	
 	exec unshare --mount --propagation=shared -- "$0" --inner "$@"
 fi

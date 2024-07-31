@@ -31,7 +31,7 @@ IS_BIGFILE depends on previously defined TYPE field.
 
  ls -l | td-trans-ls | td-alter TYPE='substr MODE,0,1' IS_BIGFILE='SIZE>10000000 && TYPE ne "d" ? "yes" : "no"'
 
-Strip sub-seconds and timezone from DATETIME field.
+Strip sub-seconds and timezone from DATETIME field:
 
  TIME_STYLE=full-iso ls -l | td-trans-ls | td-alter DATETIME='s/\..*//; $_'
 

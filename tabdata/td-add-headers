@@ -36,7 +36,7 @@ Do not add more columns than specified in the command parameters.
 
 =head1 EXAMPLE
 
-who | tr-trans | td-add-headers USER TTY DATE TIME COMMENT
+ who | td-trans | td-add-headers USER TTY DATE TIME COMMENT
 
 =cut
 

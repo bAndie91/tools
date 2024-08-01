@@ -605,6 +605,7 @@ sub init {
     my($self) = @_;
 
     require YAML;
+    $YAML::LoadBlessed = 1;
 }
 
 ###########################################

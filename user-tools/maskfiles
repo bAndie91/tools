@@ -1,0 +1,40 @@
+#!/usr/bin/env perl
+
+$hole_char = ' ';
+@overlay_files = @ARGV;
+@filehandles = ();
+
+for my $path (reverse @overlay_files)
+{
+	open my $fh, '<', $path or die "$0: open: $path: $!\n";
+	push @filehandles, $fh;
+}
+
+while(1)
+{
+	my $char0;
+	my $char;
+	
+	last if not grep {defined} @filehandles;
+	
+	for my $fh_idx (0..$#filehandles)
+	{
+		my $fh = $filehandles[$fh_idx];
+		next if not defined $fh;
+		
+		my $nbytes = read $fh, $char, 1;
+		if($nbytes != 1)
+		{
+			delete $filehandles[$fh_idx];
+			next;
+		}
+		
+		if(not defined $char0 and $char ne $hole_char)
+		{
+			$char0 = $char;
+		}
+	}
+	
+	$char0 = $char if not defined $char0;
+	print $char0;
+}

@@ -9,7 +9,7 @@ pipeby - Run a command and pipe its output to an other one
 
 =head1 SYNOPSIS
 
-pipeby I<CMD_2> [I<ARGS> --] I<CMD_1> [I<ARGS>]
+pipeby I<CMD_1> [I<ARGS>] -- I<CMD_2> [I<ARGS>]
 
 =head1 DESCRIPTION
 
@@ -17,9 +17,19 @@ Equivalent to this shell command:
 
  CMD_1 | CMD_2
 
+The first command's (I<CMD_1>) arguments can not contain a double-dash (C<-->),
+because it's the command separator for pipeby(1).
+However, since only a total of 2 commands are supported,
+arguments for I<CMD_2> may contain double-dash(es).
+
+You can chain pipeby(1) commands together to get a pipeline equivalent to
+C<CMD_1 | CMD_2 | CMD_3>, like:
+
+ pipeby CMD_1 -- pipeby CMD_2 -- CMD_3
+
 =head1 RATIONALE
 
-It is simetimes more convenient to skip shell involvement.
+It's sometimes more convenient to don't involve shell command-line parser.
 
 =head1 SEE ALSO
 
@@ -45,28 +55,19 @@ then
 	exit 0
 fi
 
+cmd_n=1
 declare -a cmd_1=()
 declare -a cmd_2=()
 
-cmd_2+=("$1")
-shift
-
 while [ $# != 0 ]
 do
-	case "$1" in
-	--)
-		shift
-		cmd_2+=("${cmd_1[@]}")
-		cmd_1=()
-		break
-		;;
-	*)
-		cmd_1+=("$1")
-		;;
-	esac
+	if [ ".$1" = '.--' -a $cmd_n == 1 ]
+	then
+		cmd_n=2
+	else
+		eval "cmd_${cmd_n}+=(\"\$1\")"
+	fi
 	shift
 done
-
-cmd_1+=("$@")
 
 "${cmd_1[@]}" | "${cmd_2[@]}"

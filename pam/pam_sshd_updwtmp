@@ -197,7 +197,7 @@ if ($ENV{'PAM_TYPE'} =~ /^(open|close)_session$/)
 	
 	
 	open my $fh, '>>', $utmp_file;
-	flock $fh, LOCK_EX;
+	flock $fh, LOCK_EX or exit PAM_SYSTEM_ERR;
 	User::Utmp::utmpname($utmp_file);
 	
 	my $ut_id;

@@ -4,11 +4,11 @@
 
 =head1 NAME
 
-pfxln - Prefix lines from STDIN
+prefixlines - Prefix lines from STDIN
 
 =head1 SYNOPSIS
 
-pfxln [I<PREFIX>]
+prefixlines [I<PREFIX>]
 
 =cut
 

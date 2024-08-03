@@ -114,7 +114,7 @@ TOOLS ?= \
   perlprintf \
   perl-repl \
   pfx2pem \
-  pfxln \
+  prefixlines \
   pipeby \
   pipekill \
   PMbwmon \

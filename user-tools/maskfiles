@@ -1,13 +1,77 @@
 #!/usr/bin/env perl
 
-$hole_char = ' ';
+=pod
+
+=head1 NAME
+
+maskfiles - Lay over several text files on top of each other like transparency sheets for overhead projectors
+
+=head1 SYNOPSIS
+
+maskfiles [I<OPTIONS>] [--] I<FILE_1> I<FILE_2> [I<FILE_3> ... I<< FILE_B<n> >>]
+
+=head1 DESCRIPTION
+
+Take files from 1 to B<n> and virtually put them on top of each other
+by matching byte offsets.
+If a file from the upper layer have a hole (space by default, otherwise see --hole-char option),
+then the char on lower layers "looks through" it.
+Non hole chars just block the lower layers, so they are visible at the end.
+
+Output is STDOUT.
+No input files are written.
+
+=head1 OPTIONS
+
+=over 4
+
+=item -h, --hole-chars I<CHARS>
+
+Which chars are to be looked through.
+By default space is the only hole char.
+Add underscore to it by example: --hole-chars=" _"
+
+=item --nul-hole
+
+Make NUL chars to look through as well.
+
+=item --linewise
+
+Respect line breaks.
+
+=back
+
+=cut
+
+
+use Fcntl qw/:flock :seek/;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
+use Pod::Usage;
+use POSIX;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+
+
+$OptHoleChars = " ";
+$OptHoleNUL = 0;
+$OptLinewise = 0;
+
+GetOptions(
+	'h|hole|holechar|hole-char|holechars|hole-chars=s' => \$OptHoleChars,
+	'nul-hole' => \$OptHoleNUL,
+	'l|linewise!' => \$OptLinewise,
+	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+
+$OptHoleChars .= chr(0) if $OptHoleNUL;
+
 @overlay_files = @ARGV;
-@filehandles = ();
+@layers = ();
 
 for my $path (reverse @overlay_files)
 {
 	open my $fh, '<', $path or die "$0: open: $path: $!\n";
-	push @filehandles, $fh;
+	push @layers, {'fh'=>$fh, 'eol'=>0};
 }
 
 while(1)
@@ -15,26 +79,38 @@ while(1)
 	my $char0;
 	my $char;
 	
-	last if not grep {defined} @filehandles;
+	last if not grep {defined $_->{'fh'}} @layers;
 	
-	for my $fh_idx (0..$#filehandles)
+	if($OptLinewise and not grep {defined $_->{'fh'} and not $_->{'eol'}} @layers)
 	{
-		my $fh = $filehandles[$fh_idx];
+		# all files are at EOL, reset flags
+		map {$_->{'eol'} = 0} @layers;
+	}
+	
+	for my $layer (@layers)
+	{
+		my $fh = $layer->{'fh'};
 		next if not defined $fh;
+		next if $OptLinewise and $layer->{'eol'};
 		
 		my $nbytes = read $fh, $char, 1;
 		if($nbytes != 1)
 		{
-			delete $filehandles[$fh_idx];
+			$layer->{'fh'} = undef;
+			next;
+		}
+		if($OptLinewise and $char eq "\n")
+		{
+			$layer->{'eol'} = 1;
 			next;
 		}
 		
-		if(not defined $char0 and $char ne $hole_char)
+		if(not defined $char0 and $OptHoleChars !~ /\Q$char\E/)
 		{
 			$char0 = $char;
 		}
 	}
 	
-	$char0 = $char if not defined $char0;
+	$char0 = $char if not defined $char0;  # there are holes all the way down to the lowermost layer
 	print $char0;
 }

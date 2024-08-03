@@ -23,6 +23,12 @@ becomes:
 
   Text::CSV->new({sep=>";", blank_is_undef=>0, binary=>1})
 
+=head1 F. A. Q.
+
+Why there is no td2csv?
+
+Why would you go back to ugly CSV when you have nice shiny Tabdata?
+
 =head1 SEE ALSO
 
 csv2(1), mrkv2td(1)

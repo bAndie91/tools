@@ -1,0 +1,34 @@
+#!/usr/bin/env perl
+
+use Data::Dumper;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
+process_header(scalar <STDIN>);
+
+
+print <<"EOT"
+set xlabel "$Header[0]"
+set autoscale
+#set key on outside
+set key on bmargin left horizontal
+set xtics out nomirror
+set x2tics out nomirror
+set ytics out nomirror
+set y2tics out nomirror
+unset grid
+#set terminal dumb size $term_cols,$term_rows ansi256
+set terminal png
+set output "/dev/stdout"
+EOT
+;
+
+
+print "plot ";
+
+for my $colnum (2..$#Header+1)
+{
+	my $col = $Header[$colnum-1];
+	print "\"/dev/stdin\" using 1:$colnum with linespoints title \"$col\" axes x1y1, ";
+}
+print "\n";

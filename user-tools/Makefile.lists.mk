@@ -2,6 +2,7 @@ TOOLS ?= \
   2opml \
   a8e \
   adr2html \
+  args2env \
   asterisk-log-separator \
   autosshfs-mount \
   awk-cut \

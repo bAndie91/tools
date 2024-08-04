@@ -1,0 +1,85 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+args2env - Turns command arguments into environment variables and executes command with the remained arguments
+
+=head1 SYNOPSIS
+
+args2env [I<OPTIONS>] I<COMMAND> I<ARG_1> I<ARG_2> ... I<ARG_R2> I<ARG_R1>
+
+=head1 DESCRIPTION
+
+=head1 OPTIONS
+
+=over 4
+
+=item -a, --arg I<NUM>
+
+Move the I<NUM>th argument to the environment by the name B<< ARG_I<NUM> >>
+(may be overridden by B<--template> option).
+Counting starts from 1.
+I<NUM> may be negative number, in which case it's counted from the end backwards.
+
+=item -ra, --right-arg I<NUM>
+
+Same as B<< --arg -I<NUM> >>.
+
+=item -t, --template I<TEMPLATE>
+
+How to name environment variables?
+Must contain a B<%d> macro.
+Default is B<ARG_%d>.
+So the value of argument given by B<--arg 1> goes to B<ARG_1> variable.
+
+=item -nt, --negative-template I<TEMPLATE>
+
+How to name environment variables for arguments specified by negative number?
+Must contain a B<%d> macro.
+Default is B<ARG_R%d>, B<R> is for "right", because this arg is counted from the right.
+So the value of argument given by B<--arg -1> goes to B<ARG_R1> variable.
+
+=back
+
+=head1 SEE ALSO
+
+=cut
+
+
+use Data::Dumper;
+use Errno qw/:POSIX/;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
+use Pod::Usage;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+
+@args_to_move = ();
+$envname_template = 'ARG_%d';
+$negative_envname_template = 'ARG_R%d';
+
+GetOptions(
+	'a|arg=i@' => \@args_to_move,
+	'ra|right-arg=i@' => sub {
+		my ($getopt, $param) = @_;
+		push @args_to_move, -$param;
+	},
+	't|template=s' => \$envname_template,
+	'nt|negative-template=s' => \$negative_envname_template,
+	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+
+for my $arg_num (@args_to_move)
+{
+	my $envname;
+	if($arg_num >= 0) { $envname = sprintf $envname_template, abs $arg_num; }
+	else { $envname = sprintf $negative_envname_template, abs $arg_num; }
+	$ENV{$envname} = $ARGV[$arg_num];
+	delete $ARGV[$arg_num];
+}
+@ARGV = grep {defined} @ARGV;
+
+warn Dumper \@ARGV, {map {$_=>$ENV{$_}} grep {/^ARG/} keys %ENV};
+
+exec {$ARGV[0]} @ARGV;

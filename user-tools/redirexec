@@ -1,63 +1,5 @@
 #!/usr/bin/env perl
 
-use POSIX qw/dup2/;
-
-$0 =~ s/.*\/([^\/]+)$/$1/;
-
-%perlopenmode = (
-	'r' => {symbol => '<', word => 'read'},
-	'c' => {symbol => '>', word => 'create/clobber'},
-	'rw' => {symbol => '+<', word => 'read/write'},
-	'a' => {symbol => '>>', word => 'append'},
-);
-
-@redirs = ();
-
-while(@ARGV)
-{
-	my $fdspec = shift @ARGV;
-	if($fdspec eq '--') { last; }
-	if($fdspec =~ /^(?'fd'\d+|std(in|out|err)):(?'dest'-|(?'mode'r|c|rw|a):(file:(?'path'.+)|fd:(?'fileno'\d+|std(in|out|err))))$/)
-	{
-		my ($fd, $dest, $mode, $path, $fileno) = ($+{'fd'}, $+{'dest'}, $+{'mode'}, $+{'path'}, $+{'fileno'});
-		$fd = 0 if $fd eq 'stdin';
-		$fd = 1 if $fd eq 'stdout';
-		$fd = 2 if $fd eq 'stderr';
-		$fileno = 0 if $fileno eq 'stdin';
-		$fileno = 1 if $fileno eq 'stdout';
-		$fileno = 2 if $fileno eq 'stderr';
-		if($dest eq '-')
-		{
-			$mode = 'rw';
-			$path = '/dev/null';
-		}
-		push @redirs, {
-			fd => $fd,
-			mode => $perlopenmode{$mode}->{'symbol'} . (defined $fileno ? '&=' : ''),
-			modename => $perlopenmode{$mode}->{'word'},
-			file => defined $fileno ? $fileno : $path,
-		};
-	}
-	else
-	{
-		warn "invalid redirect specification: $fdspec\n";
-		pod2usage(-exitval=>2, -verbose=>99);
-	}
-}
-
-@command = @ARGV;
-
-for my $redir (@redirs)
-{
-	open $fh, $redir->{'mode'}, $redir->{'file'} or die "$0: can not open ($redir->{'modename'}) $redir->{'file'}: $!\n";
-	dup2(fileno $fh, $redir->{'fd'}) or die "$0: can not duplicate fd of $redir->{'file'}: $!\n";
-}
-
-exec {$command[0]} @command;
-
-
-__END__
-
 
 =pod
 
@@ -67,11 +9,11 @@ redirexec - Execute a command with some file descriptiors redirected.
 
 =head1 SYNOPSIS
 
-redirexec [I<FILENO>:I<MODE>:file:I<PATH>] -- I<COMMAND> I<ARGS>
+redirexec [I<FILENO>:I<MODE>:file:I<PATH>] [--] I<COMMAND> I<ARGS>
 
-redirexec [I<FILENO>:I<MODE>:fd:I<FD>] -- I<COMMAND> I<ARGS>
+redirexec [I<FILENO>:I<MODE>:fd:I<FD>] [--] I<COMMAND> I<ARGS>
 
-redirexec [I<FILENO>:-] -- I<COMMAND> I<ARGS>
+redirexec [I<FILENO>:-] [--] I<COMMAND> I<ARGS>
 
 =head1 DESCRIPTION
 
@@ -125,3 +67,62 @@ append
 redirfd by execlineb(1)
 
 =cut
+
+
+use POSIX qw/dup2/;
+
+$0 =~ s/.*\/([^\/]+)$/$1/;
+
+%perlopenmode = (
+	'r' => {symbol => '<', word => 'read'},
+	'c' => {symbol => '>', word => 'create/clobber'},
+	'rw' => {symbol => '+<', word => 'read/write'},
+	'a' => {symbol => '>>', word => 'append'},
+);
+
+@redirs = ();
+
+while(@ARGV)
+{
+	my $fdspec = shift @ARGV;
+	if($fdspec eq '--') { last; }
+	if($fdspec =~ /^(?'fd'\d+|std(in|out|err)):(?'dest'-|(?'mode'r|c|rw|a):(file:(?'path'.+)|fd:(?'fileno'\d+|std(in|out|err))))$/)
+	{
+		my ($fd, $dest, $mode, $path, $fileno) = ($+{'fd'}, $+{'dest'}, $+{'mode'}, $+{'path'}, $+{'fileno'});
+		$fd = 0 if $fd eq 'stdin';
+		$fd = 1 if $fd eq 'stdout';
+		$fd = 2 if $fd eq 'stderr';
+		$fileno = 0 if $fileno eq 'stdin';
+		$fileno = 1 if $fileno eq 'stdout';
+		$fileno = 2 if $fileno eq 'stderr';
+		if($dest eq '-')
+		{
+			$mode = 'rw';
+			$path = '/dev/null';
+		}
+		push @redirs, {
+			fd => $fd,
+			mode => $perlopenmode{$mode}->{'symbol'} . (defined $fileno ? '&=' : ''),
+			modename => $perlopenmode{$mode}->{'word'},
+			file => defined $fileno ? $fileno : $path,
+		};
+	}
+	else
+	{
+		# does not seem to be a redirection specification, take it as the command
+		unshift @ARGV, $fdspec;
+		last;
+	}
+}
+
+@command = @ARGV;
+
+for my $redir (@redirs)
+{
+	open $fh, $redir->{'mode'}, $redir->{'file'} or die "$0: can not open ($redir->{'modename'}) $redir->{'file'}: $!\n";
+	dup2(fileno $fh, $redir->{'fd'}) or die "$0: can not duplicate fd of $redir->{'file'}: $!\n";
+}
+
+exec {$command[0]} @command;
+
+

@@ -48,8 +48,8 @@ TOOLS ?= \
   foreach \
   fzf-preview \
   g_filename_to_uri \
-  gitconfigexec \
   git-checkout-sparse \
+  gitconfigexec \
   git_diff \
   git-submodule-auto-add \
   grepdatetime \
@@ -87,6 +87,7 @@ TOOLS ?= \
   lynx-render \
   mail-extract-addresses \
   mail-extract-raw-headers \
+  maskfiles \
   mime_extract \
   mime-header-decode \
   mkdeb \
@@ -114,7 +115,6 @@ TOOLS ?= \
   perlprintf \
   perl-repl \
   pfx2pem \
-  prefixlines \
   pipeby \
   pipekill \
   PMbwmon \
@@ -124,6 +124,7 @@ TOOLS ?= \
   PMpwgen \
   PMrecdiff \
   pngmetatext \
+  prefixlines \
   pstab \
   pvalve \
   pyzor-files \
@@ -175,6 +176,7 @@ TOOLS ?= \
   ttinput \
   uchmod \
   unicodestyle \
+  uniproc \
   upsidedown \
   url_decode \
   url_encode \

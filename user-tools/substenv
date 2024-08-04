@@ -52,4 +52,6 @@ for my $arg (@ARGV)
 }
 
 exec {$run_cmd[0]} @run_cmd;
-exit 127;
+($errno, $errstr) = (int $!, $!);
+warn "$0: ${run_cmd[0]}: $errstr\n";
+exit 125+$errno;

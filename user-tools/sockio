@@ -102,7 +102,9 @@ if($pid == 0)
   flag(STDIN, O_RDONLY);
   flag(STDOUT, O_WRONLY);
   exec {$ARGV[0]} @ARGV;
-  exit 127;
+  my ($errno, $errstr) = (int $!, $!);
+  warn "$0: ${ARGV[0]}: $errstr\n";
+  exit 125+$errno;
 }
 
 

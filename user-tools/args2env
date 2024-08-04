@@ -80,6 +80,7 @@ for my $arg_num (@args_to_move)
 }
 @ARGV = grep {defined} @ARGV;
 
-warn Dumper \@ARGV, {map {$_=>$ENV{$_}} grep {/^ARG/} keys %ENV};
-
 exec {$ARGV[0]} @ARGV;
+($errno, $errstr) = (int $!, $!);
+warn "$0: ${ARGV[0]}: $errstr\n";
+exit 125+$errno;

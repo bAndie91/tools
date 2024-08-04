@@ -184,8 +184,9 @@ if(defined $Zonefile)
 		if($allowed)
 		{
 			exec {$Command} $Command, @Args;
-			warnx "failed to exec: $Command\n";
-			exit 127;
+			my ($errno, $errstr) = (int $!, $!);
+			warn "$0: $Command: $errstr\n";
+			exit 125+$errno;
 		}
 		else
 		{

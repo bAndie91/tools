@@ -89,8 +89,11 @@ if($child_pid == 0)
 	open STDERR, '>&', $stderr_w or die "$0: replace stderr: $!\n";
 	select STDERR; $|++;
 	select STDOUT; $|++;
+	
 	exec {$ARGV[0]} @ARGV;
-	exit 127;
+	my ($errno, $errstr) = (int $!, $!);
+	warn "$0: ${ARGV[0]}: $errstr\n";
+	exit 125+$errno;
 }
 
 

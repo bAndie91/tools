@@ -124,5 +124,6 @@ for my $redir (@redirs)
 }
 
 exec {$command[0]} @command;
-
-
+($errno, $errstr) = (int $!, $!);
+warn "$0: ${command[0]}: $errstr\n";
+exit 125+$errno;

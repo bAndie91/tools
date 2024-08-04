@@ -42,3 +42,6 @@ while(@ARGV)
 
 # remaining arguments are the command and its arguments
 exec {$ARGV[0]} @ARGV;
+($errno, $errstr) = (int $!, $!);
+warn "$0: ${ARGV[0]}: $errstr\n";
+exit 125+$errno;

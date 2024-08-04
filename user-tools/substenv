@@ -17,11 +17,14 @@ variable's value, then run I<COMMAND>.
 
 =head1 EXAMPLE
 
- system('substenv', 'ls', '$HOME/.config')
+This function call, in C, runs substenv(1),
+note, there is no dollar-interpolation in C.
 
-runs:
+ execve("substenv", ["substenv", "ls", "$HOME/.config"])
 
- execve('ls', ['ls', '/home/jdoe/.config'])
+Then substenv issues this system call:
+
+ execve("ls", ["ls", "/home/jdoe/.config"])
 
 =head1 NOTES
 

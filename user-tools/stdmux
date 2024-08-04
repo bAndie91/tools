@@ -1,5 +1,35 @@
 #!/usr/bin/env perl
 
+=pod
+
+=head1 NAME
+
+stdmux - Multiplex the given command's STDOUT and STDERR by prefixing lines
+
+=head1 SYNOPSIS
+
+stdmux [-o I<STDOUT_PREFIX> | -e I<STDERR_PREFIX>] [--] I<COMMAND> [I<ARGS>]
+
+=head1 OPTIONS
+
+=over 4
+
+=back
+
+=head1 EXIT STATUS
+
+stdmux(1) exits with the I<COMMAND>'s exit status.
+
+=head1 USAGE EXAMPLE
+
+  mux_output=`stdmux command`
+  demux() { local prefix=$1; sed -ne "s/^$prefix//p"; }
+  output_text=`echo "$mux_output" | demux 1`
+  error_text=`echo "$mux_output" | demux 2`
+
+=cut
+
+
 use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat/;
 use POSIX;
 use Pod::Usage;
@@ -126,34 +156,3 @@ $exit_status = 128 + WTERMSIG($child_status) if WIFSIGNALED($child_status);
 exit $exit_status;
 
 
-__END__
-
-=pod
-
-=head1 NAME
-
-stdmux - Multiplex the given command's STDOUT and STDERR by prefixing their lines
-
-=head1 SYNOPSIS
-
-stdmux [-o I<STDOUT_PREFIX> | -e I<STDERR_PREFIX>] [--] I<COMMAND> [I<ARGS>]
-
-=head1 OPTIONS
-
-=over 4
-
-=back
-
-=head1 EXIT STATUS
-
-stdmux(1) exits with the I<COMMAND>'s exit status.
-
-=head1 USAGE EXAMPLE
-
-  mux_output=`stdmux command`
-  output_text=`echo "$mux_output" | sed -ne 's/^1//p'`
-  error_text=`echo "$mux_output" | sed -ne 's/^2//p'`
-
-=cut
-
-EOF

@@ -11,14 +11,16 @@ TOOLS = \
   td2mrkv \
   td-add-headers \
   td-alter \
-  td-expand \
-  td-disamb-headers \
-  td-filter \
   td-collapse \
+  td-disamb-headers \
+  td-expand \
+  td-filter \
+  td-gnuplot \
   td-keepheader \
   td-lpstat \
   td-ls \
   td-pivot \
+  td-ps \
   td-select \
   td-sort \
   td-trans \
@@ -36,6 +38,10 @@ TARGET_TOOLS = $(foreach filename,$(TOOLS),$(BIN_DIR)/$(filename))
 
 
 install-all: depcheck $(TARGET_TOOLS) $(LIB_DIR)/common.pl install-manpages
+
+.PHONY: list-tools
+list-tools:
+	@echo $(TOOLS) | tr " " "\n" | sort
 
 
 $(TARGET_TOOLS): $(BIN_DIR)/%: %

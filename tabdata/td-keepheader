@@ -26,7 +26,7 @@ $header = sys_read_line();
 $|++;
 print $header . $RS;
 
-exec @ARGV;
+exec {$ARGV[0]} @ARGV;
 ($errno, $errstr) = (int $!, $!);
 warn "$ARGV[0]: $errstr\n";
 exit 125+$errno;

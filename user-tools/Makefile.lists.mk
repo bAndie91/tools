@@ -126,7 +126,6 @@ TOOLS ?= \
   PMrecdiff \
   pngmetatext \
   prefixlines \
-  pstab \
   pvalve \
   pyzor-files \
   qrwifi \

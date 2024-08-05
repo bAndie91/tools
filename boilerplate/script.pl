@@ -34,7 +34,7 @@ use Date::Parse;
 use DateTime::Format::Strptime;
 use Encode qw/decode encode decode_utf8 encode_utf8/;
 use Errno qw/:POSIX/;
-use Fcntl qw/:flock :seek/;
+use Fcntl qw/:flock :seek F_GETFL F_SETFL O_NONBLOCK F_GETFD F_SETFD FD_CLOEXEC/;
 use File::Basename;
 use File::Temp qw/tempfile/;
 use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;

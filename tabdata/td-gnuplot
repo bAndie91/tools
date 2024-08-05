@@ -1,28 +1,67 @@
 #!/usr/bin/env perl
 
+use constant { OUTPUT_TERM=>1, OUTPUT_IMAGE=>2, OUTPUT_DEFAULT=>3, };
 use Data::Dumper;
+use Term::Size;
+use Fcntl qw/F_GETFL F_SETFL F_GETFD F_SETFD FD_CLOEXEC/;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+
+
+$OptOutput = OUTPUT_TERM;
+@gnuplot_commands = ();
+
+%OptionDefs = (
+	'i' => sub { $OptOutput = OUTPUT_IMAGE; },
+	'd' => sub { $OptOutput = OUTPUT_DEFAULT; },
+	'e=s@' => \@gnuplot_commands,
+);
+
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
-process_header(scalar <STDIN>);
+pipe $conf_script_rfh, $conf_script_wfh or die "$0: pipe: $!\n";
+pipe $plot_script_rfh, $plot_script_wfh or die "$0: pipe: $!\n";
+fcntl($conf_script_rfh, F_SETFD, fcntl($conf_script_rfh, F_GETFD, 0) & ~FD_CLOEXEC);
+fcntl($plot_script_rfh, F_SETFD, fcntl($plot_script_rfh, F_GETFD, 0) & ~FD_CLOEXEC);
 
+process_header(sys_read_line());
+
+select $conf_script_wfh;
 
 print <<"EOT"
 set xlabel "$Header[0]"
 set autoscale
 #set key on outside
 set key on bmargin left horizontal
-set xtics out nomirror
+set xtics  out nomirror
 set x2tics out nomirror
-set ytics out nomirror
+set ytics  out nomirror
 set y2tics out nomirror
-unset grid
-#set terminal dumb size $term_cols,$term_rows ansi256
-set terminal png
-set output "/dev/stdout"
 EOT
 ;
 
+if($OptOutput eq OUTPUT_TERM)
+{
+	my ($term_cols, $term_rows) = Term::Size::chars *STDOUT{IO};
+	if(not $term_cols) { ($term_cols, $term_rows) = Term::Size::chars *STDERR{IO}; }
+	
+	print <<"EOT"
+	unset grid
+	set terminal dumb size $term_cols,$term_rows ansi256
+EOT
+;
+}
+elsif($OptOutput eq OUTPUT_IMAGE)
+{
+	print <<"EOT"
+	set grid
+	set terminal png
+	set output "/dev/stdout"
+EOT
+;
+}
+
+close $conf_script_wfh;
+select $plot_script_wfh;
 
 print "plot ";
 
@@ -32,3 +71,11 @@ for my $colnum (2..$#Header+1)
 	print "\"/dev/stdin\" using 1:$colnum with linespoints title \"$col\" axes x1y1, ";
 }
 print "\n";
+
+close $plot_script_wfh;
+
+
+exec 'gnuplot', '--persist', map {('-e', $_)} 'load "/dev/fd/'.fileno($conf_script_rfh).'"', @gnuplot_commands, 'load "/dev/fd/'.fileno($plot_script_rfh).'"';
+($errno, $errstr) = (int $!, $!);
+warn "gnuplot: $errstr\n";
+exit 125+$errno;

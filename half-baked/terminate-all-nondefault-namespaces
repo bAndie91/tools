@@ -1,0 +1,1 @@
+lsns -t pid | td-trans | td-filter PID ne 1 | td-select -H PID | foreach pgrep --nslist pid --ns {} -x init | xargs -t kill -SIGINT

@@ -143,6 +143,10 @@ Similar to B<is one of>, but substring match is checked
 instead of full string equality.
 Optional I<whole word> is a literal part of the operator.
 
+=item ends with
+
+=item starts with
+
 =back
 
 Operators may be preceeded by I<not>, I<does not>, I<do not> to negate their effect.
@@ -201,6 +205,12 @@ $Expr = undef;
 	'have',    'contains',
 	'has',     'contains',
 	'contain', 'contains',
+	'start',   'starts',
+	'end',     'ends',
+	'startwith',  'starts-with',
+	'endwith',    'ends-with',
+	'startswith', 'starts-with',
+	'endswith',   'ends-with',
 );
 
 if($ARGV[0] eq '--perl')
@@ -222,10 +232,14 @@ else
 		elsif($ARGV[0] ~~ ['does', 'do'] and $ARGV[1] eq 'not') { $negation = 1; shift @ARGV; shift @ARGV; }
 		
 		my $operator = shift @ARGV or die "$0: missing operator for: $column\n";
+		
+		# handle multi-word operators:
 		if($operator eq 'is' and $ARGV[0] eq 'not') { $operator .= ' ' . shift @ARGV; }
 		$operator = $operator_alterform{$operator} if exists $operator_alterform{$operator};
 		if($operator ~~ ['contains', 'is'] and $ARGV[0] ~~ ['one', 'any'] and $ARGV[1] eq 'of')
 			{ $operator .= '-one-of'; shift @ARGV; shift @ARGV; }
+		if($operator ~~ ['starts', 'ends'] and $ARGV[0] eq 'with')
+			{ $operator .= '-' . shift @ARGV; }
 		
 		$operator = $operator_alias{$operator} if exists $operator_alias{$operator};
 		
@@ -237,7 +251,7 @@ else
 		die "$0: missing r-value for: $column $operator\n" if not defined $rvalue;
 		
 		
-		unless($operator ~~ [qw/== != <= >= < > =~ !~ eq ne gt lt is-one-of contains contains-one-of/])
+		unless($operator ~~ [qw/== != <= >= < > =~ !~ eq ne gt lt is-one-of contains contains-one-of ends-with starts-with/])
 		{
 			die "$0: unknown operator: $operator\n";
 		}
@@ -325,6 +339,14 @@ while(not eof STDIN)
 				case 'contains-one-of'
 				{
 					$result = any { 1 + index $left_data, $_ } split /,/, $right_data;
+				}
+				case 'starts-with'
+				{
+					$result = $right_data eq substr($left_data, 0, length $right_data);
+				}
+				case 'ends-with'
+				{
+					$result = $right_data eq substr($left_data, -length $right_data);
 				}
 				else
 				{

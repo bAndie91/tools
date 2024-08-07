@@ -15,13 +15,16 @@ td-alter I<COLUMN>=I<EXPR> [I<COLUMN>=I<EXPR> [I<COLUMN>=I<EXPR> [...]]]
 On each data row, sets field in I<COLUMN> to the value resulted by I<EXPR>
 Perl expression.
 
-In I<EXPR>, you may refer to other columns by C<$F{NAME}> where I<NAME> is the column name;
-or by C<$F[INDEX]> where I<INDEX> is the 0-based column index number;
-or in case of uppercase alpha-numeric field names, simply by bareword C<COLUMN>
-(because these are set up as subroutines internally).
-Topic variable (C<$_>) is set to the current value of I<COLUMN>.
+In I<EXPR>, you may refer to other fields by C<$F{NAME}> where I<NAME> is the column name;
+or by C<$F[INDEX]> where I<INDEX> is the 0-based column index number.
+Furthermore you may refer to uppercase alpha-numeric field names, simply by bareword C<COLUMN>,
+well, enclosed in paretheses like C<(COLUMN)> to avoid parsing unambiguity in Perl.
+It's possible because these column names are set up as subroutines internally.
 
-You can create new columns simply by referring to a I<COLUMN> name that does not yet exist.
+Topic variable (C<$_>) initially is set to the current value of I<COLUMN> in I<EXPR>.
+So for example C<N='-$_'> makes the field N the negative of itself.
+
+You can create new columns simply by referring to a I<COLUMN> name that does not exist yet.
 You can refer to an earlier defined I<COLUMN> in subsequent I<EXPR> expressions.
 
 =head1 EXAMPLES

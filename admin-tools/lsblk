@@ -1,0 +1,52 @@
+#!/bin/bash
+
+declare -a args=()
+declare columns=,NAME,LABEL,MOUNTPOINT,RM,SIZE,TYPE,FSTYPE,UUID,
+
+while [ $# -gt 0 ]
+do
+	arg=$1
+	
+	if [[ $arg =~ ^(-o|--output)$ ]]
+	then
+		shift
+		arg="$arg=$1"
+	fi
+	
+	if [[ $arg =~ ^(-o|--output=?)([-+])(.+)$ ]]
+	then
+		addremove=${BASH_REMATCH[2]}
+		cols=${BASH_REMATCH[3]}
+		for col in ${cols//,/ }
+		do
+			if [ $addremove = + ]
+			then
+				columns="$columns,$col,"
+			else
+				columns=${columns/,$col,/,}
+			fi
+		done
+	elif [[ $arg =~ ^(-o|--output)=(.*)$ ]]
+	then
+		columns=${BASH_REMATCH[2]}
+	else
+		args+=("$arg")
+	fi
+	
+	shift
+done
+
+arg_o=''
+for col in ${columns//,/ }
+do
+	if ! grep -q ",$col," <<< "$arg_o"
+	then
+		arg_o="$arg_o,$col,"
+	fi
+done
+
+arg_o=${arg_o//,,/,}
+arg_o=${arg_o/#,}
+arg_o=${arg_o/%,}
+
+exec /bin/lsblk -o "$arg_o" "${args[@]}"

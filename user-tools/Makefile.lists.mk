@@ -89,6 +89,7 @@ TOOLS ?= \
   mail-extract-addresses \
   mail-extract-raw-headers \
   maskfiles \
+  mdstat \
   mime_extract \
   mime-header-decode \
   mkdeb \

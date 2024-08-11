@@ -7,7 +7,10 @@ TOOLS = grandparentexe relpath mksock remove syncfs utmp usbreset \
   chmod-cheap setgroups kill-rogue xidle logbtmp lastcsv wall \
   loadenv setpgrp xdpys cdstatus
 
+SPECIAL_COMPILE_TOOLS = logbtmp lastcsv chmod-cheap wall
 SPECIAL_INSTALL_TOOLS = grandparentexe netbulk lastbcsv
+
+NORMAL_COMPILE_TOOLS = $(filter-out $(SPECIAL_COMPILE_TOOLS),$(TOOLS))
 
 NORMAL_TARGET_FILES = $(foreach tool,$(filter-out $(SPECIAL_INSTALL_TOOLS),$(TOOLS)),$(TARGET_DIR)/$(tool))
 SPECIAL_TARGET_FILES = $(foreach tool,$(SPECIAL_INSTALL_TOOLS),$(TARGET_DIR)/$(tool))
@@ -15,13 +18,14 @@ POD_FILES = $(filter $(wildcard *.pod),$(foreach tool,$(TOOLS),$(tool).pod))
 
 
 
+.PHONY: default
 default:
 	$(error may be interested in: all install-all install-manpages)
-
+.PHONY: all
 all: $(TOOLS) netbulk lastbcsv
-install-all: $(NORMAL_TARGET_FILES) $(SPECIAL_TARGET_FILES) install-manpages
+.PHONY: install-all
+install-all: $(NORMAL_TARGET_FILES) $(SPECIAL_TARGET_FILES) install-manpages /sbin/rebootlogon
 
-.PHONY: default all install-all
 
 define install-tool-recipe
 	install $< $@
@@ -32,6 +36,10 @@ define make-subdir-tool-recipe:
 	$(MAKE) -C $(dir $@) $(notdir $@)
 endef
 
+
+
+$(NORMAL_COMPILE_TOOLS): %: %.c
+	$(CC) $< $(CFLAGS) -o $@
 
 
 $(NORMAL_TARGET_FILES): $(TARGET_DIR)/%: %
@@ -57,7 +65,10 @@ $(TARGET_DIR)/kill-rogue: /usr/share/man/man1/kill-rogue.1.gz
 
 
 netbulk: setgroups.c
-	$(CC) $(CFLAGS) -DONLY_ALLOWED_GID=$(shell getent group netbulk | cut -d: -f3) setgroups.c -o $@
+	$(CC) $< $(CFLAGS) -DONLY_ALLOWED_GID=$(shell getent group netbulk | cut -d: -f3) -o $@
+
+rebootlogon: rebootlogon.c
+	gcc $< $(CFLAGS) -o $@
 
 lastbcsv: lastcsv
 	ln -sfT lastcsv $@
@@ -92,6 +103,7 @@ wall.d/wall:
 
 
 
+
 MANPAGE_SECTION = 1
 COMPRESSOR = xz
 COMPRESSOR_EXT = xz
@@ -119,9 +131,6 @@ install-manpages: $(MANPAGE_FILES) $(SYSTEM_MANPAGES_PATH)/lastbcsv$(MANPAGE_FIL
 
 
 
-
-rebootlogon: rebootlogon.c
-	gcc $< -o $@
 
 /sbin/rebootlogon: rebootlogon
 	install -o root -g root -m 4444 $< $@

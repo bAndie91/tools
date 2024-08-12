@@ -49,6 +49,7 @@ TOOLS ?= \
   foreach \
   fzf-preview \
   g_filename_to_uri \
+  getcvt \
   git-checkout-sparse \
   gitconfigexec \
   git_diff \

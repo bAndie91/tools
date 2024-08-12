@@ -1,0 +1,2 @@
+#!/bin/sh
+exec pdfjam --suffix rotated180 --angle 180 --fitpaper true "$@"

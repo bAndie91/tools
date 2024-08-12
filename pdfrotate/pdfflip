@@ -1,0 +1,2 @@
+#!/bin/sh
+exec pdfjam --suffix flipped --reflect true --fitpaper true  "$@"

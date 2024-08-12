@@ -28,7 +28,7 @@ while(<$pipe>)
 	{
 		$default_printer = $1;
 	}
-	elsif(/^printer (?'PRINTER'\S+) ((?'STAGE'.*?)\.  (?'STATUS'enabled)|(?'STATUS'.+)) since \S+ (?'datetime'\S+ \d+ \S+ \d+)( -)?$/)
+	elsif(/^printer (?'PRINTER'\S+) ((?'STAGE'.*?)\.  (?'STATUS'enabled)|(?'STATUS'.+)) since \S+ (?'datetime'\S+ [ ]?\d+ \S+ \d+)( -)?$/)
 	{
 		$last_printer = $+{'PRINTER'};
 		my $stage = $+{'STAGE'};
@@ -52,7 +52,7 @@ while(<$pipe>)
 		$Printer{$last_printer}->{'REASON'} .= "\n" if exists $Printer{$last_printer}->{'REASON'};
 		$Printer{$last_printer}->{'REASON'} .= $1;
 	}
-	elsif(/^(?'PRINTER'\S+) (?'ACCEPTANCE'not accepting|accepting) requests since \S+ (?'datetime'\S+ \d+ \S+ \d+)( -)?/)
+	elsif(/^(?'PRINTER'\S+) (?'ACCEPTANCE'not accepting|accepting) requests since \S+ (?'datetime'\S+ [ ]?\d+ \S+ \d+)( -)?/)
 	{
 		$Printer{$+{'PRINTER'}}->{'ACCEPTANCE'} = $+{'ACCEPTANCE'};
 		$Printer{$+{'PRINTER'}}->{'ACCEPTANCE_SINCE'} = $datetime_parser->parse_datetime($+{'datetime'})->strftime('%F %T');

@@ -114,7 +114,6 @@ TOOLS ?= \
   parsel \
   partial \
   paths2indent \
-  pdfflop \
   perlprintf \
   perl-repl \
   pfx2pem \

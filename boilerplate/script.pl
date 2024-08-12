@@ -50,6 +50,7 @@ $OptVerbose = 0;
 GetOptions(
 	'v|verbose!' => \$OptVerbose,
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
 

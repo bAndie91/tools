@@ -32,11 +32,11 @@ then
 	exit
 fi
 
-declare -a logger_opts=()
+passthrough=''
 
 if [ "$1" = -s ]
 then
-	logger_opts+=(-s)
+	passthrough=1
 	shift
 fi
 
@@ -49,4 +49,4 @@ shift
 ident=$1
 shift
 
-exec "$@" > >(exec logger -p "$facility.info" -t "$ident" "${logger_opts[@]}" 2>&1) 2> >(exec logger -p "$facility.error" -t "$ident" "${logger_opts[@]}")
+exec "$@" > >(exec {fd}>&1; exec tee ${passthrough:+/dev/fd/$fd} | exec logger -p "$facility.info" -t "$ident" 2>&1) 2> >(exec tee ${passthrough:+/dev/stderr} | logger -p "$facility.error" -t "$ident")

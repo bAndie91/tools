@@ -1,0 +1,181 @@
+#!/bin/bash
+
+set -eE
+set -o pipefail
+set -u
+
+. /usr/lib/tool/bash-utils
+
+print_traceback()
+{
+	local i stack_size=${#FUNCNAME[@]}
+	for (( i=1; i<stack_size; i++ )); do
+		local func="${FUNCNAME[$i]}"
+		[[ $func = "" ]] && func=MAIN
+		local linen="${BASH_LINENO[$(( i - 1 ))]}"
+		local src="${BASH_SOURCE[$i]}"
+		[[ "$src" = "" ]] && src=non_file_source
+		
+		echo "  function: $func"
+		echo "  file: $src (line $linen)"
+		nl -ba -w ${#linen} -s ' | ' "$src" | grep -C 2 -E "^\s*$linen " | prefixlines '    ' | sed -e "s/^\(\s*$linen .*\)/\x1B[1m\1\x1B[0m/"
+	done
+}
+
+trap 'print_traceback >&2' ERR
+
+
+basedir=~/cred
+
+subcmd=$1
+shift
+
+case "$subcmd" in
+(dump)
+	site=${1:?'enter site name!'}
+	shift
+	options=("$@")
+	
+	(
+		cd "$basedir/$site"
+		GLOBIGNORE=${GLOBIGNORE:-}${GLOBIGNORE:+:}".:..:.[!/.]*:..[!/]*:-*"
+		for file in *
+		do
+			if [ ! -f "$file" ]
+			then
+				continue
+			fi
+			shopt -s nocasematch
+			if [[ $file =~ password|key|cvc|secret|pin ]]
+			then
+				if in_list reveal-secrets "${options[@]}"
+				then
+					true
+				elif in_list hash-secrets "${options[@]}"
+				then
+					echo "$file"$'\t'MD5=`cat "$file" | md5sum | cut -c 1-32`
+					continue
+				else
+					echo "$file"$'\t'"*****"
+					continue
+				fi
+			fi
+			
+			grep . "$file" | prefixlines "$file"$'\t'
+		done
+		
+		site=${site%/}
+		if [[ $site =~ / ]]
+		then
+			parent=${site%/*}
+			cred dump "$parent" "${options[@]}"
+		fi
+	)
+	;;
+(password)
+	site=${1:?'enter site name!'}
+	cat "$basedir/$site/PASSWORD"
+	;;
+(clip-password)
+	site=${1:?'enter site name!'}
+	cat "$basedir/$site/PASSWORD" | xclip -i -selection clipboard
+	;;
+(list-sites)
+	find -L "$basedir" -path "$basedir/${1:-}*" -type d -printf "%P\n"
+	;;
+(prop)
+	site=${1:?'enter site name and property name!'}
+	shift
+	prop=${1:?'enter property name!'}
+	shift
+	if [ $# = 0 ]
+	then
+		cat "$basedir/$site/$prop"
+	else
+		case "$1" in
+		(set)
+			shift
+			val=$*
+			mkdir -p "$basedir/$site"
+			echo "$val" > "$basedir/$site/$prop"
+			;;
+		(edit)
+			mkdir -p "$basedir/$site"
+			"${EDITOR:-$VISUAL}" "$basedir/$site/$prop"
+			;;
+		(del)
+			rm "$basedir/$site/$prop"
+			;;
+		(*)
+			false
+			;;
+		esac
+	fi
+	;;
+(list-props)
+	site=${1:?'enter site name, property name and value!'}
+	find "$basedir/$site" -type f -printf "%P\n"
+	;;
+(pwgen)
+	site=${1:?'enter site name!'}
+	newpwd=$(pwgen -y 8 1)$(pwgen -y 8 1)
+	pwdfile=$basedir/$site/PASSWORD
+	mkdir -p "$basedir/$site"
+	if [ -s "$pwdfile" ]
+	then
+		cur_pwd=`cat "$pwdfile"`
+		atime=`stat -c %x "$pwdfile"`
+		now=`date +'%F %T.%N %z'`
+		echo "$atime	$now	$cur_pwd" >> "$basedir/$site/OLDPASSWORDS"
+	fi
+	printf '%s' "$newpwd" > "$pwdfile"
+	;;
+(compscript)
+	cat <<'EOF'
+_autocomplete_cred() {
+	local compreply
+	local curr_word=${COMP_WORDS[$COMP_CWORD]}
+	local prev_word=${COMP_WORDS[$[COMP_CWORD - 1]]}
+	if [ $COMP_CWORD = 1 ]
+	then
+		compreply="list-sites dump dump-with-secrets password clip-password pwgen help compscript prop list-props"
+	elif [ $COMP_CWORD = 2 ]
+	then 
+		compreply=`cred list-sites "$curr_word"`
+	else
+		case "${COMP_WORDS[1]}" in
+		(prop)
+			case $COMP_CWORD in
+			(3)
+				site=${COMP_WORDS[2]}
+				compreply=`cred list-props "$site"`
+				;;
+			(4)
+				compreply="set edit del"
+				;;
+			esac
+			;;
+		(dump)
+			case $COMP_CWORD in
+			(3)
+				compreply="reveal-secrets mask-secrets hash-secrets"
+				;;
+			esac
+		esac
+	fi
+	COMPREPLY=($(compgen -W "$compreply" -- "${COMP_WORDS[$COMP_CWORD]}"))
+	return 0
+}
+complete -F _autocomplete_cred cred
+# use this in your bash session by eg: eval "$(cred compscript)"
+EOF
+	;;
+(*)
+	{
+		echo 'Use tab-completion!'
+		echo 'Example:'
+		echo 'eval "$(cred compscript)"'
+	} >&2
+	false
+	;;
+esac

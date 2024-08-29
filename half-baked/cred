@@ -1,10 +1,18 @@
 #!/bin/bash
 
+shopt -s nocasematch
+shopt -s expand_aliases
+alias set_site='if [ -z "${site:-}" ]; then set_site_func "${1:-}"; shift; fi;'
+
+{
 set -eE
 set -o pipefail
 set -u
 
 . /usr/lib/tool/bash-utils
+. /usr/lib/tool/ansi-codes
+
+TAB=$'\t'
 
 print_traceback()
 {
@@ -16,24 +24,64 @@ print_traceback()
 		local src="${BASH_SOURCE[$i]}"
 		[[ "$src" = "" ]] && src=non_file_source
 		
+		echo -n "$ANSI_bold$ANSI_fg_black"
 		echo "  function: $func"
 		echo "  file: $src (line $linen)"
-		nl -ba -w ${#linen} -s ' | ' "$src" | grep -C 2 -E "^\s*$linen " | prefixlines '    ' | sed -e "s/^\(\s*$linen .*\)/\x1B[1m\1\x1B[0m/"
+		echo -n "$ANSI_reset"
+		
+		local line_number_text_sep='| '
+		nl -ba -w ${#linen} -s " $line_number_text_sep" "$src" | grep -C 2 -E "^\s*$linen " |\
+			prefixlines "    " |\
+			sed -e "s/^\(\s*$linen\) \(.\{${#line_number_text_sep}\}\)\(.*\)/\1-\2$ANSI_italic\3$ANSI_normal/" |\
+			sd '^' "$ANSI_bold$ANSI_fg_black" | sd '$' "$ANSI_reset"
 	done
 }
 
 trap 'print_traceback >&2' ERR
 
+set_site_func()
+{
+	local param=$1
+	if [ -z "$1" ]
+	then
+		errx 1 "Enter site name or directory!"
+	elif [ -d "$param" ]
+	then
+		site=`basename "$param"`
+	else
+		site=$1
+	fi
+}
+
+is_secret()
+{
+	[[ $1 =~ password|key|cvc|secret|pin ]]
+}
+
+do_clip()
+{
+	xclip -i -selection clipboard
+}
+
 
 basedir=~/cred
+site=''
 
-subcmd=$1
-shift
+
+if [ "${1:-}" = site ]
+then
+	shift || true
+	set_site
+fi
+
+subcmd=${1:-}
+shift || true
+
+
 
 case "$subcmd" in
 (dump)
-	site=${1:?'enter site name!'}
-	shift
+	set_site
 	options=("$@")
 	
 	(
@@ -45,15 +93,15 @@ case "$subcmd" in
 			then
 				continue
 			fi
-			shopt -s nocasematch
-			if [[ $file =~ password|key|cvc|secret|pin ]]
+			if is_secret "$file"
 			then
 				if in_list reveal-secrets "${options[@]}"
 				then
 					true
 				elif in_list hash-secrets "${options[@]}"
 				then
-					echo "$file"$'\t'MD5=`cat "$file" | md5sum | cut -c 1-32`
+					hash=`cat "$file" | md5sum | cut -c 1-32`
+					echo "$file$TAB$hash$TAB""hash-algo=md5"
 					continue
 				else
 					echo "$file"$'\t'"*****"
@@ -73,31 +121,42 @@ case "$subcmd" in
 	)
 	;;
 (password)
-	site=${1:?'enter site name!'}
+	set_site
 	cat "$basedir/$site/PASSWORD"
-	;;
-(clip-password)
-	site=${1:?'enter site name!'}
-	cat "$basedir/$site/PASSWORD" | xclip -i -selection clipboard
 	;;
 (list-sites)
 	find -L "$basedir" -path "$basedir/${1:-}*" -type d -printf "%P\n"
 	;;
-(prop)
-	site=${1:?'enter site name and property name!'}
-	shift
+(prop|clip)
+	set_site
 	prop=${1:?'enter property name!'}
 	shift
 	if [ $# = 0 ]
 	then
-		cat "$basedir/$site/$prop"
-	else
+		case "$subcmd" in
+		(prop)
+			if is_secret "$prop"
+			then
+				warnx "$prop is a secret."
+				warnx "enter 'cred [...] prop [...] $prop show' explicitely, or"
+				warnx "more preferably 'cred [...] prop [...] $prop clip' to copy to the clipboard!"
+				false
+			else
+				cat "$basedir/$site/$prop"
+			fi
+			;;
+		(clip)
+			cat "$basedir/$site/$prop" | do_clip
+			;;
+		esac
+	elif [ "$subcmd" = prop ]
+	then
 		case "$1" in
 		(set)
 			shift
 			val=$*
 			mkdir -p "$basedir/$site"
-			echo "$val" > "$basedir/$site/$prop"
+			printf '%s' "$val" > "$basedir/$site/$prop"
 			;;
 		(edit)
 			mkdir -p "$basedir/$site"
@@ -106,18 +165,24 @@ case "$subcmd" in
 		(del)
 			rm "$basedir/$site/$prop"
 			;;
+		(show)
+			cat "$basedir/$site/$prop"
+			;;
+		(clip)
+			cat "$basedir/$site/$prop" | do_clip
+			;;
 		(*)
-			false
+			false "invalid argument"
 			;;
 		esac
 	fi
 	;;
 (list-props)
-	site=${1:?'enter site name, property name and value!'}
+	set_site
 	find "$basedir/$site" -type f -printf "%P\n"
 	;;
 (pwgen)
-	site=${1:?'enter site name!'}
+	set_site
 	newpwd=$(pwgen -y 8 1)$(pwgen -y 8 1)
 	pwdfile=$basedir/$site/PASSWORD
 	mkdir -p "$basedir/$site"
@@ -136,33 +201,52 @@ _autocomplete_cred() {
 	local compreply
 	local curr_word=${COMP_WORDS[$COMP_CWORD]}
 	local prev_word=${COMP_WORDS[$[COMP_CWORD - 1]]}
-	if [ $COMP_CWORD = 1 ]
-	then
-		compreply="list-sites dump dump-with-secrets password clip-password pwgen help compscript prop list-props"
-	elif [ $COMP_CWORD = 2 ]
-	then 
+	local site_subcmds="list-sites dump pwgen list-props prop clip"
+	
+	case $COMP_CWORD in
+	(1)
+		compreply="compscript site $site_subcmds"
+		;;
+	(2)
 		compreply=`cred list-sites "$curr_word"`
-	else
-		case "${COMP_WORDS[1]}" in
+		;;
+	(*)
+		local subcmd=${COMP_WORDS[1]}
+		local site=${COMP_WORDS[2]}
+		local cword_idx=$COMP_CWORD
+		if [ "$subcmd" = site ]
+		then
+			if [ $COMP_CWORD = 3 ]
+			then
+				compreply="$site_subcmds"
+			else
+				subcmd=${COMP_WORDS[3]}
+				let cword_idx-=1
+			fi
+		fi
+		case "$subcmd" in
 		(prop)
-			case $COMP_CWORD in
+			case $cword_idx in
 			(3)
-				site=${COMP_WORDS[2]}
 				compreply=`cred list-props "$site"`
 				;;
 			(4)
-				compreply="set edit del"
+				compreply="set edit del show clip"
 				;;
 			esac
 			;;
+		(clip)
+			compreply=`cred list-props "$site"`
+			;;
 		(dump)
-			case $COMP_CWORD in
+			case $cword_idx in
 			(3)
 				compreply="reveal-secrets mask-secrets hash-secrets"
 				;;
 			esac
 		esac
-	fi
+		;;
+	esac
 	COMPREPLY=($(compgen -W "$compreply" -- "${COMP_WORDS[$COMP_CWORD]}"))
 	return 0
 }
@@ -171,11 +255,11 @@ complete -F _autocomplete_cred cred
 EOF
 	;;
 (*)
-	{
-		echo 'Use tab-completion!'
-		echo 'Example:'
-		echo 'eval "$(cred compscript)"'
-	} >&2
+	warnx 'Use tab-completion!'
+	warnx 'Example: eval "$(cred compscript)"'
 	false
 	;;
 esac
+
+exit
+}

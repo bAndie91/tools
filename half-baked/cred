@@ -1,7 +1,10 @@
 #!/bin/bash
 
+# need to set these shell options before they are relied upon when bash parses the big { ... } block later down.
 shopt -s nocasematch
 shopt -s expand_aliases
+# aliases in non-interactive bash script are not evaluated in the same scope where they are defined,
+# but they are in the big { ... } block below.
 alias set_site='if [ -z "${site:-}" ]; then set_site_func "${1:-}"; shift; fi;'
 
 {
@@ -181,9 +184,10 @@ case "$subcmd" in
 	set_site
 	find "$basedir/$site" -type f -printf "%P\n"
 	;;
-(pwgen)
+(renew-password)
 	set_site
 	newpwd=$(pwgen -y 8 1)$(pwgen -y 8 1)
+	[ -n "$newpwd" ]
 	pwdfile=$basedir/$site/PASSWORD
 	mkdir -p "$basedir/$site"
 	if [ -s "$pwdfile" ]
@@ -201,18 +205,19 @@ _autocomplete_cred() {
 	local compreply
 	local curr_word=${COMP_WORDS[$COMP_CWORD]}
 	local prev_word=${COMP_WORDS[$[COMP_CWORD - 1]]}
-	local site_subcmds="list-sites dump pwgen list-props prop clip"
+	local site_subcmds="list-sites dump renew-password list-props prop clip"
 	
 	case $COMP_CWORD in
 	(1)
 		compreply="compscript site $site_subcmds"
 		;;
 	(2)
-		compreply=`cred list-sites "$curr_word"`
+		local site=$curr_word; site=${site/#'~/'/$HOME/}
+		compreply=`cred list-sites "$site"`
 		;;
 	(*)
 		local subcmd=${COMP_WORDS[1]}
-		local site=${COMP_WORDS[2]}
+		local site=${COMP_WORDS[2]}; site=${site/#'~/'/$HOME/}
 		local cword_idx=$COMP_CWORD
 		if [ "$subcmd" = site ]
 		then

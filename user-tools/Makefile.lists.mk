@@ -56,7 +56,7 @@ TOOLS ?= \
   git-submodule-auto-add \
   grepdatetime \
   Head \
-  header.sed \
+  header \
   hlcal \
   hlncal \
   htmlentities \

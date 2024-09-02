@@ -1,6 +1,6 @@
 #!/bin/sh
 
-exec sed -e '/^\r\?$/q' "$@"
+exec sed -e '/^\r\?$/q' --separate "$@"
 
 
 true <<EOF

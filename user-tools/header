@@ -1,0 +1,29 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+header - Echo the input stream up to the first empty line (usual end-of-header marker)
+
+=head1 SYNOPSIS
+
+header <FILE> [<FILE> [<FILE> [...]]]
+
+=cut
+
+
+for my $idx (0..$#ARGV)
+{
+	my $path = $ARGV[$idx];
+	open my $fh, '<', $path;
+	while(<$fh>)
+	{
+		last if /^\r?\n?$/;
+		print;
+	}
+	if($idx < $#ARGV)
+	{
+		print "\n";
+	}
+}

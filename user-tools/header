@@ -8,10 +8,16 @@ header - Echo the input stream up to the first empty line (usual end-of-header m
 
 =head1 SYNOPSIS
 
-header <FILE> [<FILE> [<FILE> [...]]]
+header I<FILE> [I<FILE> [I<FILE> [...]]]
+
+header < I<FILE>
 
 =cut
 
+if(not @ARGV)
+{
+	push @ARGV, '/dev/stdin';
+}
 
 for my $idx (0..$#ARGV)
 {

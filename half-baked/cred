@@ -63,7 +63,22 @@ is_secret()
 
 do_clip()
 {
-	xclip -i -selection clipboard
+	local prop=$1
+	if type copyq 1>/dev/null 2>&1 && is_secret "$prop"
+	then
+		copyq_monitoring=`copyq monitoring`
+		if [ "$copyq_monitoring" = true ]
+		then
+			copyq disable
+		fi
+		copyq copy -
+		if [ "$copyq_monitoring" = true ]
+		then
+			copyq enable
+		fi
+	else
+		xclip -i -selection clipboard
+	fi
 }
 
 
@@ -149,7 +164,7 @@ case "$subcmd" in
 			fi
 			;;
 		(clip)
-			cat "$basedir/$site/$prop" | do_clip
+			cat "$basedir/$site/$prop" | do_clip "$prop"
 			;;
 		esac
 	elif [ "$subcmd" = prop ]
@@ -165,6 +180,15 @@ case "$subcmd" in
 			mkdir -p "$basedir/$site"
 			"${EDITOR:-$VISUAL}" "$basedir/$site/$prop"
 			;;
+		(read)
+			if is_secret "$prop"
+			then
+				read -s -p "$prop: " -e val
+			else
+				read -p "$prop: " -e val
+			fi
+			printf '%s' "$val" > "$basedir/$site/$prop"
+			;;
 		(del)
 			rm "$basedir/$site/$prop"
 			;;
@@ -172,7 +196,7 @@ case "$subcmd" in
 			cat "$basedir/$site/$prop"
 			;;
 		(clip)
-			cat "$basedir/$site/$prop" | do_clip
+			cat "$basedir/$site/$prop" | do_clip "$prop"
 			;;
 		(*)
 			false "invalid argument"
@@ -180,11 +204,26 @@ case "$subcmd" in
 		esac
 	fi
 	;;
+(fill-form)
+	set_site
+	if [ $# -gt 0 ]
+	then
+		strings=''
+		for prop in "$@"
+		do
+			val=`cat "$basedir/$site/$prop"`
+			strings="$strings$val"$'\t'
+		done
+		xdotool key Alt+Tab type "$strings"
+	else
+		errx 1 "Enter property names in order to fill the form on the window brought to focus by Alt+Tab."
+	fi
+	;;
 (list-props)
 	set_site
 	find "$basedir/$site" -type f -printf "%P\n"
 	;;
-(renew-password)
+(generate-password)
 	set_site
 	newpwd=$(pwgen -y 8 1)$(pwgen -y 8 1)
 	[ -n "$newpwd" ]
@@ -205,7 +244,7 @@ _autocomplete_cred() {
 	local compreply
 	local curr_word=${COMP_WORDS[$COMP_CWORD]}
 	local prev_word=${COMP_WORDS[$[COMP_CWORD - 1]]}
-	local site_subcmds="list-sites dump renew-password list-props prop clip"
+	local site_subcmds="list-sites dump generate-password list-props prop clip fill-form"
 	
 	case $COMP_CWORD in
 	(1)
@@ -236,11 +275,11 @@ _autocomplete_cred() {
 				compreply=`cred list-props "$site"`
 				;;
 			(4)
-				compreply="set edit del show clip"
+				compreply="set edit read del show clip"
 				;;
 			esac
 			;;
-		(clip)
+		(clip|fill-form)
 			compreply=`cred list-props "$site"`
 			;;
 		(dump)

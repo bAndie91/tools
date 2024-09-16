@@ -3,6 +3,7 @@
 # unicode-aware expand(1) replacement
 
 use Encode;
+binmode STDIN, ":utf8";
 binmode STDOUT, ":utf8";
 
 $tabstop = 4;
@@ -10,7 +11,6 @@ $tabstopMinusOne = $tabstop - 1;
 
 while(<STDIN>)
 {
-	Encode::_utf8_on($_);
 	s/((?<A>[^\t]{0,$tabstopMinusOne})\t|(?<A>[^\t]{$tabstop}))/sprintf "%s%s", $+{A}, " " x ($tabstop - length $+{A})/ge;
 	print;
 }

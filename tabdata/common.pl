@@ -13,6 +13,10 @@ no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 use Getopt::Long qw/:config no_ignore_case bundling pass_through require_order no_getopt_compat no_auto_abbrev/;
 use Pod::Usage;
 
+binmode STDIN,  ':utf8';
+binmode STDOUT, ':utf8';
+
+
 if(not $TabdataCommonSkipGetopt)
 {
 	GetOptions(

@@ -55,7 +55,8 @@ in cases where the user knows that the input data is good to go through as-is.
 
 # Tool Descriptions
 
-[descriptions.txt](descriptions.txt)
+See short description of each commands of this toolkit in [descriptions.txt](descriptions.txt).
+For detailed documentation of them, run `make manpages` or read the POD in the files themselves.
 
 # Compare to CSV
 

@@ -12,9 +12,11 @@ $RS = $/ = "\n";
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 use Getopt::Long qw/:config no_ignore_case bundling pass_through require_order no_getopt_compat no_auto_abbrev/;
 use Pod::Usage;
+use Encode;
 
 binmode STDIN,  ':utf8';
 binmode STDOUT, ':utf8';
+@ARGV = map {Encode::_utf8_on($_); $_} @ARGV;
 
 
 if(not $TabdataCommonSkipGetopt)
@@ -52,12 +54,14 @@ sub sys_read_line
 {
 	# read data from STDIN until $RS (usually newline) or EOF, whichever comes first.
 	# and return with data.
-	# $RS is consumed by not returned.
-	# useful if the rest of STDIN will not be processed by the current process.
+	# $RS is consumed but not returned.
+	# useful to avoid libc io-buffering in situations when the rest of STDIN will not be processed by the current process.
 	
 	my $line = '';
 	my $c;
+	binmode STDIN, ':bytes';
 	$line .= $c while sysread(STDIN, $c, 1) and $c ne $RS;
+	binmode STDIN, ':utf8';
 	return $line;
 }
 

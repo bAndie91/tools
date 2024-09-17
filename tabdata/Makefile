@@ -65,10 +65,11 @@ depcheck:
 	perl -MMIME::QuotedPrint -e 1
 	perl -MEncode -e 1
 	perl -MText::CSV -e 1
+	perl -MMath::Cartesian::Product -e 1
 
 .PHONY: try-satisfy-dependencies
 try-satisfy-dependencies:
-	apt install libswitch-perl liblist-moreutils-perl libtext-csv-perl
+	apt install libswitch-perl liblist-moreutils-perl libtext-csv-perl libmath-cartesian-product-perl
 
 
 REPO_ROOT = ..

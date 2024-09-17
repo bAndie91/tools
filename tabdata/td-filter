@@ -72,51 +72,53 @@ For your convenience, not to bother with escaping, you may also use these operat
 
 =item is
 
+=item = I<(single equal sign)>
+
 string equality (B<eq>)
 
 =item is not
-
-=item isnt
-
-=item isnot
 
 string inequality (B<ne>)
 
 =item -eq
 
-numerical equality (B<==>)
+numeric equality (B<==>)
 
 =item -ne
 
-numerical inequality (B<!=>)
+numeric inequality (B<!=>)
 
 =item <>
 
-numerical inequality (B<!=>)
+numeric inequality (B<!=>)
 
 =item -gt
 
-numerical greater than (B<E<gt>>)
+numeric greater than (B<E<gt>>)
 
 =item -ge
 
-numerical greater or equal (B<E<gt>=>)
+numeric greater or equal (B<E<gt>=>)
 
 =item -lt
 
-numerical less than (B<E<lt>>)
+numeric less than (B<E<lt>>)
 
 =item -le
 
-numerical less or equal (B<E<lt>=>)
+numeric less or equal (B<E<lt>=>)
 
 =item match
 
+=item matches
+
 regexp match (B<=~>)
 
-=item notmatch
-
 =item does not match
+
+=item do not match
+
+=item not match
 
 negated regexp match (B<!~>)
 
@@ -126,26 +128,32 @@ Other operators:
 
 =over 4
 
-=item [is] one of
+=item is [not] one of
+
+=item is [not] any of
 
 I<R-VALUE> is split into pieces by commas (C<,>) and
-equality to at least one of them is required
+equality to at least one of them is required.
+Equality to none of them is required if the operator is negated.
 
-=item [contains | has] [whole word]
+=item contains [whole word]
 
 Substring match.
-Plural forms ("contain" and "have") are also accepted.
+Plural form "contain" is also accepted.
 Optional I<whole word> is a literal part of the operator.
 
-=item [contains | has] one of [whole word]
+=item contains [one | any] [whole word] of
 
 Similar to B<is one of>, but substring match is checked
 instead of full string equality.
+Plural form "contain" is also accepted.
 Optional I<whole word> is a literal part of the operator.
 
 =item ends with
 
 =item starts with
+
+Plural forms are also accepted.
 
 =back
 
@@ -178,40 +186,106 @@ $OptFailNonNumericRValue = 1;
 );
 
 use Switch;
-use List::MoreUtils qw/all any none/;
+use List::MoreUtils qw/all any none uniq/;
 use Data::Dumper;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
+use Math::Cartesian::Product;
+
+
+sub subst_alternate_forms
+{
+	my $words = shift;
+	my $altforms = shift;
+	my @product_terms = ();
+	for my $word (split /\s+/, $words)
+	{
+		push @product_terms, ($word ~~ [keys %$altforms]) ? $altforms->{$word} : [$word];
+	}
+	my @results = ();
+	cartesian {push @results, join ' ', @_} @product_terms;
+	return @results;
+}
+sub parse_operator
+{
+	my @args = @_;
+	my %alternate_form = (
+		'ANY' => [qw/one any/],
+		'MATCH' => [qw/match matches/],
+		'CONTAIN' => [qw/contain contains/],
+		'DOES' => [qw/do does/],
+	);
+	my @opdef = (
+		{ phrase => 'MATCH',                                operator => '=~'},
+		{ phrase => 'not MATCH',                            operator => '!~'},
+		{ phrase => 'DOES not match',                       operator => '!~'},
+		
+		{ phrase => 'is not ANY of',                        operator => 'is-one-of',       negation => 1},
+		{ phrase => 'is ANY of',                            operator => 'is-one-of'},
+		{ phrase => 'is not',                               operator => 'ne'},
+		{ phrase => 'is',                                   operator => 'eq'},
+		
+		{ phrase => '=',   operator => 'eq'},
+		{ phrase => '-eq', operator => '=='},
+		{ phrase => '-ne', operator => '!='},
+		{ phrase => '<>',  operator => '!='},
+		{ phrase => '-gt', operator => '>'},
+		{ phrase => '-ge', operator => '>='},
+		{ phrase => '-lt', operator => '<'},
+		{ phrase => '-le', operator => '<='},
+		
+		{ phrase => 'CONTAIN whole word',                   operator => 'contains',                       wholeword => 1},
+		{ phrase => 'CONTAIN ANY whole word of',            operator => 'contains-one-of',                wholeword => 1},
+		{ phrase => 'CONTAIN ANY of',                       operator => 'contains-one-of'},
+		{ phrase => 'CONTAIN',                              operator => 'contains'},
+		{ phrase => 'not CONTAIN whole word',               operator => 'contains',        negation => 1, wholeword => 1},
+		{ phrase => 'not CONTAIN ANY whole word of',        operator => 'contains-one-of', negation => 1, wholeword => 1},
+		{ phrase => 'not CONTAIN ANY of',                   operator => 'contains-one-of', negation => 1},
+		{ phrase => 'not CONTAIN',                          operator => 'contains',        negation => 1},
+		{ phrase => 'DOES not contain ANY whole word of',   operator => 'contains-one-of', negation => 1, wholeword => 1},
+		{ phrase => 'DOES not contain whole word',          operator => 'contains',        negation => 1, wholeword => 1},
+		{ phrase => 'DOES not contain ANY of',              operator => 'contains-one-of', negation => 1},
+		{ phrase => 'DOES not contain',                     operator => 'contains',        negation => 1},
+		
+		{ phrase => 'START with',                           operator => 'starts-with'},
+		{ phrase => 'not START with',                       operator => 'starts-with',     negation => 1},
+		{ phrase => 'DOES not start with',                  operator => 'starts-with',     negation => 1},
+		
+		{ phrase => 'END with',                             operator => 'ends-with'},
+		{ phrase => 'not END with',                         operator => 'ends-with',       negation => 1},
+		{ phrase => 'DOES not end with',                    operator => 'ends-with',       negation => 1},
+	);
+	my @canonical_operators = uniq map {$_->{operator}} @opdef;
+	for my $opdef (@opdef)
+	{
+		my $phrase = $opdef->{phrase};
+		my $nwords = scalar split /\s+/, $phrase;
+		my @phrases = subst_alternate_forms($phrase, \%alternate_form);
+		#warn Dumper \@phrases;
+		for my $possible_operator (@phrases)
+		{
+			my $argstr = join ' ', @args[0..($nwords-1)];
+			if($argstr eq $possible_operator)
+			{
+				my %result = %$opdef;
+				$result{remaining_args} = [@args[$nwords..$#args]];
+				return \%result;
+			}
+		}
+	}
+	if($args[0] ~~ [@canonical_operators])
+	{
+		return {operator => $args[0], remaining_args => [@args[1..$#args]]};
+	}
+	die "valid operator expected; found this: @args";
+}
+
+
+
 @Filter = ();
 $Expr = undef;
 
-%operator_alias = (
-	'-eq', '==',
-	'is',  'eq',
-	'<>',  '!=',
-	'-ne', '!=',
-	'isnt',   'ne',
-	'isnot',  'ne',
-	'is not', 'ne',
-	'-gt', '>',
-	'-lt', '<',
-	'-ge', '>=',
-	'-le', '<=',
-	'notmatch', '!~',
-	'match', '=~',
-);
-%operator_alterform = (
-	'have',    'contains',
-	'has',     'contains',
-	'contain', 'contains',
-	'start',   'starts',
-	'end',     'ends',
-	'startwith',  'starts-with',
-	'endwith',    'ends-with',
-	'startswith', 'starts-with',
-	'endswith',   'ends-with',
-);
 
 if($ARGV[0] eq '--perl')
 {
@@ -227,34 +301,15 @@ else
 		
 		my $column = shift @ARGV;
 		
-		my $negation = 0;
-		if($ARGV[0] eq 'not') { $negation = 1; shift @ARGV; }
-		elsif($ARGV[0] ~~ ['does', 'do'] and $ARGV[1] eq 'not') { $negation = 1; shift @ARGV; shift @ARGV; }
-		
-		my $operator = shift @ARGV or die "$0: missing operator for: $column\n";
-		
-		# handle multi-word operators:
-		if($operator eq 'is' and $ARGV[0] eq 'not') { $operator .= ' ' . shift @ARGV; }
-		$operator = $operator_alterform{$operator} if exists $operator_alterform{$operator};
-		if($operator ~~ ['contains', 'is'] and $ARGV[0] ~~ ['one', 'any'] and $ARGV[1] eq 'of')
-			{ $operator .= '-one-of'; shift @ARGV; shift @ARGV; }
-		if($operator ~~ ['starts', 'ends'] and $ARGV[0] eq 'with')
-			{ $operator .= '-' . shift @ARGV; }
-		
-		$operator = $operator_alias{$operator} if exists $operator_alias{$operator};
-		
-		my $wholeword = 0;
-		if($operator ~~ [qw/contains contains-one-of/] and $ARGV[0] eq 'whole' and $ARGV[1] eq 'word')
-			{ $wholeword = 1; shift @ARGV; shift @ARGV; }
+		my $complex_operator = parse_operator(@ARGV);
+		#warn Dumper $complex_operator;
+		my $operator = $complex_operator->{operator};
+		my $negation = $complex_operator->{negation};
+		my $wholeword = $complex_operator->{wholeword};
+		@ARGV = @{$complex_operator->{remaining_args}};
 		
 		my $rvalue = shift @ARGV;
 		die "$0: missing r-value for: $column $operator\n" if not defined $rvalue;
-		
-		
-		unless($operator ~~ [qw/== != <= >= < > =~ !~ eq ne gt lt is-one-of contains contains-one-of ends-with starts-with/])
-		{
-			die "$0: unknown operator: $operator\n";
-		}
 		
 		if($operator ~~ [qw/== != <= >= < >/] and $rvalue !~ /^[+-]?[0-9]\d*(.\d+|)(E[+-]?\d+|)$/i)
 		{

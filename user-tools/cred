@@ -15,10 +15,18 @@ cred site I<SITE> I<SUBCOMMAND> [I<ARGUMENTS>]
 
 =head1 DESCRIPTION
 
-I<SITE> is a container of one or more properties, most often a website name.
-It is represented in a directory in the credentials base dir.
+I<SITE>, most often a website name, is a container of one or more properties.
+But it can be anything you want to tie properties to,
+typically passwords, keys, pin codes, API tokens as secrets and 
+username, email address, etc. as ordinary properties.
+
+I<SITE> is represented in a directory in the credentials base dir.
 You may also enter a directory path on the filesystem for I<SITE>.
 You don't need to create a I<SITE>: it's created automatically when you write in it.
+
+For websites and other services you have more than one account or identity for,
+recommended to organize them into subdirectories like: I<SITE>/I<IDENTITY>,
+eg: C<mail.example.net/joe@example.net> and C<mail.example.net/jane@example.net>.
 
 =head1 SUBCOMMANDS
 

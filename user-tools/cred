@@ -1,5 +1,90 @@
 #!/bin/bash
 
+true <<'EOF'
+=pod
+
+=head1 NAME
+
+cred - Credentials and secrets management in command line
+
+=head1 SYNOPSIS
+
+cred I<SUBCOMMAND> I<SITE> [I<ARGUMENTS>]
+
+cred site I<SITE> I<SUBCOMMAND> [I<ARGUMENTS>]
+
+=head1 DESCRIPTION
+
+I<SITE> is a container of one or more properties, most often a website name.
+It is represented in a directory in the credentials base dir.
+You may also enter a directory path on the filesystem for I<SITE>.
+You don't need to create a I<SITE>: it's created automatically when you write in it.
+
+=head1 SUBCOMMANDS
+
+=over 4
+
+=item compscript
+
+Output a bash script to setup tab-completion for the C<cred> command.
+Use it by eg: C<eval "$(cred compscript)">
+
+=item list-sites
+
+=item dump [reveal-secrets | mask-secrets | hash-secrets]
+
+Display all properties (and their values) of a given site.
+Optional parameter is how secrets are displayed:
+B<mask-secrets> is the default and replaces a secret string's characters by asterisk (C<*>).
+B<hash-secrets> replaces secrets by a hash and the checksum algorithm' name
+is appended to the hash with a tab, like: <TAB>B<hash-algo=>I<NAME>.
+Finally B<reveal-secrets> displays secret strings in clear text just like ordinary properties.
+
+=item generate-password
+
+Generate a new password and put in B<PASSWORD> property.
+And append its old value to the B<OLDPASSWORDS> property.
+
+=item list-props
+
+=item prop I<PROPERTY> [set I<NEW-VALUE> | edit | read | del | show | clip]
+
+Manage properties of a given site.
+The B<edit> instruction opens up the B<$EDITOR> (falling back to B<$VISUAL>) to edit the given property's value.
+B<read> reads the new value from the STDIN (readline is supported if bash does support it, see C<help read> in bash(1)).
+Secrets are read in no-echo mode.
+The B<clip> instruction does the same as B<clip> subcommand, see below.
+
+=item clip I<PROPERTY>
+
+By B<clip> you may copy the value to the clipboard.
+If you use CopyQ(1), secrets are prevented to get to CopyQ's clipboard items history.
+
+=item fill-form I<PROPERTY> [I<PROPERTY> [...]]
+
+Takes one or more property names and types their values to the window accessible by pressing Alt+Tab on your desktop.
+Also presses <TAB> after each string, but does not press <RETURN>.
+Obviously it's useful only with a B<$DESKTOP>.
+Depends on xdotool(1).
+
+=back
+
+=head1 FILES
+
+Hardcoded credentials' directory is F<~/cred>.
+
+=head1 SEE ALSO
+
+=over 4
+
+=back
+
+=cut
+
+EOF
+
+
+
 # need to set these shell options before they are relied upon when bash parses the big { ... } block later down.
 shopt -s nocasematch
 shopt -s expand_aliases
@@ -137,10 +222,6 @@ case "$subcmd" in
 			cred dump "$parent" "${options[@]}"
 		fi
 	)
-	;;
-(password)
-	set_site
-	cat "$basedir/$site/PASSWORD"
 	;;
 (list-sites)
 	find -L "$basedir" -path "$basedir/${1:-}*" -type d -printf "%P\n"

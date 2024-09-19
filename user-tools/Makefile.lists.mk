@@ -15,6 +15,7 @@ TOOLS ?= \
   chromium_cookie_decrypt.py \
   chshebang \
   cled \
+  cred \
   convert_chromium_cookies_to_netscape.sh \
   corner_time \
   cronrun \

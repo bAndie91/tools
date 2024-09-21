@@ -72,6 +72,9 @@ If you use CopyQ(1), secrets are prevented to get to CopyQ's clipboard items his
 
 Takes one or more property names and types their values to the window accessible by pressing Alt+Tab on your desktop.
 Also presses <TAB> after each string, but does not press <RETURN>.
+A single dot (C<.>) is a pseudo I<PROPERTY> name: if it's given, nothing will be typed in its place,
+but <TAB> is still pressed after it.
+Use it if the form has fields which you don't want to fill in.
 Obviously it's useful only with a B<$DESKTOP>.
 Depends on xdotool(1).
 
@@ -79,7 +82,7 @@ Depends on xdotool(1).
 
 =head1 FILES
 
-Hardcoded credentials' directory is F<~/cred>.
+Hardcoded credentials directory is F<~/cred>.
 
 =head1 SEE ALSO
 
@@ -300,7 +303,12 @@ case "$subcmd" in
 		strings=''
 		for prop in "$@"
 		do
-			val=`cat "$basedir/$site/$prop"`
+			if [ "$prop" = . ]
+			then
+				val=''
+			else
+				val=`cat "$basedir/$site/$prop"`
+			fi
 			strings="$strings$val"$'\t'
 		done
 		xdotool key Alt+Tab type "$strings"

@@ -48,6 +48,9 @@ B<hash-secrets> replaces secrets by a hash and the checksum algorithm' name
 is appended to the hash with a tab, like: <TAB>B<hash-algo=>I<NAME>.
 Finally B<reveal-secrets> displays secret strings in clear text just like ordinary properties.
 
+Those properies are considered to be secret at the moment which contain at least one of these words (case insensitive) :
+B<pass>, B<key>, B<cvc>, B<secret>, B<pin>, B<code>, B<token>.
+
 =item generate-password
 
 Generate a new password and put in B<PASSWORD> property.
@@ -55,18 +58,32 @@ And append its old value to the B<OLDPASSWORDS> property.
 
 =item list-props
 
-=item prop I<PROPERTY> [set I<NEW-VALUE> | edit | read | del | show | clip]
+=item prop I<PROPERTY> [set I<NEW-VALUE> | edit | read | del | show | reveal | clip]
 
 Manage properties of a given site.
 The B<edit> instruction opens up the B<$EDITOR> (falling back to B<$VISUAL>) to edit the given property's value.
 B<read> reads the new value from the STDIN (readline is supported if bash does support it, see C<help read> in bash(1)).
 Secrets are read in no-echo mode.
-The B<clip> instruction does the same as B<clip> subcommand, see below.
+B<show> shows only non-secrets.
+Enter B<reveal> to show secrets as well.
+By B<clip> you may copy the value to the clipboard.
+If you use CopyQ(1), secrets are prevented to get to CopyQ's clipboard items history.
+
+=item set I<PROPERTY> I<NEW-VALUE>
+
+=item edit I<PROPERTY>
+
+=item read I<PROPERTY>
+
+=item del I<PROPERTY>
+
+=item show I<PROPERTY>
+
+=item reveal I<PROPERTY>
 
 =item clip I<PROPERTY>
 
-By B<clip> you may copy the value to the clipboard.
-If you use CopyQ(1), secrets are prevented to get to CopyQ's clipboard items history.
+These subcommands do the same as B<prop> subcommand's instructions, see above.
 
 =item fill-form I<PROPERTY> [I<PROPERTY> [...]]
 
@@ -82,7 +99,7 @@ Depends on xdotool(1).
 
 =head1 FILES
 
-Hardcoded credentials directory is F<~/cred>.
+Hardcoded credentials' directory is F<~/cred>.
 
 =head1 SEE ALSO
 
@@ -154,7 +171,7 @@ set_site_func()
 
 is_secret()
 {
-	[[ $1 =~ password|key|cvc|secret|pin ]]
+	[[ $1 =~ pass|key|cvc|secret|pin|code|token ]]
 }
 
 do_clip()
@@ -175,6 +192,56 @@ do_clip()
 	else
 		xclip -i -selection clipboard
 	fi
+}
+
+prop()
+{
+	local prop=${1:?'enter property name!'}
+	shift
+	local instruct=${1:?enter an instruction: set, edit, read, del, show, reveal, clip}
+	shift
+	case "$instruct" in
+	(set)
+		[ $# -gt 0 ]  # 'prop ... set' needs at least 1 argument
+		val=$*
+		mkdir -p "$basedir/$site"
+		printf '%s' "$val" > "$basedir/$site/$prop"
+		;;
+	(edit)
+		mkdir -p "$basedir/$site"
+		"${EDITOR:-$VISUAL}" "$basedir/$site/$prop"
+		;;
+	(read)
+		if is_secret "$prop"
+		then
+			read -s -p "$site/$prop: " -e val
+		else
+			read -p "$site/$prop: " -e val
+		fi
+		mkdir -p "$basedir/$site"
+		printf '%s' "$val" > "$basedir/$site/$prop"
+		;;
+	(del)
+		rm "$basedir/$site/$prop"
+		;;
+	(show)
+		if is_secret "$prop"
+		then
+			false  # this property is deemed to be a secret
+		else
+			cat "$basedir/$site/$prop"
+		fi
+		;;
+	(reveal)
+		cat "$basedir/$site/$prop"
+		;;
+	(clip)
+		cat "$basedir/$site/$prop" | do_clip "$prop"
+		;;
+	(*)
+		false  # invalid instruction given
+		;;
+	esac
 }
 
 
@@ -223,7 +290,7 @@ case "$subcmd" in
 				fi
 			fi
 			
-			grep . "$file" | prefixlines "$file"$'\t'
+			grep . "$file" | prefixlines "$file"$'\t' || true
 		done
 		
 		site=${site%/}
@@ -237,64 +304,15 @@ case "$subcmd" in
 (list-sites)
 	find -L "$basedir" -path "$basedir/${1:-}*" -type d -printf "%P\n"
 	;;
-(prop|clip)
+(prop)
 	set_site
-	prop=${1:?'enter property name!'}
+	prop "$@"
+	;;
+(set|edit|read|del|show|reveal|clip)
+	set_site
+	prop=$1
 	shift
-	if [ $# = 0 ]
-	then
-		case "$subcmd" in
-		(prop)
-			if is_secret "$prop"
-			then
-				warnx "$prop is a secret."
-				warnx "enter 'cred [...] prop [...] $prop show' explicitely, or"
-				warnx "more preferably 'cred [...] prop [...] $prop clip' to copy to the clipboard!"
-				false
-			else
-				cat "$basedir/$site/$prop"
-			fi
-			;;
-		(clip)
-			cat "$basedir/$site/$prop" | do_clip "$prop"
-			;;
-		esac
-	elif [ "$subcmd" = prop ]
-	then
-		case "$1" in
-		(set)
-			shift
-			val=$*
-			mkdir -p "$basedir/$site"
-			printf '%s' "$val" > "$basedir/$site/$prop"
-			;;
-		(edit)
-			mkdir -p "$basedir/$site"
-			"${EDITOR:-$VISUAL}" "$basedir/$site/$prop"
-			;;
-		(read)
-			if is_secret "$prop"
-			then
-				read -s -p "$prop: " -e val
-			else
-				read -p "$prop: " -e val
-			fi
-			printf '%s' "$val" > "$basedir/$site/$prop"
-			;;
-		(del)
-			rm "$basedir/$site/$prop"
-			;;
-		(show)
-			cat "$basedir/$site/$prop"
-			;;
-		(clip)
-			cat "$basedir/$site/$prop" | do_clip "$prop"
-			;;
-		(*)
-			false "invalid argument"
-			;;
-		esac
-	fi
+	prop "$prop" "$subcmd" "$@"
 	;;
 (fill-form)
 	set_site
@@ -341,7 +359,9 @@ _autocomplete_cred() {
 	local compreply
 	local curr_word=${COMP_WORDS[$COMP_CWORD]}
 	local prev_word=${COMP_WORDS[$[COMP_CWORD - 1]]}
-	local site_subcmds="list-sites dump generate-password list-props prop clip fill-form"
+	# NOTE if change $prop_subcmds, align it with the switch case below!
+	local prop_subcmds="set edit read del show reveal clip"
+	local site_subcmds="list-sites dump generate-password list-props prop $prop_subcmds fill-form"
 	
 	case $COMP_CWORD in
 	(1)
@@ -372,11 +392,12 @@ _autocomplete_cred() {
 				compreply=`cred list-props "$site"`
 				;;
 			(4)
-				compreply="set edit read del show clip"
+				compreply=$prop_subcmds
 				;;
 			esac
 			;;
-		(clip|fill-form)
+		# NOTE: align with $prop_subcmds!
+		(fill-form|set|edit|read|del|show|reveal|clip)
 			compreply=`cred list-props "$site"`
 			;;
 		(dump)

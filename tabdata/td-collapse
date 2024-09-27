@@ -30,6 +30,43 @@ reorder the columns by td-select(1). Eg. C<td-select KEYCOLUMN +REST>.
 Delimiter character or string between joined cell data.
 Default is space.
 
+=item -u, --distribute-unique-field I<FIELD>
+
+Take the I<FIELD> column's cells from the first collapsed group,
+and multiplicate all other columns as many times as many rows are in this group,
+in a way that each cell goes under a new column corresponding to that cell's original row.
+I<FIELD> field's cells need to be unique within each groups.
+
+If an unexpected value found during processing the 2nd row group an onwards,
+ie. a value which was not there in the first group,
+it won't be distibuted into the new column, since the header is already sent,
+but left in the original column just like B<-u> option would not be in effect.
+See "pause" and "resume" in the example below.
+
+B<Example>:
+
+ ID | EVENT  | TIME  | STATUS
+ 15 | start  | 10:00 |
+ 15 | end    | 10:05 | ok
+ 16 | start  | 11:00 |
+ 16 | end    | 11:06 | err
+ 16 | pause  | 11:04 |
+ 16 | resume | 11:05 |
+ 
+ td-collapse -u EVENT
+ 
+ COUNT | ID | EVENT        | TIME        | TIME_start | TIME_end | STATUS | STATUS_start | STATUS_end
+ 2     | 15 |              |             | 10:00      | 10:05    |        |              | ok
+ 4     | 16 | pause resume | 11:04 11:05 | 11:00      | 11:06    |        |              | err
+
+=item -s, --distributed-column-name-separator I<STR>
+
+When generating new columns as described at B<-u> option,
+join the original column name with each of the unique field's values
+by I<STR> string.
+See example at B<-u> option description.
+Default is underscore C<_>.
+
 =back
 
 =head1 EXAMPLES
@@ -63,9 +100,13 @@ B<Output>:
 
 Have to sort input data first.
 
+Group key is always the first input column.
+
+If a row in the input data has more cells than the number of columns, those are ignored.
+
 =head1 SEE ALSO
 
-td-expand(1) is a kind of inverse to td-collapse(1).
+td-expand(1) is a kind of an inverse to td-collapse(1).
 
 =head1 REFERENCES
 
@@ -75,42 +116,105 @@ td-collapse(1) roughly translates to SELECT COUNT(*) + GROUP_CONCAT() + GROUP BY
 
 
 $OptGlue = " ";
+$OptDistUniqueField = undef;
+$OptDistColumnNameSeparator = "_";
 %OptionDefs = (
 	'g|glue=s' => \$OptGlue,
+	'u|distribute-unique-field=s' => \$OptDistUniqueField,
+	's|distributed-column-name-separator=s' => \$OptDistColumnNameSeparator,
 );
 
+use Data::Dumper;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 process_header(scalar <STDIN>);
-unshift @Header, "COUNT";
-print join($FS, @Header).$RS;
+$last_input_column_idx = $#Header;
 
-
-sub output_last_group
+if(defined $OptDistUniqueField)
 {
-	print $collapsed_rows . $FS . $prev_group_key . $FS . join($FS, map { join $OptGlue, @$_ } @group_members) . $RS;
+	die "$0: no such column: $OptDistUniqueField\n" if not exists $Header{$OptDistUniqueField};
+	$uniq_field_idx = $Header{$OptDistUniqueField};
+}
+
+
+sub commit_group
+{
+	if($group_count == 0)
+	{
+		if($OptDistUniqueField)
+		{
+			for my $colidx (1..$#Header)
+			{
+				next if $colidx == $uniq_field_idx;
+				@distributed_cells = @{$group_members[$uniq_field_idx]};
+				for my $uniq_cell (@distributed_cells)
+				{
+					my $distrib_colname = $Header[$colidx] . $OptDistColumnNameSeparator . $uniq_cell;
+					push @Header, $distrib_colname;
+					$Header{$distrib_colname} = $#Header;
+				}
+			}
+		}
+		print join($FS, "COUNT", @Header).$RS;
+	}
+	
+	if($OptDistUniqueField)
+	{
+		for my $uniq_cell_idx (0..$#{$group_members[$uniq_field_idx]})
+		{
+			my $uniq_cell = $group_members[$uniq_field_idx]->[$uniq_cell_idx];
+			next if not $uniq_cell ~~ @distributed_cells;
+			for my $colidx (1..$last_input_column_idx)
+			{
+				my $colname = $Header[$colidx];
+				my $distrib_colname = $colname . $OptDistColumnNameSeparator . $uniq_cell;
+				$group_members[$Header{$distrib_colname}]->[0] = $group_members[$colidx]->[$uniq_cell_idx];
+				$group_members[$colidx]->[$uniq_cell_idx] = undef;
+			}
+			$group_members[$uniq_field_idx]->[$uniq_cell_idx] = undef;
+		}
+		for my $colidx (1..$last_input_column_idx)
+		{
+			@{$group_members[$colidx]} = grep {defined} @{$group_members[$colidx]};
+		}
+		@{$group_members[$uniq_field_idx]} = grep {defined} @{$group_members[$uniq_field_idx]};
+	}
+	
+	print $collapsed_rows . $FS . $prev_group_key . $FS . join($FS, map { join $OptGlue, @$_ } @group_members[1..$#group_members]) . $RS;
 	@group_members = ();
 	$collapsed_rows = 0;
+	$group_count++;
 }
 
 $group_key = undef;
 $prev_group_key = undef;
 @group_members = ();
 $collapsed_rows = 0;
+$group_count = 0;
+@distributed_cells = ();
+
 
 while(not eof STDIN)
 {
 	my @input_row = read_record(\*STDIN);
 	
 	$group_key = $input_row[0];
-	output_last_group if defined $prev_group_key and $group_key ne $prev_group_key;
-	for my $cell_num (1..$#input_row)
+	
+	if(defined $prev_group_key and $group_key ne $prev_group_key)
 	{
-		push @{$group_members[$cell_num-1]}, $input_row[$cell_num];
+		commit_group;
 	}
+
+	for my $cell_idx (1..$last_input_column_idx)
+	{
+		my $cell = $input_row[$cell_idx];
+		$cell = '' unless defined $cell;
+		push @{$group_members[$cell_idx]}, $cell;
+	}
+	
 	$collapsed_rows++;
 	$prev_group_key = $group_key;
 }
 
-END { output_last_group; }
+END { commit_group; }

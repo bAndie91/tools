@@ -21,6 +21,7 @@ TOOLS = \
   td-ls \
   td-pivot \
   td-ps \
+  td-rename \
   td-select \
   td-sort \
   td-trans \

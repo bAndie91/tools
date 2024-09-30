@@ -11,6 +11,7 @@ td-keepheader - Plug a non header-aware program in the tabular-data processing p
 td-lpstat - lpstat(1) wrapper to output printers status in Tabular Data format
 td-ls - ls(1)-like file list but more machine-parseable
 td-pivot - Switch columns for rows in tabular data
+td-rename - Rename tabular data columns
 td-select - Show only the specified columns from the input tabular data stream.
 td-sort - Sort tabular data by the columns given by name
 td-trans - Transform whitespace-delimited into TAB-delimited lines ignoring sorrounding whitespace.

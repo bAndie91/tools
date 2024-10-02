@@ -20,7 +20,7 @@ do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 $datetime_parser = new DateTime::Format::Strptime(pattern=>'%b %d %T %Y', on_error=>'croak', locale=>'C');
 
 $ENV{'LANG'} = 'C';
-open $pipe, '-|', 'lpstat', '-d', '-p', '-a';
+open $pipe, '-|:utf8', 'lpstat', '-d', '-p', '-a';
 while(<$pipe>)
 {
 	chomp;

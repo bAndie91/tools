@@ -218,7 +218,7 @@ if($show_header)
 # Then escape them properly
 # and output in tabular data format to the user.
 
-open $fh, '-|', 'find', @ARGV, @depthopts, 
+open $fh, '-|:utf8', 'find', @ARGV, @depthopts, 
 	(map {('!', '-name', $_)} values %ignore_name), 
 	'-printf', join("\\0", @field_macros)."\\0"
 or die "$0: $!\n";

@@ -1,4 +1,5 @@
 csv2td - Transform CSV to tabular data format.
+kvpairs2td - Transform lines of key-value pairs to tabular data stream
 mrkv2td - Transform multi-record key-value (MRKV) stream to tabular data format.
 td-add-headers - Add headers to the tabular data stream and pass through the rows.
 td-alter - Add new columns and fields to tabular data stream, and modify value of existing fields.
@@ -7,8 +8,10 @@ td-disamb-headers - Disambiguate headers in tabular data
 td-expand - Generate multiple rows from each one row in a Tabular data stream.
 td-filter - Show only those records from the input tabular data stream which match to the conditions.
 td-keepheader - Plug a non header-aware program in the tabular-data processing pipeline
+td-lpstat - lpstat(1) wrapper to output printers status in Tabular Data format
 td-ls - ls(1)-like file list but more machine-parseable
 td-pivot - Switch columns for rows in tabular data
+td-rename - Rename tabular data columns
 td-select - Show only the specified columns from the input tabular data stream.
 td-sort - Sort tabular data by the columns given by name
 td-trans - Transform whitespace-delimited into TAB-delimited lines ignoring sorrounding whitespace.
@@ -16,5 +19,6 @@ td-trans-fixcol - Transform a table-looking text, aligned to fixed columns by sp
 td-trans-ls - Transform ls(1) output into fix number of TAB-delimited columns.
 td-trans-mount - Transform mount(1) output to tabular data stream.
 td2html - Transform tabular data stream into a HTML table.
+td2kvpairs - Transform tabular data into key-value pairs
 td2mrkv - Transform tabular data into multi-record key-value (MRKV) format.
 vcf2td - Transform VCF to tabular data format.

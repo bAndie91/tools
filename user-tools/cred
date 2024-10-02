@@ -1,0 +1,427 @@
+#!/bin/bash
+
+true <<'EOF'
+=pod
+
+=head1 NAME
+
+cred - Credentials and secrets management in command line
+
+=head1 SYNOPSIS
+
+cred I<SUBCOMMAND> I<SITE> [I<ARGUMENTS>]
+
+cred site I<SITE> I<SUBCOMMAND> [I<ARGUMENTS>]
+
+=head1 DESCRIPTION
+
+I<SITE>, most often a website name, is a container of one or more properties.
+But it can be anything you want to tie properties to,
+typically passwords, keys, pin codes, API tokens as secrets and 
+username, email address, etc. as ordinary properties.
+
+I<SITE> is represented in a directory in the credentials base dir.
+You may also enter a directory path on the filesystem for I<SITE>.
+You don't need to create a I<SITE>: it's created automatically when you write in it.
+
+For websites and other services you have more than one account or identity for,
+recommended to organize them into subdirectories like: I<SITE>/I<IDENTITY>,
+eg: C<mail.example.net/joe@example.net> and C<mail.example.net/jane@example.net>.
+
+=head1 SUBCOMMANDS
+
+=over 4
+
+=item compscript
+
+Output a bash script to setup tab-completion for the C<cred> command.
+Use it by eg: C<eval "$(cred compscript)">
+
+=item list-sites
+
+=item dump [reveal-secrets | mask-secrets | hash-secrets]
+
+Display all properties (and their values) of a given site.
+Optional parameter is how secrets are displayed:
+B<mask-secrets> is the default and replaces a secret string with 5 asterisks (C<*****>) uniformly (so number of chars are not leaked).
+B<hash-secrets> replaces secrets by a hash and the checksum algorithm' name
+is appended to the hash with a tab, like: <TAB>B<hash-algo=>I<NAME>.
+Finally B<reveal-secrets> displays secret strings in clear text just like ordinary properties.
+
+Those properies are considered to be secret at the moment which contain at least one of these words (case insensitive) :
+B<pass>, B<key>, B<cvc>, B<secret>, B<pin>, B<code>, B<token>.
+
+=item generate-password
+
+Generate a new password and put in B<PASSWORD> property.
+And append its old value to the B<OLDPASSWORDS> property.
+
+=item list-props
+
+=item prop I<PROPERTY> [set I<NEW-VALUE> | edit | read | del | show | reveal | clip]
+
+Manage properties of a given site.
+The B<edit> instruction opens up the B<$EDITOR> (falling back to B<$VISUAL>) to edit the given property's value.
+B<read> reads the new value from the STDIN (readline is supported if bash does support it, see C<help read> in bash(1)).
+Secrets are read in no-echo mode.
+B<show> shows only non-secrets.
+Enter B<reveal> to show secrets as well.
+By B<clip> you may copy the value to the clipboard.
+If you use CopyQ(1), secrets are prevented to get to CopyQ's clipboard items history.
+
+=item set I<PROPERTY> I<NEW-VALUE>
+
+=item edit I<PROPERTY>
+
+=item read I<PROPERTY>
+
+=item del I<PROPERTY>
+
+=item show I<PROPERTY>
+
+=item reveal I<PROPERTY>
+
+=item clip I<PROPERTY>
+
+These subcommands do the same as B<prop> subcommand's instructions, see above.
+
+=item fill-form I<PROPERTY> [I<PROPERTY> [...]]
+
+Takes one or more property names and types their values to the window accessible by pressing Alt+Tab on your desktop.
+Also presses <TAB> after each string, but does not press <RETURN>.
+A single dot (C<.>) is a pseudo I<PROPERTY> name: if it's given, nothing will be typed in its place,
+but <TAB> is still pressed after it.
+Use it if the form has fields which you don't want to fill in.
+Obviously it's useful only with a B<$DESKTOP>.
+Depends on xdotool(1).
+
+=back
+
+=head1 FILES
+
+Hardcoded credentials' directory is F<~/cred>.
+
+=head1 SEE ALSO
+
+=over 4
+
+=back
+
+=cut
+
+EOF
+
+
+
+# need to set these shell options before they are relied upon when bash parses the big { ... } block later down.
+shopt -s nocasematch
+shopt -s expand_aliases
+# aliases in non-interactive bash script are not evaluated in the same scope where they are defined,
+# but they are in the big { ... } block below.
+alias set_site='if [ -z "${site:-}" ]; then set_site_func "${1:-}"; shift; fi;'
+
+{
+set -eE
+set -o pipefail
+set -u
+
+. /usr/lib/tool/bash-utils
+. /usr/lib/tool/ansi-codes
+
+TAB=$'\t'
+
+print_traceback()
+{
+	local i stack_size=${#FUNCNAME[@]}
+	for (( i=1; i<stack_size; i++ )); do
+		local func="${FUNCNAME[$i]}"
+		[[ $func = "" ]] && func=MAIN
+		local linen="${BASH_LINENO[$(( i - 1 ))]}"
+		local src="${BASH_SOURCE[$i]}"
+		[[ "$src" = "" ]] && src=non_file_source
+		
+		echo -n "$ANSI_bold$ANSI_fg_black"
+		echo "  function: $func"
+		echo "  file: $src (line $linen)"
+		echo -n "$ANSI_reset"
+		
+		local line_number_text_sep='| '
+		nl -ba -w ${#linen} -s " $line_number_text_sep" "$src" | grep -C 2 -E "^\s*$linen " |\
+			prefixlines "    " |\
+			sed -e "s/^\(\s*$linen\) \(.\{${#line_number_text_sep}\}\)\(.*\)/\1-\2$ANSI_italic\3$ANSI_normal/" |\
+			sd '^' "$ANSI_bold$ANSI_fg_black" | sd '$' "$ANSI_reset"
+	done
+}
+
+trap 'print_traceback >&2' ERR
+
+set_site_func()
+{
+	local param=$1
+	if [ -z "$1" ]
+	then
+		errx 1 "Enter site name or directory!"
+	elif [ -d "$param" ]
+	then
+		site=`basename "$param"`
+	else
+		site=$1
+	fi
+}
+
+is_secret()
+{
+	[[ $1 =~ pass|key|cvc|secret|pin|code|token ]]
+}
+
+do_clip()
+{
+	local prop=$1
+	if type copyq 1>/dev/null 2>&1 && is_secret "$prop"
+	then
+		copyq_monitoring=`copyq monitoring`
+		if [ "$copyq_monitoring" = true ]
+		then
+			copyq disable
+		fi
+		copyq copy -
+		if [ "$copyq_monitoring" = true ]
+		then
+			copyq enable
+		fi
+	else
+		xclip -i -selection clipboard
+	fi
+}
+
+prop()
+{
+	local prop=${1:?'enter property name!'}
+	shift
+	local instruct=${1:?enter an instruction: set, edit, read, del, show, reveal, clip}
+	shift
+	case "$instruct" in
+	(set)
+		[ $# -gt 0 ]  # 'prop ... set' needs at least 1 argument
+		val=$*
+		mkdir -p "$basedir/$site"
+		printf '%s' "$val" > "$basedir/$site/$prop"
+		;;
+	(edit)
+		mkdir -p "$basedir/$site"
+		"${EDITOR:-$VISUAL}" "$basedir/$site/$prop"
+		;;
+	(read)
+		if is_secret "$prop"
+		then
+			read -s -p "$site/$prop: " -e val
+		else
+			read -p "$site/$prop: " -e val
+		fi
+		mkdir -p "$basedir/$site"
+		printf '%s' "$val" > "$basedir/$site/$prop"
+		;;
+	(del)
+		rm "$basedir/$site/$prop"
+		;;
+	(show)
+		if is_secret "$prop"
+		then
+			false  # this property is deemed to be a secret
+		else
+			cat "$basedir/$site/$prop"
+		fi
+		;;
+	(reveal)
+		cat "$basedir/$site/$prop"
+		;;
+	(clip)
+		cat "$basedir/$site/$prop" | do_clip "$prop"
+		;;
+	(*)
+		false  # invalid instruction given
+		;;
+	esac
+}
+
+
+basedir=~/cred
+site=''
+
+
+if [ "${1:-}" = site ]
+then
+	shift || true
+	set_site
+fi
+
+subcmd=${1:-}
+shift || true
+
+
+
+case "$subcmd" in
+(dump)
+	set_site
+	options=("$@")
+	
+	(
+		cd "$basedir/$site"
+		GLOBIGNORE=${GLOBIGNORE:-}${GLOBIGNORE:+:}".:..:.[!/.]*:..[!/]*:-*"
+		for file in *
+		do
+			if [ ! -f "$file" ]
+			then
+				continue
+			fi
+			if is_secret "$file"
+			then
+				if in_list reveal-secrets "${options[@]}"
+				then
+					true
+				elif in_list hash-secrets "${options[@]}"
+				then
+					hash=`cat "$file" | md5sum | cut -c 1-32`
+					echo "$file$TAB$hash$TAB""hash-algo=md5"
+					continue
+				else
+					echo "$file"$'\t'"*****"
+					continue
+				fi
+			fi
+			
+			grep . "$file" | prefixlines "$file"$'\t' || true
+		done
+		
+		site=${site%/}
+		if [[ $site =~ / ]]
+		then
+			parent=${site%/*}
+			cred dump "$parent" "${options[@]}"
+		fi
+	)
+	;;
+(list-sites)
+	find -L "$basedir" -path "$basedir/${1:-}*" -type d -printf "%P\n"
+	;;
+(prop)
+	set_site
+	prop "$@"
+	;;
+(set|edit|read|del|show|reveal|clip)
+	set_site
+	prop=$1
+	shift
+	prop "$prop" "$subcmd" "$@"
+	;;
+(fill-form)
+	set_site
+	if [ $# -gt 0 ]
+	then
+		strings=''
+		for prop in "$@"
+		do
+			if [ "$prop" = . ]
+			then
+				val=''
+			else
+				val=`cat "$basedir/$site/$prop"`
+			fi
+			strings="$strings$val"$'\t'
+		done
+		xdotool key Alt+Tab type "$strings"
+	else
+		errx 1 "Enter property names in order to fill the form on the window brought to focus by Alt+Tab."
+	fi
+	;;
+(list-props)
+	set_site
+	find "$basedir/$site" -type f -printf "%P\n"
+	;;
+(generate-password)
+	set_site
+	newpwd=$(pwgen -y 8 1)$(pwgen -y 8 1)
+	[ -n "$newpwd" ]
+	pwdfile=$basedir/$site/PASSWORD
+	mkdir -p "$basedir/$site"
+	if [ -s "$pwdfile" ]
+	then
+		cur_pwd=`cat "$pwdfile"`
+		atime=`stat -c %x "$pwdfile"`
+		now=`date +'%F %T.%N %z'`
+		echo "$atime	$now	$cur_pwd" >> "$basedir/$site/OLDPASSWORDS"
+	fi
+	printf '%s' "$newpwd" > "$pwdfile"
+	;;
+(compscript)
+	cat <<'EOF'
+_autocomplete_cred() {
+	local compreply
+	local curr_word=${COMP_WORDS[$COMP_CWORD]}
+	local prev_word=${COMP_WORDS[$[COMP_CWORD - 1]]}
+	# NOTE if change $prop_subcmds, align it with the switch case below!
+	local prop_subcmds="set edit read del show reveal clip"
+	local site_subcmds="list-sites dump generate-password list-props prop $prop_subcmds fill-form"
+	
+	case $COMP_CWORD in
+	(1)
+		compreply="compscript site $site_subcmds"
+		;;
+	(2)
+		local site=$curr_word; site=${site/#'~/'/$HOME/}
+		compreply=`cred list-sites "$site"`
+		;;
+	(*)
+		local subcmd=${COMP_WORDS[1]}
+		local site=${COMP_WORDS[2]}; site=${site/#'~/'/$HOME/}
+		local cword_idx=$COMP_CWORD
+		if [ "$subcmd" = site ]
+		then
+			if [ $COMP_CWORD = 3 ]
+			then
+				compreply="$site_subcmds"
+			else
+				subcmd=${COMP_WORDS[3]}
+				let cword_idx-=1
+			fi
+		fi
+		case "$subcmd" in
+		(prop)
+			case $cword_idx in
+			(3)
+				compreply=`cred list-props "$site"`
+				;;
+			(4)
+				compreply=$prop_subcmds
+				;;
+			esac
+			;;
+		# NOTE: align with $prop_subcmds!
+		(fill-form|set|edit|read|del|show|reveal|clip)
+			compreply=`cred list-props "$site"`
+			;;
+		(dump)
+			case $cword_idx in
+			(3)
+				compreply="reveal-secrets mask-secrets hash-secrets"
+				;;
+			esac
+		esac
+		;;
+	esac
+	COMPREPLY=($(compgen -W "$compreply" -- "${COMP_WORDS[$COMP_CWORD]}"))
+	return 0
+}
+complete -F _autocomplete_cred cred
+# use this in your bash session by eg: eval "$(cred compscript)"
+EOF
+	;;
+(*)
+	warnx 'Use tab-completion!'
+	warnx 'Example: eval "$(cred compscript)"'
+	false
+	;;
+esac
+
+exit
+}

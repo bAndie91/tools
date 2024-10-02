@@ -1,0 +1,50 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+td-rename - Rename tabular data columns
+
+=head1 USAGE
+
+td-rename I<OLDNAME> I<NEWNAME> [I<OLDNAME> I<NEWNAME> [I<OLDNAME> I<NEWNAME> [...]]]
+
+=head1 EXAMPLE
+
+ conntrack -L | sd '^(\S+)\s+(\S+)\s+(\S+)' 'protoname=$1 protonum=$2 timeout=$3' | kvpairs2td | td-rename _REST FLAGS
+
+=head1 SEE ALSO
+
+Not to confuse with rename.td(1) which renames files, not columns.
+
+=cut
+
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+use Data::Dumper;
+
+process_header(scalar <STDIN>);
+
+%renames = @ARGV;
+
+RENAME:
+for my $oldname (keys %renames)
+{
+	COLUMN:
+	for my $colidx (0..$#Header)
+	{
+		if($Header[$colidx] eq $oldname)
+		{
+			my $newname = $renames{$oldname};
+			$Header[$colidx] = $newname;
+			delete $Header{$oldname};
+			$Header{$newname} = $colidx;
+			next RENAME;
+		}
+	}
+}
+
+print join($FS, @Header).$RS;
+
+print while <STDIN>;

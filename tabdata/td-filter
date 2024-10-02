@@ -215,6 +215,8 @@ sub parse_operator
 		'MATCH' => [qw/match matches/],
 		'CONTAIN' => [qw/contain contains/],
 		'DOES' => [qw/do does/],
+		'START' => [qw/start starts/],
+		'END' => [qw/end ends/],
 	);
 	my @opdef = (
 		{ phrase => 'MATCH',                                operator => '=~'},

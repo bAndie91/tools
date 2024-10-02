@@ -1,5 +1,43 @@
 #!/usr/bin/env perl
 
+=pod
+
+=head1 NAME
+
+td-gnuplot - Graph tabular data using gnuplot(1)
+
+=head1 USAGE
+
+td-gnuplot [I<OPTIONS>]
+
+=head1 DESCRIPTION
+
+Invoke gnuplot(1) to graph the data represented in Tabular data format on STDIN.
+The first column is the x axis, the rest of the columns are data lines.
+
+Default is to output an ascii-art chart to the terminal ("dumb" output in gnuplot).
+
+=head1 OPTIONS
+
+=over 4
+
+=item -i
+
+Output an image (PNG) to the STDOUT
+
+=item -d
+
+Let gnuplot(1) decide the output
+
+=item -e I<COMMAND>
+
+Pass commands to gnuplot.
+This option may be repeated.
+
+=back
+
+=cut
+
 use constant { OUTPUT_TERM=>1, OUTPUT_IMAGE=>2, OUTPUT_DEFAULT=>3, };
 use Data::Dumper;
 use Term::Size;

@@ -1,0 +1,52 @@
+#!/usr/bin/env perl
+
+use Data::Dumper;
+
+$\ = "\n";
+
+while(<STDIN>)
+{
+	/^(\s*)(.*)$/;
+	my $indent_level = length $1;
+	my $node = $2;
+	my $related_node;
+	
+	if($indent_level > $prev_indent_level)
+	{
+		$parent_of_level{$indent_level} = $prev_node;
+	}
+	
+	$related_node = $parent_of_level{$indent_level};
+	
+	if(defined $related_node)
+	{
+		$relation{$node}->{$related_node} = 1;
+	}
+	
+	$prev_indent_level = $indent_level;
+	$prev_node = $node;
+}
+
+
+$rankdir = $ENV{'INDENT2DOT_RANKDIR'} || 'LR';
+
+print "digraph {";
+print "rankdir=$rankdir;";
+print "node [shape=box];";
+
+for my $node (sort keys %relation)
+{
+	for my $related_node (sort keys %{$relation{$node}})
+	{
+		if($ENV{'INDENT2DOT_ASCENDENT_CHART'})
+		{
+			print "\"$node\" -> \"$related_node\";";
+		}
+		else
+		{
+			print "\"$related_node\" -> \"$node\";";
+		}
+	}
+}
+
+print "}";

@@ -35,12 +35,12 @@
 use strict;
 
 use Getopt::Long;
-Getopt::Long::Configure('bundling');
+Getopt::Long::Configure('bundling', 'permute');
 
 my $verbose = 0;
 my ($no_act, $force, $op);
 
-die "Usage: rename [-v] [-n] [-f] perlexpr [filenames]\n"
+die "Usage: rename [-v[v]] [-n] [-f] perlexpr [filenames]\n"
 unless GetOptions(
 	'v|verbose+' => \$verbose,
 	'n|no-act|dry-run|dryrun' => \$no_act,
@@ -53,12 +53,13 @@ if (!@ARGV) {
     chomp(@ARGV);
 }
 
-$header_emitted = 0;
-$highest_errno = 0;
+my $header_emitted = 0;
+my $highest_errno = 0;
 
 sub emit_header
 {
 	return if $header_emitted;
+	$header_emitted = 1;
 	print join "\t", "STATUS", "OLD", "NEW";
 	print "\n";
 }
@@ -102,7 +103,7 @@ for (@ARGV)
     
     if(defined $status)
     {
-    	emit_header;
+    	emit_header();
 	    print join "\t", $status, $was, $_;
     	print "\n";
     }

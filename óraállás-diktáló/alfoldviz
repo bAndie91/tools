@@ -23,7 +23,7 @@ assert()
 
 save_diag()
 {
-	tmp=`tempfile -s .txt`
+	tmp=`mktemp --suffix=.txt`
 	{
 		echo == Cookies
 		echo "$Cookies"

@@ -13,9 +13,18 @@ td-gnuplot [I<OPTIONS>]
 =head1 DESCRIPTION
 
 Invoke gnuplot(1) to graph the data represented in Tabular data format on STDIN.
-The first column is the x axis, the rest of the columns are data lines.
+The first column is the X axis, the rest of the columns are data lines.
 
 Default is to output an ascii-art chart to the terminal ("dumb" output in gnuplot).
+
+td-gnuplot guesses the data format from the column names.
+If the 0th column matches to "date" or "time" (case insensitively) then the X axis will be a time axis.
+If the 0th column matches to "time", then unix epoch timetamp is assumed.
+Otherwise specify what date/time format is used by eg. B<--timefmt=%Y-%m-%d> option.
+
+Plot data read from STDIN is buffered in a temp file
+(provided by C<< File::Temp->new(TMPDIR=>1) >> and immediately unlinked so no waste product left around),
+because gnuplot(1) need to seek in it when plotting more than 1 data series.
 
 =head1 OPTIONS
 
@@ -23,16 +32,41 @@ Default is to output an ascii-art chart to the terminal ("dumb" output in gnuplo
 
 =item -i
 
-Output an image (PNG) to the STDOUT
+Output an image (PNG) to the STDOUT,
+instead of drawing to the terminal.
 
 =item -d
 
-Let gnuplot(1) decide the output
+Let gnuplot(1) decide the output medium,
+instead of drawing to the terminal.
+
+=item --I<SETTING>
+
+=item --I<SETTING>=I<VALUE>
+
+Set any gnuplot setting, optionally set its value to I<VALUE>.
+I<SETTING> is a setting name used in C<set ...> gnuplot commands, except spaces replaced with dasshes.
+I<VALUE> is always passed to gnuplot enclosed in double quotes.
+Examples:
+
+  --format-x="%Y %b"
+  --xtics-rotate-by=-90
+  --style-data-lines
+
+Gnuplot equivalent command:
+
+  set format x "%Y %b"
+  set xtics rotate by "-90"
+  set style data lines
 
 =item -e I<COMMAND>
 
-Pass commands to gnuplot.
+Pass arbitrary gnuplot commands to gnuplot.
 This option may be repeated.
+This is passed to gnuplot(1) in command line (B<-e> option) 
+after td-grnuplot(1)'s own sequence of gnuplot setup commands
+and after the B<< --I<SETTING> >> settings are applied,
+so you can override them.
 
 =back
 
@@ -42,6 +76,7 @@ use constant { OUTPUT_TERM=>1, OUTPUT_IMAGE=>2, OUTPUT_DEFAULT=>3, };
 use Data::Dumper;
 use Term::Size;
 use Fcntl qw/F_GETFL F_SETFL F_GETFD F_SETFD FD_CLOEXEC/;
+use File::Temp;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 
@@ -60,8 +95,18 @@ pipe $conf_script_rfh, $conf_script_wfh or die "$0: pipe: $!\n";
 pipe $plot_script_rfh, $plot_script_wfh or die "$0: pipe: $!\n";
 fcntl($conf_script_rfh, F_SETFD, fcntl($conf_script_rfh, F_GETFD, 0) & ~FD_CLOEXEC);
 fcntl($plot_script_rfh, F_SETFD, fcntl($plot_script_rfh, F_GETFD, 0) & ~FD_CLOEXEC);
+$conf_script_rfileno = fileno $conf_script_rfh;
+$plot_script_rfileno = fileno $plot_script_rfh;
 
 process_header(sys_read_line());
+
+$data_tmp_fh = File::Temp->new( SUFFIX => '.dat', TMPDIR => 1, );
+# shovel all of STDIN to a temp file to let gnuplot seek in it
+print {$data_tmp_fh} <STDIN>;
+$data_tmp_path = '/dev/fd/'.fileno($data_tmp_fh);
+fcntl($data_tmp_fh, F_SETFD, fcntl($data_tmp_fh, F_GETFD, 0) & ~FD_CLOEXEC);
+unlink $data_tmp_fh->filename;
+
 
 select $conf_script_wfh;
 
@@ -74,8 +119,28 @@ set xtics  out nomirror
 set x2tics out nomirror
 set ytics  out nomirror
 set y2tics out nomirror
+set yrange [0:]
+set format y  "%.2f"
+set format y2 "%.2f"
+set style data linespoints
+set datafile separator "\t"
 EOT
 ;
+
+if($Header[0] =~ /date|time/i)
+{
+	print "set xdata  time;";
+	#print "set x2data time;";
+	print "set format x  \"%Y-%m-%d %H:%M\";";
+	#print "set format x2 \"%Y-%m-%d %H:%M\";";
+	# set xtics  rotate by -90
+	# set x2tics rotate by 90
+	if($Header[0] =~ /time/i)
+	{
+		# assuming unix epoch timestamp
+		print "set timefmt \"%s\";";
+	}
+}
 
 if($OptOutput eq OUTPUT_TERM)
 {
@@ -98,22 +163,43 @@ EOT
 ;
 }
 
+while(my $arg = shift @ARGV)
+{
+	if($arg =~ /^--([^=]+)(?:=(.*)|)$/)
+	{
+		my ($setting, $value) = ($1, $2);
+		$setting =~ s/-/ /g;
+		if(defined $value)
+		{
+			print "set $setting \"$value\";";
+		}
+		else
+		{
+			print "set $setting;";
+		}
+	}
+}
+
 close $conf_script_wfh;
 select $plot_script_wfh;
 
 print "plot ";
 
+$sep = '';
+$input = $data_tmp_path;
 for my $colnum (2..$#Header+1)
 {
 	my $col = $Header[$colnum-1];
-	print "\"/dev/stdin\" using 1:$colnum with linespoints title \"$col\" axes x1y1, ";
+	print "$sep'$input' using 1:$colnum title \"$col\" axes x1y1";
+	$sep = ', ';
+	$input = '';
 }
 print "\n";
 
 close $plot_script_wfh;
 
 
-exec 'gnuplot', '--persist', map {('-e', $_)} 'load "/dev/fd/'.fileno($conf_script_rfh).'"', @gnuplot_commands, 'load "/dev/fd/'.fileno($plot_script_rfh).'"';
+exec 'gnuplot', '--persist', map {('-e', $_)} "load \"/dev/fd/$conf_script_rfileno\"", @gnuplot_commands, "load \"/dev/fd/$plot_script_rfileno\"", "pause mouse close";
 ($errno, $errstr) = (int $!, $!);
 warn "gnuplot: $errstr\n";
 exit 125+$errno;

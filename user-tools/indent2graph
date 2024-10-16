@@ -1,52 +1,356 @@
 #!/usr/bin/env perl
 
-use Data::Dumper;
+=pod
 
-$\ = "\n";
+=head1 NAME
+
+indent2graph - Generate graph out of whitespace-indented hierarchical text
+
+=head1 SYNOPSIS
+
+indent2graph < tree.txt > tree.dot
+
+=head1 DESCRIPTION
+
+Take line-based input, and output a directed graph in a given format, eg. dot(1) (see graphviz(1)).
+Each input line is a node.
+How much the line is indented (by leading spaces or TABs) determines its relation to the nodes of the surrounding lines.
+Lines which are indented to the same level, go to the same rank on the tree-like graph in the output.
+The graph may contain loops:
+lines with the same text (apart from the leading whitespace) are considered the same node
+(except when B<--tree> option is set).
+
+=head1 EXAMPLE
+
+Input:
+
+  /usr/bin/ssh
+    libselinux
+      libpcre2-8
+    libgssapi_krb5
+      libkrb5
+        libkeyutils
+        libresolv
+      libk5crypto
+      libcom_err
+      libkrb5support
+    libcrypto
+    libz
+    libc
+
+Command:
+
+  indent2graph -f clojure | vijual draw-tree -
+
+Output:
+
+                                +------------+
+                                | /usr/bin/s |
+                                |     sh     |
+                                +-----+------+
+                                      |
+        +------------------------+----+---------+----------+--------+
+        |                        |              |          |        |
+  +-----+------+           +-----+------+ +-----+-----+ +--+---+ +--+---+
+  | libselinux |           | libgssapi_ | | libcrypto | | libz | | libc |
+  +-----+------+           |    krb5    | +-----------+ +------+ +------+
+        |                  +-----+------+
+        |                        |
+        |             +----------+-+--------------+--------------+
+  +-----+------+      |            |              |              |
+  | libpcre2-8 | +----+----+ +-----+------+ +-----+------+ +-----+------+
+  +------------+ | libkrb5 | | libk5crypt | | libcom_err | | libkrb5sup |
+                 +----+----+ |     o      | +------------+ |    port    |
+                      |      +------------+                +------------+
+             +--------+-----+
+             |              |
+       +-----+------+ +-----+-----+
+       | libkeyutil | | libresolv |
+       |     s      | +-----------+
+       +------------+
+
+=head1 OPTIONS
+
+=over 4
+
+=item -f, --format I<FORMAT>
+
+Output format.
+
+=over 8
+
+=item B<dot> (default)
+
+The graphviz(1) (dot(1)) format.
+
+=item B<pairs>
+
+Simple B<TAB>-separated node name pairs, each describes a graph edge, 1 per line.
+
+=item B<clojure>
+
+Clojure-style nested vectors (represented as string).
+Useful for vijual(1).
+
+=item B<grapheasy>
+
+Graph::Easy(3pl)'s own "txt" format.
+With graph-easy(1) you can transform further into other formats, like GDL, VCG, ...
+
+=item B<mermaid>
+
+TODO
+
+=back
+
+=item -a, --ascendent
+
+Indentation in the input represents ascendents, not descendents.
+Default is descendent chart.
+This influences to where arrows point.
+
+=item -t, --tree
+
+Interpret input strictly as a tree with no cycles.
+By default, without B<--tree>, lines with the same text represent the same node,
+so you can build arbitrary graph.
+With B<--tree>, you can build a tree-like graph in which different nodes may have the same text (label).
+
+=item -d, --rankdir I<DIR>
+
+This is the dot(1) graph's B<rankdir> parameter.
+This option is although specific to dot(1) format,
+but translated to B<grapheasy> if it is the chosen output format.
+I<DIR> is one of B<TB>, B<BT>, B<LR>, B<RL>.
+Default is B<LR> ie. left-to-right.
+See graphviz(1) documentation for details.
+
+=back
+
+=head1 SEE ALSO
+
+indent2tree(1), graphviz(1), dot(1), vijual(1), Graph::Easy(3pl)
+
+=cut
+
+
+use Data::Dumper;
+use Switch;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
+use Pod::Usage;
+
+
+sub esc
+{
+	$_[0] =~ s/[\\\Q$_[1]\E]/\\$&/gr;
+}
+
+sub esc_dquo
+{
+	esc($_[0], '"');
+}
+
+sub output_node_rec
+{
+	my %p = @_;
+	my $node_id = $p{id};
+	my $node_text = $NodeText{$node_id};
+	
+	switch ($OptFormat)
+	{
+		case('clojure')
+		{
+			print '[';
+			print node_repr(text=>$node_text);
+			for my $child_node_id (@{$SubTree{$node_id}->{'children'}})
+			{
+				print ' ';
+				output_node_rec(id => $child_node_id);
+			}
+			print ']';
+		}
+		case(['dot', 'pairs', 'grapheasy'])
+		{
+			for my $child_node_id (@{$SubTree{$node_id}->{'children'}})
+			{
+				print edge_repr({id=>$node_id, text=>$node_text}, {id=>$child_node_id, text=>$NodeText{$child_node_id}});
+			}
+			for my $child_node_id (@{$SubTree{$node_id}->{'children'}})
+			{
+				output_node_rec(id=>$child_node_id);
+			}
+		}
+	}
+}
+
+sub node_repr
+{
+	my %p = @_;
+	switch ($OptFormat)
+	{
+		case('dot')
+		{
+			if(defined $p{id}) { return $p{id}; }
+			else { return '"'.esc_dquo($p{text}).'"'; }
+		}
+		case('pairs') { return $p{text} =~ s/\t/\\t/gr; }
+		case('clojure')
+		{
+			if(defined $p{id}) { return ':'.$p{id}; }
+			else { return '"'.esc_dquo($p{text}).'"'; }
+		}
+		case('grapheasy')
+		{
+			if(defined $p{id}) { return '[ '.esc($p{id},   ']|').' ]'; }
+			else               { return '[ '.esc($p{text}, ']|').' ]'; }
+		}
+	}
+}
+
+sub edge_repr
+{
+	my ($n1, $n2) = @_;
+	switch($OptFormat)
+	{
+		case('dot')       { return sprintf '%s -> %s;', node_repr(%$n1), node_repr(%$n2); }
+		case('pairs')     { return sprintf '%s\t%s',    node_repr(%$n1), node_repr(%$n2); }
+		case('clojure')   { return sprintf '[%s %s]',   node_repr(%$n1), node_repr(%$n2); }
+		case('grapheasy') { return sprintf '%s --> %s', node_repr(%$n1), node_repr(%$n2); }
+	}
+}
+
+
+$OptFormat = 'dot';
+$OptAscendent = 0;
+$OptTree = 0;
+$OptRankdir = 'LR';
+
+GetOptions(
+	'a|ascendent!' => \$OptAscendent,
+	'd|rankdir=s' => \$OptRankdir,
+	'f|format=s' => \$OptFormat,
+	't|tree!' => \$OptTree,
+	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+
+die "Output format 'pairs' and strict tree input is not supported.\n" if $OptFormat eq 'pairs' and $OptTree;
+
+$GraphEasyGraphFlow = {qw/TB south LR east RL west BT north/}->{$OptRankdir};
 
 while(<STDIN>)
 {
 	/^(\s*)(.*)$/;
 	my $indent_level = length $1;
 	my $node = $2;
+	my $node_id = $.;
+	$NodeText{$node_id} = $node;
 	my $related_node;
 	
 	if($indent_level > $prev_indent_level)
 	{
 		$parent_of_level{$indent_level} = $prev_node;
+		$parent_id_of_level{$indent_level} = $prev_node_id;
 	}
 	
 	$related_node = $parent_of_level{$indent_level};
+	$related_node_id = $parent_id_of_level{$indent_level};
 	
 	if(defined $related_node)
 	{
-		$relation{$node}->{$related_node} = 1;
+		if($OptTree)
+		{
+			push @{$SubTree{$related_node_id}->{'children'}}, $node_id;
+		}
+		else
+		{
+			$Relation{$node}->{$related_node} = 1;
+			push @Relation, [$node, $related_node];
+		}
 	}
 	
 	$prev_indent_level = $indent_level;
 	$prev_node = $node;
+	$prev_node_id = $node_id;
 }
 
 
-$rankdir = $ENV{'INDENT2DOT_RANKDIR'} || 'LR';
+$\ = "\n";
 
-print "digraph {";
-print "rankdir=$rankdir;";
-print "node [shape=box];";
-
-for my $node (sort keys %relation)
+switch ($OptFormat)
 {
-	for my $related_node (sort keys %{$relation{$node}})
+	case('dot')
 	{
-		if($ENV{'INDENT2DOT_ASCENDENT_CHART'})
+		print "digraph {";
+		print "rankdir=$OptRankdir;";
+		print "node [shape=box];";
+	}
+	case('clojure')
+	{
+		$\ = undef;
+		print "[";
+	}
+	case('grapheasy')
+	{
+		printf 'graph { flow: %s; }'.$\, $GraphEasyGraphFlow;
+	}
+}
+
+if($OptTree)
+{
+	for my $id (keys %NodeText)
+	{
+		my $text = $NodeText{$id};
+		switch($OptFormat)
 		{
-			print "\"$node\" -> \"$related_node\";";
+			case('dot')       { print node_repr(id=>$id) . ' [label=' . node_repr(text=>$text) . '];'; }
+			case('grapheasy') { print node_repr(id=>$id) . ' { label: ' . esc($text, ';}') . ' }'; }
 		}
-		else
+	}
+	
+	output_node_rec(id => 1);
+}
+else
+{
+	if($OptFormat eq 'clojure')
+	{
+		for my $relation (@Relation)
 		{
-			print "\"$related_node\" -> \"$node\";";
+			my ($node, $related_node) = @$relation;
+			($node, $related_node) = ($related_node, $node) if not $OptAscendent;
+			print edge_repr({text=>$node}, {text=>$related_node});
+		}
+	}
+	else
+	{
+		for my $node (sort keys %Relation)
+		{
+			for my $related_node (sort keys %{$Relation{$node}})
+			{
+				($node, $related_node) = ($related_node, $node) if not $OptAscendent;
+				print edge_repr({text=>$node}, {text=>$related_node});
+			}
 		}
 	}
 }
 
-print "}";
+switch ($OptFormat)
+{
+	case('dot')
+	{
+		print "}";
+	}
+	case('clojure')
+	{
+		print "]";
+		#if($OptTree)
+		#{
+		#	print ', {';
+		#	for my $id (keys %NodeText)
+		#	{
+		#		print node_repr(id=>$id).' '.node_repr(text=>$NodeText{$id}).' ';
+		#	}
+		#	print '}';
+		#}
+	}
+}

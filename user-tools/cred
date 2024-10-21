@@ -53,27 +53,26 @@ B<pass>, B<key>, B<cvc>, B<secret>, B<pin>, B<code>, B<token>.
 
 =item generate-password
 
-Generate a new password and put in B<PASSWORD> property.
-And append its old value to the B<OLDPASSWORDS> property.
+Generate a new password and put in B<PASSWORD> property;
+append its old value to the B<OLDPASSWORDS> property;
+copy the new one to the clipboard.
 
 =item list-props
 
 =item prop I<PROPERTY> [set I<NEW-VALUE> | edit | read | del | show | reveal | clip]
 
 Manage properties of a given site.
-The B<edit> instruction opens up the B<$EDITOR> (falling back to B<$VISUAL>) to edit the given property's value.
-B<read> reads the new value from the STDIN (readline is supported if bash does support it, see C<help read> in bash(1)).
-Secrets are read in no-echo mode.
-B<show> shows only non-secrets.
-Enter B<reveal> to show secrets as well.
-By B<clip> you may copy the value to the clipboard.
-If you use CopyQ(1), secrets are prevented to get to CopyQ's clipboard items history.
+See individual instruction descriptions at the subcommands below which are aliases to these B<prop ...> commands.
 
 =item set I<PROPERTY> I<NEW-VALUE>
 
 =item edit I<PROPERTY>
 
+Open up the B<$EDITOR> (falling back to B<$VISUAL>) to edit the given property's value.
 =item read I<PROPERTY>
+
+Read the new value from the STDIN (readline is supported if bash does support it, see C<help read> in bash(1)).
+Secrets are read in no-echo mode.
 
 =item del I<PROPERTY>
 
@@ -81,9 +80,13 @@ If you use CopyQ(1), secrets are prevented to get to CopyQ's clipboard items his
 
 =item reveal I<PROPERTY>
 
+Subcommand B<show> shows only non-secrets.
+Enter B<reveal> to show secrets as well.
+
 =item clip I<PROPERTY>
 
-These subcommands do the same as B<prop> subcommand's instructions, see above.
+By B<clip> you may copy the value to the clipboard.
+If you use CopyQ(1), secrets are prevented to get to CopyQ's clipboard items history.
 
 =item fill-form I<PROPERTY> [I<PROPERTY> [...]]
 
@@ -99,7 +102,7 @@ Depends on xdotool(1).
 
 =head1 FILES
 
-Hardcoded credentials' directory is F<~/cred>.
+Credentials directory is hardcoded to F<~/cred>.
 
 =head1 SEE ALSO
 
@@ -352,6 +355,7 @@ case "$subcmd" in
 		echo "$atime	$now	$cur_pwd" >> "$basedir/$site/OLDPASSWORDS"
 	fi
 	printf '%s' "$newpwd" > "$pwdfile"
+	printf '%s' "$newpwd" | do_clip PASSWORD
 	;;
 (compscript)
 	cat <<'EOF'

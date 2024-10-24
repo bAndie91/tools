@@ -53,8 +53,15 @@ B<stripQuotes()>, B<setupIORedirects()>.
 B<stripQuotes()> currently just return the supplied string without surrounding single and double quotes.
 
 B<setupIORedirects()> scans the supplied list for common shell IO redirection syntax,
-setup these redirection on the current process,
-and return the input list without those elements which are found to be describing a redirection.
+setup these redirections on the current process,
+and return the input list except those elements which are found to be part of the redirection.
+
+Example:
+
+ setupIORedirects("date", "-R", ">", "/tmp/date.txt")
+ # returns: ("date", "-R")
+ # and have STDOUT redirected to the file.
+
 Recognized representation:
 
 =over 4
@@ -70,7 +77,7 @@ optional, defaults are the same as in sh(1)
 =item filename 
 
 just right after the operator or in the next argument;
-strings only matching to B<[a-zA-Z0-9_,./]+> are considered filenames.
+strings only matching to B<[a-zA-Z0-9_,./-]+> are considered filenames.
 
 =back
 
@@ -105,7 +112,7 @@ sub setupIORedirects
 {
 	my @cmdargs = @_;
 	my @return = ();
-	my $filename_chars = 'a-zA-Z0-9_,./';
+	my $filename_chars = 'a-zA-Z0-9_,./-';
 	
 	while(@cmdargs)
 	{

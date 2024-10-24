@@ -86,7 +86,7 @@ video/*|audio/*)
 	mediainfo "$path"
 	;;
 message/rfc822)
-	emlv "$path"
+	emlv "$path" | fold -w "$FZF_PREVIEW_COLUMNS" -s
 	;;
 *)
 	if [ -d "$path" ]

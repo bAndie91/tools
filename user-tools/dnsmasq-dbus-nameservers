@@ -1,3 +1,6 @@
 #!/bin/sh
 
 dbus-call --system org.freedesktop.NetworkManager.dnsmasq /uk/org/thekelleys/dnsmasq org.freedesktop.NetworkManager.dnsmasq GetServerMetrics | jq -r '.[].address'
+
+# may be queried via DNS:
+# dig +short -c CH -t TXT servers.bind @localhost

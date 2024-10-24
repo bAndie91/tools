@@ -62,6 +62,7 @@ TOOLS ?= \
   hlncal \
   htmlentities \
   indent2tree \
+  indent2graph \
   inisort \
   is_gzip \
   jaro-metric \

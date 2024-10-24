@@ -23,9 +23,17 @@ Move the I<NUM>th argument to the environment by the name B<< ARG_I<NUM> >>
 Counting starts from 1.
 I<NUM> may be negative number, in which case it's counted from the end backwards.
 
-=item -ra, --right-arg I<NUM>
+=item -r, --right-arg I<NUM>
 
 Same as B<< --arg -I<NUM> >>.
+
+=item -A, --all
+
+Move all arguments to environment.
+
+=item -k, --keep I<NUM>
+
+Keep the first I<NUM> arguments as arguments, and move the rest of them to environment.
 
 =item -t, --template I<TEMPLATE>
 
@@ -60,7 +68,9 @@ $negative_envname_template = 'ARG_R%d';
 
 GetOptions(
 	'a|arg=i@' => \@args_to_move,
-	'ra|right-arg=i@' => sub {
+	'A|all' => sub { @args_to_move = (1 .. $#ARGV); },
+	'k|keep=i' => sub { @args_to_move = (($_[1]+1) .. $#ARGV); },
+	'r|right-arg=i@' => sub {
 		my ($getopt, $param) = @_;
 		push @args_to_move, -$param;
 	},
@@ -69,14 +79,19 @@ GetOptions(
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
+if(grep {$_ == 0} @args_to_move)
+{
+	warn "The 0th argument is the command itself, better not to remove.\n";
+	pod2usage(-exitval=>2, -verbose=>99);
+}
 
 for my $arg_num (@args_to_move)
 {
 	my $envname;
-	if($arg_num >= 0) { $envname = sprintf $envname_template, abs $arg_num; }
-	else { $envname = sprintf $negative_envname_template, abs $arg_num; }
+	if($arg_num > 0) { $envname = sprintf $envname_template,          abs $arg_num; }
+	else             { $envname = sprintf $negative_envname_template, abs $arg_num; }
 	$ENV{$envname} = $ARGV[$arg_num];
-	delete $ARGV[$arg_num];
+	$ARGV[$arg_num] = undef;
 }
 @ARGV = grep {defined} @ARGV;
 

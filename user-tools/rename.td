@@ -215,9 +215,4 @@ mv(1), perl(1), rename(2), file-rename(1p) (prename(1)), rename.ul (rename(1)), 
 
 If you give an invalid Perl expression you'll get a syntax error.
 
-=head1 BUGS
-
-The original C<rename> did not check for the existence of target filenames,
-so had to be used with care.  I hope I've fixed that (Robin Barker).
-
 =cut

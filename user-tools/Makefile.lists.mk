@@ -119,7 +119,7 @@ TOOLS ?= \
   perlprintf \
   perl-repl \
   pfx2pem \
-  pipeby \
+  pipecmd \
   pipekill \
   PMbwmon \
   PMdirindex \

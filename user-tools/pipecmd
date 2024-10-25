@@ -5,11 +5,11 @@ true <<'EOF'
 
 =head1 NAME
 
-pipeby - Run a command and pipe its output to an other one
+pipecmd - Run a command and pipe its output to an other one
 
 =head1 SYNOPSIS
 
-pipeby I<CMD_1> [I<ARGS>] -- I<CMD_2> [I<ARGS>]
+pipecmd I<CMD_1> [I<ARGS>] -- I<CMD_2> [I<ARGS>]
 
 =head1 DESCRIPTION
 
@@ -18,14 +18,14 @@ Equivalent to this shell command:
  CMD_1 | CMD_2
 
 The first command's (I<CMD_1>) arguments can not contain a double-dash (C<-->),
-because it's the command separator for pipeby(1).
+because it's the command separator for pipecmd(1).
 However, since only a total of 2 commands are supported,
 arguments for I<CMD_2> may contain double-dash(es).
 
-You can chain pipeby(1) commands together to get a pipeline equivalent to
+You can chain pipecmd(1) commands together to get a pipeline equivalent to
 C<CMD_1 | CMD_2 | CMD_3>, like:
 
- pipeby CMD_1 -- pipeby CMD_2 -- CMD_3
+ pipecmd CMD_1 -- pipecmd CMD_2 -- CMD_3
 
 =head1 RATIONALE
 

@@ -97,17 +97,15 @@ while(<>)
 		{
 			push @PrintFields, $Fields[$1-1];
 		}
-		elsif($fields =~ /^(\d+)-(\d+)$/)
+		else
 		{
-			push @PrintFields, @Fields[($1-1)..($2-1)];
-		}
-		elsif($fields =~ /^(\d+)-$/)
-		{
-			push @PrintFields, @Fields[($1-1)..$#Fields];
-		}
-		if($fields =~ /^-(\d+)$/)
-		{
-			push @PrintFields, @Fields[1..($1-1)];
+			my $from;
+			my $to;
+			if($fields =~ /^(\d+)-(\d+)$/) { ($from, $to) = ($1-1, $2-1); }
+			elsif($fields =~ /^(\d+)-$/) { ($from, $to) = ($1-1, $#Fields); }
+			elsif($fields =~ /^-(\d+)$/) { ($from, $to) = (0, $1-1); }
+			else { die 'SHOULD-NOT-REACHED'; }
+			push @PrintFields, @Fields[$from..$to];
 		}
 	}
 	print join($OptOutputDelimiter, @PrintFields);

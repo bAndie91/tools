@@ -10,6 +10,7 @@ PMrecdiff - Poor man's directory tree difference viewer, comparing file names an
 Tail - output as many lines from the end of files as many lines on the terminal currently
 a8e - Abbreviate words in the input stream
 adr2html - Convert Opera Hostlist 2.0 bookmarks to HTML
+args2env - Turns command arguments into environment variables and executes command with the remained arguments
 asterisk-log-separator - Split up Asterisk PBX log file into multiple files based on which process wrote each part
 awk-cut - Select fields from input stream with awk
 base58 - Encode to (decode from) Base58
@@ -22,6 +23,7 @@ chshebang - Change a script's default interpreter
 cled - Command Line-Editor - Edit text file lines by commands directly from shell
 convert_chromium_cookies_to_netscape.sh - Convert Chromium and derivative web browser's cookies to Netscape format (used by wget and curl)
 corner_time - Place a digital clock in the upper right hand corner of the terminal
+cred - Credentials and secrets management in command line
 cronrun - convenience features to run commands in task scheduler environment
 cut.awk - Output only the selected fields from the input stream, parameters follow awk(1) syntax
 daemonctl - Manage preconfigured libslack daemon(1) daemons more conveniently
@@ -49,12 +51,14 @@ fixlogfiledatetime - Set the target files modification time to their respective 
 fmtkv - Tranform key=value (each optionally double-quoted) pairs into 1 pair by 1 line on the output
 foreach - Run an OS or shell command on each input line, similar to xargs(1)
 g_filename_to_uri - Mimic g_filename_to_uri() GLib function creating a file:// url from path string
+getvct - Print the current active Virtual Terminal
 git-submodule-auto-add - Automatically add submodules to a git repo according to .gitmodules file
 git_diff - View two files' diff by git-diff(1), even not under git version control
 gitconfigexec - Change git settings for a given command run only
-header.sed - Echo the input stream up to the first empty line (usual end-of-header marker)
+header - Echo the input stream up to the first empty line (usual end-of-header marker)
 hlcal - Highlight BSD cal(1) output
 htmlentities - Convert plain text into HTML-safe text
+indent2graph - Generate graph out of whitespace-indented hierarchical text
 indent2tree - Makes TAB-indented text into ascii tree chart
 inisort - Sort keys in an INI file according to the order of keys in an other INI file
 is_gzip - Return 0 if the file in argument has gzip signature
@@ -73,6 +77,7 @@ lpjobs - Show printer queue jobs (wrapper for lpq and lpstat)
 lsata - List ATA devices on the system
 lsenv - List environment variables of a process
 mail-extract-raw-headers - Get named headers from RFC822-format input.
+maskfiles - Lay over several text files on top of each other like transparency sheets for overhead projectors
 mime-header-decode - Decode MIME-encoded stream on stdin line-by-line
 mime_extract - Extract parts from a MIME multipart file and save them into separate files
 mkdeb - Create a Debian package (.deb)
@@ -93,13 +98,13 @@ palemoon-current-url - Display the webpage's URL which is currently open in Pale
 parsel - Select parts of a HTML document based on CSS selectors
 partial - Show an earlier started long-running command's partial output
 paths2indent - Transform list of filesystem paths to an indented list of the leaf elements
-pdfflop - Flop a PDF file's pages
+pcut - Cut given fields of text input separated by the given Perl regex
 perl-repl - Read-Evaluate-Print-Loop wrapper for perl(1)
 pfx2pem - Convert PFX (PKCS#12) certificate file to PEM format
-pfxln - Prefix lines from STDIN
-pipeby - Run a command and pipe its output to an other one
+pipecmd - Run a command and pipe its output to an other one
 pipekill - Send signal to a process on the other end of the given pipe filedescriptor
 pngmetatext - Put metadata text into PNG file
+prefixlines - Prefix lines from STDIN
 pvalve - Control how much a given command should run by an other command's exit code
 pyzor-files - Run a pyzor(1) command on the given files
 qrwifi - Generate a string, used in WiFi-setup QR codes, containing a hotspot name and password
@@ -121,7 +126,7 @@ set-sys-path - Set PATH according to /etc/environment and run the given command
 set-xcursor-lock-and-run - Set X11 cursor to a padlock and run a command
 ssh-agent-finder - Find a working ssh agent on the system so you get the same in each of your logon sessions
 stdfilt - Run a command but filter its STDOUT and STDERR
-stdmux - Multiplex the given command's STDOUT and STDERR by prefixing their lines
+stdmux - Multiplex the given command's STDOUT and STDERR by prefixing lines
 strip-ansi-seq - Dumb script removing more-or-less any ANSI escape sequences from the input stream
 subst_sudo_user - Sudo helper program
 substenv - Substitute environment variables in parameters and run the resulting command
@@ -140,6 +145,7 @@ trackrun - Record when the given command was started and ended and expose to it 
 ttinput - Inject console input in a terminal as if the user typed
 uchmod - chmod files according to umask
 unicodestyle - Add font styles to input text using Unicode
+uniproc - Universal data processing tool
 upsidedown - Transliterate input stream to text with upsidedown-looking chars
 url-parts - Extract specified parts from URLs given in input stream
 url_encode - Escape URL-unsafe chars in text given either in parameters or in stdin by percent-encoding

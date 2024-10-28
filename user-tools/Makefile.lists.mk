@@ -116,6 +116,7 @@ TOOLS ?= \
   parsel \
   partial \
   paths2indent \
+  pcut \
   perlprintf \
   perl-repl \
   pfx2pem \

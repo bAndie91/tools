@@ -1,0 +1,114 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+pcut - Cut given fields of text input separated by the given Perl regex
+
+=head1 SYNOPSIS
+
+pcut [I<OPTIONS>] [I<FILE> [I<FILE> [...]]]
+
+=head1 DESCRIPTION
+
+=head1 OPTIONS
+
+=over 4
+
+=item -f, --fields I<NUMBERS>
+
+Counted from 1.
+See cut(1) for syntax.
+
+=item -d, --delimiter I<REGEX>
+
+Default is whitespace (C<\s+>).
+
+=item --complement
+
+TODO
+
+=item -s, --only-delimited
+
+TODO
+
+=item --output-delimiter I<STRING>
+
+Default is B<TAB>.
+
+=item -z, --zero-terminated
+
+=back
+
+=head1 LIMITATIONS
+
+=head1 SEE ALSO
+
+cut(1)
+
+=cut
+
+
+use Data::Dumper;
+use Errno qw/:POSIX/;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
+use List::MoreUtils qw/all any none/;
+use Pod::Usage;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+
+@OptFields = ();
+$OptDelimiter = '\s+';
+$OptOutputDelimiter = "\t";
+
+GetOptions(
+	'f|fields=s@' => \@OptFields,
+	'd|delimiter=s' => \$OptDelimiter,
+	'z|zero-terminated' => \$OptZeroTerminated,
+	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+if(not @OptFields)
+{
+	push @OptFields, '1-';
+}
+
+@OptFields = map {split /,/} @OptFields;
+
+for my $fields (@OptFields)
+{
+	die "$0: invalid fields: $fields\n" unless $fields =~ /^(\d+(-(\d+)?)?|-\d+)$/;
+}
+
+$\ = "\n";
+$\ = chr(0) if $OptZeroTerminated;
+
+eval 'use ARGV::readonly; 1' or die;
+
+while(<>)
+{
+	chomp;
+	my @Fields = split /$OptDelimiter/;
+	my @PrintFields = ();
+	for my $fields (@OptFields)
+	{
+		if($fields =~ /^(\d+)$/)
+		{
+			push @PrintFields, $Fields[$1-1];
+		}
+		elsif($fields =~ /^(\d+)-(\d+)$/)
+		{
+			push @PrintFields, @Fields[($1-1)..($2-1)];
+		}
+		elsif($fields =~ /^(\d+)-$/)
+		{
+			push @PrintFields, @Fields[($1-1)..$#Fields];
+		}
+		if($fields =~ /^-(\d+)$/)
+		{
+			push @PrintFields, @Fields[1..($1-1)];
+		}
+	}
+	print join($OptOutputDelimiter, @PrintFields);
+}

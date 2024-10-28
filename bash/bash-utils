@@ -281,6 +281,10 @@ array_shift()
 		echo "  array_shift - print and remove the first element from a bash indexed array"
 		echo "INVOCATION"
 		echo "  array_shift <VARNAME>"
+		echo "EXAMPLE"
+		echo "  shoplist=(bread milk sausage)"
+		echo "  first_element=\$(array_shift shoplist)"
+		echo "  next_element=\$(array_shift shoplist)"
 		return
 	fi
 	
@@ -297,9 +301,11 @@ array_reverse()
 	if [ "$1" = --help ]
 	then
 		echo "NAME"
-		echo "  array_reverse - reverse a bash array elements"
+		echo "  array_reverse - reverse the order of elements in a bash array in-place"
 		echo "INVOCATION"
 		echo "  array_reverse <VARNAME>"
+		echo "RETURN VALUE"
+		echo "  void"
 		return
 	fi
 	
@@ -323,4 +329,73 @@ bash_scriptdir()
 ECHO()
 {
 	printf %s "$*"
+}
+
+canonize_semver()
+{
+	# return the canonical form of a version string
+	local ver=$1
+	# trailing ".0" is considered meaningless by SemVer
+	while [[ $ver =~ ^(.+)\.0+$ ]]
+	do
+		ver=$${BASH_REMATCH[1]}
+	done
+	echo "$ver"
+}
+
+version_compare()
+{
+	# take 2 version numbers (as strings) in arguments, say A and B.
+	# return
+	#   0 when A equals to B,
+	#   1 when A is greater than B, or
+	#   255 (ie. -1) when A is less than B.
+	local ver_a=$1
+	local ver_b=$2
+	ver_a=`canonize_semver "$ver_a"`
+	ver_b=`canonize_semver "$ver_b"`
+	if [ "$ver_a" = "$ver_b" ]
+	then
+		return 0
+	fi
+	# feed the 2 version numbers, 1 per line, to sort, then take the first line, which will be the lesser one.
+	local lesser_version=`echo "$ver_a"$'\n'"$ver_b" | sort --version-sort | sed -ne 1p`
+	if [ "$ver_a" = "$lesser_version" ]
+	then
+		return 255
+	else
+		return 1
+	fi
+}
+
+version_is_lesser()
+{
+	version_compare "$1" "$2"
+	if [ $? = 255 ]
+	then
+		return 0
+	else
+		return 1
+	fi
+}
+
+version_is_greater()
+{
+	version_compare "$1" "$2"
+	if [ $? = 1 ]
+	then
+		return 0
+	else
+		return 1
+	fi
+}
+
+version_is_greater_or_equal()
+{
+	! version_is_lesser "$@"
+}
+
+version_is_lesser_or_equal()
+{
+	! version_is_greater "$@"
 }

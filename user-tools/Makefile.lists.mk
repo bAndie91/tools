@@ -9,6 +9,7 @@ TOOLS ?= \
   base58 \
   base64url \
   bencode2json \
+  body \
   cdexec \
   chattr-cow \
   chattr-nocow \

@@ -6,13 +6,25 @@
 
 header - Echo the input stream up to the first empty line (usual end-of-header marker)
 
+body - Skip everything in the input stream up the the first empty line (usual end-of-header marker) and echo the rest
+
 =head1 SYNOPSIS
 
 header I<FILE> [I<FILE> [I<FILE> [...]]]
 
 header < I<FILE>
 
+body I<FILE> [I<FILE> [I<FILE> [...]]]
+
+body < I<FILE>
+
 =cut
+
+$mode = 'header';
+if($0 =~ /body/)
+{
+	$mode = 'body';
+}
 
 if(not @ARGV)
 {
@@ -23,10 +35,13 @@ for my $idx (0..$#ARGV)
 {
 	my $path = $ARGV[$idx];
 	open my $fh, '<', $path;
+	my $state = 'header';
 	while(<$fh>)
 	{
-		last if /^\r?\n?$/;
-		print;
+		print if $mode eq 'body' and $state eq 'body';
+		$state = 'body' if /^\r?\n?$/;
+		last if $state eq 'body' and $mode eq 'header';
+		print if $mode eq 'header' and $state eq 'header';
 	}
 	if($idx < $#ARGV)
 	{

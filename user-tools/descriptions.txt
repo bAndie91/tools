@@ -16,6 +16,7 @@ awk-cut - Select fields from input stream with awk
 base58 - Encode to (decode from) Base58
 base64url - Encode to (decode from) Base64-URL encoding
 bencode2json - Convert Bencode (BitTorrent's loosely structured data) to JSON
+header - Echo the input stream up to the first empty line (usual end-of-header marker)
 cdexec - Run a given command in the given directory
 chattr-cow - try hard to enable Copy-on-Write attribute on files
 chromium_cookie_decrypt.py - Decrypt Chromium web browser stored cookies and output cleartext

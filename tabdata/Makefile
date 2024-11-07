@@ -76,3 +76,15 @@ try-satisfy-dependencies:
 REPO_ROOT = ..
 
 include ../user-tools/Makefile.documentation.mk
+
+
+index.md: SHELL = bash
+index.md: $(TOOLS)
+	echo -ne "# Tabdata commands\n\n" > $@~
+	for file in $(TOOLS); do echo -ne "- [$$file](#$$file)\n"; done >> $@~
+	for file in $(TOOLS); do \
+		echo -ne "\n" ;\
+		echo -ne "# $$file\n\n" ;\
+		pod2markdown --utf8 < "$$file" | sed -e 's/^#/##/'; \
+	done >> $@~
+	mv $@~ $@

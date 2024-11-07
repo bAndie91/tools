@@ -302,7 +302,7 @@ reorder the columns by [td-select](#td-select)(1). Eg. `td-select KEYCOLUMN +RES
     in a way that each cell goes under a new column corresponding to that cell's original row.
     _FIELD_ field's cells need to be unique within each groups.
 
-    If an unexpected value found during processing the 2nd row group an onwards,
+    If an unexpected value found during processing the 2nd row group and onwards,
     ie. a value which was not there in the first group,
     it won't be distibuted into the new column, since the header is already sent,
     but left in the original column just like **-u** option would not be in effect.
@@ -454,7 +454,7 @@ td-filter - Show only those records from the input tabular data stream which mat
 
 ## USAGE
 
-td-filter \[_OPTIONS_\] \[--\] _COLUMN_ _OPERATOR_ _R-VALUE_ \[\[or\] _COLUMN_ _OPERATOR_ _R-VALUE_ \[\[or\] ...\]\]
+td-filter \[_OPTIONS_\] \[--\] _COLUMN_ _OPERATOR_ _R-VALUE_ \[\[**or**\] _COLUMN_ _OPERATOR_ _R-VALUE_ \[\[**or**\] ...\]\]
 
 td-filter \[_OPTIONS_\] --perl _EXPR_
 
@@ -473,7 +473,7 @@ The optional word "**or**" between triplets makes your code more explicite.
 
 [td-filter](#td-filter)(1) evaluates the Perl expression in the second form and passes through records
 only if the result is true-ish in Perl (non zero, non empty string, etc).
-Each field's value is in @F by index, and in %F by column name.
+Each field's value is in `@F` by index, and in `%F` by column name.
 You can implement more complex conditions in this way.
 
 ## OPTIONS

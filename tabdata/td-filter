@@ -8,7 +8,7 @@ td-filter - Show only those records from the input tabular data stream which mat
 
 =head1 USAGE
 
-td-filter [I<OPTIONS>] [--] I<COLUMN> I<OPERATOR> I<R-VALUE> [[or] I<COLUMN> I<OPERATOR> I<R-VALUE> [[or] ...]]
+td-filter [I<OPTIONS>] [--] I<COLUMN> I<OPERATOR> I<R-VALUE> [[B<or>] I<COLUMN> I<OPERATOR> I<R-VALUE> [[B<or>] ...]]
 
 td-filter [I<OPTIONS>] --perl I<EXPR>
 
@@ -27,7 +27,7 @@ The optional word "B<or>" between triplets makes your code more explicite.
 
 td-filter(1) evaluates the Perl expression in the second form and passes through records
 only if the result is true-ish in Perl (non zero, non empty string, etc).
-Each field's value is in @F by index, and in %F by column name.
+Each field's value is in C<@F> by index, and in C<%F> by column name.
 You can implement more complex conditions in this way.
 
 =head1 OPTIONS

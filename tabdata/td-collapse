@@ -37,7 +37,7 @@ and multiplicate all other columns as many times as many rows are in this group,
 in a way that each cell goes under a new column corresponding to that cell's original row.
 I<FIELD> field's cells need to be unique within each groups.
 
-If an unexpected value found during processing the 2nd row group an onwards,
+If an unexpected value found during processing the 2nd row group and onwards,
 ie. a value which was not there in the first group,
 it won't be distibuted into the new column, since the header is already sent,
 but left in the original column just like B<-u> option would not be in effect.

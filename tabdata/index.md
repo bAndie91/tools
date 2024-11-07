@@ -62,7 +62,7 @@ Why would you go back to ugly CSV when you have nice shiny Tabdata?
 
 ## SEE ALSO
 
-csv2(1), mrkv2td(1)
+[csv2](#csv2)(1), [mrkv2td](#mrkv2td)(1)
 
 # kvpairs2td
 
@@ -96,7 +96,7 @@ kvpairs2td - Transform lines of key-value pairs to tabular data stream
 
 ## SEE ALSO
 
-td2mrkv(1), td2kvpairs(1)
+[td2mrkv](#td2mrkv)(1), [td2kvpairs](#td2kvpairs)(1)
 
 # mrkv2td
 
@@ -107,7 +107,7 @@ mrkv2td - Transform multi-record key-value (MRKV) stream to tabular data format.
 ## DESCRIPTION
 
 As tabular data format presents field names at the start of transmission,
-mrkv2td(1) infers them only from the first record,
+[mrkv2td](#mrkv2td)(1) infers them only from the first record,
 so no need to buffer the whole dataset to find all fields,
 and it's usual for all records to have all fields anyways.
 
@@ -122,7 +122,7 @@ and it's usual for all records to have all fields anyways.
 
 ## SEE ALSO
 
-td2mrkv(1)
+[td2mrkv](#td2mrkv)(1)
 
 # td2html
 
@@ -156,7 +156,7 @@ td2kvpairs - Transform tabular data into key-value pairs
 
 ## SEE ALSO
 
-td2mrkv(1), kvpairs2td(1)
+[td2mrkv](#td2mrkv)(1), [kvpairs2td](#kvpairs2td)(1)
 
 # td2mrkv
 
@@ -177,7 +177,7 @@ getent passwd | tr : "\\t" | td-add-headers USER PW UID GID GECOS HOME SHELL | t
 
 ## SEE ALSO
 
-mrkv2td(1), td2html(1)
+[mrkv2td](#mrkv2td)(1), [td2html](#td2html)(1)
 
 # td-add-headers
 
@@ -264,8 +264,8 @@ Strip sub-seconds and timezone from DATETIME field:
 ## REFERENCES
 
 "Alter" in td-alter comes from SQL.
-td-alter(1) can change the "table" column layout.
-But contrary to SQL's ALTER TABLE, td-alter(1) can modify the records too, so akin to SQL UPDATE as well.
+[td-alter](#td-alter)(1) can change the "table" column layout.
+But contrary to SQL's ALTER TABLE, [td-alter](#td-alter)(1) can modify the records too, so akin to SQL UPDATE as well.
 
 # td-collapse
 
@@ -286,7 +286,7 @@ This is done by joining corresponding cells' data from each row into one
 cell, effectively keeping every column's data in the same column.
 
 If you want to group by an other column, not the first one, then first
-reorder the columns by td-select(1). Eg. `td-select KEYCOLUMN +REST`.
+reorder the columns by [td-select](#td-select)(1). Eg. `td-select KEYCOLUMN +REST`.
 
 ## OPTIONS
 
@@ -370,11 +370,11 @@ If a row in the input data has more cells than the number of columns, those are 
 
 ## SEE ALSO
 
-td-expand(1) is a kind of an inverse to td-collapse(1).
+[td-expand](#td-expand)(1) is a kind of an inverse to [td-collapse](#td-collapse)(1).
 
 ## REFERENCES
 
-td-collapse(1) roughly translates to SELECT COUNT(\*) + GROUP\_CONCAT() + GROUP BY in SQL.
+[td-collapse](#td-collapse)(1) roughly translates to SELECT COUNT(\*) + GROUP\_CONCAT() + GROUP BY in SQL.
 
 # td-disamb-headers
 
@@ -444,7 +444,7 @@ More illustratively:
 
 ## SEE ALSO
 
-td-collapse(1) is a kind of inverse to td-expand(1).
+[td-collapse](#td-collapse)(1) is a kind of inverse to [td-expand](#td-expand)(1).
 
 # td-filter
 
@@ -462,7 +462,7 @@ td-filter \[_OPTIONS_\] --perl _EXPR_
 
 Pass through those records which match at least one of the conditions (inclusive OR).
 A condition consists of a triplet of _COLUMN_, _OPERATOR_, and _R-VALUE_.
-You may put together conditions conjunctively (AND) by chaining multiple td-filter(1) commands by shell pipes.
+You may put together conditions conjunctively (AND) by chaining multiple [td-filter](#td-filter)(1) commands by shell pipes.
 Example:
 
     td-filter NAME eq john NAME eq jacob | tr-filter AGE -gt 18
@@ -471,7 +471,7 @@ This gives the records with either john or jacob, and all of them will be above 
 
 The optional word "**or**" between triplets makes your code more explicite.
 
-td-filter(1) evaluates the Perl expression in the second form and passes through records
+[td-filter](#td-filter)(1) evaluates the Perl expression in the second form and passes through records
 only if the result is true-ish in Perl (non zero, non empty string, etc).
 Each field's value is in @F by index, and in %F by column name.
 You can implement more complex conditions in this way.
@@ -504,7 +504,7 @@ You can implement more complex conditions in this way.
 
 ## OPERATORS
 
-These operators are supported, semantics are the same as in Perl, see perlop(1).
+These operators are supported, semantics are the same as in Perl, see [perlop](#perlop)(1).
 
     == != <= >= < > =~ !~ eq ne gt lt
 
@@ -590,17 +590,17 @@ Operators may be preceeded by _not_, _does not_, _do not_ to negate their effect
 ## CAVEATS
 
 If there is no _COLUMN_ column in the input data, it's silently considered empty.
-td-filter(1) does not need _R-VALUE_ to be quoted or escaped, however your shell may do.
+[td-filter](#td-filter)(1) does not need _R-VALUE_ to be quoted or escaped, however your shell may do.
 
 ## REFERENCES
 
-td-filter(1) is analogous to SQL WHERE.
+[td-filter](#td-filter)(1) is analogous to SQL WHERE.
 
 # td-gnuplot
 
 ## NAME
 
-td-gnuplot - Graph tabular data using gnuplot(1)
+td-gnuplot - Graph tabular data using [gnuplot](#gnuplot)(1)
 
 ## USAGE
 
@@ -608,7 +608,7 @@ td-gnuplot \[_OPTIONS_\]
 
 ## DESCRIPTION
 
-Invoke gnuplot(1) to graph the data represented in Tabular data format on STDIN.
+Invoke [gnuplot](#gnuplot)(1) to graph the data represented in Tabular data format on STDIN.
 The first column is the X axis, the rest of the columns are data lines.
 
 Default is to output an ascii-art chart to the terminal ("dumb" output in gnuplot).
@@ -620,7 +620,7 @@ Otherwise specify what date/time format is used by eg. **--timefmt=%Y-%m-%d** op
 
 Plot data read from STDIN is buffered in a temp file
 (provided by `File::Temp->new(TMPDIR=>1)` and immediately unlinked so no waste product left around),
-because gnuplot(1) need to seek in it when plotting more than 1 data series.
+because [gnuplot](#gnuplot)(1) need to seek in it when plotting more than 1 data series.
 
 ## OPTIONS
 
@@ -631,7 +631,7 @@ because gnuplot(1) need to seek in it when plotting more than 1 data series.
 
 - -d
 
-    Let gnuplot(1) decide the output medium,
+    Let [gnuplot](#gnuplot)(1) decide the output medium,
     instead of drawing to the terminal.
 
 - --_SETTING_
@@ -656,8 +656,8 @@ because gnuplot(1) need to seek in it when plotting more than 1 data series.
 
     Pass arbitrary gnuplot commands to gnuplot.
     This option may be repeated.
-    This is passed to gnuplot(1) in command line (**-e** option) 
-    after td-grnuplot(1)'s own sequence of gnuplot setup commands
+    This is passed to [gnuplot](#gnuplot)(1) in command line (**-e** option) 
+    after [td-grnuplot](#td-grnuplot)(1)'s own sequence of gnuplot setup commands
     and after the **--_SETTING_** settings are applied,
     so you can override them.
 
@@ -679,19 +679,19 @@ ls -l | td-trans-ls | td-select NAME +REST | td-keepheader sort | tabularize
 
 ## NAME
 
-td-lpstat - lpstat(1) wrapper to output printers status in Tabular Data format
+td-lpstat - [lpstat](#lpstat)(1) wrapper to output printers status in Tabular Data format
 
 # td-ls
 
 ## NAME
 
-td-ls - ls(1)-like file list but more machine-parseable
+td-ls - [ls](#ls)(1)-like file list but more machine-parseable
 
 ## SYNOPSIS
 
 td-ls \[_OPTIONS_\] \[_PATHS_\] \[-- _FIND-OPTIONS_\]
 
-## OPTIONS, ls(1)-compatible
+## OPTIONS, [ls](#ls)(1)-compatible
 
 - -A, --almost-all
 - -g
@@ -702,9 +702,9 @@ td-ls \[_OPTIONS_\] \[_PATHS_\] \[-- _FIND-OPTIONS_\]
 - -o
 - --time=\[atime, access, use, ctime, status, birth, creation, mtime, modification\]
 - -R, --recursive
-- -U (implied, pipe to sort(1) if you want)
+- -U (implied, pipe to [sort](#sort)(1) if you want)
 
-## OPTIONS, not ls(1)-compatible
+## OPTIONS, not [ls](#ls)(1)-compatible
 
 - --devnum
 - -H, --no-header
@@ -717,8 +717,8 @@ td-ls \[_OPTIONS_\] \[_PATHS_\] \[-- _FIND-OPTIONS_\]
 
 - --add-field-macro _FORMAT_
 
-    Add extra fields by find(1)-style format specification.
-    For valid _FORMAT_s, see **-printf** section in find(1).
+    Add extra fields by [find](#find)(1)-style format specification.
+    For valid _FORMAT_s, see **-printf** section in [find](#find)(1).
     May be added multiple times.
     Putting `\\0` (backslash-zero) in _FORMAT_ screws up the output; don't do that.
 
@@ -728,7 +728,7 @@ td-ls \[_OPTIONS_\] \[_PATHS_\] \[-- _FIND-OPTIONS_\]
 
 ## DESCRIPTION
 
-Columns are similar to good old ls(1):
+Columns are similar to good old [ls](#ls)(1):
 PERMS (symbolic representation),
 LINKS,
 USERNAME (USERID if **-n** option is given),
@@ -738,10 +738,10 @@ time field is either ATIME, CTIME, or default MTIME (in full-iso format),
 BASENAME (or RELPATH in **--recursive** mode),
 and SYMLINKTARGET (unless **--no-symlink-target** option is given).
 
-Column names are a bit different than td-trans-ls(1) produces, but this is intentional,
+Column names are a bit different than [td-trans-ls](#td-trans-ls)(1) produces, but this is intentional,
 because fields by these 2 tools have slightly different meaning.
-td-trans-ls(1) is less smart because it just transforms ls(1)'s output and
-does not always know what is in the input exactly; while td-ls(1) itself controls
+[td-trans-ls](#td-trans-ls)(1) is less smart because it just transforms [ls](#ls)(1)'s output and
+does not always know what is in the input exactly; while [td-ls](#td-ls)(1) itself controls
 what data goes to the output.
 
 No color support.
@@ -770,13 +770,13 @@ including NUL, vertical-tab, and form-feed are left as-is.
 - TIME\_STYLE
 
     **TIME\_STYLE** is ignored as well as _--time-style_ option.
-    Always show date-time in `%F %T %z` strftime(3) format!
+    Always show date-time in `%F %T %z` [strftime](#strftime)(3) format!
     It's simply the most superior.
     Equivalent to **TIME\_STYLE=full-iso**.
 
 ## SEE ALSO
 
-td-select(1), td-filter(1), td-trans-ls(1)
+[td-select](#td-select)(1), [td-filter](#td-filter)(1), [td-trans-ls](#td-trans-ls)(1)
 
 # td-pivot
 
@@ -813,7 +813,7 @@ td-rename _OLDNAME_ _NEWNAME_ \[_OLDNAME_ _NEWNAME_ \[_OLDNAME_ _NEWNAME_ \[...\
 
 ## SEE ALSO
 
-Not to confuse with rename.td(1) which renames files, not columns.
+Not to confuse with [rename.td](#rename.td)(1) which renames files, not columns.
 
 # td-select
 
@@ -882,7 +882,7 @@ If you want to put a given column (say "KEY") to the first place and left others
 ## REFERENCES
 
 "Select" in td-select comes from SQL.
-Similarly to SQL, td-select(1) is to choose some of the columns and return them in the given order.
+Similarly to SQL, [td-select](#td-select)(1) is to choose some of the columns and return them in the given order.
 
 # td-sort
 
@@ -896,15 +896,15 @@ td-sort _OPTIONS_
 
 ## OPTIONS
 
-All those which are accepted by sort(1),
+All those which are accepted by [sort](#sort)(1),
 except you don't need to refer to columns by ordinal number,
 but by name.
 
 - -k, --key=_KEYDEF_
 
-    sort(1) defines _KEYDEF_ as `F[.C][OPTS][,F[.C][OPTS]]`,
+    [sort](#sort)(1) defines _KEYDEF_ as `F[.C][OPTS][,F[.C][OPTS]]`,
     where **F** is the (1-based) field number.
-    However with td-sort(1) you may refer to fields by name.
+    However with [td-sort](#td-sort)(1) you may refer to fields by name.
     But since **F** is no longer consists only of digits,
     but is an arbitrary string,
     it's may be ambiguous where the name ends.
@@ -916,7 +916,7 @@ but by name.
 
 ## REFERENCES
 
-td-sort(1) is analogous to SQL ORDER BY.
+[td-sort](#td-sort)(1) is analogous to SQL ORDER BY.
 
 # td-trans
 
@@ -967,7 +967,7 @@ Each field's text must start in the same terminal column as the column name.
 
 ## NAME
 
-td-trans-ls - Transform ls(1) output into fix number of TAB-delimited columns.
+td-trans-ls - Transform [ls](#ls)(1) output into fix number of TAB-delimited columns.
 
 ## USAGE
 
@@ -975,7 +975,7 @@ ls -l | td-trans-ls
 
 ## DETAILS
 
-Supported ls(1) options which affect its output format:
+Supported [ls](#ls)(1) options which affect its output format:
 
 - --human-readable
 - --inode
@@ -993,11 +993,11 @@ Unsupported options:
 
 ## NAME
 
-td-trans-mount - Transform mount(1) output to tabular data stream.
+td-trans-mount - Transform [mount](#mount)(1) output to tabular data stream.
 
 ## DESCRIPTION
 
-Supported mount(1) options which affect output format:
+Supported [mount](#mount)(1) options which affect output format:
 
 - -l (show labels)
 
@@ -1028,7 +1028,7 @@ vcf2td - Transform VCF to tabular data format.
     Indicate that there will be a column by the name _COLUMN_.
     Useful if the first record does not contain all fields
     which are otherwise occur in the whole data stream.
-    By default, vcf2td(1) recognize fields which are in the first record in the VCF input,
+    By default, [vcf2td](#vcf2td)(1) recognize fields which are in the first record in the VCF input,
     does not read ahead more records before sending the header.
     This option is repeatable.
 
@@ -1040,7 +1040,7 @@ vcf2td - Transform VCF to tabular data format.
     so it can not introduce new columns later on in the data stream
     (unless some records were buffered which are not currently).
     However in VCF, each record may have fields different from the first record.
-    That's why vcf2td(1) fails itself by default
+    That's why [vcf2td](#vcf2td)(1) fails itself by default
     if it encounters a field it can not convert to tabular.
 
 - -w, --warn-non-existing-columns
@@ -1065,7 +1065,7 @@ vcf2td - Transform VCF to tabular data format.
 - N
 
     **N** is for a contact's name, different parts separated by `;` semicolon.
-    vcf2td(1) simplifies the **N** field by removing excess semicolons.
+    [vcf2td](#vcf2td)(1) simplifies the **N** field by removing excess semicolons.
     If you need one or more name parts precisely,
     request the **N.family**, **N.given**, **N.middle**, **N.prefixes** fields
     by the **-c** option if you want,

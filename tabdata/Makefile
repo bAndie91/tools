@@ -85,6 +85,7 @@ index.md: $(TOOLS)
 	for file in $(TOOLS); do \
 		echo -ne "\n" ;\
 		echo -ne "# $$file\n\n" ;\
-		pod2markdown --utf8 < "$$file" | sed -e 's/^#/##/'; \
+		pod2markdown --utf8 < "$$file" |\
+			perl -pe 's/^#/##/; s/\b([a-z0-9.-]+)(\(\d)/[$$1](#$$1)$$2/g' ;\
 	done >> $@~
 	mv $@~ $@

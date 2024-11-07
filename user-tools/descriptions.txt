@@ -52,7 +52,7 @@ fixlogfiledatetime - Set the target files modification time to their respective 
 fmtkv - Tranform key=value (each optionally double-quoted) pairs into 1 pair by 1 line on the output
 foreach - Run an OS or shell command on each input line, similar to xargs(1)
 g_filename_to_uri - Mimic g_filename_to_uri() GLib function creating a file:// url from path string
-getvct - Print the current active Virtual Terminal
+getcvt - Print the current active Virtual Terminal
 git-submodule-auto-add - Automatically add submodules to a git repo according to .gitmodules file
 git_diff - View two files' diff by git-diff(1), even not under git version control
 gitconfigexec - Change git settings for a given command run only

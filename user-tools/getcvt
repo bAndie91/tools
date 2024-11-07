@@ -5,7 +5,7 @@ true <<EOF
 
 =head1 NAME
 
-getvct - Print the current active Virtual Terminal
+getcvt - Print the current active Virtual Terminal
 
 =head1 SYNOPSIS
 

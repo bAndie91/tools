@@ -30,9 +30,15 @@ $highest_remaining_sec = undef;
 $highest_percent = undef;
 
 
-open my $pipe, '-|', 'acpi', '-b' or die "$0: $!";
+open my $pipe, '-|', 'acpi', '-ab' or die "$0: $!";
 while(<$pipe>)
 {
+	chomp;
+	if(/Adapter.*on-line/)
+	{
+		warn "$0: $_: No action.\n";
+		exit 0;
+	}
 	if(/(\d\d+):(\d\d):(\d\d) remaining/)
 	{
 		my ($hour, $min, $sec) = ($1, $2, $3);

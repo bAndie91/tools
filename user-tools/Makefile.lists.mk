@@ -56,6 +56,7 @@ TOOLS ?= \
   gitconfigexec \
   git_diff \
   git-submodule-auto-add \
+  glob \
   grepdatetime \
   Head \
   header \

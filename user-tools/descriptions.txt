@@ -56,6 +56,7 @@ getcvt - Print the current active Virtual Terminal
 git-submodule-auto-add - Automatically add submodules to a git repo according to .gitmodules file
 git_diff - View two files' diff by git-diff(1), even not under git version control
 gitconfigexec - Change git settings for a given command run only
+glob - Expand shell-wildcard patterns
 header - Echo the input stream up to the first empty line (usual end-of-header marker)
 hlcal - Highlight BSD cal(1) output
 htmlentities - Convert plain text into HTML-safe text

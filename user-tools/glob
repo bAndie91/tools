@@ -1,0 +1,87 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+glob - Expand shell-wildcard patterns
+
+=head1 SYNOPSIS
+
+glob [I<OPTIONS>] [--] I<PATTERN> [I<PATTERN> [I<PATTERN> [...]]]
+
+=head1 DESCRIPTION
+
+Expand I<PATTERN> as shell-wildcard patterns and output matching filenames.
+Output all matched file names once and sorted alphabetically.
+
+=head1 OPTIONS
+
+=over 4
+
+=item -0
+
+Output filenames as NULL byte temrinated strings.
+
+=item -f
+
+Fail if can not read a directory.
+See B<GLOB_ERR> in File::Glob(3perl).
+
+=item -i
+
+Match case-insensitively.
+Default is case-sensitive.
+
+=item -b
+
+Support curly bracket expansion.
+See B<GLOB_BRACE> in File::Glob(3perl).
+
+=back
+
+=head1 LIMITATIONS
+
+Uses perl(1)'s B<bsd_glob> function from File::Glob(3perl),
+
+=head1 SEE ALSO
+
+File::Glob(3perl), perldoc(1): glob
+
+=cut
+
+
+use Data::Dumper;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
+use Pod::Usage;
+use File::Glob ':bsd_glob';
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+
+$OptNullTerminated = 0;
+$OptGlobFlags = GLOB_QUOTE | GLOB_TILDE;
+
+GetOptions(
+	'0' => \$OptNullTerminated,
+	'f' => sub { $OptGlobFlags |= GLOB_ERR; },
+	'i' => sub { $OptGlobFlags |= GLOB_NOCASE; },
+	'b' => sub { $OptGlobFlags |= GLOB_BRACE; },
+	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+
+%Files = ();
+
+for my $pattern (@ARGV)
+{
+	my @matches = bsd_glob($pattern, $OptGlobFlags);
+	if(GLOB_ERROR)
+	{
+		die "$0: $!: $pattern\n";
+	}
+	%Files = (%Files, map {$_=>1} @matches);
+}
+
+$\ = "\n";
+$\ = chr 0 if $OptNullTerminated;
+print "$_" for sort keys %Files;

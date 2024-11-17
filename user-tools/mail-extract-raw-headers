@@ -29,7 +29,7 @@ Output the header name(s) too, not only the contents.
 
 use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat/;
 use Pod::Usage;
-#use Data::Dumper;
+use Data::Dumper;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 $OptKeepLF = 0;
@@ -54,17 +54,17 @@ sub getheaders($)
 	my $hname = lc shift;
 	my @return;
 	
-	for my $hdr_ref (@Headers)
+	for my $header_ref (@Headers)
 	{
-		if(lc $hdr_ref->{"name"} eq $hname)
+		if(lc $header_ref->{"name"} eq $hname)
 		{
-			push @return, $hdr_ref->{"content"};
+			push @return, $header_ref->{"content"};
 		}
 	}
 	return @return;
 }
 
-@found_headers = ();
+%found_headers = ();
 
 # read headers
 while(<STDIN>)
@@ -78,37 +78,50 @@ while(<STDIN>)
 	# does not care line ending
 	s/\r?\n?$//;
 	
-	if(my($hdr_name, $content) = /^(\S+?):[ ]?(.*)/)
+	if(my($header_name, $content) = /^(\S+?):[ ]?(.*)/)
 	{
-		if(lc $hdr_name ~~ @asked_headers)
+		if(lc $header_name ~~ @asked_headers)
 		{
-			my $hdr_name_pretty = $hdr_name;
-			$hdr_name_pretty =~ s/[^-]*/\L\u$&/g;
-			
-			my $hdr_hash = { "name" => $hdr_name, "pretty_name" => $hdr_name_pretty, "content" => $content, };
-			push @found_headers, $hdr_hash;
-			$last_hdr_ref = $hdr_hash;
+			my $header_name_pretty = $header_name =~ s/[^-]*/\L\u$&/gr;
+			my $header_hash = { "name" => $header_name, "pretty_name" => $header_name_pretty, "content" => $content, };
+			push @{$found_headers{lc $header_name}}, $header_hash;
+			$last_header_ref = $header_hash;
 		}
 		else
 		{
-			$last_hdr_ref = undef;
+			$last_header_ref = undef;
 		}
 	}
-	elsif(/^\s+(.*)/ and defined $last_hdr_ref)
+	elsif(/^\s+(.*)/)
 	{
 		# it is a folded header
-		$last_hdr_ref->{"content"} .= "\n" if $OptKeepLF;
-		$last_hdr_ref->{"content"} .= $1;
-	}
-}
-
-print join "", map {
-	if($OptNames)
-	{
-		sprintf "%s: %s\n", $_->{'pretty_name'}, $_->{'content'};
+		if(defined $last_header_ref)
+		{
+			$last_header_ref->{"content"} .= "\n" if $OptKeepLF;
+			$last_header_ref->{"content"} .= $1;
+		}
 	}
 	else
 	{
-		sprintf "%s\n", $_->{'content'};
+		die "$0: can not parse line $.\n";
 	}
-} @found_headers;
+}
+
+for my $asked_header (@asked_headers)
+{
+	for my $header (@{$found_headers{$asked_header}})
+	{
+		# avoid non-whitespace character at the beginning of lines in the header content,
+		# so header names can not be spoofed.
+		my $safe_content = $header->{'content'} =~ s/\n([^\t ])/\n  $1/gr;
+		
+		if($OptNames)
+		{
+			printf "%s: %s\n", $header->{'name'}, $safe_content;
+		}
+		else
+		{
+			printf "%s\n", $safe_content;
+		}
+	}
+}

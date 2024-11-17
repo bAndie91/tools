@@ -12,5 +12,14 @@ mime-header-decode - Decode MIME-encoded stream on stdin line-by-line
 use Encode;
 while(<STDIN>)
 {
-	print encode("UTF-8", decode("MIME-Header", $_));
+	chomp;
+	my $header = decode("MIME-Header", $_);
+	# avoid non-whitespace character at the beginning of lines in the header content,
+	# so header names can not be spoofed.
+	$safe_header = $header =~ s/\n(?![\t ])/\n  /gr;
+	# all-whitespace lines are not always taken correctly by downstream programs,
+	# and should not have meaning in themself, so remove.
+	$safe_header =~ s/^\s*\n//gm;
+	chomp $safe_header;
+	print encode("UTF-8", $safe_header) . "\n";
 }

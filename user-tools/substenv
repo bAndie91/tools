@@ -8,12 +8,41 @@ substenv - Substitute environment variables in parameters and run the resulting 
 
 =head1 SYNOPSIS
 
-substenv I<COMMAND> [I<ARGS>]
+substenv [I<OPTIONS>] [--] I<COMMAND> [I<ARGS>]
 
 =head1 DESCRIPTION
 
 Replace all occurrances of C<$NAME> in I<COMMAND> and I<ARGS> to the I<NAME> environment
-variable's value, then run I<COMMAND>.
+variable's value, whatever I<NAME> would be, then run I<COMMAND> I<ARGS>.
+Support C<${NAME}> curly bracket notation too.
+
+=head1 OPTIONS
+
+=over 4
+
+=item -a, --all
+
+Replace all occurrances of any C<$NAME> (and C<${NAME}>) substring
+(for details see S<LIMITATIONS>).
+This is the default behaviur, unless B<-e> is given.
+
+=item -e, --environment I<NAME>
+
+Replace the occurrances of I<NAME> environment variable.
+May be specified more than once.
+If B<-a> option is NOT given, ONLY these I<NAME>s are replaced.
+
+=item -k, --keep-undefined
+
+Do not replace variables which are not defined (ie. not in the environment),
+but keep them as-is.
+By default they are replaced with the empty string.
+
+=item --dryrun, --dry-run
+
+Do not run I<COMMAND>, just print what would be executed.
+
+=back
 
 =head1 EXAMPLE
 
@@ -25,6 +54,16 @@ note, there is no dollar-interpolation in C.
 Then substenv issues this system call:
 
  execve("ls", ["ls", "/home/jdoe/.config"])
+
+=head1 LIMITATIONS
+
+In "substitute all" mode (without B<-e> flag) it replaces only names 
+with uppercase letters, digits, and underscore (C<[A-Z0-9_]+>),
+as env vars usually contain only these chars.
+However it still replaces variables with lowercase letters in C<${NAME}> notation,
+and specific variable(s) given in B<-e> option(s).
+
+Does not honour escaped dollar marks, ie. C<\$>.
 
 =head1 NOTES
 
@@ -43,15 +82,72 @@ envsubst(1) from gettext-base package
 =cut
 
 
+use Data::Dumper;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
+use Pod::Usage;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+
+
+$OptAlwaysAll = 0;
+$OptKeepUndef = 0;
+$OptDryRun = 0;
+@subst_env_only = ();
+
+GetOptions(
+	'a|all!' => \$OptAlwaysAll,
+	'e|env|environ|environment=s@' => \@subst_env_only,
+	'k|keep-undefined!' => \$OptKeepUndef,
+	'dry-run|dryrun!' => \$OptDryRun,
+	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+
+$bare_env_name_regex = '[A-Z_][A-Z0-9_]*';
+$bracketed_env_name_regex = '[^}]+';
+if(@subst_env_only)
+{
+	my $specific_env_names_regex = join '|', map { quotemeta } @subst_env_only;
+	if($OptAlwaysAll)
+	{
+		$bare_env_name_regex = $specific_env_names_regex . '|' . $bare_env_name_regex;
+		$bracketed_env_name_regex = $specific_env_names_regex . '|' . $bracketed_env_name_regex;
+	}
+	else
+	{
+		$bare_env_name_regex = $bracketed_env_name_regex = $specific_env_names_regex;
+	}
+}
+
 @run_cmd = ();
+
+sub subst_env
+{
+	my $varname = shift;
+	my $whole_substring = shift;
+	if(not $OptKeepUndef or exists $ENV{$varname}) {
+		return $ENV{$varname};
+	}
+	else {
+		return $whole_substring;
+	}
+}
 
 for my $arg (@ARGV)
 {
-	$arg =~ s/\$([A-Z0-9_]+)/$ENV{$1}/g;
+	$arg =~ s/\$(\{(?<NAME>$bracketed_env_name_regex)\}|(?<NAME>$bare_env_name_regex))/subst_env($+{'NAME'}, $&)/eg;
 	push @run_cmd, $arg;
 }
 
-exec {$run_cmd[0]} @run_cmd;
-($errno, $errstr) = (int $!, $!);
-warn "$0: ${run_cmd[0]}: $errstr\n";
-exit 125+$errno;
+
+if($OptDryRun)
+{
+	warn Dumper \@run_cmd;
+}
+else
+{
+	exec {$run_cmd[0]} @run_cmd;
+	($errno, $errstr) = (int $!, $!);
+	warn "$0: ${run_cmd[0]}: $errstr\n";
+	exit 125+$errno;
+}

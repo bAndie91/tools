@@ -8,7 +8,7 @@ name - description
 
 =head1 SYNOPSIS
 
-name [I<OPTIONS>] [--]
+name [I<OPTIONS>] [--] I<COMMAND> [I<ARGS>]
 
 =head1 DESCRIPTION
 

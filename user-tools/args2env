@@ -49,6 +49,12 @@ Must contain a B<%d> macro.
 Default is B<ARG_R%d>, B<R> is for "right", because this arg is counted from the right.
 So the value of argument given by B<--arg -1> goes to B<ARG_R1> variable.
 
+=item -s, --set I<NAME>=I<NUM>
+
+Set I<NAME> variable to the I<NUM>th argument (negative numbers also may be given)
+and remove the argument from the argument list (keeping the numbering of remaining arguments unchanged).
+Number-based variables (B<< ARG_I<n> >> and B<< ARG_RI<n> >>) are still available.
+
 =back
 
 =head1 SEE ALSO
@@ -63,6 +69,8 @@ use Pod::Usage;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 @args_to_move = ();
+@OptSetenv = ();
+%env_names = ();
 $envname_template = 'ARG_%d';
 $negative_envname_template = 'ARG_R%d';
 
@@ -76,8 +84,22 @@ GetOptions(
 	},
 	't|template=s' => \$envname_template,
 	'nt|negative-template=s' => \$negative_envname_template,
+	's|set=s@' => \@OptSetenv,
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 ) or pod2usage(-exitval=>2, -verbose=>99);
+
+for my $setenv (@OptSetenv)
+{
+	if(my ($name, $num) = $setenv =~ /^([^=]+)=(-?\d+)$/)
+	{
+		push @args_to_move, $num;
+		$env_names{$num} = $name;
+	}
+	else
+	{
+		die "$0: wrong --set option: $setenv\n";
+	}
+}
 
 if(grep {$_ == 0} @args_to_move)
 {
@@ -85,13 +107,21 @@ if(grep {$_ == 0} @args_to_move)
 	pod2usage(-exitval=>2, -verbose=>99);
 }
 
-for my $arg_num (@args_to_move)
+for my $arg_num (1..$#ARGV)
 {
-	my $envname;
-	if($arg_num > 0) { $envname = sprintf $envname_template,          abs $arg_num; }
-	else             { $envname = sprintf $negative_envname_template, abs $arg_num; }
-	$ENV{$envname} = $ARGV[$arg_num];
-	$ARGV[$arg_num] = undef;
+	if(grep {$_ > 0 ? ($arg_num == $_) : ($arg_num == scalar(@ARGV)+$_)} @args_to_move)
+	{
+		my $arg_num_neg = $arg_num - scalar(@ARGV);
+		for my $n ($arg_num, $arg_num_neg)
+		{
+			$ENV{$env_names{$n}} = $ARGV[$arg_num] if defined $env_names{$n};
+		}
+		my $envname_pos = sprintf $envname_template, $arg_num;
+		my $envname_neg = sprintf $negative_envname_template, abs $arg_num_neg;
+		$ENV{$envname_pos} = $ARGV[$arg_num];
+		$ENV{$envname_neg} = $ARGV[$arg_num];
+		$ARGV[$arg_num] = undef;
+	}
 }
 @ARGV = grep {defined} @ARGV;
 

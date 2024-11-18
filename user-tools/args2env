@@ -21,6 +21,7 @@ args2env [I<OPTIONS>] I<COMMAND> I<ARG_1> I<ARG_2> ... I<ARG_R2> I<ARG_R1>
 Move the I<NUM>th argument to the environment by the name B<< ARG_I<NUM> >>
 (may be overridden by B<--template> option).
 Counting starts from 1.
+The 0th argument would be the I<COMMAND> itself.
 I<NUM> may be negative number, in which case it's counted from the end backwards.
 
 =item -r, --right-arg I<NUM>
@@ -34,6 +35,7 @@ Move all arguments to environment.
 =item -k, --keep I<NUM>
 
 Keep the first I<NUM> arguments as arguments, and move the rest of them to environment.
+Don't use it with B<-A>, B<-a>, or B<-r>.
 
 =item -t, --template I<TEMPLATE>
 
@@ -59,6 +61,8 @@ Number-based variables (B<< ARG_I<n> >> and B<< ARG_RI<n> >>) are still availabl
 
 =head1 SEE ALSO
 
+args2stdin(1)
+
 =cut
 
 
@@ -70,23 +74,29 @@ no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 @args_to_move = ();
 @OptSetenv = ();
+$OptKeepArgs = undef;
 %env_names = ();
 $envname_template = 'ARG_%d';
 $negative_envname_template = 'ARG_R%d';
 
 GetOptions(
 	'a|arg=i@' => \@args_to_move,
-	'A|all' => sub { @args_to_move = (1 .. $#ARGV); },
-	'k|keep=i' => sub { @args_to_move = (($_[1]+1) .. $#ARGV); },
+	'A|all' => sub { $OptKeepArgs = 0; },
+	'k|keep=i' => \$OptKeepArgs,
 	'r|right-arg=i@' => sub {
 		my ($getopt, $param) = @_;
 		push @args_to_move, -$param;
 	},
+	's|set=s@' => \@OptSetenv,
 	't|template=s' => \$envname_template,
 	'nt|negative-template=s' => \$negative_envname_template,
-	's|set=s@' => \@OptSetenv,
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 ) or pod2usage(-exitval=>2, -verbose=>99);
+
+if(defined $OptKeepArgs)
+{
+	@args_to_move = (($OptKeepArgs+1) .. $#ARGV);
+}
 
 for my $setenv (@OptSetenv)
 {

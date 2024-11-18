@@ -1,0 +1,112 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+args2stdin - Turns command arguments into input stream on STDIN
+
+=head1 SYNOPSIS
+
+args2stdin [I<OPTIONS>] I<COMMAND> I<ARG_1> [I<ARG_2> [...]]
+
+=head1 DESCRIPTION
+
+Execute I<COMMAND> command with I<ARG_n> arguments,
+except remove those which are specified in I<OPTIONS> and write them on the command's STDIN instead.
+
+=head1 OPTIONS
+
+=over 4
+
+=item -a, --arg I<NUM>
+
+Remove the I<NUM>th argument and write it on STDIN.
+Counting starts from 1.
+The 0th argument would be the I<COMMAND> itself.
+I<NUM> may be negative number, in which case it's counted from the end backwards.
+
+=item -r, --right-arg I<NUM>
+
+Same as B<< --arg -I<NUM> >>.
+
+=item -A, --all
+
+Move all arguments to STDIN.
+
+=item -k, --keep I<NUM>
+
+Keep the first I<NUM> arguments as arguments, and move the rest of them.
+Don't use it with B<-A>, B<-a>, or B<-r>.
+
+=item -d, --delimiter I<STRING>
+
+Delimit arguments by I<STRING> string.
+Default is linefeed (B<\n>).
+
+=item -0, --null
+
+Delimit argument by NUL char.
+
+=back
+
+=head1 SEE ALSO
+
+args2env(1)
+
+=cut
+
+
+use Data::Dumper;
+use Errno qw/:POSIX/;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
+use Pod::Usage;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+
+@args_to_move = ();
+$OptDelimiter = "\n";
+$OptKeepArgs = undef;
+
+GetOptions(
+	'a|arg=i@' => \@args_to_move,
+	'A|all' => sub { $OptKeepArgs = 0; },
+	'k|keep=i' => \$OptKeepArgs,
+	'r|right-arg=i@' => sub {
+		my ($getopt, $param) = @_;
+		push @args_to_move, -$param;
+	},
+	'd|delimiter=s' => \$OptDelimiter,
+	'0|null' => sub { $OptDelimiter = chr 0; },
+	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+if(defined $OptKeepArgs)
+{
+	@args_to_move = (($OptKeepArgs+1) .. $#ARGV);
+}
+
+if(grep {$_ == 0} @args_to_move)
+{
+	warn "The 0th argument is the command itself, better not to remove.\n";
+	pod2usage(-exitval=>2, -verbose=>99);
+}
+
+pipe($stdin_r, $stdin_w) or die "$0: pipe: $!\n";
+
+for my $arg_num (@args_to_move)
+{
+	print {$stdin_w} $ARGV[$arg_num] . $OptDelimiter;
+}
+for my $arg_num (@args_to_move)
+{
+	$ARGV[$arg_num] = undef;
+}
+@ARGV = grep {defined} @ARGV;
+
+close $stdin_w;
+open STDIN, '<&=', fileno $stdin_r or die "$0: open: $!\n";
+
+exec {$ARGV[0]} @ARGV;
+($errno, $errstr) = (int $!, $!);
+warn "$0: ${ARGV[0]}: $errstr\n";
+exit 125+$errno;

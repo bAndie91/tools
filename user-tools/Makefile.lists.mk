@@ -3,6 +3,7 @@ TOOLS ?= \
   a8e \
   adr2html \
   args2env \
+  args2stdin \
   asterisk-log-separator \
   autosshfs-mount \
   awk-cut \

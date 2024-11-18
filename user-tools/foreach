@@ -70,8 +70,23 @@ Do not substitute C<{}> with B<DATA>.
 Print something before each command execution.
 I<TEMPLATE> is a bash-interpolated string,
 may contain C<$DATA> and C<${FIELD[n]}>.
-Probably need to put in single quotes when passing to foreach(1) in the invoking shell.
-Beware using backtick, command substitution, double quotes, semicolon - since it's B<eval>ed.
+Probably need to put in single quotes when passing to foreach(1) by the invoking shell.
+It's designed to be B<eval>uated, so backtick, command substitution, semicolon, and other shell expressions are interpreted by bash.
+
+=item --prefix-add I<TEMPLATE>
+
+Append I<TEMPLATE> to the prefix template.
+See B<--prefix> option.
+
+=item --prefix-add-data
+
+Add B<DATA> to the prefix which is printed before each command execution.
+See B<--prefix> option.
+
+=item --prefix-add-tab
+
+Add a B<TAB> char to the prefix which is printed before each command execution.
+See B<--prefix> option.
 
 =item -v, --verbose
 
@@ -127,50 +142,60 @@ FOREACH_PREFIX_TEMPLATE=''
 while [ $# != 0 ]
 do
 	case "$1" in
-	--help)
+	(--help)
 		pod2text "$0"
 		exit
 		;;
-	-e|--sh)
+	(-e|--sh)
 		FOREACH_MODE=sh
 		;;
-	-l|--data)
+	(-l|--data)
 		FOREACH_PASS_DATA=yes
 		;;
-	-f|--fields)
+	(-f|--fields)
 		FOREACH_PASS_FIELDS=yes
 		;;
-	-d|--delimiter)
+	(-d|--delimiter)
 		shift
 		FOREACH_DELIM=$1
 		;;
-	-t|--tab)
+	(-t|--tab)
 		FOREACH_DELIM=$'\t'
 		;;
-	-P|--no-placeholder)
+	(-P|--no-placeholder)
 		FOREACH_REPLACE_PLACEHOLDER=no
 		;;
-	-p|--prefix)
+	(-p|--prefix)
 		shift
 		FOREACH_PREFIX_TEMPLATE=$1
 		;;
-	-v|--verbose)
+	(--prefix-add)
+		shift
+		FOREACH_PREFIX_TEMPLATE=${FOREACH_PREFIX_TEMPLATE}"$1"
+		;;
+	(--prefix-add-data)
+		FOREACH_PREFIX_TEMPLATE=${FOREACH_PREFIX_TEMPLATE}'$DATA'
+		;;
+	(--prefix-add-tab)
+		FOREACH_PREFIX_TEMPLATE=${FOREACH_PREFIX_TEMPLATE}$'\t'
+		;;
+	(-v|--verbose)
 		FOREACH_VERBOSE=yes
 		;;
-	-n|--dry-run)
+	(-n|--dry-run)
 		FOREACH_DRYRUN=yes
 		;;
-	-E|--errexit)
+	(-E|--errexit)
 		FOREACH_ERREXIT=yes
 		;;
-	--)
+	(--)
 		shift
 		break;;
-	-*)
+	(-*)
 		echo "foreach: unknown option: $1" >&2
 		exit -1
 		;;
-	*)	break;;
+	(*)	break;;
 	esac
 	shift
 done

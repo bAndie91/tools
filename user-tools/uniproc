@@ -15,22 +15,31 @@ uniproc [I<OPTIONS>] I<INPUTFILE> I<COMMAND> [I<ARGS>]
 Take each line from I<INPUTFILE> as B<DATA>,
 pass each piece of B<DATA> to I<COMMAND> as the last argument,
 then record the exit status.
+
 Can be well parallelized.
+uniproc(1) itself does not run multiple instances of I<COMMAND> in parallel, just in series,
+but if you start multiple instances of uniproc(1), then you can run I<COMMAND>s concurrently.
+Locking ensures no overlapping data being processes.
 
 Use a wrapper command/script for I<COMMAND> if you want either of these:
 
 =over 4
 
-=item save I<COMMAND>'s output as well. By default it goes to STDOUT.
+=item save I<COMMAND>'s output as well.
+
+By default it goes to STDOUT.
+See redirexec(1) for example.
 
 =item pass B<DATA> on the STDIN or in environment variable instead of command argument.
 
+See args2env(1) for example.
+
 =back
 
-Maybe interrupted, then re-run to process the remaining data
-or to re-try the failed ones.
+If re-run after an interrupt, won't process already processed data.
+But you may re-try the failed ones by B<--retry> option.
 
-May append new lines to I<INPUTFILE> between executions,
+The user may append new lines of data to I<INPUTFILE> between executions or during runtime,
 but not edit or reorder old ones, otherwise results get confused.
 
 =head1 OPTIONS
@@ -39,7 +48,7 @@ but not edit or reorder old ones, otherwise results get confused.
 
 =item --retry
 
-Process those data which were previously failed.
+Process those data which were previously failed (according to B<< I<INPUTFILE>.uniproc >> state file).
 
 =back
 
@@ -51,19 +60,19 @@ Processing status is either:
 
 =over 4
 
-=item all spaces
+=item all spaces (   )
 
 processing not yet started
 
-=item periods
+=item periods (...)
 
 in progress
 
-=item digits (possibly padded by spaces)
+=item digits, possibly padded by spaces (  0)
 
 result status (exit code)
 
-=item exclamation mark (C<!>) followed by hexadecimal digits
+=item exclamation mark (C<!>) followed by hexadecimal digits (!0f)
 
 termination signal (I<COMMAND> teminated abnormally)
 
@@ -79,6 +88,39 @@ where B<NUM> is the line number of the corresponding piece of data in I<INPUTFIL
 A lock is held on each of these I<INPUTFILE>.proc.B<NUM> files by the respective instance of I<COMMAND>
 to detect if the processing is still going or the process crashed.
 
+=head1 LIMITATION
+
+Due to currently used locking mechanism (Fcntl(3perl)), running on multiple hosts may void locking.
+
+=head1 ENVIRONMENT
+
+When running I<COMMAND>, the following environment is set:
+
+=over 4
+
+=item UNIPROC_DATANUM
+
+Number of the particular piece of data (ie. line number in I<INPUTFILE>)
+which is need to be processed by the current process.
+
+=back
+
+=head1 EXAMPLES
+
+Display the data processing status before each line of data:
+
+  paste datafile.uniproc datafile
+
+Record output of data processing into a file per each piece of data:
+
+  uniproc datafile sh -c 'some-command "$@" | tee output-$UNIPROC_DATANUM' --
+
+  uniproc datafile substenv -e UNIPROC_DATANUM redirexec '1:a:file:output-$UNIPROC_DATANUM' some-command
+
+Display data number, processing status, input data, (last line of) output data in a table:
+
+  join -t $'\t' <(nl -ba -v0 datafile.uniproc) <(nl -ba -v0 datafile) | foreach -t --prefix-add-data --prefix-add-tab tail -n1 output-{0}
+
 =cut
 
 
@@ -90,9 +132,11 @@ use POSIX;
 use Pod::Usage;
 
 $OptRetry = 0;
+$OptDebug = 0;
 
 GetOptions(
 	'retry' => \$OptRetry,
+	'debug' => \$OptDebug,
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
@@ -101,7 +145,7 @@ pod2usage(-exitval=>2, -verbose=>99) unless scalar @ARGV >= 2;
 
 sub debug_msg
 {
-	#warn @_;
+	warn @_ if $OptDebug;
 }
 
 sub deriv_processing_status
@@ -296,6 +340,7 @@ while(1)
 	record_status($LineNum, '...');
 	close $Results_fh;
 	
+	$ENV{'UNIPROC_DATANUM'} = $LineNum;
 	run [$Command, @Args, $Data];
 	my $status = $?;
 	

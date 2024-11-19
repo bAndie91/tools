@@ -52,9 +52,14 @@ Pass B<DATA> in the arguments after the user-specified I<ARGS>.
 Pass individual fields of B<DATA> in the arguments after B<DATA> if I<--data> is given,
 or after the user-specified I<ARGS> if I<--data> is not given.
 
-=item -d, --delimiter DELIM
+=item -i, --input I<DATA>
 
-Cut up B<DATA> into fields at B<DELIM> chars.
+Don't read any B<DATA> from stdin, but take I<DATA> given at B<--input> option(s).
+This option is repeatable.
+
+=item -d, --delimiter I<DELIM>
+
+Cut up B<DATA> into fields at I<DELIM> chars.
 Default is C<$IFS>.
 
 =item -t, --tab
@@ -71,7 +76,7 @@ Print something before each command execution.
 I<TEMPLATE> is a bash-interpolated string,
 may contain C<$DATA> and C<${FIELD[n]}>.
 Probably need to put in single quotes when passing to foreach(1) by the invoking shell.
-It's designed to be B<eval>uated, so backtick, command substitution, semicolon, and other shell expressions are interpreted by bash.
+It's designed to be B<eval>uated, so backtick, command substitution, semicolon, and other shell expressions are B<eval>'ed by bash.
 
 =item --prefix-add I<TEMPLATE>
 
@@ -124,8 +129,6 @@ xargs(1), xe(1), apply(1), xapply(1) L<https://www.databits.net/~ksb/msrc/local/
 EOF
 
 
-# syntax highlighter correction: '
-
 
 
 FOREACH_MODE=command
@@ -137,6 +140,8 @@ FOREACH_REPLACE_PLACEHOLDER=yes
 FOREACH_DRYRUN=no
 FOREACH_ERREXIT=no
 FOREACH_PREFIX_TEMPLATE=''
+FOREACH_INPUT_DATA=()
+FOREACH_INPUT_DATA_INDEX=0
 
 
 while [ $# != 0 ]
@@ -154,6 +159,10 @@ do
 		;;
 	(-f|--fields)
 		FOREACH_PASS_FIELDS=yes
+		;;
+	(-i|--input)
+		shift
+		FOREACH_INPUT_DATA+=("$1")
 		;;
 	(-d|--delimiter)
 		shift
@@ -217,7 +226,24 @@ fi
 
 declare -a FOREACH_COMMAND=("$@")
 
-while read -r DATA
+next_data()
+{
+	if [ ${#FOREACH_INPUT_DATA[@]} -gt 0 ]
+	then
+		if [ $FOREACH_INPUT_DATA_INDEX -ge ${#FOREACH_INPUT_DATA[@]} ]
+		then
+			return 1
+		else
+			DATA=${FOREACH_INPUT_DATA[$FOREACH_INPUT_DATA_INDEX]}
+			FOREACH_INPUT_DATA_INDEX=$[FOREACH_INPUT_DATA_INDEX + 1]
+			return 0
+		fi
+	else
+		read -r DATA
+	fi
+}
+
+while next_data
 do
 	export DATA
 	declare -a FIELD=()

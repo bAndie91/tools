@@ -28,12 +28,18 @@ if($uptime <= $ENV{'MIN_UPTIME'})
 
 $highest_remaining_sec = undef;
 $highest_percent = undef;
+$batteries_with_sufficient_charge = 0;
 
 
 open my $pipe, '-|', 'acpi', '-ab' or die "$0: $!";
 while(<$pipe>)
 {
 	chomp;
+	$remaining_sec = undef;
+	$remaining_time = undef;
+	$percent = undef;
+	my $battery_has_sufficient_charge = 1;
+	
 	if(/Adapter.*on-line/)
 	{
 		warn "$0: $_: No action.\n";
@@ -42,7 +48,7 @@ while(<$pipe>)
 	if(/(\d\d+):(\d\d):(\d\d) remaining/)
 	{
 		my ($hour, $min, $sec) = ($1, $2, $3);
-		my $remaining_sec = $hour * 3600 + $min * 60 + $sec;
+		$remaining_sec = $hour * 3600 + $min * 60 + $sec;
 		if($remaining_sec > $highest_remaining_sec)
 		{
 			$highest_remaining_sec = $remaining_sec;
@@ -51,31 +57,33 @@ while(<$pipe>)
 	}
 	if(/(\d+)%/)
 	{
-		my $percent = $1;
+		$percent = $1;
 		if($percent > $highest_percent)
 		{
 			$highest_percent = $percent;
 		}
 	}
+	
+	if($ENV{'BATTERY_TIME_THRESHOLD'} and defined $remaining_sec and $remaining_sec <= $ENV{'BATTERY_TIME_THRESHOLD'})
+	{
+		$battery_has_sufficient_charge = 0;
+	}
+	if($ENV{'BATTERY_PERCENTAGE_THRESHOLD'} and defined $percent and $percent <= $ENV{'BATTERY_PERCENTAGE_THRESHOLD'})
+	{
+		$battery_has_sufficient_charge = 0;
+	}
+	if($battery_has_sufficient_charge)
+	{
+		$batteries_with_sufficient_charge++;
+	}
 }
 close $pipe;
 
 
-$message = sprintf "remaining percentage: %s%%, remaining time: %s.", $highest_percent // "unknown", $highest_remaining_time // "unknown";
-$fire_action = 0;
+$message = sprintf "remaining percentage: %s%%, remaining time: %s, batteries with enough capacity: %d.", $highest_percent // "unknown", $highest_remaining_time // "unknown", $batteries_with_sufficient_charge;
 
-if($ENV{'BATTERY_TIME_THRESHOLD'} and defined $highest_remaining_sec and $highest_remaining_sec <= $ENV{'BATTERY_TIME_THRESHOLD'})
-{
-	$message .= " Remaining time less than $ENV{'BATTERY_TIME_THRESHOLD'} sec.";
-	$fire_action = 1;
-}
-if($ENV{'BATTERY_PERCENTAGE_THRESHOLD'} and defined $highest_percent and $highest_percent <= $ENV{'BATTERY_PERCENTAGE_THRESHOLD'})
-{
-	$message .= " Less than $ENV{'BATTERY_PERCENTAGE_THRESHOLD'}% left.";
-	$fire_action = 1;
-}
 
-if($fire_action)
+if($batteries_with_sufficient_charge < 1)
 {
 	my $command = $ENV{'BATTERY_LOW_ACTION'};
 	warn "$0: $message Running '$command'.\n";

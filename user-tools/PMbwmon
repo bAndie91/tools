@@ -7,6 +7,10 @@ true <<EOF
 
 PMbwmon - Poor man's bandwidth monitor
 
+=head1 SYNOPSIS
+
+PMbwmon [kMG][B<bit> | B<Byte>] [I<INTERFACES>...]
+
 =cut
 
 EOF
@@ -14,9 +18,11 @@ EOF
 
 set -e
 
-usage()
+. /usr/lib/tool/bash-utils
+
+wrong_usage()
 {
-	echo "Usage: $0 [kMG][bB]" >&2
+	pod2text "$0" >&2
 	exit 1
 }
 
@@ -28,7 +34,9 @@ declare -A tx1
 declare -A rxd
 declare -A txd
 
-prefix=${1:-kb}
+prefix=${1:-kbit}
+shift
+ifaces=("$@")
 
 cd /sys/class/net
 
@@ -39,13 +47,13 @@ M)	qt=$[1024*1024];;
 G)	qt=$[1024*1024*1024];;
 b)	qt=1;;
 B)	qt=8;;
-*)	usage;;
+*)	wrong_usage;;
 esac
 if [ "${#prefix}" -gt 1 ]; then
-  case "${prefix:1:1}" in
-  B)	qt=$[qt*8];;
-  b)	true;;
-  *)	usage;;
+  case "${prefix:1}" in
+  Byte)	qt=$[qt*8];;
+  bit)	true;;
+  *)	wrong_usage;;
   esac
 fi
 
@@ -53,69 +61,95 @@ fi
 shot=0
 while true
 do
-    shot=$[shot+1]
-    declare -A masters
+	shot=$[shot+1]
+	declare -A masters
 
-    for master in `cat /sys/class/net/bonding_masters 2>/dev/null`
-    do
-        masters[$master]=1
-        var=slaves_$master
-        declare -a $var
-        eval "$var=($(cat /sys/class/net/$master/bonding/slaves))"
-    done
+	for master in `cat /sys/class/net/bonding_masters 2>/dev/null`
+	do
+		masters[$master]=1
+		var=slaves_$master
+		declare -a $var
+		eval "$var=($(cat /sys/class/net/$master/bonding/slaves))"
+	done
 
-    for iface in *
-    do
-            [ ! -d "$iface" ] && continue
-            [ "$iface" = lo ] && continue
+	for iface in *
+	do
+			[ ! -d "$iface" ] && continue
+			[ "$iface" = lo ] && continue
+			if [ -n "${ifaces[0]}" ]
+			then
+				match=0
+				for iface_pattern in "${ifaces[@]}"
+				do
+					if [[ $iface_pattern =~ ^(.+)\+$ ]]
+					then
+						re=${BASH_REMATCH[1]}.+
+						if [[ $iface =~ ^$re$ ]]
+						then
+							match=1
+						fi
+					elif [ "$iface" = "$iface_pattern" ]
+					then
+						match=1
+					fi
+					if [ $match = 1 ]
+					then
+						break
+					fi
+				done
+				if [ $match = 0 ]
+				then
+					continue
+				fi
+			fi
+			
+			rx0[$iface]=${rx1[$iface]:-0}
+			tx0[$iface]=${tx1[$iface]:-0}
+			rx1[$iface]=`cat /sys/class/net/$iface/statistics/rx_bytes`
+			tx1[$iface]=`cat /sys/class/net/$iface/statistics/tx_bytes`
+			
+			rxd[$iface]=$[ ${rx1[$iface]} - ${rx0[$iface]} ]
+			txd[$iface]=$[ ${tx1[$iface]} - ${tx0[$iface]} ]
+			
+			if [ $shot -gt 1 ]
+			then
+				printf "%6s  -  RX: %8d  TX: %8d  %sps"  "$iface" $[ ${rxd[$iface]} / $qt ] $[ ${txd[$iface]} / $qt ] "$prefix"
 
-            rx0[$iface]=${rx1[$iface]:-0}
-            tx0[$iface]=${tx1[$iface]:-0}
-            rx1[$iface]=`cat /sys/class/net/$iface/statistics/rx_bytes`
-            tx1[$iface]=`cat /sys/class/net/$iface/statistics/tx_bytes`
+				if [ -n "${masters[$iface]}" ]
+				then
+						taps_rx_sum=0
+						taps_tx_sum=0
+						var=slaves_$iface
+						declare -a slaves
+						eval "slaves=(\${slaves_$iface[@]})"
 
-            rxd[$iface]=$[ ${rx1[$iface]} - ${rx0[$iface]} ]
-            txd[$iface]=$[ ${tx1[$iface]} - ${tx0[$iface]} ]
+						for slave in "${slaves[@]}"
+						do
+								taps_rx_sum=$[ $taps_rx_sum + ${rxd[$slave]} ]
+								taps_tx_sum=$[ $taps_tx_sum + ${txd[$slave]} ]
+						done
+						taps_rx_sum=$[ $taps_rx_sum / $qt ]
+						taps_tx_sum=$[ $taps_tx_sum / $qt ]
+						bond_rx=$[ ${rxd[$iface]} / $qt ]
+						bond_tx=$[ ${txd[$iface]} / $qt ]
 
-            if [ $shot -gt 1 ]
-            then
-                printf "%6s  -  RX: %8d  TX: %8d  %sps"  "$iface" $[ ${rxd[$iface]} / $qt ] $[ ${txd[$iface]} / $qt ] "$prefix"
+						rx_comp_rt=''
+						tx_comp_rt=''
+						if [ $taps_rx_sum -ne 0 -a $taps_rx_sum -ne $bond_rx ]
+						then
+								rx_comp_rt=$[ ${bond_rx} / $taps_rx_sum ]
+						fi
+						if [ $taps_tx_sum -ne 0 -a $taps_tx_sum -ne $bond_tx ]
+						then
+								tx_comp_rt=$[ ${bond_tx} / $taps_tx_sum ]
+						fi
 
-                if [ -n "${masters[$iface]}" ]
-                then
-                        taps_rx_sum=0
-                        taps_tx_sum=0
-                        var=slaves_$iface
-                        declare -a slaves
-                        eval "slaves=(\${slaves_$iface[@]})"
+						printf "  -  comp%%  RX: %5.1f%%  TX: %5.1f%%"  "$rx_comp_rt" "$tx_comp_rt"
+				fi
+				echo
+			fi
+	done
 
-                        for slave in "${slaves[@]}"
-                        do
-                                taps_rx_sum=$[ $taps_rx_sum + ${rxd[$slave]} ]
-                                taps_tx_sum=$[ $taps_tx_sum + ${txd[$slave]} ]
-                        done
-                        taps_rx_sum=$[ $taps_rx_sum / $qt ]
-                        taps_tx_sum=$[ $taps_tx_sum / $qt ]
-                        bond_rx=$[ ${rxd[$iface]} / $qt ]
-                        bond_tx=$[ ${txd[$iface]} / $qt ]
-
-                        rx_comp_rt=''
-                        tx_comp_rt=''
-                        if [ $taps_rx_sum -ne 0 -a $taps_rx_sum -ne $bond_rx ]
-                        then
-                                rx_comp_rt=$[ ${bond_rx} / $taps_rx_sum ]
-                        fi
-                        if [ $taps_tx_sum -ne 0 -a $taps_tx_sum -ne $bond_tx ]
-                        then
-                                tx_comp_rt=$[ ${bond_tx} / $taps_tx_sum ]
-                        fi
-
-                        printf "  -  comp%%  RX: %5.1f%%  TX: %5.1f%%"  "$rx_comp_rt" "$tx_comp_rt"
-                fi
-                echo
-            fi
-    done
-
-    echo
-    sleep 1
+	echo
+	sleep 1
 done

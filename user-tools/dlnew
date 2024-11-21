@@ -227,7 +227,7 @@ Local file data have to written in. If omitted, last component (basename) of B<u
 
 =item B<0>
 
-B<Url> ia found and downloaded.
+B<Url> is found and downloaded.
 
 =item B<1>
 

@@ -52,13 +52,11 @@ to IP address(es) before connect(2) is called and does not pass the
 prior known hostname to it.
 Therefore the wrapper command has to be creative in terms of what to
 send in SNI to the TLS endpoint. 
-Autossl is not particular recommended to use in processes which connects
-to many various hosts (eg. web browsers) with little domain name -- IP
-range corelation, because it makes hard for the wrapper command to find
-out the right SNI for a given IP. 
-A more plausible scenario to have autossl.so upgrade socket connections
-to a few, 1, 2, or 3 hosts, or to hosts whiches server name is
-unambiguous by thier IP provided in order to have correct SNI.
+Autossl is not particularly recommended to use with processes which connect
+to many various hosts (eg. web browsers) with little correlation between domain names and IP addresses/ranges,
+because it makes hard for the wrapper command to find out the right SNI for a given IP. 
+A more plausible scenario is to make autossl.so upgrade socket connections to a few, 1, 2, or 3 hosts,
+or to hosts of which server name is unambiguous by thier IP.
 
 =head2 Error cases
 

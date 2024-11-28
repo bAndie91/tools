@@ -98,7 +98,7 @@ while(<STDIN>)
 		if(defined $last_header_ref)
 		{
 			$last_header_ref->{"content"} .= "\n" if $OptKeepLF;
-			$last_header_ref->{"content"} .= $1;
+			$last_header_ref->{"content"} .= " " . $1;
 		}
 	}
 	else

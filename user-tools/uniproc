@@ -111,6 +111,14 @@ Display the data processing status before each line of data:
 
   paste datafile.uniproc datafile
 
+How much competed?
+
+  awk -v total=$(wc -l < datafile) 'BEGIN{ok=ip=fail=0} {if($1==0){ok++} else if($1=="..."){ip++} else if($1!=""){fail++}} END{print "total: "total", completed: "ok" ("(ok*100/total)"%), in-progress: "ip" ("(ip*100/total)"%), failed: "fail" ("(fail*100/total)"%)"}' datafile.uniproc
+  
+Output:
+
+  total: 8, completed: 4 (50%), in-progress: 1 (12.5%), failed: 1 (12.5%)
+
 Record output of data processing into a file per each piece of data:
 
   uniproc datafile sh -c 'some-command "$@" | tee output-$UNIPROC_DATANUM' --

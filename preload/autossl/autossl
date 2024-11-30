@@ -9,7 +9,7 @@ help()
 	echo "  AUTOSSL_SILENT - less diagnostical messages"
 	echo "  AUTOSSL_UPGRADE_PORTS - space-delimited list of port numbers which autossl should work on (default 80)"
 	echo "  AUTOSSL_UPGRADE_IPS - space-delimited list of IPs which autossl should work on. unset means any."
-	echo "  AUTOSSL_TLS_PORT_MAP - space-delimited list of colon-separated port number pairs denoting which port should be mapped to which one (some common ports defaulted)"
+	echo "  AUTOSSL_TLS_PORT_MAP - space-delimited list of colon-separated port number pairs denoting which port should be mapped to which one. some common ports are in defaults."
 	echo "  OPENSSL_EXTRA_ARGS - additional options passed to openssl"
 	echo "  STUNNEL_EXTRA_ARGS - additional options passed to stunnel"
 }	

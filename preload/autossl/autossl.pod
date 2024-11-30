@@ -52,6 +52,7 @@ autossl(1) has built-in port mapping which contains I<PLAIN>:I<TLS> port
 pairs for common protocols, but you can extend it by setting
 space-delimited I<PLAIN>:I<TLS> port number pairs in
 B<AUTOSSL_TLS_PORT_MAP> environment variable.
+Mappings defined in B<AUTOSSL_TLS_PORT_MAP> take precedence over built-ins.
 
 =head1 ENVIRONMENT
 

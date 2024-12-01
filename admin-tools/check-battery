@@ -38,12 +38,16 @@ while(<$pipe>)
 	$remaining_sec = undef;
 	$remaining_time = undef;
 	$percent = undef;
-	my $battery_has_sufficient_charge = 1;
+	my $battery_may_have_insufficient_charge = 1;
 	
-	if(/Adapter.*on-line/)
+	if(/Adapter/)
 	{
-		warn "$0: $_: No action.\n";
-		exit 0;
+		if(/on-line/)
+		{
+			warn "$0: $_: No action.\n";
+			exit 0;
+		}
+		next;
 	}
 	if(/(\d\d+):(\d\d):(\d\d) remaining/)
 	{
@@ -64,15 +68,24 @@ while(<$pipe>)
 		}
 	}
 	
-	if($ENV{'BATTERY_TIME_THRESHOLD'} and defined $remaining_sec and $remaining_sec <= $ENV{'BATTERY_TIME_THRESHOLD'})
+	my $sufficient_time = undef;
+	my $sufficient_percent = undef;
+	
+	if($ENV{'BATTERY_TIME_THRESHOLD'} and defined $remaining_sec)
 	{
-		$battery_has_sufficient_charge = 0;
+		$sufficient_time = $remaining_sec >= $ENV{'BATTERY_TIME_THRESHOLD'} ? 1 : 0;
 	}
-	if($ENV{'BATTERY_PERCENTAGE_THRESHOLD'} and defined $percent and $percent <= $ENV{'BATTERY_PERCENTAGE_THRESHOLD'})
+	if($ENV{'BATTERY_PERCENTAGE_THRESHOLD'} and defined $percent)
 	{
-		$battery_has_sufficient_charge = 0;
+		$sufficient_percent = $percent >= $ENV{'BATTERY_PERCENTAGE_THRESHOLD'} ? 1 : 0;
 	}
-	if($battery_has_sufficient_charge)
+	
+	if((not defined $sufficient_time or $sufficient_time) and (not defined $sufficient_percent or $sufficient_percent))
+	{
+		$battery_may_have_insufficient_charge = 0;
+	}
+	
+	if(not $battery_may_have_insufficient_charge)
 	{
 		$batteries_with_sufficient_charge++;
 	}

@@ -403,6 +403,11 @@ _autocomplete_cred() {
 		# NOTE: align with $prop_subcmds!
 		(fill-form|set|edit|read|del|show|reveal|clip)
 			compreply=`cred list-props "$site"`
+			if [ "$subcmd" = set ]
+			then
+				common_properties="EMAIL USERNAME PASSWORD PIN KEY TOKEN"
+				compreply="$compreply $common_properties"
+			fi
 			;;
 		(dump)
 			case $cword_idx in

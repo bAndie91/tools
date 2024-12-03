@@ -314,23 +314,34 @@ sub errstr
 
 sub handle_children
 {
-	for my $id (keys %Daemon)
+	while(1)
 	{
-		my $daemon_pid = $Daemon{$id}->{'pid'};
-		next unless defined $daemon_pid;
-		
-		my $pid = waitpid($daemon_pid, WNOHANG);
+		my $reaped_pid = waitpid(-1, WNOHANG);  # check if any children terminated
+		last if $reaped_pid <= 0;  # no more zombie children
 		my $status = ${^CHILD_ERROR_NATIVE};
-		if($pid == $daemon_pid)
+		my $exitcode = WIFEXITED($status) ? WEXITSTATUS($status) : undef;
+		my $exitsignal = WIFSIGNALED($status) ? WTERMSIG($status) : undef;
+		my $reaped = 0;
+		
+		for my $id (keys %Daemon)
 		{
-			my $exitcode = WIFEXITED($status) ? WEXITSTATUS($status) : undef;
-			my $exitsignal = WIFSIGNALED($status) ? WTERMSIG($status) : undef;
+			my $daemon_pid = $Daemon{$id}->{'pid'};
+			next if not defined $daemon_pid;
+			next if $daemon_pid != $reaped_pid;
+			
 			logger sprintf "daemon %s PID %d deceased, exit status %s (%s) signal %s (%s)",
 				$id, $daemon_pid, $exitcode // 'none', errstr($exitcode), $exitsignal // 'none', $signal_names[$exitsignal];
 			$Daemon{$id}->{'exitcode'} = $exitcode;
 			$Daemon{$id}->{'exitsignal'} = $exitsignal;
 			append_fixsizelist \@{$Daemon{$id}->{'exittimes'}}, $respawn_burst_limit, time;
 			delete $Daemon{$id}->{'pid'};
+			$reaped = 1;
+			last;
+		}
+		if(not $reaped)
+		{
+			logger sprintf "unknown PID %d deceased, exit status %s (%s) signal %s (%s)",
+				$reaped_pid, $exitcode // 'none', errstr($exitcode), $exitsignal // 'none', $signal_names[$exitsignal];
 		}
 	}
 }

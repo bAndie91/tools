@@ -30,13 +30,9 @@ See cut(1) for syntax.
 
 Default is whitespace (C<\s+>).
 
-=item --complement
-
-TODO
-
 =item -s, --only-delimited
 
-TODO
+See the same option in cut(1).
 
 =item -D, --output-delimiter I<STRING>
 
@@ -94,6 +90,7 @@ $OptOutputDelimiter = undef;
 $OptPreferPreceding = 0;
 $OptDelimBeforeFirst = undef;
 $OptDelimAfterLast = undef;
+$OptOnlyDelimited = 0;
 
 GetOptions(
 	'f|fields=s@' => \@OptFields,
@@ -104,6 +101,7 @@ GetOptions(
 	'prefer-succeeding-delimiter' => sub { $OptPreferPreceding = 0; },
 	'delimiter-before-first=s' => \$OptDelimBeforeFirst,
 	'delimiter-after-last=s' => \$OptDelimAfterLast,
+	's|only-delimited' => \$OptOnlyDelimited,
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
 ) or pod2usage(-exitval=>2, -verbose=>99);
@@ -165,6 +163,11 @@ while(<>)
 {
 	chomp;
 	my ($Field, $Delimiter) = unzip split /($OptDelimiter)/;
+	
+	if($OptOnlyDelimited and not defined $Delimiter->[0])
+	{
+		next;
+	}
 	
 	for my $requested_fieldnumbers_idx (0 .. $#OptFields)
 	{

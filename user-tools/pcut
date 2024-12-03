@@ -33,9 +33,25 @@ TODO
 
 TODO
 
-=item --output-delimiter I<STRING>
+=item -D, --output-delimiter I<STRING>
 
-Default is B<TAB>.
+Define what to delimit fields on the output with.
+Default is not to use a constant output delimiter,
+but to preserve the separator substrings as they matched to the pattern of B<-d> option
+(see B<--prefer-preceding-delimiter> and B<--prefer-succeeding-delimiter> options).
+
+=item -P, --prefer-preceding-delimiter
+
+=item --prefer-succeeding-delimiter (default)
+
+Contrary to cut(1), pcut(1) does not always use a constant delimiter char,
+but a regexp pattern which may match to different substrings between fields.
+
+Each output field (except the last one) is followed by the same delimiter substring
+(matched to the pattern given as delimiter pattern at B<-d> option) which is after that field in the input.
+
+With B<--prefer-preceding-delimiter>, each output field (except the first one) is similarly preceded by the delimiter substring
+which is before that field in the input.
 
 =item -z, --zero-terminated
 
@@ -59,15 +75,24 @@ no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 @OptFields = ();
 $OptDelimiter = '\s+';
-$OptOutputDelimiter = "\t";
+$OptOutputDelimiter = undef;
+$OptOutputDelimiterPreceding = 0;
 
 GetOptions(
 	'f|fields=s@' => \@OptFields,
 	'd|delimiter=s' => \$OptDelimiter,
 	'z|zero-terminated' => \$OptZeroTerminated,
+	'D|output-delimiter=s' => \$OptOutputDelimiter,
+	'P|prefer-preceding-delimiter' => \$OptOutputDelimiterPreceding,  # TODO
+	'prefer-succeeding-delimiter' => sub { $OptOutputDelimiterPreceding = 0; },
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
 ) or pod2usage(-exitval=>2, -verbose=>99);
+
+if(defined $OptOutputDelimiter and $OptOutputDelimiterPreceding)
+{
+	die "$0: Options -D and -P are mutually exclusive.\n";
+}
 
 if(not @OptFields)
 {
@@ -81,32 +106,50 @@ for my $fields (@OptFields)
 	die "$0: invalid fields: $fields\n" unless $fields =~ /^(\d+(-(\d+)?)?|-\d+)$/;
 }
 
-$\ = "\n";
-$\ = chr(0) if $OptZeroTerminated;
+sub unzip
+{
+	[map { $_[$_*2]   } (0 .. $#_ / 2)],
+	[map { $_[$_*2+1] } (0 .. $#_ / 2)];
+}
+
+sub zip_evenlist
+{
+	map { $_[$_], $_[$_ + ($#_+1)/2] } (0 .. $#_/2);
+}
+
+$\ = "";
 
 eval 'use ARGV::readonly; 1' or die;
 
 while(<>)
 {
 	chomp;
-	my @Fields = split /$OptDelimiter/;
-	my @PrintFields = ();
+	my ($Field, $Delimiter) = unzip split /($OptDelimiter)/;
+	
 	for my $fields (@OptFields)
 	{
 		if($fields =~ /^(\d+)$/)
 		{
-			push @PrintFields, $Fields[$1-1];
+			print $Field->[$1-1] . $Delimiter->[$1-1];
 		}
 		else
 		{
 			my $from;
 			my $to;
 			if($fields =~ /^(\d+)-(\d+)$/) { ($from, $to) = ($1-1, $2-1); }
-			elsif($fields =~ /^(\d+)-$/) { ($from, $to) = ($1-1, $#Fields); }
+			elsif($fields =~ /^(\d+)-$/) { ($from, $to) = ($1-1, $#$Field); }
 			elsif($fields =~ /^-(\d+)$/) { ($from, $to) = (0, $1-1); }
 			else { die 'SHOULD-NOT-REACHED'; }
-			push @PrintFields, @Fields[$from..$to];
+			print join '', zip_evenlist(@{$Field}[$from..$to], @{$Delimiter}[$from..$to]);
 		}
 	}
-	print join($OptOutputDelimiter, @PrintFields);
+	
+	if($OptZeroTerminated)
+	{
+		print chr(0);
+	}
+	else
+	{
+		print "\n";
+	}
 }

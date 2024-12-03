@@ -339,7 +339,10 @@ case "$subcmd" in
 	;;
 (list-props)
 	set_site
-	find "$basedir/$site" -type f -printf "%P\n"
+	if [ -e "$basedir/$site" ]
+	then
+		find "$basedir/$site" -type f -printf "%P\n"
+	fi
 	;;
 (generate-password)
 	set_site

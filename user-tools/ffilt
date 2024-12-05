@@ -25,7 +25,7 @@ Similar to this shell script:
 
 =head1 SEE ALSO
 
-sponge(1)
+sponge(1), insitu(1) L<https://github.com/athas/insitu>
 
 =cut
 
@@ -62,10 +62,13 @@ do
 	shift
 done
 
+set -e
+set -o pipefail
+set -u
 
 file=$1
 shift
 
 stdout=`cat "$file" | command "$@"`
-# pipefail let us die here if either cat or command failed
+# pipefail make us die here if either cat or command failed
 cat > "$file" <<< "$stdout"

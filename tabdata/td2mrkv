@@ -15,6 +15,12 @@ td2mrkv - Transform tabular data into multi-record key-value (MRKV) format.
 String to separate field name from content.
 Default is TAB (C<\t>).
 
+=item -K, --sort-keys
+
+Note, sorting by keys does not support duplicated column names.
+
+=item -V, --sort-values
+
 =back
 
 =head1 EXAMPLE
@@ -28,24 +34,47 @@ mrkv2td(1), td2html(1)
 =cut
 
 $OptSeparator = "\t";
+$OptSortKeys = 0;
+$OptSortValues = 0;
+$OptCaseInsensitiveSort = 0;
 %OptionDefs = (
 	's|separator=s' => \$OptSeparator,
+	'K|sort-keys!' => \$OptSortKeys,
+	'V|sort-values!' => \$OptSortValues,
+	'I|case-insensitive-sort!' => \$OptCaseInsensitiveSort,
 );
 
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
+sub sortkey
+{
+	return $OptCaseInsensitiveSort ? lc($_[0]) : $_[0];
+}
 
 process_header(scalar <STDIN>);
 
+@OrderedHeaders = do { my $pos = 0; map {{name=>$_, orig_idx=>$pos++}} @Header };
+
+if($OptSortKeys)
+{
+	@OrderedHeaders = sort { sortkey($a->{name}) cmp sortkey($b->{name}) } @OrderedHeaders;
+}
 
 while(not eof STDIN)
 {
 	my @Field = read_record(\*STDIN);
 	
-	for my $idx (0..$#Header)
+	my @columns = @OrderedHeaders;
+	
+	if($OptSortValues)
 	{
-		printf "%s%s%s\n", $Header[$idx], $OptSeparator, $Field[$idx];
+		@columns = sort { sortkey($Field[$a->{orig_idx}]) cmp sortkey($Field[$b->{orig_idx}]) } @OrderedHeaders;
+	}
+	
+	for my $col (@columns)
+	{
+		printf "%s%s%s%s", $col->{name}, $OptSeparator, $Field[$col->{orig_idx}], $RS;
 	}
 	
 	print $RS;

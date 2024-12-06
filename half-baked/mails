@@ -1,7 +1,10 @@
 #!/bin/bash
 
+. /usr/lib/tool/bash-utils || exit -1
+
 opt_maildir=~/Mail/new/
-opt_newer="1 day"
+opt_newer=''
+opt_older=''
 
 opt_parser_set_opt()
 {
@@ -9,7 +12,7 @@ opt_parser_set_opt()
 	optname=opt_${optname//-/_}
 	if [ "${!optname+x}" != x ]
 	then
-		echo "$0: option '$1' is not known." >&2
+		warnx "option is not known: $1"
 		return 1
 	fi
 	shift
@@ -25,17 +28,17 @@ do
 		break
 	elif [[ $1 =~ ^--([a-zA-Z0-9_-]+)=(.*)$ ]]
 	then
-		opt_parser_set_opt "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+		opt_parser_set_opt "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" || exit -1
 	elif [[ $1 =~ ^--([a-zA-Z0-9_-]+)$ ]]
 	then
 		shift
-		opt_parser_set_opt "${BASH_REMATCH[1]}" "$1"
+		opt_parser_set_opt "${BASH_REMATCH[1]}" "$1" || exit -1
 	elif [[ $1 =~ ^-([a-zA-Z0-9_-]+)$ ]]
 	then
 		flags=${BASH_REMATCH[1]}
 		for (( i=0; i<${#flags}; i++ ))
 		do
-			opt_parser_set_opt "${flags:$i:1}" 1
+			opt_parser_set_opt "${flags:$i:1}" 1 || exit -1
 		done
 		unset flags
 		unset i
@@ -43,7 +46,7 @@ do
 	shift
 done
 
-find "$opt_maildir" -maxdepth 1 -type f -newermt "now - $opt_newer" |\
+find "$opt_maildir" -maxdepth 1 -type f ${opt_newer:+-newermt "now - $opt_newer"} ${opt_older:+! -newermt "now - $opt_older"} |\
 foreach stat -c "%y	%n" | sort |\
 foreach -t -p $'\n''${FIELD[1]}'$'\n''${FIELD[0]}'$'\n' \
 	pipecmd cat {1} -- pipecmd mail-extract-raw-headers -n From Delivered-To To Cc Subject -- mime-header-decode 

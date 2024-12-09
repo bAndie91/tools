@@ -61,20 +61,18 @@ do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 sub flush_record
 {
-	my $colnum = shift;
 	my $record = shift;
 	
 	if(not $header_sent)
 	{
-		print join($FS, map {escape_tabdata($_)} sort { $colnum->{$a} <=> $colnum->{$b} } keys %$colnum).$RS;
+		print join($FS, map {escape_tabdata($_)} @Headers).$RS;
 		$header_sent = 1;
 	}
 	
-	print join($FS, map { escape_tabdata($record->{$_}) } sort { $colnum->{$a} <=> $colnum->{$b} } keys %$record).$RS;
+	print join($FS, map { escape_tabdata($record->{$_}) } @Headers).$RS;
 }
 
 @Headers = ();
-%ColumnNumber = ();
 %record = ();
 $record_num = 0;
 $header_sent = 0;
@@ -91,14 +89,13 @@ while(my $line = <STDIN>)
 				if(not $predef_column ~~ @Headers)
 				{
 					push @Headers, $predef_column;
-					$ColumnNumber{$predef_column} = $#Headers;
 				}
 			}
 		}
 		
 		if(%record)
 		{
-			flush_record(\%ColumnNumber, \%record);
+			flush_record(\%record);
 			%record = ();
 			$record_num++;
 		}
@@ -118,7 +115,6 @@ while(my $line = <STDIN>)
 		if($record_num == 0)
 		{
 			push @Headers, $field;
-			$ColumnNumber{$field} = $#Headers;
 		}
 		else
 		{
@@ -137,5 +133,7 @@ while(my $line = <STDIN>)
 
 if(%record)
 {
-	flush_record(\%ColumnNumber, \%record);
+	flush_record(\%record);
+	%record = ();
+	$record_num++;
 }

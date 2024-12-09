@@ -5,6 +5,8 @@
 opt_maildir=~/Mail/new/
 opt_newer=''
 opt_older=''
+opt_newer_rel=''
+opt_older_rel=''
 
 opt_parser_set_opt()
 {
@@ -46,7 +48,9 @@ do
 	shift
 done
 
-find "$opt_maildir" -maxdepth 1 -type f ${opt_newer:+-newermt "now - $opt_newer"} ${opt_older:+! -newermt "now - $opt_older"} |\
+find "$opt_maildir" -maxdepth 1 -type f \
+	${opt_newer:+-newermt "$opt_newer"} ${opt_older:+! -newermt "$opt_older"} \
+	${opt_newer_rel:+-newermt "now - $opt_newer_rel"} ${opt_older_rel:+! -newermt "now - $opt_older_rel"} |\
 foreach stat -c "%y	%n" | sort |\
 foreach -t -p $'\n''${FIELD[1]}'$'\n''${FIELD[0]}'$'\n' \
 	pipecmd cat {1} -- pipecmd mail-extract-raw-headers -n From Delivered-To To Cc Subject -- mime-header-decode 

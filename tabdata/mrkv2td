@@ -24,6 +24,14 @@ Default is TAB (C<\t>).
 
 =item -g, --multiline-glue I<STRING>
 
+=item -i, --ignore-non-existing-columns
+
+=item -w, --warn-non-existing-columns
+
+=item -c, --column I<NAME>
+
+Repeatable option.
+
 =back
 
 =head1 SEE ALSO
@@ -34,12 +42,19 @@ td2mrkv(1)
 
 $OptSeparatorRegexp = "\t";
 $OptMultilineGlue = "\n";
+$OptWarnBadColumnNames = 1;
+$OptFailBadColumnNames = 1;
+@OptPredefColumns = ();
 %OptionDefs = (
 	's|separator=s' => \$OptSeparatorRegexp,
 	'g|multiline-glue=s' => \$OptMultilineGlue,
+	'i|ignore-non-existing-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 0; },
+	'w|warn-non-existing-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 1; },
+	'c|column=s@' => \@OptPredefColumns,
 );
 
 use Data::Dumper;
+use List::MoreUtils qw/all any none/;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
@@ -69,6 +84,18 @@ while(my $line = <STDIN>)
 	chomp $line;
 	if($line eq '')
 	{
+		if(not $header_sent)
+		{
+			for my $predef_column (@OptPredefColumns)
+			{
+				if(not $predef_column ~~ @Headers)
+				{
+					push @Headers, $predef_column;
+					$ColumnNumber{$predef_column} = $#Headers;
+				}
+			}
+		}
+		
 		if(%record)
 		{
 			flush_record(\%ColumnNumber, \%record);
@@ -92,6 +119,18 @@ while(my $line = <STDIN>)
 		{
 			push @Headers, $field;
 			$ColumnNumber{$field} = $#Headers;
+		}
+		else
+		{
+			if(not $field ~~ @Headers)
+			{
+				unless($field ~~ @warned_fields)
+				{
+					warn "$0: column not defined: $field\n" if $OptWarnBadColumnNames;
+					push @warned_fields, $field_name;
+				}
+				die if $OptFailBadColumnNames;
+			}
 		}
 	}
 }

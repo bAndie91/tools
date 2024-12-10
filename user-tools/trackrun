@@ -194,7 +194,7 @@ lookup()
 {
 	# lookup A B [A B [A B]]
 	# search a line in STDIN of which field A's value is B for all pair of A and B,
-	# if A is not a number but "ret", then return the B field's value.
+	# if A is not a number but "return", then return the B field's value.
 	# Fields are counted form zero.
 	perl -e 'while(<STDIN>) {
 		chomp;
@@ -204,20 +204,22 @@ lookup()
 		{
 			$filter_field = shift @Filters;
 			$filter_value = shift @Filters;
-			if($filter_field eq "ret") { print $field[$filter_value]; exit; }
+			if($filter_field eq "return") { print $filter_value eq "record" ? $_ : $field[$filter_value]; exit; }
 			elsif($field[$filter_field] ne $filter_value) { last; }
 		}
 	}' -- "$@"
 }
 
 mkdir -p "$track_dir"
-export TRACKRUN_LAST_UUID=`tac "$track_file" 2>/dev/null | lookup 1 end ret 0`
-export TRACKRUN_LAST_STARTED=`tac "$track_file" 2>/dev/null | lookup 0 "$TRACKRUN_LAST_UUID" 1 start ret 2`
-export TRACKRUN_LAST_ENDED=`tac "$track_file" 2>/dev/null | lookup 0 "$TRACKRUN_LAST_UUID" 1 end ret 2`
-export TRACKRUN_LAST_STATUS=`tac "$track_file" 2>/dev/null | lookup 0 "$TRACKRUN_LAST_UUID" 1 end ret 3`
-export TRACKRUN_LAST_SUCCESSFUL_UUID=`tac "$track_file" 2>/dev/null | lookup 1 end 3 0 ret 0`
-export TRACKRUN_LAST_SUCCESSFUL_STARTED=`tac "$track_file" 2>/dev/null | lookup 0 "$TRACKRUN_LAST_SUCCESSFUL_UUID" 1 start ret 2`
-export TRACKRUN_LAST_SUCCESSFUL_ENDED=`tac "$track_file" 2>/dev/null | lookup 0 "$TRACKRUN_LAST_SUCCESSFUL_UUID" 1 end ret 2`
+last_record_end=`tac "$track_file" 2>/dev/null | lookup 1 end return record`
+export TRACKRUN_LAST_UUID=`echo "$last_record_end" | lookup return 0`
+export TRACKRUN_LAST_STARTED=`tac "$track_file" 2>/dev/null | lookup 0 "$TRACKRUN_LAST_UUID" 1 start return 2`
+export TRACKRUN_LAST_ENDED=`echo "$last_record_end" | lookup return 2`
+export TRACKRUN_LAST_STATUS=`echo "$last_record_end" | lookup return 3`
+last_successful_record_end=`tac "$track_file" 2>/dev/null | lookup 1 end 3 0 return record`
+export TRACKRUN_LAST_SUCCESSFUL_UUID=`echo "$last_successful_record_end" | lookup return 0`
+export TRACKRUN_LAST_SUCCESSFUL_STARTED=`tac "$track_file" 2>/dev/null | lookup 0 "$TRACKRUN_LAST_SUCCESSFUL_UUID" 1 start return 2`
+export TRACKRUN_LAST_SUCCESSFUL_ENDED=`echo "$last_successful_record_end" | lookup return 2`
 
 type uuidgen >/dev/null
 export TRACKRUN_UUID=`uuidgen`

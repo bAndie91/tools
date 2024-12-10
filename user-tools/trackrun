@@ -86,7 +86,19 @@ Store tracking data in F<~/.trackrun> directory.
 
 =item TRACKRUN_LAST_STATUS
 
+=item TRACKRUN_LAST_UUID
+
+=item TRACKRUN_LAST_SUCCESSFUL_STARTED
+
+=item TRACKRUN_LAST_SUCCESSFUL_ENDED
+
+=item TRACKRUN_LAST_SUCCESSFUL_UUID
+
+The last successful run's UUID, date-time when started and ended.
+
 =item TRACKRUN_UUID
+
+The current run's UUID
 
 =back
 

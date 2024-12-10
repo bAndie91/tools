@@ -192,16 +192,32 @@ fi
 
 lookup()
 {
-	# lookup A B C
-	# return the C-th field of the first line in stdin of which A-th field is B
-	awk -F $'\t' -v field_num="$1" -v field_val="$2" -v field_ret="$3" \
-		'{if($field_num == field_val){ print $field_ret; exit; }}'
+	# lookup A B [A B [A B]]
+	# search a line in STDIN of which field A's value is B for all pair of A and B,
+	# if A is not a number but "ret", then return the B field's value.
+	# Fields are counted form zero.
+	perl -e 'while(<STDIN>) {
+		chomp;
+		@field = split /\t/;
+		@Filters = @ARGV;
+		while(@Filters)
+		{
+			$filter_field = shift @Filters;
+			$filter_value = shift @Filters;
+			if($filter_field eq "ret") { print $field[$filter_value]; exit; }
+			elsif($field[$filter_field] ne $filter_value) { last; }
+		}
+	}' -- "$@"
 }
 
 mkdir -p "$track_dir"
-export TRACKRUN_LAST_STARTED=`tac "$track_file" 2>/dev/null | lookup 1 start 3`
-export TRACKRUN_LAST_ENDED=`tac "$track_file" 2>/dev/null | lookup 1 end 3`
-export TRACKRUN_LAST_STATUS=`tac "$track_file" 2>/dev/null | lookup 1 end 4`
+export TRACKRUN_LAST_UUID=`tac "$track_file" 2>/dev/null | lookup 1 end ret 0`
+export TRACKRUN_LAST_STARTED=`tac "$track_file" 2>/dev/null | lookup 0 "$TRACKRUN_LAST_UUID" 1 start ret 2`
+export TRACKRUN_LAST_ENDED=`tac "$track_file" 2>/dev/null | lookup 0 "$TRACKRUN_LAST_UUID" 1 end ret 2`
+export TRACKRUN_LAST_STATUS=`tac "$track_file" 2>/dev/null | lookup 0 "$TRACKRUN_LAST_UUID" 1 end ret 3`
+export TRACKRUN_LAST_SUCCESSFUL_UUID=`tac "$track_file" 2>/dev/null | lookup 1 end 3 0 ret 0`
+export TRACKRUN_LAST_SUCCESSFUL_STARTED=`tac "$track_file" 2>/dev/null | lookup 0 "$TRACKRUN_LAST_SUCCESSFUL_UUID" 1 start ret 2`
+export TRACKRUN_LAST_SUCCESSFUL_ENDED=`tac "$track_file" 2>/dev/null | lookup 0 "$TRACKRUN_LAST_SUCCESSFUL_UUID" 1 end ret 2`
 
 type uuidgen >/dev/null
 export TRACKRUN_UUID=`uuidgen`

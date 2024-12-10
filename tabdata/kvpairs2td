@@ -115,7 +115,7 @@ while(my $Line = <STDIN>)
 	
 	if($RN == 0)
 	{
-		push @Headers, @OptPredefColumns, $OptRestColumnName;
+		push @Headers, grep { not $_ ~~ @Headers } @OptPredefColumns, $OptRestColumnName;
 		$rest_column_idx = $#Headers;
 		print join($FS, @Headers).$RS;
 	}

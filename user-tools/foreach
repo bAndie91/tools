@@ -225,6 +225,7 @@ then
 fi
 
 declare -a FOREACH_COMMAND=("$@")
+declare -g DATA
 
 next_data()
 {
@@ -239,7 +240,14 @@ next_data()
 			return 0
 		fi
 	else
+		local rc
 		read -r DATA
+		rc=$?
+		if [ $rc != 0 -a -z "$DATA" ]
+		then
+			return $rc
+		fi
+		return 0
 	fi
 }
 

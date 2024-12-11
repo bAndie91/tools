@@ -180,6 +180,7 @@ TOOLS ?= \
   timestamper \
   touchx \
   trackrun \
+  triggerexec \
   ttinput \
   uchmod \
   unicodestyle \

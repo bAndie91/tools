@@ -1,0 +1,178 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+triggerexec - description
+
+=head1 SYNOPSIS
+
+triggerexec [I<EVENT> I<ACTION> [I<EVENT> I<ACTION> [...]]] [--] I<COMMAND> [I<ARGS>]
+
+=head1 DESCRIPTION
+
+Run I<COMMAND> and execute specific actions depending on
+what I<COMMAND> does.
+
+Supported I<EVENT> events:
+
+=over 4
+
+=item B<stdout>:I<PATTERN>
+
+=item B<stderr>:I<PATTERN>
+
+Match I<PATTERN> regex pattern to B<stdout>/B<stderr> line-wise.
+
+=back
+
+Supported I<ACTION> actions:
+
+=over 4
+
+=item B<perl>:I<EXPR>
+
+Evaluate perl expression in triggerexec(1)'s own context.
+Useful variables:
+B<$COMMAND_PID> is the I<COMMAND>'s PID.
+B<$PARAM> is a hash ref containing event parameters,
+for example B<line> which is the text triggered the action - if applicable (B<stdout:>/B<stderr:> events).
+
+=back
+
+=head1 LIMITATIONS
+
+=head1 SEE ALSO
+
+expect(1)
+
+=cut
+
+
+use constant { STAT_DEV=>0, STAT_INODE=>1, STAT_PERM=>2, STAT_NLINKS=>3, STAT_UID=>4, STAT_GID=>5, STAT_RDEV=>6, STAT_SIZE=>7, STAT_ATIME=>8, STAT_MTIME=>9, STAT_CTIME=>10, STAT_BLOCKSIZE=>11, STAT_BLOCKS=>12, };
+use Cwd qw/getcwd realpath/;
+use Data::Dumper;
+use Date::Parse;
+use DateTime::Format::Strptime;
+use Encode qw/decode encode decode_utf8 encode_utf8/;
+use Errno qw/:POSIX/;
+use Fcntl qw/:flock :seek F_GETFL F_SETFL O_NONBLOCK F_GETFD F_SETFD FD_CLOEXEC/;
+use File::Basename;
+use File::Temp qw/tempfile/;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
+use IPC::Run qw/run start finish/;
+use List::MoreUtils qw/all any none/;
+use Pod::Usage;
+use POSIX;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+
+
+GetOptions(
+	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+
+@Param = ();
+while(my $arg = shift @ARGV)
+{
+	last if $arg eq '--';
+	push @Param, $arg;
+}
+
+@Trigger = ();
+while(my $param = shift @Param)
+{
+	my $action = shift @Param;
+	push @Trigger, {event=>$param, action=>$action,};
+}
+
+sub do_action
+{
+	my $action = shift;
+	my $PARAM = shift;
+	if($action =~ /^perl:(.*)$/)
+	{
+		eval $1;
+		warn $@ if $@;
+	}
+	# else {} TODO validate action expressions at start
+}
+
+sub process_output_line
+{
+	my $stream_name = shift;
+	my $line = shift;
+	
+	for my $trig (@Trigger)
+	{
+		if($trig->{event} =~ /^(stdout|stderr):(.*)/)
+		{
+			my $event_stream_name = $1;
+			my $pattern = $2;
+			if($event_stream_name eq $stream_name)
+			{
+				if($line =~ /$pattern/)
+				{
+					do_action($trig->{action}, {line=>$line});
+				}
+			}
+		}
+		# else {} # TODO validate event expressions at start
+	}
+}
+
+sub process_buffer
+{
+	my $buffer_ref = shift;
+	my $last_call = shift;
+	my $func_ref = shift;
+	my $args_ref = shift;
+	
+	while(1)
+	{
+		my $eolpos = index $$buffer_ref, "\n";
+		last if $eolpos < 0;
+		$eolpos++;  # include the trailing linefeed
+		my $line = substr($$buffer_ref, 0, $eolpos);
+		$func_ref->(@$args_ref, $line);
+		$$buffer_ref = substr($$buffer_ref, $eolpos);
+	}
+	if($last_call and $$buffer_ref ne '')
+	{
+		# process the last incomplete line, if any
+		$func_ref->(@$args_ref, $$buffer_ref);
+	}
+}
+
+sub read_stdout
+{
+	my $chunk = shift;
+	$stdout_buffer .= $chunk;
+	process_buffer(\$stdout_buffer, 0, \&process_output_line, ['stdout']);
+	print STDOUT $chunk;
+}
+
+sub read_stderr
+{
+	my $chunk = shift;
+	$stderr_buffer .= $chunk;
+	process_buffer(\$stderr_buffer, 0, \&process_output_line, ['stderr']);
+	print STDERR $chunk;
+}
+
+$stdout_buffer = '';
+$stderr_buffer = '';
+
+$ipc = start [@ARGV], \*STDIN, \&read_stdout, \&read_stderr;
+$COMMAND_PID = $ipc->{KIDS}->[0]->{PID};
+finish $ipc;
+$status = $?;
+
+process_buffer(\$stdout_buffer, 1, \&process_output_line, ['stdout']);
+process_buffer(\$stderr_buffer, 1, \&process_output_line, ['stderr']);
+
+$exitcode = WEXITSTATUS($status);
+$exitcode = 128 + WTERMSIG($status) if WIFSIGNALED($status);
+exit $exitcode;

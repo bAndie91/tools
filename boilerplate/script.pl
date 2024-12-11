@@ -4,11 +4,11 @@
 
 =head1 NAME
 
-name - description
+scriptname - description
 
 =head1 SYNOPSIS
 
-name [I<OPTIONS>] [--] I<COMMAND> [I<ARGS>]
+scriptname [I<OPTIONS>] [--] I<COMMAND> [I<ARGS>]
 
 =head1 DESCRIPTION
 

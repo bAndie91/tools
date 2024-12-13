@@ -122,7 +122,7 @@ So be careful using it in shell command arguments like C<sh -e 'echo "data is: {
 
 =head1 SEE ALSO
 
-xargs(1), xe(1), apply(1), xapply(1) L<https://www.databits.net/~ksb/msrc/local/bin/xapply/xapply.html>
+xargs(1), xe(1) L<https://github.com/leahneukirchen/xe>, apply(1), xapply(1) L<https://www.databits.net/~ksb/msrc/local/bin/xapply/xapply.html>
 
 =cut
 

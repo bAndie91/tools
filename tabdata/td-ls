@@ -119,7 +119,7 @@ Equivalent to B<TIME_STYLE=full-iso>.
 
 =head1 SEE ALSO
 
-td-select(1), td-filter(1), td-trans-ls(1)
+td-select(1), td-filter(1), td-trans-ls(1), L<lr|https://github.com/leahneukirchen/lr>
 
 =cut
 

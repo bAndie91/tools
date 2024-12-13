@@ -15,28 +15,35 @@ GIT_DIR="$directory" git show repo-mgmt:access |\
 while read -r line
 do
 	case "$line" in
-	public)
+	(public)
 		echo "Making '$directory' public..." >&2
 		chmod o+rx "$directory"
 		;;
-	private)
+	(private)
 		echo "Making '$directory' private..." >&2
 		setfacl -b "$directory"
 		chmod g-rwx,o-rwx "$directory"
 		;;
-	default)
+	(default)
 		# leave permissions as they are set at the beginning
 		true
 		;;
-	delete)
+	(delete)
 		echo "Deleting '$directory'..." >&2
 		rm -rf --one-file-system "$directory"
 		;;
-	*)
+	(*)
 		echo "Unknown directive: '$line'" >&2
 		;;
 	esac
 done
+
+default_branch=$(GIT_DIR="$directory" git show repo-mgmt:default-branch)
+if [ -n "$default_branch" ]
+then
+	echo "Setting default branch to '$default_branch'..." >&2
+	GIT_DIR="$directory" git symbolic-ref HEAD refs/heads/"$default_branch"
+fi
 )
 
 errstatus=$?

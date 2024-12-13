@@ -37,6 +37,11 @@ do
 		;;
 	esac
 done
+)
+
+(
+set -e
+set -o pipefail
 
 default_branch=$(GIT_DIR="$directory" git show repo-mgmt:default-branch)
 if [ -n "$default_branch" ]

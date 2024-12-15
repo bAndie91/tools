@@ -1,7 +1,6 @@
 #!/bin/bash
 
-set -e
-set -o pipefail
+set -e -o pipefail
 set -u
 
 
@@ -223,6 +222,7 @@ lookup()
 }
 
 mkdir -p "$track_dir"
+set +e +o pipefail
 last_record_end=`tac "$track_file" 2>/dev/null | lookup 1 end return record`
 export TRACKRUN_LAST_UUID=`echo "$last_record_end" | lookup return 0`
 export TRACKRUN_LAST_STARTED=`tac "$track_file" 2>/dev/null | lookup 0 "$TRACKRUN_LAST_UUID" 1 start return 2`
@@ -232,6 +232,7 @@ last_successful_record_end=`tac "$track_file" 2>/dev/null | lookup 1 end 3 0 ret
 export TRACKRUN_LAST_SUCCESSFUL_UUID=`echo "$last_successful_record_end" | lookup return 0`
 export TRACKRUN_LAST_SUCCESSFUL_STARTED=`tac "$track_file" 2>/dev/null | lookup 0 "$TRACKRUN_LAST_SUCCESSFUL_UUID" 1 start return 2`
 export TRACKRUN_LAST_SUCCESSFUL_ENDED=`echo "$last_successful_record_end" | lookup return 2`
+set -e -o pipefail
 
 type uuidgen >/dev/null
 export TRACKRUN_UUID=`uuidgen`

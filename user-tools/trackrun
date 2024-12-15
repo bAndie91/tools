@@ -249,10 +249,9 @@ export TRACKRUN_LAST_SUCCESSFUL_STARTED=`tac "$track_file" 2>/dev/null | lookup 
 export TRACKRUN_LAST_SUCCESSFUL_ENDED=`echo "$last_successful_record_end" | lookup return 2`
 set -e -o pipefail
 
-if [ -z "${cmd_args[0]}" ]
+if [ -z "${cmd_args[0]:-}" ]
 then
-	echo "$0: no command given" >&2
-	exit 1
+	cmd_args=("$@")
 fi
 
 type uuidgen >/dev/null
@@ -275,7 +274,7 @@ record()
 record start
 
 {
-	exec -- setsid ${cmd_args[@]}
+	exec -- setsid "${cmd_args[@]}"
 	exit 127
 } &
 

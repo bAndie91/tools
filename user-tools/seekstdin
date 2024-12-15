@@ -1,0 +1,17 @@
+#!/usr/bin/env perl
+
+use File::Temp qw/tempfile/;
+use Fcntl qw/:flock :seek/;
+
+($tmpfh, undef) = tempfile( "tempstdin-XXXXXX", TMPDIR => 1, UNLINK => 1 );
+
+$/ = undef;
+print {$tmpfh} <STDIN>;
+
+seek $tmpfh, 0, SEEK_SET or die "$0: $!\n";
+open \*STDIN, '+<&='.fileno($tmpfh) or die "$0: $!\n";
+
+exec {$ARGV[0]} @ARGV;
+($errno, $errstr) = (int $!, $!);
+warn "$0: ${ARGV[0]}: $errstr\n";
+exit 125+$errno;

@@ -156,6 +156,7 @@ TOOLS ?= \
   screen-notify \
   screenreattach \
   screens \
+  seekstdin \
   set-sys-path \
   set-xcursor-lock-and-run \
   singleinstance \

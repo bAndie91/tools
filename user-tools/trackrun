@@ -194,6 +194,11 @@ cmd_id_hash=`printf %s "$cmd_id" | md5sum | cut -c 1-32`
 track_file=$track_dir/$cmd_id_hash
 
 
+if [ $do_show_hash ]
+then
+	echo $cmd_id_hash
+	exit
+fi
 if [ $do_report ]
 then
 	cat "$track_file" | tac | td-add-headers UUID EVENT DATETIME STATUS COMMAND

@@ -121,69 +121,79 @@ do_show_uuid=''
 while [ $# -gt 0 ]
 do
 	case "$1" in
-	--help)
+	(--help)
 		pod2text "$0"
 		exit 0;;
-	-f|--full-command)
+	(-f|--full-command)
 		cmd_id_by=full
 		;;
-	-b|--command-basename)
+	(-b|--command-basename)
 		cmd_id_by=basename
 		;;
-	-n|--name)
+	(-n|--name)
 		cmd_id_by=name
 		shift
 		cmd_id=$1
 		;;
-	-e|--env-var)
+	(-e|--env-var)
 		cmd_id_by=env
 		shift
 		cmd_id=${!1}
 		;;
-	-R|--report)
+	(-R|--report)
 		do_report=1
 		;;
-	-h|--show-hash)
+	(-h|--show-hash)
 		do_show_hash=1
 		;;
-	-u|--show-uuid)
+	(-u|--show-uuid)
 		do_show_uuid=1
 		;;
-	-U|--write-uuid)
+	(-U|--write-uuid)
 		shift
 		uuid_outfile=$1
 		;;
-	--)
+	(--)
 		shift
 		break;;
-	-*)
+	(-*)
 		echo "$0: unknown option: $1" >&1
 		exit -1;;
-	*)
+	(*)
 		break;;
 	esac
 	shift
 done
 
 
-if [ $# = 0 ]
-then
-	pod2text "$0" >&2
-	exit -1
-fi
-
-
-declare -a cmd_args=("$@")
-
+declare -a cmd_args=()
 
 if [ -z "$cmd_id" ]
 then
 	case "$cmd_id_by" in
-	full)
+	(full|basename)
+		if [ $# = 0 ]
+		then
+			pod2text "$0" >&2
+			exit -1
+		fi
+		cmd_args=("$@")
+		;;
+	esac
+	case "$cmd_id_by" in
+	(full)
 		cmd_id=${cmd_args[*]}
 		;;
-	basename)
+	(basename)
 		cmd_id=`basename "${cmd_args[0]}"`
+		;;
+	(name)
+		echo "$0: empty --name" >&2
+		exit 1
+		;;
+	(env)
+		echo "$0: value empty in --env-var" >&2
+		exit 1
 		;;
 	esac
 fi
@@ -238,6 +248,12 @@ export TRACKRUN_LAST_SUCCESSFUL_UUID=`echo "$last_successful_record_end" | looku
 export TRACKRUN_LAST_SUCCESSFUL_STARTED=`tac "$track_file" 2>/dev/null | lookup 0 "$TRACKRUN_LAST_SUCCESSFUL_UUID" 1 start return 2`
 export TRACKRUN_LAST_SUCCESSFUL_ENDED=`echo "$last_successful_record_end" | lookup return 2`
 set -e -o pipefail
+
+if [ -z "${cmd_args[0]}" ]
+then
+	echo "$0: no command given" >&2
+	exit 1
+fi
 
 type uuidgen >/dev/null
 export TRACKRUN_UUID=`uuidgen`

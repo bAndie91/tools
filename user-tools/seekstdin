@@ -1,9 +1,40 @@
 #!/usr/bin/env perl
 
+=pod
+
+=head1 NAME
+
+seekstdin - description
+
+=head1 SYNOPSIS
+
+seekstdin I<COMMAND> [I<ARGS>]
+
+=head1 DESCRIPTION
+
+Saves the content of STDIN into a temporary file,
+then runs I<COMMAND>.
+This is useful if I<COMMAND> does not support reading from pipe.
+One of the reasons why reading from pipe is usually not supported
+is that it is not seekable.
+seekstdin(1) makes I<COMMAND>'s STDIN seekable by saving its own input
+to a file which is unlinked right away,
+so it won't consume resources once I<COMMAND> ends.
+
+=head1 LIMITATIONS
+
+Impractical with huge files,
+because they possibly do not fit on the temporary files' filesystem.
+
+=head1 SEE ALSO
+
+=cut
+
+
 use File::Temp qw/tempfile/;
 use Fcntl qw/:flock :seek/;
 
-($tmpfh, undef) = tempfile( "tempstdin-XXXXXX", TMPDIR => 1, UNLINK => 1 );
+($tmpfh, undef) = tempfile( "seekstdin-XXXXXX", TMPDIR => 1, UNLINK => 1 );
 
 $/ = undef;
 print {$tmpfh} <STDIN>;

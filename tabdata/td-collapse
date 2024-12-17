@@ -53,7 +53,7 @@ B<Example>:
  16 | pause  | 11:04 |
  16 | resume | 11:05 |
  
- td-collapse -u EVENT
+ td-collapse -u EVENT -z
  
  COUNT | ID | EVENT        | TIME        | TIME_start | TIME_end | STATUS | STATUS_start | STATUS_end
  2     | 15 |              |             | 10:00      | 10:05    |        |              | ok
@@ -66,6 +66,15 @@ join the original column name with each of the unique field's values
 by I<STR> string.
 See example at B<-u> option description.
 Default is underscore C<_>.
+
+=item -k, --keep-equivalent-cells-united
+
+Don't repeat the original cells' content
+in the collapsed cell if all of the original cell are the same.
+
+=item -z, --empty-distributed-cells
+
+Clear cells of which data moved to other columns by B<-u> option.
 
 =back
 
@@ -118,13 +127,18 @@ td-collapse(1) roughly translates to SELECT COUNT(*) + GROUP_CONCAT() + GROUP BY
 $OptGlue = " ";
 $OptDistUniqueField = undef;
 $OptDistColumnNameSeparator = "_";
+$OptKeepSameCells = 0;
+$OptEmptyDistCells = 0;
 %OptionDefs = (
 	'g|glue=s' => \$OptGlue,
 	'u|distribute-unique-field=s' => \$OptDistUniqueField,
 	's|distributed-column-name-separator=s' => \$OptDistColumnNameSeparator,
+	'k|keep-equivalent-cells-united!' => \$OptKeepSameCells,
+	'z|empty-distributed-cells!' => \$OptEmptyDistCells,
 );
 
 use Data::Dumper;
+use List::MoreUtils qw/all/;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
@@ -137,6 +151,16 @@ if(defined $OptDistUniqueField)
 	$uniq_field_idx = $Header{$OptDistUniqueField};
 }
 
+
+sub make_collapsed_cell
+{
+	my $first_input_cell = $_[0];
+	if($OptKeepSameCells and all {$_ eq $first_input_cell} @_)
+	{
+		return $first_input_cell;
+	}
+	return join $OptGlue, @_;
+}
 
 sub commit_group
 {
@@ -170,9 +194,9 @@ sub commit_group
 				my $colname = $Header[$colidx];
 				my $distrib_colname = $colname . $OptDistColumnNameSeparator . $uniq_cell;
 				$group_members[$Header{$distrib_colname}]->[0] = $group_members[$colidx]->[$uniq_cell_idx];
-				$group_members[$colidx]->[$uniq_cell_idx] = undef;
+				$group_members[$colidx]->[$uniq_cell_idx] = undef if $OptEmptyDistCells;
 			}
-			$group_members[$uniq_field_idx]->[$uniq_cell_idx] = undef;
+			$group_members[$uniq_field_idx]->[$uniq_cell_idx] = undef if $OptEmptyDistCells;
 		}
 		for my $colidx (1..$last_input_column_idx)
 		{
@@ -181,7 +205,7 @@ sub commit_group
 		@{$group_members[$uniq_field_idx]} = grep {defined} @{$group_members[$uniq_field_idx]};
 	}
 	
-	print $collapsed_rows . $FS . $prev_group_key . $FS . join($FS, map { join $OptGlue, @$_ } @group_members[1..$#group_members]) . $RS;
+	print $collapsed_rows . $FS . $prev_group_key . $FS . join($FS, map {make_collapsed_cell(@$_)} @group_members[1..$#group_members]) . $RS;
 	@group_members = ();
 	$collapsed_rows = 0;
 	$group_count++;

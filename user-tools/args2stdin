@@ -115,8 +115,6 @@ if(defined $OptEndMark)
 	}
 }
 
-warn Dumper \@ARGV;
-
 if(defined $OptKeepArgs)
 {
 	@args_to_move = (($OptKeepArgs+1) .. $#ARGV);

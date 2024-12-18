@@ -34,6 +34,14 @@ Same as B<< --arg -I<NUM> >>.
 
 Move all arguments to STDIN.
 
+=item -e, --all-after I<STRING>
+
+I<STRING> marks the end of arguments.
+All arguments after this will be passed in STDIN.
+This argument won't be passed to I<COMMAND> anywhere.
+It's usually C<-->.
+args2stdin(1) does not have any default for this, so no particular argument makes the rest of them go to STDIN.
+
 =item -k, --keep I<NUM>
 
 Keep the first I<NUM> arguments as arguments, and move the rest of them.
@@ -44,9 +52,13 @@ Don't use it with B<-A>, B<-a>, or B<-r>.
 Delimit arguments by I<STRING> string.
 Default is linefeed (B<\n>).
 
+=item -t, --tab-delimiter
+
+Delimit arguments by TAB char.
+
 =item -0, --null
 
-Delimit argument by NUL char.
+Delimit arguments by NUL char.
 
 =back
 
@@ -66,6 +78,7 @@ no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 @args_to_move = ();
 $OptDelimiter = "\n";
 $OptKeepArgs = undef;
+$OptEndMark = undef;
 
 GetOptions(
 	'a|arg=i@' => \@args_to_move,
@@ -75,10 +88,34 @@ GetOptions(
 		my ($getopt, $param) = @_;
 		push @args_to_move, -$param;
 	},
+	'e|all-after=s' => \$OptEndMark,
 	'd|delimiter=s' => \$OptDelimiter,
+	't|tab-delimiter' => sub { $OptDelimiter = "\t"; },
 	'0|null' => sub { $OptDelimiter = chr 0; },
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 ) or pod2usage(-exitval=>2, -verbose=>99);
+
+if(defined $OptEndMark)
+{
+	my $mark_arg_num = undef;
+	for my $arg_num (1..$#ARGV)
+	{
+		if(defined $mark_arg_num)
+		{
+			push @args_to_move, $arg_num-1;
+		}
+		elsif($ARGV[$arg_num] eq $OptEndMark)
+		{
+			$mark_arg_num = $arg_num;
+		}
+	}
+	if(defined $mark_arg_num)
+	{
+		@ARGV = (@ARGV[0..($mark_arg_num-1)], @ARGV[($mark_arg_num+1)..$#ARGV]);
+	}
+}
+
+warn Dumper \@ARGV;
 
 if(defined $OptKeepArgs)
 {

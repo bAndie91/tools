@@ -48,7 +48,13 @@ but not edit or reorder old ones, otherwise results get confused.
 
 =item --retry
 
-Process those data which were previously failed (according to B<< I<INPUTFILE>.uniproc >> state file).
+Process those data which were previously failed (according to B<< I<INPUTFILE>.uniproc >> state file) too,
+besides the unprocessed ones.
+
+=item -1, --one-shot
+
+Process only 1 item, then exit.
+Default is to process as many items in series as possible.
 
 =back
 
@@ -141,9 +147,11 @@ use Pod::Usage;
 
 $OptRetry = 0;
 $OptDebug = 0;
+$OptShots = undef;
 
 GetOptions(
 	'retry' => \$OptRetry,
+	'1|oneshot|one-shot' => sub { $OptShots = 1; },
 	'debug' => \$OptDebug,
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 ) or pod2usage(-exitval=>2, -verbose=>99);
@@ -185,7 +193,7 @@ sub fopen
 	{
 		flock $fh, LOCK_EX or die "$0: flock: $path: $!\n";
 	}
-	return $fh
+	return $fh;
 }
 
 sub extend_resultsfile
@@ -333,8 +341,9 @@ $FirstUnprocessed = 0;
 $ResultsRecordLength = 4;
 $ResultsFile = "$InputFile.uniproc";
 $Results_fh = undef;
+$num_shots = 0;
 
-while(1)
+while(not defined $OptShots or $num_shots < $OptShots)
 {
 	$Results_fh = fopen $ResultsFile, {rw=>1, lock=>1};
 	my $LineNum = get_next_data_number();
@@ -358,4 +367,6 @@ while(1)
 	
 	unlink $InprogressFile;
 	close $inprogress_fh;
+	
+	$num_shots++;
 }

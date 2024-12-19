@@ -328,6 +328,6 @@ do
 	
 	if [ $FOREACH_ERREXIT = yes -a $FOREACH_COMMAND_STATUS != 0 ]
 	then
-		exit $status
+		exit $FOREACH_COMMAND_STATUS
 	fi
 done

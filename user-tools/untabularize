@@ -33,6 +33,8 @@ use List::MoreUtils qw/all any none/;
 use Pod::Usage;
 use POSIX;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+use utf8;
+use open ':std', ':encoding(UTF-8)';
 
 GetOptions(
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
@@ -42,13 +44,35 @@ GetOptions(
 
 while(<STDIN>)
 {
-	next if /^\+/ or /^(┌|├|└)/;
+	chomp;
+	if(/^(┌|├|└|\+)(.)/ and not @cellWidths)
+	{
+		my $linechar = $2;
+		s/^[^\Q$linechar\E]//;
+		s/[^\Q$linechar\E]$//;
+		@cellWidths = map {length} split /[^\Q$linechar\E]/;
+		next;
+	}
 	if(/^(\||│)/)
 	{
 		my $gridchar = $1;
-		s/^\s*\Q$gridchar\E\s*//;
-		s/\s*\Q$gridchar\E\s*$//;
-		my @cells = split /\s*\Q$gridchar\E\s*/;
+		s/^\Q$gridchar\E//;
+		s/\Q$gridchar\E$//;
+		if(not @cellWidths)
+		{
+			if($gridchar eq '|')
+			{
+				# pipe char may occur in the cell data as well,
+				# so can not confidentally take it as a cell separator.
+				die "$0: can not determine the columns in --ascii --no-horizontal mode\n";
+			}
+			@cellWidths = map {length} split /\Q$gridchar\E/;
+		}
+		my $record = $_;
+		my $prev_cell_endpos = 0;
+		my @cells = map { s/\s+$// or s/^\s+//;  $_ }
+			map { my $cell = substr $record, $prev_cell_endpos, $_; $prev_cell_endpos += $_ + length $gridchar; $cell }
+			@cellWidths;
 		print join("\t", @cells) . "\n";
 	}
 }

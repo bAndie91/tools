@@ -129,7 +129,14 @@ set -o pipefail
 set -u
 
 . /usr/lib/tool/bash-utils
-. /usr/lib/tool/ansi-codes
+
+colors_supported()
+{
+	if [ -n "${NO_COLOR:-}" ]; then return 1; fi
+	if [ -n "${CLICOLOR_FORCE:-}" ]; then return 0; fi
+	[ -t 1 ]
+}
+if colors_supported; then . /usr/lib/tool/ansi-codes; fi
 
 TAB=$'\t'
 
@@ -143,16 +150,16 @@ print_traceback()
 		local src="${BASH_SOURCE[$i]}"
 		[[ "$src" = "" ]] && src=non_file_source
 		
-		echo -n "$ANSI_bold$ANSI_fg_black"
+		echo -n "${ANSI_bold:-}${ANSI_fg_black:-}"
 		echo "  function: $func"
 		echo "  file: $src (line $linen)"
-		echo -n "$ANSI_reset"
+		echo -n "${ANSI_reset:-}"
 		
 		local line_number_text_sep='| '
 		nl -ba -w ${#linen} -s " $line_number_text_sep" "$src" | grep -C 2 -E "^\s*$linen " |\
 			prefixlines "    " |\
-			sed -e "s/^\(\s*$linen\) \(.\{${#line_number_text_sep}\}\)\(.*\)/\1-\2$ANSI_italic\3$ANSI_normal/" |\
-			sd '^' "$ANSI_bold$ANSI_fg_black" | sd '$' "$ANSI_reset"
+			sed -e "s/^\(\s*$linen\) \(.\{${#line_number_text_sep}\}\)\(.*\)/\1-\2${ANSI_italic:-}\3${ANSI_normal:-}/" |\
+			sd '^' "${ANSI_bold:-}${ANSI_fg_black:-}" | sd '$' "${ANSI_reset:-}"
 	done
 }
 

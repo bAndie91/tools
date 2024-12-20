@@ -60,6 +60,10 @@ then pipe the table through B<$PAGER>.
 
 =back
 
+=head1 SEE ALSO
+
+column(1), untabularize(1)
+
 =cut
 
 EOF

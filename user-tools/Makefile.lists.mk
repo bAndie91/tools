@@ -186,6 +186,7 @@ TOOLS ?= \
   uchmod \
   unicodestyle \
   uniproc \
+  untabularize \
   upsidedown \
   url_decode \
   url_encode \

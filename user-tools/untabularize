@@ -1,0 +1,54 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+untabularize - Revert the formatting done by tabularize(1)
+
+=head1 SYNOPSIS
+
+untabularize [I<OPTIONS>]
+
+=head1 DESCRIPTION
+
+=head1 OPTIONS
+
+=over 4
+
+=back
+
+=head1 LIMITATIONS
+
+=head1 SEE ALSO
+
+tabularize(1)
+
+=cut
+
+
+use Data::Dumper;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
+use List::MoreUtils qw/all any none/;
+use Pod::Usage;
+use POSIX;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+
+GetOptions(
+	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+
+while(<STDIN>)
+{
+	next if /^\+/ or /^(┌|├|└)/;
+	if(/^(\||│)/)
+	{
+		my $gridchar = $1;
+		s/^\s*\Q$gridchar\E\s*//;
+		s/\s*\Q$gridchar\E\s*$//;
+		my @cells = split /\s*\Q$gridchar\E\s*/;
+		print join("\t", @cells) . "\n";
+	}
+}

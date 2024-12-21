@@ -1,7 +1,6 @@
 
-autossl.so:
-	gcc $(CCFLAGS) autossl.c -D_GNU_SOURCE -ldl -lbsd -shared -fPIC -o $@
-	strip $@
+autossl.so: autossl.c
+	gcc $(CCFLAGS) $< -D_GNU_SOURCE -ldl -lbsd -shared -fPIC -o $@
 	chmod -x $@
 
 install: /usr/tool/autossl /usr/tool/autossl-conn /usr/lib/tool/preload/autossl.so manpages

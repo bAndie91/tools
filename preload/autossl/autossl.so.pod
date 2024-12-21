@@ -2,13 +2,13 @@
 
 =head1 NAME
 
-autossl.so - LD_PRELOAD-able library to upgrade plain transport channels to enrypted ones without the client software's knowledge
+autossl.so - LD_PRELOAD-able library to upgrade transport channels from plain to enrypted beyond the client software's capability
 
 =head1 USAGE
 	
 LD_PRELOAD=.../autossl.so AUTOSSL_UPGRADE_PORTS="80 8080" AUTOSSL_TLS_CMD=stunnel.sh wget ...
 
-LD_PRELOAD=.../autossl.so AUTOSSL_UPGRADE_PORT=80 AUTOSSL_UPGRADE_IPS="192.0.2.1 192.0.2.2" AUTOSSL_TLS_CMD=s_client.sh wget ...
+LD_PRELOAD=.../autossl.so AUTOSSL_UPGRADE_PORTS=80 AUTOSSL_UPGRADE_IPS="192.0.2.1 192.0.2.2" AUTOSSL_TLS_CMD=s_client.sh wget ...
 
 =head1 DESCRIPTION
 
@@ -84,7 +84,3 @@ AUTOSSL_TLS_CMD
 AUTOSSL_ERRNO
 
 AUTOSSL_SILENT
-
-=head1 HOW TO COMPILE
-
-  gcc -D_GNU_SOURCE -ldl -shared -fPIC -o autossl.so autossl.c

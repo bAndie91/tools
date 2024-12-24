@@ -1,5 +1,29 @@
 #!/bin/bash
 
+true <<'EOF'
+=pod
+
+=head1 NAME
+
+delfattr - Removes given attributes (xattr) from files
+
+=head1 SYNOPSIS
+
+delfattr -n I<NAME> [-n I<NAME> [..]] I<FILE> [I<FILE> [...]]
+
+=head1 DESCRIPTION
+
+Remove I<NAME> xattribute(s) from the given files.
+
+=head1 SEE ALSO
+
+setfattr(1)
+
+=cut
+
+EOF
+
+
 set -e
 set -o pipefail
 set -u

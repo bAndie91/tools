@@ -1,5 +1,35 @@
 #!/bin/bash
 
+true <<'EOF'
+=pod
+
+=head1 NAME
+
+cpyfattr - Copy file attributes (xattr)
+
+=head1 SYNOPSIS
+
+cpyfattr [I<OPTIONS>] I<SOURCE> I<DESTINATION>
+
+=head1 DESCRIPTION
+
+Copy I<SOURCE> file'Z<'>s all xattributes to I<DESTINATION>
+using getfattr(1) and setfattr(1).
+
+=head1 OPTIONS
+
+All options passed to setfattr(1).
+
+=head1 SEE ALSO
+
+getfattr(1), setfattr(1)
+
+=cut
+
+EOF
+
+
+
 set -e
 set -o pipefail
 set -u

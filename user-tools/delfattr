@@ -1,0 +1,37 @@
+#!/bin/bash
+
+set -e
+set -o pipefail
+set -u
+
+attr_names=()
+files=()
+
+while [ $# -gt 0 ]
+do
+	case "$1" in
+	(-n)
+		shift
+		attr_names+=("$1")
+		;;
+	(--)
+		shift
+		break
+		;;
+	(-*)
+		echo "$0: unknown option: $1" >&2
+		exit 1
+		;;
+	(*)
+		files+=("$1")
+		;;
+	esac
+	shift
+done
+
+files+=("$@")
+
+for name in "${attr_names[@]}"
+do
+	setfattr -x "$name" "${files[@]}"
+done

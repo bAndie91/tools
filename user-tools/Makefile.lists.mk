@@ -20,12 +20,14 @@ TOOLS ?= \
   cred \
   convert_chromium_cookies_to_netscape.sh \
   corner_time \
+  cpyfattr \
   cronrun \
   cut.awk \
   daemonctl \
   dataurl2bin \
   dbus-call \
   debdiff \
+  delfattr \
   descpids \
   dfbar \
   digasn \

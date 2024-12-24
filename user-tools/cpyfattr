@@ -1,0 +1,13 @@
+#!/bin/bash
+
+set -e
+set -o pipefail
+set -u
+
+source=$1
+dest=$2
+
+{
+echo "# file: $dest"
+getfattr -d "$source" | sed -e 1d
+} | setfattr --restore=- "$@"

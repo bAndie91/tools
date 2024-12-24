@@ -9,7 +9,7 @@ cpyfattr - Copy file attributes (xattr)
 
 =head1 SYNOPSIS
 
-cpyfattr [I<OPTIONS>] I<SOURCE> I<DESTINATION>
+cpyfattr I<SOURCE> I<DESTINATION> [I<OPTIONS>]
 
 =head1 DESCRIPTION
 
@@ -19,6 +19,7 @@ using getfattr(1) and setfattr(1).
 =head1 OPTIONS
 
 All options passed to setfattr(1).
+Note that I<OPTIONS> are at the end of argument list.
 
 =head1 SEE ALSO
 
@@ -35,7 +36,9 @@ set -o pipefail
 set -u
 
 source=$1
-dest=$2
+shift
+dest=$1
+shift
 
 {
 echo "# file: $dest"

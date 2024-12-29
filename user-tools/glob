@@ -54,7 +54,7 @@ File::Glob(3perl), perldoc(1): glob
 use Data::Dumper;
 use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
 use Pod::Usage;
-eval q{ use File::Glob ':bsd_glob'; 1; } or use File::Glob ':glob';
+eval q{ use File::Glob ':bsd_glob'; 1; } or eval q{ use File::Glob ':glob'; 1; };
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 $OptNullTerminated = 0;

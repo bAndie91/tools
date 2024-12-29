@@ -54,17 +54,17 @@ File::Glob(3perl), perldoc(1): glob
 use Data::Dumper;
 use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
 use Pod::Usage;
-eval q{ use File::Glob ':bsd_glob'; 1; } or eval q{ use File::Glob ':glob'; 1; };
+use File::Glob;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 $OptNullTerminated = 0;
-$OptGlobFlags = GLOB_QUOTE | GLOB_TILDE;
+$OptGlobFlags = File::Glob::GLOB_QUOTE | File::Glob::GLOB_TILDE;
 
 GetOptions(
 	'0' => \$OptNullTerminated,
-	'f' => sub { $OptGlobFlags |= GLOB_ERR; },
-	'i' => sub { $OptGlobFlags |= GLOB_NOCASE; },
-	'b' => sub { $OptGlobFlags |= GLOB_BRACE; },
+	'f' => sub { $OptGlobFlags |= File::Glob::GLOB_ERR; },
+	'i' => sub { $OptGlobFlags |= File::Glob::GLOB_NOCASE; },
+	'b' => sub { $OptGlobFlags |= File::Glob::GLOB_BRACE; },
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
 ) or pod2usage(-exitval=>2, -verbose=>99);
@@ -74,8 +74,8 @@ GetOptions(
 
 for my $pattern (@ARGV)
 {
-	my @matches = bsd_glob($pattern, $OptGlobFlags);
-	if(GLOB_ERROR)
+	my @matches = File::Glob::bsd_glob($pattern, $OptGlobFlags);
+	if(File::Glob::GLOB_ERROR)
 	{
 		die "$0: $!: $pattern\n";
 	}

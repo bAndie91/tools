@@ -54,7 +54,7 @@ File::Glob(3perl), perldoc(1): glob
 use Data::Dumper;
 use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
 use Pod::Usage;
-use File::Glob;
+eval { use File::Glob ':bsd_glob'; 1; } or use File::Glob ':glob';
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 $OptNullTerminated = 0;
@@ -74,7 +74,7 @@ GetOptions(
 
 for my $pattern (@ARGV)
 {
-	my @matches = File::Glob::bsd_glob($pattern, $OptGlobFlags);
+	my @matches = bsd_glob($pattern, $OptGlobFlags);
 	if(GLOB_ERROR)
 	{
 		die "$0: $!: $pattern\n";

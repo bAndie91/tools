@@ -1,0 +1,99 @@
+#!/bin/bash
+
+#                no-keyframe  keyframe               keyframe  no-keyframe
+#                         ↓     ↓                        ↓     ↓
+# input file: |-----------|+++++|========================|+++++|--------------|
+#           start         A  ↑  B           ↑            C  ↑  D             end
+#                            |              |               |
+#                         re-encode        copy         re-encode
+#                        portion AB     portion BC      portion CD
+#
+# re-encode only the leading (A-B) and trailing (C-D) portions
+# which bound by keyframes only on one side (B and C).
+# copy the bulk of the cut, so it'll be quick.
+# and finally concat AB + BC + CD.
+#
+# concatenation is tested with mp4 format.
+# the input coded must be supported by ffmpeg as output codec too,
+# in order to able to concat portions AB to BC and BC to CD.
+
+set -eo pipefail
+set -u
+
+input=$1
+shift
+ss=$1
+shift
+to=$1
+shift
+
+if [ ${to:0:1} = + ]
+then
+	to=`bc <<< $ss$to`
+fi
+
+ext=${input##*.}
+
+c()
+{
+	bc <<< "$*"
+}
+
+frames()
+{
+	local interval=$1
+	ffprobe -hide_banner -loglevel quiet -i "$input" -v 0 -of csv=p=0 -select_streams v -show_entries packet=pts_time,flags -read_intervals "$interval"
+}
+
+keyframes()
+{
+	#ffprobe -hide_banner -loglevel quiet -i "$input" -select_streams v -show_entries frame=pts_time -of csv=p=0 -skip_frame nokey
+	#ffprobe -v 0 -of compact=p=0 -select_streams v -show_entries packet=pts_time,flags -read_intervals 2990%3010 "input.mkv" | grep K
+	#ffprobe -hide_banner -loglevel quiet -i "$input" -v 0 -of csv=p=0 -select_streams v -show_entries packet=pts_time -skip_frame nokey -read_intervals "$interval"
+	frames "$@" | grep ',K' | cut -f1 -d,
+}
+
+lookaround_sec=5
+
+next_keyframe_ts()
+{
+	keyframes $(c $1 - $lookaround_sec)%$(c $1 + $lookaround_sec) | perl -ne 'if($_ > '"$1"'){ print; exit; }'
+}
+
+prev_keyframe_ts()
+{
+	keyframes $(c $1 - $lookaround_sec)%$(c $1 + $lookaround_sec) | tac | perl -ne 'if($_ < '"$1"'){ print; exit; }'
+}
+
+next_frame_ts()
+{
+	frames $(c $1 - $lookaround_sec)%$(c $1 + $lookaround_sec) | cut -f1 -d, | perl -ne 'if($_ == '"$1"'){ $n = <>; print $n; exit; }'
+}
+
+prev_frame_ts()
+{
+	frames $(c $1 - $lookaround_sec)%$(c $1 + $lookaround_sec) | tac | cut -f1 -d, | perl -ne 'if($_ == '"$1"'){ $n = <>; print $n; exit; }'
+}
+
+gen_filelist()
+{	
+	echo file $PWD/ffcutp_$ts_a-$ts_b.$ext
+	echo file $PWD/ffcutp_$ts_b-$ts_c.$ext
+	echo file $PWD/ffcutp_$ts_c-$ts_d.$ext
+}
+
+ts_a=$ss
+ts_b=`next_keyframe_ts "$ss"`
+ts_b0=`prev_frame_ts $ts_b`
+ts_c=`prev_keyframe_ts "$to"`
+ts_c1=`next_frame_ts $ts_c`
+ts_d=$to
+
+# TODO make the input and output codecs match
+ffmpeg -ss $ts_a	-to $ts_b0	-i "$input"		-y ffcutp_$ts_a-$ts_b.$ext
+ffmpeg -ss $ts_b	-to $ts_c	-i "$input"	-c copy	-y ffcutp_$ts_b-$ts_c.$ext
+ffmpeg -ss $ts_c1	-to $ts_d	-i "$input"		-y ffcutp_$ts_c-$ts_d.$ext
+
+ffmpeg -f concat -safe 0 -i <(gen_filelist) -c copy -y ffcutp_$ts_a-$ts_d.$ext
+
+rm ffcutp_$ts_a-$ts_b.$ext ffcutp_$ts_b-$ts_c.$ext ffcutp_$ts_c-$ts_d.$ext

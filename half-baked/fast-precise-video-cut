@@ -39,6 +39,19 @@ c()
 	bc <<< "$*"
 }
 
+assert()
+{
+	local msg=$1
+	shift
+	if "$@"
+	then
+		return 0
+	else
+		echo "$msg" >&2
+		exit 1
+	fi
+}
+
 frames()
 {
 	local interval=$1
@@ -53,7 +66,7 @@ keyframes()
 	frames "$@" | grep ',K' | cut -f1 -d,
 }
 
-lookaround_sec=5
+lookaround_sec=10
 
 next_keyframe_ts()
 {
@@ -62,17 +75,17 @@ next_keyframe_ts()
 
 prev_keyframe_ts()
 {
-	keyframes $(c $1 - $lookaround_sec)%$(c $1 + $lookaround_sec) | tac | perl -ne 'if($_ < '"$1"'){ print; exit; }'
+	keyframes $(c $1 - $lookaround_sec)%$(c $1 + $lookaround_sec) | rcmod any=0 tac | perl -ne 'if($_ < '"$1"'){ print; exit; }'
 }
 
 next_frame_ts()
 {
-	frames $(c $1 - $lookaround_sec)%$(c $1 + $lookaround_sec) | cut -f1 -d, | perl -ne 'if($_ == '"$1"'){ $n = <>; print $n; exit; }'
+	frames $(c $1 - $lookaround_sec)%$(c $1 + $lookaround_sec) | rcmod any=0 cut -f1 -d, | perl -ne 'if($_ == '"$1"'){ $n = <>; print $n; exit; }'
 }
 
 prev_frame_ts()
 {
-	frames $(c $1 - $lookaround_sec)%$(c $1 + $lookaround_sec) | tac | cut -f1 -d, | perl -ne 'if($_ == '"$1"'){ $n = <>; print $n; exit; }'
+	frames $(c $1 - $lookaround_sec)%$(c $1 + $lookaround_sec) | rcmod any=0 tac | rcmod any=0 cut -f1 -d, | perl -ne 'if($_ == '"$1"'){ $n = <>; print $n; exit; }'
 }
 
 gen_filelist()
@@ -84,16 +97,25 @@ gen_filelist()
 
 ts_a=$ss
 ts_b=`next_keyframe_ts "$ss"`
+assert "next_keyframe_ts $ss" [ -n "$ts_b" ]
+
 ts_b0=`prev_frame_ts $ts_b`
+assert "prev_frame_ts $ts_b" [ -n "$ts_b0" ]
+
 ts_c=`prev_keyframe_ts "$to"`
+assert "prev_keyframe_ts $to" [ -n "$ts_c" ]
+
 ts_c1=`next_frame_ts $ts_c`
+assert "next_frame_ts $ts_c" [ -n "$ts_c1" ]
+
 ts_d=$to
 
 # TODO make the input and output codecs match
-ffmpeg -ss $ts_a	-to $ts_b0	-i "$input"		-y ffcutp_$ts_a-$ts_b.$ext
-ffmpeg -ss $ts_b	-to $ts_c	-i "$input"	-c copy	-y ffcutp_$ts_b-$ts_c.$ext
-ffmpeg -ss $ts_c1	-to $ts_d	-i "$input"		-y ffcutp_$ts_c-$ts_d.$ext
 
-ffmpeg -f concat -safe 0 -i <(gen_filelist) -c copy -y ffcutp_$ts_a-$ts_d.$ext
+ffmpeg -nostdin -ss $ts_a	-to $ts_b0	-i "$input"		-y ffcutp_$ts_a-$ts_b.$ext
+ffmpeg -nostdin -ss $ts_b	-to $ts_c	-i "$input"	-c copy	-y ffcutp_$ts_b-$ts_c.$ext
+ffmpeg -nostdin -ss $ts_c1	-to $ts_d	-i "$input"		-y ffcutp_$ts_c-$ts_d.$ext
+
+ffmpeg -nostdin -f concat -safe 0 -i <(gen_filelist) -c copy -y ffcutp_$ts_a-$ts_d.$ext
 
 rm ffcutp_$ts_a-$ts_b.$ext ffcutp_$ts_b-$ts_c.$ext ffcutp_$ts_c-$ts_d.$ext

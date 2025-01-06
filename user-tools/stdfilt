@@ -11,12 +11,12 @@ $Filters = {
 	'out' => [],
 	'err' => [],
 };
-@savedARGV = @ARGV;
+@initialARGV = @ARGV;
 
 
 sub process_args
 {
-	@ARGV = @savedARGV;
+	@ARGV = @initialARGV;
 	pop @{$Filters->{'out'}} while scalar @{$Filters->{'out'}};
 	pop @{$Filters->{'err'}} while scalar @{$Filters->{'err'}};
 	return GetOptions(
@@ -27,6 +27,7 @@ sub process_args
 		'E|fe|filter-stderr=s@' => sub { push @{$Filters->{'err'}}, {'pass'=>0, 'pattern'=>$_[1]}; },
 		'p|pass=s@' =>   sub { push @{$Filters->{$_}}, {'pass'=>1, 'pattern'=>$_[1]} for ('out', 'err'); },
 		'f|filter=s@' => sub { push @{$Filters->{$_}}, {'pass'=>0, 'pattern'=>$_[1]} for ('out', 'err'); },
+		'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
 	);
 }
 

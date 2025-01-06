@@ -110,6 +110,12 @@ assert "next_frame_ts $ts_c" [ -n "$ts_c1" ]
 
 ts_d=$to
 
+
+echo A-B : $ts_a -- $ts_b0
+echo B-C : $ts_b -- $ts_c
+echo C-D : $ts_c1 -- $ts_d
+
+
 # TODO make the input and output codecs match
 
 ffmpeg -nostdin -ss $ts_a	-to $ts_b0	-i "$input"		-y ffcutp_$ts_a-$ts_b.$ext

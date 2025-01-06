@@ -6,13 +6,21 @@ use Pod::Usage;
 
 $0 = "reportcmdstatus";
 
+$report_start = 0;
 $clone_status = 0;
 
 GetOptions(
+	's|report-start!' => \$report_start,
 	'c|clone!' => \$clone_status,
 	'help|?' => sub{ pod2usage(-exitval=>0, -verbose=>99); },
 	'<>' => sub{ unshift @ARGV, @_; die '!FINISH'; },
 ) or pod2usage(-exitval=>2, -verbose=>99);
+
+if($report_start)
+{
+	eval q{ use String::ShellQuote; 1; } or die $@;
+	printf STDERR "starting: %s\n", join(' ', map {shell_quote $_} @ARGV);
+}
 
 system @ARGV;
 $status = ${^CHILD_ERROR_NATIVE};
@@ -42,7 +50,7 @@ reportcmdstatus - Textually show how the given command finished (exit status/sig
 
 =head1 SYNOPSIS
 
-reportcmdstatus [-c] [--] <COMMAND> [<ARGS>]
+reportcmdstatus [I<OPTIONS>] [--] I<COMMAND> [I<ARGS>]
 
 =head1 OPTIONS
 
@@ -50,8 +58,15 @@ reportcmdstatus [-c] [--] <COMMAND> [<ARGS>]
 
 =item -c, --clone
 
-Take COMMAND's status and itself exits with it.
+Take I<COMMAND>'s status and itself exits with it.
 Default is to exit 0.
+
+If I<COMMAND> did not exit normally, but it is terminated by a signal,
+exit 128 + I<SIGNAL>, like most shells do.
+
+=item -s, --report-start
+
+Report what is being started, ie. I<COMMAND> I<ARGS>, to the STDERR.
 
 =back
 

@@ -19,7 +19,7 @@ GetOptions(
 if($report_start)
 {
 	eval q{ use String::ShellQuote; 1; } or die $@;
-	printf STDERR "starting: %s\n", join(' ', map {shell_quote $_} @ARGV);
+	printf STDERR "starting: %s\n", join(' ', map {String::ShellQuote::shell_quote($_)} @ARGV);
 }
 
 system @ARGV;

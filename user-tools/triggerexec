@@ -4,7 +4,7 @@
 
 =head1 NAME
 
-triggerexec - description
+triggerexec - Run a command and do various specified actions depending on what command does
 
 =head1 SYNOPSIS
 
@@ -40,6 +40,10 @@ B<$PARAM> is a hash ref containing event parameters,
 for example B<$PARAM->{line}> is the text triggered the action - if applicable (B<stdout:>/B<stderr:> events).
 
 =back
+
+=head1 IMPLEMENTATION STATUS
+
+incomplete
 
 =head1 LIMITATIONS
 

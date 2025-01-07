@@ -4,7 +4,7 @@
 
 =head1 NAME
 
-seekstdin - description
+seekstdin - Makes STDIN seekable for a given command
 
 =head1 SYNOPSIS
 
@@ -19,7 +19,7 @@ One of the reasons why reading from pipe is usually not supported
 is that it is not seekable.
 seekstdin(1) makes I<COMMAND>'s STDIN seekable by saving its own input
 to a file which is unlinked right away,
-so it won't consume resources once I<COMMAND> ends.
+so it won't occupy disk space once I<COMMAND> ends.
 
 =head1 LIMITATIONS
 

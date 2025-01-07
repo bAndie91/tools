@@ -21,6 +21,14 @@ __END__
 
 timestamper - Prepend a timestamp to each input line
 
+=head1 SYNOPSIS
+
+timestamper
+
+=head1 DESCRIPTION
+
+Read STDIN and put everything on STDOUT, only prepending each line by a timestamp and a B<TAB> char.
+
 =head1 ENVIRONMENT
 
 =over 4

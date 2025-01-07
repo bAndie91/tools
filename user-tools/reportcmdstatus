@@ -3,6 +3,7 @@
 use POSIX;
 use Getopt::Long qw/:config no_ignore_case permute/;
 use Pod::Usage;
+use IPC::Run qw/start finish/;
 
 $0 = "reportcmdstatus";
 
@@ -19,20 +20,30 @@ GetOptions(
 if($report_start)
 {
 	eval q{ use String::ShellQuote; 1; } or die $@;
-	printf STDERR "starting: %s\n", join(' ', map {String::ShellQuote::shell_quote($_)} @ARGV);
+	$COMMAND_STRING_QUOTED = join(' ', map {String::ShellQuote::shell_quote($_)} @ARGV);
 }
 
-system @ARGV;
-$status = ${^CHILD_ERROR_NATIVE};
+sub child_process_forked
+{
+	if($report_start)
+	{
+		printf STDERR "starting process %d: %s\n", $$, $COMMAND_STRING_QUOTED;
+	}
+}
+
+$ipc = start [@ARGV], init=>\&child_process_forked;
+$COMMAND_PID = $ipc->{KIDS}->[0]->{PID};
+finish $ipc;
+$status = $?;
 
 if(WIFSIGNALED($status))
 {
-	printf STDERR "command terminated by signal %d.\n", WTERMSIG($status);
+	printf STDERR "command (pid $COMMAND_PID) terminated by signal: %d\n", WTERMSIG($status);
 	$mystatus = 128 + WTERMSIG($status);
 }
 else
 {
-	printf STDERR "command exited with status %d.\n", WEXITSTATUS($status);
+	printf STDERR "command (pid $COMMAND_PID) exited with status: %d\n", WEXITSTATUS($status);
 	$mystatus = WEXITSTATUS($status);
 }
 

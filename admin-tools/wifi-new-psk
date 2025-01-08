@@ -56,7 +56,7 @@ psk_file=`grep '^wpa_psk_file=' /etc/hostapd/config.* | get_config_value | head 
 key=`pwgen -cns 16 1`
 
 ts=`date +%s`
-date=`LANG=C date +%c -d @$ts`
+date=`LANG=C date -d @$ts`
 
 echo "PSK file is $psk_file" >&2
 {

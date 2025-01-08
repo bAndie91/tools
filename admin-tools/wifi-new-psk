@@ -11,7 +11,7 @@ type qrcli >/dev/null
 get_ssids()
 {
 	set +e
-	grep '^ssid=' /etc/hostapd/config.* | cut -f2- -d= | cut -f1 -d'#' | sort
+	grep '^ssid=' /etc/hostapd/config.* | cut -f2- -d= | cut -f1 -d'#' | sort -u
 	set -e
 }
 

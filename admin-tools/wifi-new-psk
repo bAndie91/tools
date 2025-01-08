@@ -55,8 +55,14 @@ fi
 psk_file=`grep '^wpa_psk_file=' /etc/hostapd/config.* | get_config_value | head -n1`
 key=`pwgen -cns 16 1`
 
+ts=`date +%s`
+date=`LANG=C date +%c -d @$ts`
+
 echo "PSK file is $psk_file" >&2
-echo "00:00:00:00:00:00 $key" >> "$psk_file"
+{
+	echo "# created_ts=$ts ($date) with wifi-new-psk"
+	echo "00:00:00:00:00:00 $key"
+} >> "$psk_file"
 
 code=`qrwifi "$ssid" "$key"`
 echo "$code"

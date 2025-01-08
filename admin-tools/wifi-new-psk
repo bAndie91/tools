@@ -46,7 +46,7 @@ else
 		IFS=$'\n'
 		ssids=(`get_ssids`)
 		IFS=$' \t\n'
-		ssid=${ssids[$n]}
+		ssid=${ssids[$1]}
 	else
 		ssid=$1
 	fi

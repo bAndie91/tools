@@ -1,0 +1,56 @@
+#!/bin/bash
+
+set -e
+set -o pipefail
+set -u
+
+type pwgen >/dev/null
+type qrwifi >/dev/null
+type qrcli >/dev/null
+
+get_ssids()
+{
+	set +e
+	grep '^ssid=' /etc/hostapd/config.* | cut -f2- -d= | cut -f1 -d'#' | sort
+	set -e
+}
+
+if [ -z "${1:-}" ]
+then
+	IFS=$'\n'
+	ssids=(`get_ssids`)
+	IFS=$' \t\n'
+	{
+	if [ ${#ssids[@]} = 0 ]
+	then
+		echo "no known SSID found on the local hostAPd's config(s)"
+		echo "enter an SSID as parameter if you know better."
+	else
+		echo "known SSIDs by the local hostAPd:"
+		for n in "${!ssids[@]}"
+		do
+			echo " ($n) ${ssids[$n]}"
+		done
+		echo "enter SSID name or number as parameter."
+	fi
+	} >&2
+	exit 1
+else
+	if [[ $1 =~ ^[0-9]+$ ]]
+	then
+		IFS=$'\n'
+		ssids=(`get_ssids`)
+		IFS=$' \t\n'
+		ssid=${ssids[$n]}
+	else
+		ssid=$1
+	fi
+fi
+
+key=`pwgen -cns 16 1`
+
+echo "00:00:00:00:00:00 $key" >> /etc/hostapd/wpa.psk
+
+code=`qrwifi "$ssid" "$key"`
+echo "$code"
+echo "$code" | qrcli

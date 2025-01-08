@@ -59,8 +59,11 @@ depcheck-dhcpdiscover:
 	python -c 'import scapy'
 
 
-install-all: install-dmaster /etc/profile.d/locale-validator.sh install-dhcpdiscover
+install-all: install-dmaster /etc/profile.d/locale-validator.sh install-dhcpdiscover /usr/sbin/wps-pbc-approve
 .PHONY: install-all
 
 uninstall-all: uninstall-dmaster uninstall-locale-validator uninstall-dhcpdiscover
 .PHONY: uninstall-all
+
+/usr/sbin/wps-pbc-approve: wps-pbc-approve
+	install $< $@

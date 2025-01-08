@@ -1,0 +1,13 @@
+#!/bin/sh
+
+d=/var/run/hostapd
+
+for f in "$d"/*
+do
+        if [ -S "$f" ]
+        then
+                i=`basename "$f"`
+                echo "Pushing WPS button on $i ..." >&2
+                hostapd_cli -p"$d" -i"$i" wps_pbc
+        fi
+done

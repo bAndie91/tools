@@ -52,7 +52,7 @@ else
 	fi
 fi
 
-psk_file=`grep -m1 '^wpa_psk_file=' /etc/hostapd/config.* | get_config_value`
+psk_file=`grep '^wpa_psk_file=' /etc/hostapd/config.* | get_config_value | head -n1`
 key=`pwgen -cns 16 1`
 
 echo "PSK file is $psk_file" >&2

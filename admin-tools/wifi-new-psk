@@ -8,10 +8,15 @@ type pwgen >/dev/null
 type qrwifi >/dev/null
 type qrcli >/dev/null
 
+get_config_value()
+{
+	cut -f2- -d= | cut -f1 -d'#'
+}
+
 get_ssids()
 {
 	set +e
-	grep '^ssid=' /etc/hostapd/config.* | cut -f2- -d= | cut -f1 -d'#' | sort -u
+	grep '^ssid=' /etc/hostapd/config.* | get_config_value | sort -u
 	set -e
 }
 
@@ -47,9 +52,11 @@ else
 	fi
 fi
 
+psk_file=`grep -m1 '^wpa_psk_file=' /etc/hostapd/config.* | get_config_value`
 key=`pwgen -cns 16 1`
 
-echo "00:00:00:00:00:00 $key" >> /etc/hostapd/wpa.psk
+echo "PSK file is $psk_file" >&2
+echo "00:00:00:00:00:00 $key" >> "$psk_file"
 
 code=`qrwifi "$ssid" "$key"`
 echo "$code"

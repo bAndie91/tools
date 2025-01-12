@@ -15,6 +15,7 @@ TOOLS = \
   td-disamb-headers \
   td-expand \
   td-filter \
+  td-format \
   td-gnuplot \
   td-keepheader \
   td-lpstat \

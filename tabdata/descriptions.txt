@@ -7,6 +7,8 @@ td-collapse - Collapse multiple tabular data records with equivalent keys into o
 td-disamb-headers - Disambiguate headers in tabular data
 td-expand - Generate multiple rows from each one row in a Tabular data stream.
 td-filter - Show only those records from the input tabular data stream which match to the conditions.
+td-format - Print formatted lines per Tabular Data record
+td-gnuplot - Graph tabular data using gnuplot(1)
 td-keepheader - Plug a non header-aware program in the tabular-data processing pipeline
 td-lpstat - lpstat(1) wrapper to output printers status in Tabular Data format
 td-ls - ls(1)-like file list but more machine-parseable

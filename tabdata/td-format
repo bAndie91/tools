@@ -1,0 +1,125 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+td-format - Print formatted lines per Tabular Data record
+
+=head1 SYNOPSIS
+
+td-format I<TEMPLATE>
+
+=head1 DESCRIPTION
+
+=head1 OPTIONS
+
+=over 4
+
+=item --nofield=[B<empty>|B<leave>|B<name>|B<skip-record>|B<fail>]
+
+How to resolve non-existent field names in template variables?
+
+=over 8
+
+=item B<empty>
+
+Replace with empty string.
+This is the default.
+
+=item B<leave>
+
+Leave the C<{field_name>}> string there unresolved.
+
+=item B<name>
+
+Replace with the field name itself.
+
+=item B<skip-record>
+
+Don't output anything for the given record.
+Continue with the next one.
+
+=item B<fail>
+
+Exit the program immediately with error code.
+
+=back
+
+=item -n
+
+No newline.
+
+=back
+
+=head1 SEE ALSO
+
+=cut
+
+
+use Switch;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+
+
+sub replace_nofield
+{
+	my $fieldname = shift;
+	my $template_fragment = shift;
+	my $callback_data = shift;
+	
+	switch($OptNoFieldBehavior)
+	{
+		case('empty') { return ''; }
+		case('leave') { return $template_fragment; }
+		case('name') { return $fieldname; }
+		case('skip-record') { $callback_data->{'skip-record'} = 1; die; }
+		case('fail') { $callback_data->{'fail'} = 1; $callback_data->{'missing-field-name'} = $fieldname; die; }
+	}
+}
+
+sub render
+{
+	my $s = shift;
+	my $fields = shift;
+	my $callback_data = shift;
+	$s =~ s{\{([^{}]*)\}}{$fields->{$1} // replace_nofield($1, $&, $callback_data)}eg;
+	return $s;
+}
+
+
+@NoFieldBehaviorValues = (qw/empty leave name skip-record fail/);
+$OptNoFieldBehavior = 'empty';
+$OptNoNewline = 0;
+
+%OptionDefs = (
+	'nofield=s' => \$OptNoFieldBehavior,
+	'n' => \$OptNoNewline,
+);
+
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
+pod2usage(-exitval=>2, -verbose=>99) if not $OptNoFieldBehavior ~~ @NoFieldBehaviorValues;
+
+@Templates = @ARGV;
+
+
+
+process_header(scalar <STDIN>);
+
+RECORD:
+while(not eof STDIN)
+{
+	my @row = read_record(\*STDIN);
+	my %fields = map {( $_ => $row[$Header{$_}] )} keys %Header;
+	my $callback_data = {};
+	my $output;
+	eval {
+		$output = join $FS, map {render($_, \%fields, $callback_data)} @Templates; 1;
+	}
+	or do {
+		if($callback_data->{'skip-record'}) { next RECORD; }
+		if($callback_data->{'fail'}) { die sprintf "%s: no such field: %s\n", $0, $callback_data->{'missing-field-name'}; }
+	};
+	$output .= $RS unless $OptNoNewline;
+	print $output;
+}

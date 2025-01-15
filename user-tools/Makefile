@@ -23,25 +23,30 @@ $(TOOLS_TARGET_DIR)/msg: /etc/bash_completion.d/msg
 $(TOOLS_TARGET_DIR)/perl-repl: /usr/libexec/perlshell
 $(TOOLS_TARGET_DIR)/rsync-semichroot: /usr/share/doc/tool/rsync-semichroot.txt
 $(TOOLS_TARGET_DIR)/multithrottler: /usr/lib/multithrottler/Throttler.pm
+$(TOOLS_TARGET_DIR)/git-mirrors: /usr/share/bash-completion/completions/git-mirrors
 
 /etc/bash_completion.d/msg: $(REPO_ROOT)/bash/bash_completion.d/msg
-	install $(REPO_ROOT)/bash/bash_completion.d/msg $@
+	install $< $@
+	@echo remove $@ >> uninstall.sh
+
+/usr/share/bash-completion/completions/git-mirrors: $(REPO_ROOT)/bash/bash_completion.d/git-mirrors
+	install $< $@
 	@echo remove $@ >> uninstall.sh
 
 /usr/libexec/perlshell: $(REPO_ROOT)/libexec/perlshell
-	install $(REPO_ROOT)/libexec/perlshell $@
+	install $< $@
 	@echo remove $@ >> uninstall.sh
 
 /usr/share/doc/tool/rsync-semichroot.txt: $(REPO_ROOT)/doc/rsync-semichroot.txt | /usr/share/doc/tool
-	install $(REPO_ROOT)/doc/rsync-semichroot.txt $@
+	install $< $@
 	@echo remove $@ >> uninstall.sh
 
 /usr/lib/tool/bash-utils: $(REPO_ROOT)/bash/bash-utils | /usr/lib/tool
-	install $(REPO_ROOT)/bash/bash-utils $@
+	install $< $@
 	@echo remove $@ >> uninstall.sh
 
 /usr/lib/multithrottler/Throttler.pm: $(REPO_ROOT)/lib/multithrottler/Throttler.pm | /usr/lib/multithrottler
-	install $(REPO_ROOT)/lib/multithrottler/Throttler.pm $@
+	install $< $@
 	@echo remove $@ >> uninstall.sh
 
 /usr/lib/multithrottler:

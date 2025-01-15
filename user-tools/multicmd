@@ -104,7 +104,7 @@ $last_cmd_ref = pop @cmd_args;
 
 for my $cmd_ref (@cmd_args)
 {
-	system @$cmd_ref;
+	system {$cmd_ref->[0]} @$cmd_ref;
 	my $error_code = ${^CHILD_ERROR_NATIVE};
 	my $sys_errmsg = $!;
 	my $sys_errno = int $!;

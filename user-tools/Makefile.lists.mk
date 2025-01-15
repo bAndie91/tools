@@ -73,6 +73,7 @@ TOOLS ?= \
   jaro-metric \
   jaro-winkler-metric \
   jobsel \
+  json-merge-objects \
   json2bencode \
   json2msgpack \
   killcmd \

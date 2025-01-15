@@ -1,0 +1,3 @@
+#!/bin/bash
+
+exec jq "$@" -s 'reduce .[] as $item ({}; . *= $item)'

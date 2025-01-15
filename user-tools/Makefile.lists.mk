@@ -18,6 +18,7 @@ TOOLS ?= \
   chshebang \
   cled \
   cred \
+  confpatch \
   convert_chromium_cookies_to_netscape.sh \
   corner_time \
   cpyfattr \

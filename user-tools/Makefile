@@ -87,16 +87,16 @@ DEPCHECK/dbus-call:
 
 .PHONY: try-satisfy-dependencies
 try-satisfy-dependencies:
-	cpan ARGV::readonly || true
-	apt install python3-parsel || true
-	apt install python3-cssselect || true
-	apt install python3-xmltodict || true
-	apt install jq || true
-	apt install libnet-dbus-perl || cpan Net::DBus || true
-	apt install libxml-hash-lx-perl || cpan XML::Hash::LX || true
-	apt install libjson-perl || cpan JSON || true
-	apt install liblog-log4perl-perl || cpan Log::Log4perl || true
-	apt install libyaml-perl || cpan YAML || true
+	-cpan ARGV::readonly
+	-apt install python3-parsel
+	-apt install python3-cssselect
+	-apt install python3-xmltodict
+	-apt install jq
+	-apt install libnet-dbus-perl || cpan Net::DBus
+	-apt install libxml-libxml-perl libxml-hash-lx-perl || cpan XML::Hash::LX
+	-apt install libjson-perl || cpan JSON
+	-apt install liblog-log4perl-perl || cpan Log::Log4perl
+	-apt install libyaml-perl || cpan YAML
 
 
 install-all: \

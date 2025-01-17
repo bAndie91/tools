@@ -1,0 +1,3 @@
+#!/bin/sh
+
+fuser -k -SIGHUP /var/run/dmaster.sock

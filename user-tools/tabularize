@@ -1,6 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env perl
 
-true <<EOF
 =pod
 
 =head1 NAME
@@ -31,6 +30,11 @@ no horizontal lines in the output
 
 no margins, ie. no right-most and left-most vertical borders
 
+=item -p, --padding I<NUM>
+
+add space padding in cells.
+I<NUM> is how many spaces.
+
 =item -v, --output-vertical-separator I<CHAR>
 
 vertical separator character(s) in the output
@@ -38,8 +42,9 @@ vertical separator character(s) in the output
 =item -r, --align-right I<NUM>
 
 align these columns (0-indexed) to the right,
-others are auto-detected and if deemed to contain numeric data,
-only then aligned to the right.
+others are auto-detected and if they seem to hold mostly numeric data,
+then aligned to the right;
+otherwise to the left.
 this option is repeatable.
 
 =item -l, --align-left I<NUM>
@@ -66,271 +71,237 @@ column(1), untabularize(1)
 
 =cut
 
-EOF
+
+use Data::Dumper;
+use Date::Parse;
+use DateTime::Format::Strptime;
+use Encode qw/decode encode decode_utf8 encode_utf8/;
+use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat no_auto_abbrev require_order/;
+use IPC::Run qw/run/;
+use List::MoreUtils qw/all any none zip/;
+use Pod::Usage;
+use Term::Size;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 
-TAB=$'\t'
-IFS=''
-
-set_ascii()
+sub set_ascii
 {
-	verticalBar='|'
-	horizontalBar='-'
-	topleftCorner='+'
-	toprightCorner='+'
-	bottomleftCorner='+'
-	bottomrightCorner='+'
-	leftCross='+'
-	middleCross='+'
-	rightCross='+'
-	topCross='+'
-	bottomCross='+'
-}
-set_unicode()
-{
-	verticalBar='│'
-	horizontalBar='─'
-	topleftCorner='┌'
-	toprightCorner='┐'
-	bottomleftCorner='└'
-	bottomrightCorner='┘'
-	leftCross='├'
-	middleCross='┼'
-	rightCross='┤'
-	topCross='┬'
-	bottomCross='┴'
+	$verticalBorder = '|';
+	$verticalBar = '|';
+	$horizontalBar = '-';
+	$topleftCorner = '+';
+	$toprightCorner = '+';
+	$bottomleftCorner = '+';
+	$bottomrightCorner = '+';
+	$leftCross = '+';
+	$middleCross = '+';
+	$rightCross = '+';
+	$topCross = '+';
+	$bottomCross = '+';
 }
 
-
-set_unicode
-
-declare -a columnAlignment=()
-horizontalLines=yes
-margins=yes
-
-while [ $# -gt 0 ]
-do
-case "$1" in
--a|--ascii)
-	set_ascii
-	;;
--u|--unicode)
-	set_unicode
-	;;
--H|--no-horizontal)
-	horizontalLines=''
-	;;
--M|--no-margins)
-	margins=''
-	;;
--r|--align-right)
-	shift
-	columnAlignment[$1]=right
-	;;
--l|--align-left)
-	shift
-	columnAlignment[$1]=left
-	;;
--v|--output-vertical-separator)
-	shift
-	verticalBar=$1
-	topleftCorner=$1
-	toprightCorner=$1
-	bottomleftCorner=$1
-	bottomrightCorner=$1
-	leftCross=$1
-	middleCross=$1
-	rightCross=$1
-	topCross=$1
-	bottomCross=$1
-	;;
--h|--help)
-	pod2text "$0"
-	exit
-	;;
--*)
-	echo "$0: unknown option: $1" >&2
-	exit -1
-	;;
-esac
-shift
-done
-
-
-explode()
+sub set_unicode
 {
-	local separator=$1
-	local string=$2
-	local new_string
-	declare -g -a EXPLODE_ARRAY=()
+	$verticalBorder = '│';
+	$verticalBar = '│';
+	$horizontalBar = '─';
+	$topleftCorner = '┌';
+	$toprightCorner = '┐';
+	$bottomleftCorner = '└';
+	$bottomrightCorner = '┘';
+	$leftCross = '├';
+	$middleCross = '┼';
+	$rightCross = '┤';
+	$topCross = '┬';
+	$bottomCross = '┴';
+}
+
+set_unicode;
+
+use constant { ALIGN_LEFT => 1, ALIGN_RIGHT =>2, };
+
+$OptHorizontal = 1;
+$OptMargins = 1;
+$OptPadding = 0;
+@columnsAlignment = ();
+
+GetOptions(
+	'a|ascii' => \&set_ascii,
+	'u|unicode' => \&set_unicode,
+	'H|no-horizontal' => sub { $OptHorizontal = 0; },
+	'M|no-margins' => sub { $OptMargins = 0; },
+	'p|padding=i' => \$OptPadding,
+	'v|output-vertical-separator=s' => sub {
+		my ($getopt_obj, $param) = @_;
+		$verticalBorder = $param;
+		$verticalBar = $param;
+		$topleftCorner = $param;
+		$toprightCorner = $param;
+		$bottomleftCorner = $param;
+		$bottomrightCorner = $param;
+		$leftCross = $param;
+		$middleCross = $param;
+		$rightCross = $param;
+		$topCross = $param;
+		$bottomCross = $param;
+	},
+	'r|align-right=i@' => sub {
+		my ($getopt_obj, $param) = @_;
+		$columnsAlignment[$param] = ALIGN_RIGHT;
+	},
+	'l|align-left=i@' => sub {
+		my ($getopt_obj, $param) = @_;
+		$columnsAlignment[$param] = ALIGN_LEFT;
+	},
+	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+
+
+sub is_numeric
+{
+	# consider a cell's value numeric if it has only 
+	# - optional sign prefix,
+	# - numbers,
+	# - and optionally a common thousands- and/or fraction separator.
+	# I don't like the anglo-saxon ".123" notation, missing leading zero before the fraction separator.
+	local $_ = shift;
+	/^[+-]?\d+((?'thousands_sep'[,. ])\d+(\g{thousands_sep}\d+)*)?([.,]\d+(\g{thousands_sep}\d+)*)?$/ and return 1;
+	return 0;
+}
+
+
+# compute the width of each column
+
+@Table = ();
+@columnsWidth = ();
+@numericals_by_col = ();
+@non_numericals_by_col = ();
+
+while(<STDIN>)
+{
+	chomp;
+	my @cells = split /\t/;
 	
-	while [ -n "$string" ]
-	do
-		EXPLODE_ARRAY+=("${string%%$separator*}")
-		new_string=${string#*$separator}
-		if [ "$string" = "$new_string" ]
-		then
-			break
-		fi
-		string=$new_string
-	done
-	
-	# return $EXPLODE_ARRAY
-}
-
-is_numeric_check_sep()
-{
-	local thousands_sep=$2
-	local fraction_sep=$3
-	[[ $1 =~ ^[+-]?[0-9]+($thousands_sep[0-9]+)*($fraction_sep[0-9]+($thousands_sep[0-9]+)*)?$ ]]
-}
-is_numeric()
-{
-	is_numeric_check_sep "$1" ',' . && return 0
-	is_numeric_check_sep "$1" ' ' , && return 0
-	is_numeric_check_sep "$1" '.' , && return 0
-	return 1
-}
-
-
-# compute width of each column
-
-column_width=()
-num_line=0
-text=''
-numericals_by_col=()
-non_numericals_by_col=()
-while read -r line
-do
-	text="$text${text:+$'\n'}$line"
-	explode $'\t' "$line"
-	
-	column=0
-	for cell in "${EXPLODE_ARRAY[@]}"
-	do
-		width=${#cell}
-		if [ -z "${column_width[$column]}" ] || [ $width -gt "${column_width[$column]}" ]
-		then
-			column_width[$column]=$width
-		fi
-			
+	for my $idx (0 .. $#cells)
+	{
+		my $cell = $cells[$idx] || '';
+		my $width = length $cell;  # TODO multibyte chars?
+		$columnsWidth[$idx] = $width if $columnsWidth[$idx] < $width;
+		
 		# guess if this cell has numerical content (skip 1st line as it's likely a header)
-		if [ $num_line -gt 0 -a -n "$cell" -a -z "${columnAlignment[$column]:-}" ]
-		then
-			if is_numeric "$cell"
-			then
-				let numericals_by_col[$column]++
-			else
-				let non_numericals_by_col[$column]++
-			fi
-		fi
-		let column++
-	done
+		if($. > 0 and not defined $columnsAlignment[$idx])
+		{
+			is_numeric($cell) ? ($numericals_by_col[$idx]++) : ($non_numericals_by_col[$idx]++);
+		}
+	}
 	
-	let num_line++
-done
+	push @Table, \@cells;
+}
 
-if [ $num_line = 0 ]
-then
-	# no input, no output
-	exit 0
-fi
+if(not @Table)
+{
+	exit;
+}
 
-
-set -u
 
 # compose the format string
 
-table_width=0
-cellFmt=''
-topFmt=''
-innerFmt=''
-bottomFmt=''
-segments=()
-sequentColumn=''
-for column in "${!column_width[@]}"
-do
-	if [ -z "${columnAlignment[$column]:-}" ]
-	then
-		if [ ${numericals_by_col[$column]:-0} -ge ${non_numericals_by_col[$column]:-0} ]
-		then
-			columnAlignment[$column]=right
-		else
-			columnAlignment[$column]=left
-		fi
-	fi
-	
-	table_width=$[table_width + (column == 0 ? (0${margins:+1} ? ${#verticalBar} : 0) : ${#verticalBar}) + ${column_width[$column]}]
-	
-	cellFmt="${cellFmt:-${margins:+$verticalBar}}${sequentColumn:+$verticalBar}%*s"
-	topFmt="${topFmt:-${margins:+$topleftCorner}}${sequentColumn:+$topCross}%${column_width[$column]}s"
-	innerFmt="${innerFmt:-${margins:+$leftCross}}${sequentColumn:+$middleCross}%${column_width[$column]}s"
-	bottomFmt="${bottomFmt:-${margins:+$bottomleftCorner}}${sequentColumn:+$bottomCross}%${column_width[$column]}s"
-	segments+=('')
-	
-	sequentColumn=yes
-done
-table_width=$[table_width + (0${margins:+1} ? ${#verticalBar} : 0)]
-cellFmt="$cellFmt${margins:+$verticalBar}"
-topFmt="$topFmt${margins:+$toprightCorner}"
-innerFmt="$innerFmt${margins:+$rightCross}"
-bottomFmt="$bottomFmt${margins:+$bottomrightCorner}"
-
-
-topGrid=''
-innerGrid=''
-bottomGrid=''
-if [ $horizontalLines ]
-then
-	topGrid=`printf -- "$topFmt" "${segments[@]}"`
-	topGrid=${topGrid// /$horizontalBar}$'\n'
-	innerGrid=`printf -- "$innerFmt" "${segments[@]}"`
-	innerGrid=${innerGrid// /$horizontalBar}$'\n'
-	bottomGrid=`printf -- "$bottomFmt" "${segments[@]}"`
-	bottomGrid=${bottomGrid// /$horizontalBar}$'\n'
-fi
-
-
-print_table_g()
+if(not $OptMargins)
 {
-	line_no=1
-	while read -r line
-	do
-		if [ $line_no = 1 ]
-		then
-			echo -n "$topGrid"
+	$verticalBorder = '';
+	$topleftCorner = '';
+	$toprightCorner = '';
+	$bottomleftCorner = '';
+	$bottomrightCorner = '';
+	$leftCross = '';
+	$rightCross = '';
+}
+
+for my $idx (0 .. $#columnsWidth)
+{
+	if(not defined $columnsAlignment[$idx])
+	{
+		if($numericals_by_col[$idx] >= $non_numericals_by_col[$idx])
+		{
+			$columnAlignment[$idx] = ALIGN_RIGHT;
+		}
 		else
-			echo -n "$innerGrid"
-		fi
-		
-		explode $'\t' "$line"
-		printf_args=()
-		for column in "${!column_width[@]}"
-		do
-			[ $column -lt ${#EXPLODE_ARRAY[@]} ] && cell=${EXPLODE_ARRAY[$column]} || cell=''
-			chars=${#cell}
-			bytes=`LANG=C; echo "${#cell}"`
-			swidth=$[ ${column_width[$column]} + ( $bytes - $chars ) ]
-			[ ${columnAlignment[$column]} = left ] && swidth=-$swidth
-			printf_args+=($swidth "$cell")
-		done
-		printf -- "$cellFmt\n" "${printf_args[@]}"
-		
-		let line_no++
-	done <<<"$text"
+		{
+			$columnAlignment[$idx] = ALIGN_LEFT;
+		}
+	}
 	
-	echo -n "$bottomGrid"
+	$full_table_width += $idx == 0 ? length($verticalBorder) : length($verticalBar);
+	$full_table_width += $columnsWidth[$idx] + 2*$OptPadding;
+}
+
+$full_table_width += length($verticalBorder);
+$n_cols = scalar @columnsWidth;
+@verticalBars = ($verticalBar) x ($n_cols-1);
+
+if($OptHorizontal)
+{
+	$gridlineTop = $topleftCorner . join($topCross, map {$horizontalBar x ($_+2*$OptPadding)} @columnsWidth) . $toprightCorner;
+	$gridlineInner = $leftCross . join($middleCross, map {$horizontalBar x ($_+2*$OptPadding)} @columnsWidth) . $rightCross;
+	$gridlineBottom = $bottomleftCorner . join($bottomCross, map {$horizontalBar x ($_+2*$OptPadding)} @columnsWidth) . $bottomrightCorner;
+}
+$line_format = '%s'.
+	join('%s',
+		map {(' 'x$OptPadding).'%'.$_.'s'.(' 'x$OptPadding)}
+		map {($columnAlignment[$_] == ALIGN_RIGHT ? 1 : -1) * $columnsWidth[$_]} 0 .. $#columnsWidth
+	).'%s';
+
+
+sub print_table
+{
+	my $fh = shift;
+	my $row_num = 0;
+	for my $row (@Table)
+	{
+		$row_num++;
+		if($OptHorizontal)
+		{
+			print {$fh} ($row_num == 1 ? $gridlineTop : $gridlineInner) . "\n";
+		}
+		
+		my @cells = map {$row->[$_] || ''} 0 .. $#columnsWidth;
+		my @cells_and_inner_borders = zip @cells, @verticalBars;
+		delete $cells_and_inner_borders[-1];
+		printf {$fh} $line_format."\n", $verticalBorder, @cells_and_inner_borders, $verticalBorder;
+	}
+	
+	if($OptHorizontal)
+	{
+		print {$fh} $gridlineBottom . "\n";
+	}
 }
 
 
-if [ -t 1 -a -n "$PAGER" ]
-then
-	terminal_cols=`tput cols`
-	if [ "${terminal_cols:-0}" -le $table_width ]
-	then
-		print_table_g | exec "$PAGER"
-		exit ${PIPESTATUS[1]}
-	fi
-fi
+# display the rendered table
 
-print_table_g
+if(-t 1 and $ENV{PAGER})
+{
+	my ($terminal_cols, $terminal_rows) = Term::Size::chars(*STDOUT);
+	if($terminal_cols <= $full_table_width)
+	{
+		my ($p_read, $p_write);
+		pipe($p_read, $p_write) or die "$0: pipe: $!\n";
+		my $pid = fork;
+		die "$0: fork: $!\n" if not defined $pid;
+		if($pid == 0)
+		{
+			close $p_read;
+			print_table($p_write);
+			close $p_write;
+			exit 0;
+		}
+		open \*STDIN, '<&', $p_read;
+		close $p_write;
+		exec {$ENV{PAGER}} [$ENV{PAGER}] or warn "$0: exec: $!\n";
+		exit 127;
+	}
+}
+
+print_table(\*STDOUT);

@@ -79,7 +79,7 @@ cut(1)
 
 use Data::Dumper;
 use Errno qw/:POSIX/;
-use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
+use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat no_auto_abbrev require_order/;
 use List::MoreUtils qw/all any none/;
 use Pod::Usage;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';

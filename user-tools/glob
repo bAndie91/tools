@@ -28,6 +28,11 @@ Output filenames as NULL byte temrinated strings.
 Fail if can not read a directory.
 See B<GLOB_ERR> in File::Glob(3perl).
 
+=item -E
+
+Fail if any I<PATTERN> did not match.
+Exit code is 2 in this case.
+
 =item -i
 
 Match case-insensitively.
@@ -59,12 +64,14 @@ no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 $OptNullTerminated = 0;
 $OptGlobFlags = File::Glob::GLOB_QUOTE | File::Glob::GLOB_TILDE;
+$OptFailNoMatch = 0;
 
 GetOptions(
 	'0' => \$OptNullTerminated,
 	'f' => sub { $OptGlobFlags |= File::Glob::GLOB_ERR; },
 	'i' => sub { $OptGlobFlags |= File::Glob::GLOB_NOCASE; },
 	'b' => sub { $OptGlobFlags |= File::Glob::GLOB_BRACE; },
+	'E' => \$OptFailNoMatch,
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
 ) or pod2usage(-exitval=>2, -verbose=>99);
@@ -79,6 +86,7 @@ for my $pattern (@ARGV)
 	{
 		die "$0: $!: $pattern\n";
 	}
+	exit 2 if $OptFailNoMatch and not @matches;
 	%Files = (%Files, map {$_=>1} @matches);
 }
 

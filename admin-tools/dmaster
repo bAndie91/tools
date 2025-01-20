@@ -136,7 +136,7 @@ This one removes the socket file in case of it's left there:
 
 =head1 SEE ALSO
 
-supervisor(1), supervise(8), daemon(1), runit(1)
+supervisor(1), supervise(8), daemon(1), runit(1), L<sinit|https://core.suckless.org/sinit/>
 
 =cut
 

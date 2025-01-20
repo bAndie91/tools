@@ -19,11 +19,12 @@ uninstall-locale-validator:
 
 
 
-install-dmaster: /sbin/dmaster /sbin/dmaster-signal /sbin/dmaster-dump /usr/share/man/man8/dmaster.8.xz /usr/share/man/man8/dmaster-signal.8.xz /usr/share/man/man5/daemontab.5.xz
-	@echo "Don't forget to install /sbin/dmaster as a system service (eg. put in /etc/inittab)"
+install-dmaster: /sbin/dmaster /sbin/dmaster-signal /sbin/dmaster-dump /sbin/dmaster-reload \
+ /usr/share/man/man8/dmaster.8.xz /usr/share/man/man8/dmaster-signal.8.xz /usr/share/man/man5/daemontab.5.xz
+	@echo "Don't forget to install /sbin/dmaster as a system service (eg. put in /etc/inittab), see \"man 8 dmaster\" for examples."
 .PHONY: install-dmaster
 
-/sbin/dmaster /sbin/dmaster-signal /sbin/dmaster-dump: /sbin/%: %
+/sbin/dmaster /sbin/dmaster-signal /sbin/dmaster-dump /sbin/dmaster-reload: /sbin/%: %
 	install $< $@
 
 /usr/share/man/man8/dmaster.8.xz /usr/share/man/man8/dmaster-signal.8.xz: /usr/share/man/man8/%.8.xz: %

@@ -42,7 +42,7 @@ sub process_header
 {
 	$HeaderLine = $_[0];
 	chomp $HeaderLine;
-	@Header = split $FS, $HeaderLine;
+	@Header = map { unescape_tabdata($_) } split $FS, $HeaderLine;
 	%Header = ();
 	for my $idx (0..$#Header)
 	{
@@ -70,7 +70,7 @@ sub read_record
 	my $fd = shift;
 	my $line = <$fd>;
 	chomp $line;
-	my @record = split $FS, $line;
+	my @record = map { unescape_tabdata($_) } split $FS, $line;
 	return @record;
 }
 
@@ -92,20 +92,50 @@ sub unescape_tabdata
 sub kvpair_escape
 {
 	my $s = shift;
-	if($s =~ /[""'' ]/)
+	if($s =~ /[""'' \\\t\r\n]/)
 	{
-		$s =~ s/[\x00-\x1F\x7F""\\]/sprintf '\\x%02X', ord $&/eg;
+		$s =~ s/\\/\\\\/g;
+		$s =~ s/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/sprintf '\\x%02X', ord $&/eg;
+		$s =~ s/[\t\n\r]/{"\t"=>'\t', "\n"=>'\n', "\r"=>'\r'}->{$&}/eg;
+		$s =~ s/[""]/\\$&/g;
 		$s = "\"$s\"";
 	}
 	return $s;
 }
 
+sub kvpair_unescape_replacement
+{
+	my $match = shift;
+	my $whole_match = shift;
+	
+	if($match =~ /^x(..)$/)
+	{
+		# replace to the char represented with its hexadecimal char code
+		return chr hex $1;
+	}
+	elsif($match =~ /^[trn]$/)
+	{
+		# replace \t, \r, and \n to TAB, CR, and LF respectively
+		return eval "\"\\$match\"";
+	}
+	elsif($match =~ /^[""''\\]$/)
+	{
+		# replace escaped quotes and backslash itself to their unescaped form:
+		return $match;
+	}
+	else
+	{
+		# leave backslash there for everything else:
+		return $whole_match;
+	}
+}
+
 sub kvpair_unescape
 {
 	my $s = shift;
-	if($s =~ /^(?'quote'[""''])(?'value'.*?)\g{quote}$/)
+	if($s =~ /^(?'quote'[""''])(?'value'.*)\g{quote}$/)
 	{
-		$s = $+{'value'} =~ s/\\x([[:xdigit:]]{2})/chr hex $1/egir;
+		$s = $+{'value'} =~ s/\\(x([[:xdigit:]]{2})|.)/kvpair_unescape_replacement($1, $&)/egir;
 	}
 	return $s;
 }

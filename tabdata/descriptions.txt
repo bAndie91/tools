@@ -5,6 +5,7 @@ td-add-headers - Add headers to the tabular data stream and pass through the row
 td-alter - Add new columns and fields to tabular data stream, and modify value of existing fields.
 td-collapse - Collapse multiple tabular data records with equivalent keys into one.
 td-disamb-headers - Disambiguate headers in tabular data
+td-env - Add tabular data fields to environment and invoke a command for each record
 td-expand - Generate multiple rows from each one row in a Tabular data stream.
 td-filter - Show only those records from the input tabular data stream which match to the conditions.
 td-format - Print formatted lines per Tabular Data record

@@ -164,7 +164,7 @@ IFS=$'\n'
 		done
 	fi
 	
-	for line in `test $isthereworktree && git status --porcelain ${GIT_PROMPT_SHOW_IGNORED:+--ignored}`
+	for line in `test $isthereworktree && git status --porcelain ${GIT_PROMPT_SHOW_IGNORED:+--ignored} 2>/dev/null`
 	do
 		line=${line//\?/N}
 		line=${line//\!/E}
@@ -191,7 +191,7 @@ IFS=$'\n'
 	
 	if trueish "${GIT_PROMPT_COUNT_LINES-true}"
 	then
-		for line in `test $isthereworktree && git diff --numstat --find-copies=100`
+		for line in `test $isthereworktree && git diff --numstat --find-copies=100 2>/dev/null`
 		do
 			line=${line%	*}
 			line=${line//-/0}
@@ -199,7 +199,7 @@ IFS=$'\n'
 			let dels1+=${line#*	}
 		done
 		
-		for line in `git diff --numstat --staged --find-copies=100`
+		for line in `git diff --numstat --staged --find-copies=100 2>/dev/null`
 		do
 			line=${line%	*}
 			line=${line//-/0}

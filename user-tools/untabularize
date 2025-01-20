@@ -16,6 +16,15 @@ untabularize [I<OPTIONS>]
 
 =over 4
 
+=item -P, --no-pipe-in-header
+
+Expect no pipe char (C<|>) in column names,
+so it's less ambiguous to determine vertical gridlines.
+
+=item -w, --allow-whitespace
+
+Strip leading whitespace in column names to learn each column's left margin.
+
 =back
 
 =head1 LIMITATIONS
@@ -36,8 +45,13 @@ no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 use utf8;
 use open ':std', ':encoding(UTF-8)';
 
+$OptNoPipeInHeader = 0;
+$OptAllowWhitespace = 0;
+
 GetOptions(
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+	'P|no-pipe-in-header!' => \$OptNoPipeInHeader,
+	'w|allow-whitespace!' => \$OptAllowWhitespace,
 	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
@@ -60,19 +74,41 @@ while(<STDIN>)
 		s/\Q$gridchar\E$//;
 		if(not @cellWidths)
 		{
-			if($gridchar eq '|')
+			if($gridchar eq '|' and !$OptNoPipeInHeader)
 			{
 				# pipe char may occur in the cell data as well,
 				# so can not confidentally take it as a cell separator.
-				die "$0: can not determine the columns in --ascii --no-horizontal mode\n";
+				die "$0: can not determine the columns in --ascii --no-horizontal mode\n" . "$0: consider --no-pipe-in-header option.\n";
 			}
 			@cellWidths = map {length} split /\Q$gridchar\E/;
 		}
 		my $record = $_;
 		my $prev_cell_endpos = 0;
-		my @cells = map { s/\s+$// or s/^\s+//;  $_ }
-			map { my $cell = substr $record, $prev_cell_endpos, $_; $prev_cell_endpos += $_ + length $gridchar; $cell }
+		my @cells = map
+			{
+				my $cell = substr $record, $prev_cell_endpos, $_;
+				$prev_cell_endpos += $_ + length $gridchar;
+				$cell;
+			}
 			@cellWidths;
+			
+		if($OptAllowWhitespace and not @leftMargins)
+		{
+			# @leftMargins is not yet defined so it must be the header line.
+			# determining the left-side whitespace padding form the column names in the header:
+			@leftMargins = map {/^(\s*)/; length $1} @cells;
+		}
+		if(@leftMargins)
+		{
+			# remove at most leftMargin number of spaces.
+			# so outdented cells won't be truncated,
+			# and indented ones keep the indentation relative to the column header.
+			map { $cells[$_] =~ s/^[ ]{0,$leftMargins[$_]}//; } 0 .. $#cells;
+		}
+		
+		# strip trailing (or leading if the cell is right-aligned) whitespace.
+		@cells = map { s/\s+$// or s/^\s+//; $_ } @cells;
+		
 		print join("\t", @cells) . "\n";
 	}
 }

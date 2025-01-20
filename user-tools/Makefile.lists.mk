@@ -18,6 +18,7 @@ TOOLS ?= \
   chshebang \
   cled \
   cred \
+  confpatch \
   convert_chromium_cookies_to_netscape.sh \
   corner_time \
   cpyfattr \
@@ -73,6 +74,7 @@ TOOLS ?= \
   jaro-metric \
   jaro-winkler-metric \
   jobsel \
+  json-merge-objects \
   json2bencode \
   json2msgpack \
   killcmd \

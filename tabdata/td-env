@@ -1,0 +1,79 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+td-env - Add tabular data fields to environment and invoke a command for each record
+
+=head1 SYNOPSIS
+
+td-env [I<OPTIONS>] [--] I<COMMAND> [I<ARGS>]
+
+=head1 DESCRIPTION
+
+Takes Tabular Data on its input
+and adding fields to the environment for I<COMMAND>
+and executes it for each input record.
+
+=head1 EXAMPLE
+
+Data:
+
+  | username | score |
+  |----------|-------|
+  | joe      | 1.0   |
+  | james    | 2.1   |
+  | jeremy   | n/a   |
+
+Command:
+
+  td-env sh -c 'Hi $username, your score is $score!'
+
+Output:
+
+  Hi joe, your score is 1.0!
+  Hi james, your score is 2.1!
+  Hi jeremy, your score is n/a!
+
+=head1 OPTIONS
+
+=over 4
+
+=item -e, --errexit
+
+Stop processing records once a command failed.
+
+=back
+
+=head1 SEE ALSO
+
+env(1), environ(7)
+
+=cut
+
+
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+
+
+%OptionDefs = (
+);
+
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
+
+process_header(scalar <STDIN>);
+
+RECORD:
+while(not eof STDIN)
+{
+	my @row = read_record(\*STDIN);
+	my %fields = map {( $_ => $row[$Header{$_}] )} keys %Header;
+	
+	# localize the given keys in %ENV, so they won't affect other parts of the code,
+	# and still inherited by system() call.
+	{
+		local @ENV{keys %fields} = values %fields;
+		system {$ARGV[0]} @ARGV;
+	}
+}

@@ -23,25 +23,30 @@ $(TOOLS_TARGET_DIR)/msg: /etc/bash_completion.d/msg
 $(TOOLS_TARGET_DIR)/perl-repl: /usr/libexec/perlshell
 $(TOOLS_TARGET_DIR)/rsync-semichroot: /usr/share/doc/tool/rsync-semichroot.txt
 $(TOOLS_TARGET_DIR)/multithrottler: /usr/lib/multithrottler/Throttler.pm
+$(TOOLS_TARGET_DIR)/git-mirrors: /usr/share/bash-completion/completions/git-mirrors
 
 /etc/bash_completion.d/msg: $(REPO_ROOT)/bash/bash_completion.d/msg
-	install $(REPO_ROOT)/bash/bash_completion.d/msg $@
+	install $< $@
+	@echo remove $@ >> uninstall.sh
+
+/usr/share/bash-completion/completions/git-mirrors: $(REPO_ROOT)/bash/bash_completion.d/git-mirrors
+	install $< $@
 	@echo remove $@ >> uninstall.sh
 
 /usr/libexec/perlshell: $(REPO_ROOT)/libexec/perlshell
-	install $(REPO_ROOT)/libexec/perlshell $@
+	install $< $@
 	@echo remove $@ >> uninstall.sh
 
 /usr/share/doc/tool/rsync-semichroot.txt: $(REPO_ROOT)/doc/rsync-semichroot.txt | /usr/share/doc/tool
-	install $(REPO_ROOT)/doc/rsync-semichroot.txt $@
+	install $< $@
 	@echo remove $@ >> uninstall.sh
 
 /usr/lib/tool/bash-utils: $(REPO_ROOT)/bash/bash-utils | /usr/lib/tool
-	install $(REPO_ROOT)/bash/bash-utils $@
+	install $< $@
 	@echo remove $@ >> uninstall.sh
 
 /usr/lib/multithrottler/Throttler.pm: $(REPO_ROOT)/lib/multithrottler/Throttler.pm | /usr/lib/multithrottler
-	install $(REPO_ROOT)/lib/multithrottler/Throttler.pm $@
+	install $< $@
 	@echo remove $@ >> uninstall.sh
 
 /usr/lib/multithrottler:
@@ -82,16 +87,16 @@ DEPCHECK/dbus-call:
 
 .PHONY: try-satisfy-dependencies
 try-satisfy-dependencies:
-	cpan ARGV::readonly || true
-	apt install python3-parsel || true
-	apt install python3-cssselect || true
-	apt install python3-xmltodict || true
-	apt install jq || true
-	apt install libnet-dbus-perl || cpan Net::DBus || true
-	apt install libxml-hash-lx-perl || cpan XML::Hash::LX || true
-	apt install libjson-perl || cpan JSON || true
-	apt install liblog-log4perl-perl || cpan Log::Log4perl || true
-	apt install libyaml-perl || cpan YAML || true
+	-cpan ARGV::readonly
+	-apt install python3-parsel
+	-apt install python3-cssselect
+	-apt install python3-xmltodict
+	-apt install jq
+	-apt install libnet-dbus-perl || cpan Net::DBus
+	-apt install libxml-libxml-perl libxml-hash-lx-perl || cpan XML::Hash::LX
+	-apt install libjson-perl || cpan JSON
+	-apt install liblog-log4perl-perl || cpan Log::Log4perl
+	-apt install libyaml-perl || cpan YAML
 
 
 install-all: \

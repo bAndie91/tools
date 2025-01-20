@@ -13,6 +13,7 @@ TOOLS = \
   td-alter \
   td-collapse \
   td-disamb-headers \
+  td-env \
   td-expand \
   td-filter \
   td-format \

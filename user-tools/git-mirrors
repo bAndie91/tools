@@ -1,0 +1,42 @@
+#!/bin/bash
+
+set -e
+set -o pipefail
+
+ls_remote_urls()
+{
+	git config --local --get-regexp '^remote\..+\.url$' | cut -d' ' -f2-
+}
+
+ls_mirrors()
+{
+	[ ! -e "$mirrors_file" ] || cat "$mirrors_file"
+}
+
+repo_root=`git rev-parse --show-toplevel`
+mirrors_file=$repo_root/.gitmirrors
+
+case "$1" in
+(|ls)
+	ls_mirrors
+	;;
+(ls-remotes)
+	ls_remote_urls
+	;;
+(add-remotes-to-mirrors)
+	{
+		ls_mirrors
+		ls_remote_urls
+	}|\
+	sort -u |\
+	sponge "$mirrors_file"
+	# TODO keep mirror parameters (if any)
+	;;
+(add-mirrors-to-remotes)
+	# TODO
+	false
+	;;
+(*)
+	false
+	;;
+esac

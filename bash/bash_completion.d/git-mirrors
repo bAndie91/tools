@@ -1,0 +1,15 @@
+#!/bin/bash
+
+_git_mirrors()
+{
+    local subcommands="ls-remotes add-remotes-to-mirrors"
+    local subcommand="$(__git_find_on_cmdline "$subcommands")"
+    if [ -z "$subcommand" ]; then
+        case "$cur" in 
+            *)
+                __gitcomp "$subcommands"
+            ;;
+        esac
+        return
+    fi
+}

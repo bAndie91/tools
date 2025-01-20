@@ -56,7 +56,7 @@ while(@ARGV)
 	}
 }
 
-system @ARGV;
+system {$ARGV[0]} @ARGV;
 $status = ${^CHILD_ERROR_NATIVE};
 
 if(WIFSIGNALED($status))

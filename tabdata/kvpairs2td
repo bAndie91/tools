@@ -42,6 +42,38 @@ td2mrkv(1), td2kvpairs(1)
 =cut
 
 
+sub parse_next_key_value
+{
+	local $_ = shift;
+	# to support backslash-escaped quotes in quoted strings, we need to bookkeep what is the minimum length
+	# of the string which does not end with an odd number of backslashes, which would mean that the trailing
+	# quote is in fact an escaped quote and should be part of the string.
+	# regexp lookbehind does not work well when need to look behind to an arbitrary distance.
+	my %min = (key => 0, value => 0);
+	MATCH_NEXT_KEY_VALUE:
+	/(^|(?'spacebefore'\s*))(?'rawkey'(?'keyquote'[""''])(?'key'.{$min{key},}?)\g{keyquote}|(?'key'[^\s=]+))=(?'rawvalue'(?'valuequote'[""''])(?'value'.{$min{value},}?)\g{valuequote}|(?'value'\S*))((?'spaceafter'\s*)|$)/
+		or return ();
+	my %m = %+;
+	$m{_before} = $`;
+	$m{_after} = $';
+	#print Dumper [$key_min, $val_min, \%m];
+	for my $elem ('key', 'value')
+	{
+		# check if the key (value) is quoted and does not end with odd number of backslashes,
+		# because if so, then increase the minimum length that it should be,
+		# then try to match it again.
+		if($m{$elem.'quote'} and not $m{$elem} =~ /(?<!\\)(\\{2})*$/)
+		{
+			$min{$elem} = length($m{$elem})+1;
+			goto MATCH_NEXT_KEY_VALUE;
+		}
+	}
+	# return a hash of all named capture groups,
+	# plus the substring before and after the regexp match in the _before and _after keys respectively.
+	return %m;
+}
+
+
 $OptWarnBadColumnNames = 1;
 $OptFailBadColumnNames = 1;
 @OptPredefColumns = ();
@@ -68,14 +100,14 @@ while(my $Line = <STDIN>)
 	chomp $Line;
 	my @record = ();
 	my $Rest = '';
-	
-	while($Line =~ /(^|(?'spacebefore'\s*))((?'keyquote'[""''])(?'key'.+?)\g{keyquote}|(?'key'[^\s=]+))=((?'valuequote'[""''])(?'value'.*?)\g{valuequote}|(?'value'\S*))((?'spaceafter'\s*)|$)/)
+
+
+	while(my %m = parse_next_key_value($Line))
 	{
-		#warn Dumper [$`, \%+, $'];
-		$Rest .= $` . $+{'spacebefore'};
-		$Line = $';
-		my ($key, $value) = (kvpair_unescape($+{'key'}), kvpair_unescape($+{'value'}));
-		my $spaceafter = $+{'spaceafter'};
+		$Rest .= $m{_before} . $m{'spacebefore'};
+		$Line = $m{_after};
+		my ($key, $value) = (kvpair_unescape($m{'rawkey'}), kvpair_unescape($m{'rawvalue'}));
+		my $spaceafter = $m{'spaceafter'};
 		
 		if($RN == 0)
 		{
@@ -117,7 +149,7 @@ while(my $Line = <STDIN>)
 	{
 		push @Headers, grep { not $_ ~~ @Headers } @OptPredefColumns, $OptRestColumnName;
 		$rest_column_idx = $#Headers;
-		print join($FS, @Headers).$RS;
+		print join($FS, map {escape_tabdata($_)} @Headers).$RS;
 	}
 	
 	$record[$rest_column_idx] = $Rest . $Line;

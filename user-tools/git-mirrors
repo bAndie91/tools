@@ -82,7 +82,7 @@ case "$1" in
 				then
 					echo "# you may add these new remotes. choose better names if you wish:"
 				fi
-				echo "git add remote $remote $mirror"
+				echo "git remote add $remote $mirror"
 				new_mirrors=$[new_mirrors+1]
 				# record these proposed remote names,
 				# so don't propose duplicate names in subsequent rounds.

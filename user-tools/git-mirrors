@@ -10,31 +10,86 @@ ls_remote_urls()
 
 ls_mirrors()
 {
-	[ ! -e "$mirrors_file" ] || cat "$mirrors_file"
+	[ ! -e "$mirrors_file" ] || cat "$mirrors_file" | grep -vE '^\s*#'
 }
 
 repo_root=`git rev-parse --show-toplevel`
 mirrors_file=$repo_root/.gitmirrors
 
 case "$1" in
-(|ls)
+(''|ls)
 	ls_mirrors
 	;;
 (ls-remotes)
 	ls_remote_urls
 	;;
 (add-remotes-to-mirrors)
-	{
-		ls_mirrors
-		ls_remote_urls
-	}|\
-	sort -u |\
-	sponge "$mirrors_file"
-	# TODO keep mirror parameters (if any)
+	declare -A mirror_urls=()
+	for url in $(ls_mirrors | sed -e 's/\s.*//')
+	do
+		mirror_urls[$url]=1
+	done
+	for url in $(ls_remote_urls)
+	do
+		if [ ! "${mirror_urls[$url]}" ]
+		then
+			echo "$url" | tee -a "$mirrors_file"
+		fi
+	done
 	;;
-(add-mirrors-to-remotes)
-	# TODO
-	false
+(ls-new-mirrors)
+	git config --local --get-regexp '^remote\..+\.url$' |\
+	{
+		declare -A remote_name_by_url=()
+		declare -A remote_url_by_name=()
+		
+		while read configkey url
+		do
+			[[ $configkey =~ ^remote\.(.+)\.url$ ]]
+			remote=${BASH_REMATCH[1]}
+			remote_name_by_url[$url]=$remote
+			remote_url_by_name[$remote]=$url
+		done
+		
+		new_mirrors=0
+		
+		ls_mirrors |\
+		while read mirror
+		do
+			remote=${remote_name_by_url[$mirror]}
+			if [ ! "$remote" ]
+			then
+				# find a good name for the new remote
+				mirror_url_prettier=${mirror%.git}
+				if [[ $mirror_url_prettier =~ ://([^/:]+) ]] || [[ $mirror_url_prettier =~ ([^@:/]+): ]]
+				then
+					remote=${BASH_REMATCH[1]}
+				fi
+				if [ "${remote_url_by_name[$remote]}" ]
+				then
+					if [[ $mirror_url_prettier =~ ://([^/:]+)/([^/]+) ]] || [[ $mirror_url_prettier =~ ([^@:/]+):([^/]+) ]]
+					then
+						remote=${BASH_REMATCH[1]}_${BASH_REMATCH[2]}
+					fi
+				fi
+				# if still no good name for the remote, propose a generic one
+				while [ -z "$remote" -o "${remote_url_by_name[$remote]}" ]
+				do
+					remote=mirror_$[++i]
+				done
+				# show new remote proposal
+				if [ $new_mirrors = 0 ]
+				then
+					echo "# you may add these new remotes. choose better names if you wish:"
+				fi
+				echo "git add remote $remote $mirror"
+				new_mirrors=$[new_mirrors+1]
+				# record these proposed remote names,
+				# so don't propose duplicate names in subsequent rounds.
+				remote_url_by_name[$remote]=$mirror
+			fi
+		done
+	}
 	;;
 (*)
 	false

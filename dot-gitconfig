@@ -201,8 +201,9 @@
 	current-branch-name = symbolic-ref --quiet --short HEAD
 	current-branch-tracking-remote = ! "fn(){ branch=$1; [ -n \"$branch\" ] || branch=$(git current-branch-name); git config --get \"branch.$branch.remote\"; }; fn"
 	push-branch = ! "fn(){ branch=$(git symbolic-ref --quiet --short HEAD); if [ -z \"$branch\" ]; then echo \"not on a branch\" >&2; return 1; fi; remote=$(git config --get \"branch.$branch.remote\"); git push \"${remote:-origin}\" \"$branch\"; }; fn"
-	push-all = ! "fn(){ for remote in $(git remote); do git push \"$@\" \"$remote\"; done; }; fn"
+	push-all = ! "fn(){ git config-remotes-push-refs; for remote in $(git remote); do echo \"+ git push $remote $*\" >&2; git push \"$remote\" \"$@\"; done; }; fn"
 	push-multi = ! "fn(){ for remote in \"$@\"; do echo git push $remote | colorize cyan; git push \"$remote\"; done; }; fn"
+	config-remotes-push-refs = ! "fn(){ for remote in $(git remote); do pushurl=$(git config --get remote.$remote.url); if expr match \"$pushurl\" '.*/\\.git$' >&2; then git config --get-all remote.$remote.push | grep -qxF 'refs/heads/sync/*' || git config --add remote.$remote.url 'refs/heads/sync/*'; git config --get-regex \"^remote\\.$remote\\.push$\"; fi; done; }; fn"
 
 	# stash
 	

@@ -2,6 +2,7 @@
 #include <dlfcn.h>
 #include <errno.h>
 #include <err.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -20,3 +21,9 @@
 typedef int bool_t;
 #define TRUE 1
 #define FALSE 0
+
+int main(int argc, char** argv)
+{
+	//return EXIT_FAILURE;
+	return EXIT_SUCCESS;
+}

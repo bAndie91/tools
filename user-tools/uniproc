@@ -282,10 +282,10 @@ sub still_in_progress
 
 sub get_next_data_number
 {
-	debug_msg "go to offset ".($FirstUnprocessed*$ResultsRecordLength)." to read status of record # $FirstUnprocessed\n";
-	seek $Results_fh, $FirstUnprocessed*$ResultsRecordLength, SEEK_SET;
+	debug_msg "go to offset ".($FirstUnprocessedRecord*$ResultsRecordLength)." to read status of record # $FirstUnprocessedRecord\n";
+	seek $Results_fh, $FirstUnprocessedRecord*$ResultsRecordLength, SEEK_SET;
 	
-	my $record_num = $FirstUnprocessed;
+	my $record_num = $FirstUnprocessedRecord;
 	my $result;
 	while(1)
 	{
@@ -296,7 +296,7 @@ sub get_next_data_number
 		
 		if($result eq '   ')
 		{
-			$FirstUnprocessed = $record_num;
+			$FirstUnprocessedRecord = $record_num+1;
 			debug_msg "uninitialized $record_num\n";
 			return $record_num;
 		}
@@ -305,13 +305,14 @@ sub get_next_data_number
 			# check if still locked
 			if(not still_in_progress($record_num))
 			{
+				$FirstUnprocessedRecord = $record_num+1;
 				debug_msg "crashed $record_num\n";
 				return $record_num;
 			}
 		}
 		if($OptRetry and ($result =~ /^!/ or ($result =~ /^\s*\d+$/ and $result > 0)))
 		{
-			$FirstUnprocessed = $record_num;
+			$FirstUnprocessedRecord = $record_num+1;
 			debug_msg "retry $record_num\n";
 			return $record_num;
 		}
@@ -324,7 +325,7 @@ sub get_next_data_number
 	if($record_num < $input_records)
 	{
 		extend_resultsfile($Results_fh, $input_records * $ResultsRecordLength);
-		$FirstUnprocessed = $record_num;
+		$FirstUnprocessedRecord = $record_num+1;
 		debug_msg "new $record_num\n";
 		return $record_num;
 	}
@@ -337,7 +338,7 @@ sub get_next_data_number
 
 ($InputFile, $Command, @Args) = @ARGV;
 
-$FirstUnprocessed = 0;
+$FirstUnprocessedRecord = 0;
 $ResultsRecordLength = 4;
 $ResultsFile = "$InputFile.uniproc";
 $Results_fh = undef;

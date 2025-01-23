@@ -1,0 +1,88 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+spoolprocess - process files in a spool directory
+
+=head1 SYNOPSIS
+
+spoolprocess [I<OPTIONS>]
+
+=head1 DESCRIPTION
+
+Take all files in I<DIRECTORY> (specified by B<-d> option>),
+group them by their basename, ie. name without an optional "dot + number" suffix
+(C<.1>, C<.2>, ..., also known as B<version number>),
+and call F<< /etc/spoolprocess/B<BASENAME> >> programm for each group for processing
+
+The programm (usually a script) gets the spool file's path as arguments
+(or arguments if there are more files in the group).
+
+If the programm succeeds, delete the file.
+
+=head1 OPTIONS
+
+=over 4
+
+=item -d, --directory I<DIRECTORY>
+
+=item --1-by-1 <-- TODO
+
+=item -g, --group I<BASENAME>
+
+Process only those files with I<BASENAME>.
+This option is repeatable.
+
+=item --scriptdir I<DIR>
+
+Lookup programms in I<DIR> instead of F</etc/spoolprocess>.
+
+=back
+
+=head1 LIMITATIONS
+
+spoolprocess(1) does not do locking.
+Run it under flock(1), singleinstance(1), cronrun(1), or similar
+if you deem it necessary.
+
+I<DIRECTORY> is scanned non-recursively.
+
+=head1 SEE ALSO
+
+uniproc(1)
+
+=cut
+
+
+use constant { STAT_DEV=>0, STAT_INODE=>1, STAT_PERM=>2, STAT_NLINKS=>3, STAT_UID=>4, STAT_GID=>5, STAT_RDEV=>6, STAT_SIZE=>7, STAT_ATIME=>8, STAT_MTIME=>9, STAT_CTIME=>10, STAT_BLOCKSIZE=>11, STAT_BLOCKS=>12, };
+use Cwd qw/getcwd realpath/;
+use Data::Dumper;
+use Date::Parse;
+use DateTime::Format::Strptime;
+use Encode qw/decode encode decode_utf8 encode_utf8/;
+use Errno qw/:POSIX/;
+use Fcntl qw/:flock :seek F_GETFL F_SETFL O_NONBLOCK F_GETFD F_SETFD FD_CLOEXEC/;
+use File::Basename;
+use File::Temp qw/tempfile/;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
+use IPC::Run qw/run/;
+use List::MoreUtils qw/all any none/;
+use Pod::Usage;
+use POSIX;
+use Socket qw/AF_UNIX AF_INET SOCK_STREAM pack_sockaddr_in inet_aton sockaddr_un/;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+
+$OptVerbose = 0;
+$OptDirectory = undef;
+
+GetOptions(
+	'v|verbose!' => \$OptVerbose,
+	'd|directory=s' => \$OptDirectory,
+	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+
+opendir

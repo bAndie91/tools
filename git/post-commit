@@ -15,12 +15,10 @@ set -e
 # so you can push these sync/* branches to non-bare repos,
 # without messing up the currently checked out branch there.
 
-set -x
-
 branch=`git symbolic-ref --quiet --short HEAD`
 if [ -n "$branch" ]
 then
-	if git show-ref --verify --quiet refs/heads/$branch
+	if git show-ref --verify --quiet refs/heads/sync/$branch
 	then
 		git merge-into "sync/$branch"
 	else

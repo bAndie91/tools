@@ -2,7 +2,7 @@
 
 _git_mirrors()
 {
-    local subcommands="ls-remotes add-remotes-to-mirrors"
+    local subcommands="ls ls-remotes add-remotes-to-mirrors ls-new-mirrors"
     local subcommand="$(__git_find_on_cmdline "$subcommands")"
     if [ -z "$subcommand" ]; then
         case "$cur" in 

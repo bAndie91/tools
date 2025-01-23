@@ -57,6 +57,7 @@ TOOLS ?= \
   g_filename_to_uri \
   getcvt \
   git-checkout-sparse \
+  git-mirrors \
   gitconfigexec \
   git_diff \
   git-submodule-auto-add \

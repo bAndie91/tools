@@ -206,9 +206,7 @@ def do_magick(distortion=True, crop=True):
 		src_bottomright, trg_bottomright,
 		src_bottomleft, trg_bottomleft,
 		]))
-	# "perspect-run" is there only to visualize something is running,
-	# take it out to run convert silently in the background.
-	cmd = ["perspect-run", "convert", "-verbose", glob.sourcefile, "-auto-orient"]
+	cmd = ["convert", "-verbose", glob.sourcefile, "-auto-orient"]
 	if distortion:
 		cmd.extend(["-matte", "-virtual-pixel", "transparent", "-distort", "Perspective", coordinatepairs])
 	if crop:
@@ -284,22 +282,22 @@ def do_rotation_vertical_and_autocrop(*_):
 	run_command_with_tempfile(cmd)
 
 def get_rotation_params(angle):
-	cmd = ["perspect-run", "convert", glob.sourcefile, "-auto-orient", "-rotate", str(angle)]
+	cmd = ["convert", glob.sourcefile, "-auto-orient", "-rotate", str(angle)]
 	return cmd
 
 import imagemetadata
 
 def imagerotation_cb(transformation, user_data):
-	if transformation == imagerotation.FLIP:
+	if transformation == imagemetadata.FLIP:
 		user_data['pixbuf'] = user_data['pixbuf'].flip(horizontal=False)
-	elif transformation == imagerotation.FLOP:
+	elif transformation == imagemetadata.FLOP:
 		user_data['pixbuf'] = user_data['pixbuf'].flip(horizontal=True)
-	elif transformation == imagerotation.CLOCKWISE:
-		user_data['pixbuf'] = user_data['pixbuf'].rotate_simple(gtk.gdk.buf_ROTATE_CLOCKWISE)
-	elif transformation == imagerotation.UPSIDEDOWN:
-		user_data['pixbuf'] = user_data['pixbuf'].rotate_simple(gtk.gdk.buf_ROTATE_UPSIDEDOWN)
-	elif transformation == imagerotation.COUNTERCLOCKWISE:
-		user_data['pixbuf'] = user_data['pixbuf'].rotate_simple(gtk.gdk.buf_ROTATE_COUNTERCLOCKWISE)
+	elif transformation == imagemetadata.CLOCKWISE:
+		user_data['pixbuf'] = user_data['pixbuf'].rotate_simple(gtk.gdk.PIXBUF_ROTATE_CLOCKWISE)
+	elif transformation == imagemetadata.UPSIDEDOWN:
+		user_data['pixbuf'] = user_data['pixbuf'].rotate_simple(gtk.gdk.PIXBUF_ROTATE_UPSIDEDOWN)
+	elif transformation == imagemetadata.COUNTERCLOCKWISE:
+		user_data['pixbuf'] = user_data['pixbuf'].rotate_simple(gtk.gdk.PIXBUF_ROTATE_COUNTERCLOCKWISE)
 	else:
 		#warnx("unknown image transformation code %d" % transformation)
 		pass

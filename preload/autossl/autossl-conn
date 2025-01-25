@@ -38,6 +38,6 @@ else
 		exec stunnel -f -c -r "$ip:$tls_port" $STUNNEL_EXTRA_ARGS
 	else
 		diag "autossl: run: openssl s_client -connect $ip:$tls_port $OPENSSL_EXTRA_ARGS"
-		exec /usr/local/opt/openssl_1.1.1h/bin/openssl s_client -connect "$ip:$tls_port" -quiet $OPENSSL_EXTRA_ARGS
+		exec openssl s_client -connect "$ip:$tls_port" -quiet $OPENSSL_EXTRA_ARGS
 	fi
 fi

@@ -1,6 +1,7 @@
 [core]
 	pager = less $LESS -F
 	attributesfile = ~/.gitattributes
+	hooksPath = ~/bin/git-hook
 
 [sendemail]
 	smtpserver = /usr/bin/env
@@ -146,8 +147,8 @@
 	diff-last = ! "fn(){ git log -g --format=%h | { read h2; read h1; git diff "$@" $h1...$h2; }; }; fn"
 	diff-remote = ! "fn(){ git diff --find-copies --find-renames origin/$(git symbolic-ref --quiet --short HEAD); }; fn"
 	diff-to-branch = ! "fn(){ git diff --find-copies --find-renames $(git merge-base HEAD \"$1\"); }; fn"
-	diff-branch = ! "fn(){ b1=$1; shift; case \"$1\" in -*|'') b2='';; *) b2=$1; shift;; esac; git diff \"$@\" \"$(git common-ancestor \"$b1\" \"$b2\")\" \"$b1\"; }; fn"
-	branch-history = ! "parent_branch=master; fn(){ if [ $# = 0 ]; then b1=HEAD; else b1=$1; shift; case \"$1\" in -*) b2='';; *) b2=$1; shift;; esac; fi; if [ -z \"$b2\" ]; then b2=\"$(git common-ancestor \"$b1\" \"$parent_branch\")\"; fi; git log --patch --first-parent --no-merges \"$@\" \"$b2\"..\"$b1\"; }; fn"
+	diff-branch = ! "fn(){ b1=$1; shift; case \"$1\" in (-*|'') b2='';; (*) b2=$1; shift;; esac; git diff \"$@\" \"$(git common-ancestor \"$b1\" \"$b2\")\" \"$b1\"; }; fn"
+	branch-history = ! "parent_branch=master; fn(){ if [ $# = 0 ]; then b1=HEAD; else b1=$1; shift; case \"$1\" in (-*) b2='';; (*) b2=$1; shift;; esac; fi; if [ -z \"$b2\" ]; then b2=\"$(git common-ancestor \"$b1\" \"$parent_branch\")\"; fi; git log --patch --first-parent --no-merges \"$@\" \"$b2\"..\"$b1\"; }; fn"
 	which-branches-contain = branch --list --all --contains
 	which-tags-contain = tag -l --contains
 

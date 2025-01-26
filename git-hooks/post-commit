@@ -16,7 +16,7 @@ set -e
 # without messing up the currently checked out branch there.
 
 branch=`git symbolic-ref --quiet --short HEAD`
-if [ -n "$branch" ]
+if [ -n "$branch" ] && ! [[ $branch =~ ^sync/ ]]
 then
 	if git show-ref --verify --quiet refs/heads/sync/$branch
 	then

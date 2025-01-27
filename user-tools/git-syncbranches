@@ -1,0 +1,28 @@
+#!/bin/bash
+
+set -e
+set -o pipefail
+set -u
+
+if [ -n "${1:-}" ]
+then
+	remotes=($@)
+else
+	remotes=($(git remote))
+fi
+
+echo "remotes: ${remotes[*]}" >&2
+
+for remote in "${remotes[@]}"
+do
+	pushurl=$(git config --get remote.$remote.url)
+	if [[ $pushurl =~ /\.git$ ]]
+	then
+		refspecs=()
+		for branch in `git for-each-ref 'refs/heads/*' --format='%(refname:lstrip=2)' | grep -v ^sync/`
+		do
+			refspecs+=("refs/heads/$branch:refs/heads/sync/$branch")
+		done
+		git push "$remote" "${refspecs[@]}"
+	fi
+done

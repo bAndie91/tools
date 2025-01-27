@@ -11,24 +11,34 @@ else
 	remotes=($(git remote))
 fi
 
-echo "remotes: ${remotes[*]}" >&2
+declare -A nonBareRemotePushURL=()
 
 for remote in "${remotes[@]}"
 do
 	pushurl=$(git config --get remote.$remote.url)
 	if [[ $pushurl =~ /\.git$ ]]
 	then
-		if [[ $pushurl =~ ^([^:/]+):(.+)$ ]]
-		then
-			remoteHost=${BASH_REMATCH[1]}
-			remotePath=${BASH_REMATCH[2]}
-			ssh "$remoteHost" multicmd --delimiter=+ --errexit mkdir -p "$remotePath" + git init -q "$remotePath"
-		fi
-		refspecs=()
-		for branch in `git for-each-ref 'refs/heads/*' --format='%(refname:lstrip=2)' | grep -v ^sync/`
-		do
-			refspecs+=("refs/heads/$branch:refs/heads/sync/$branch")
-		done
-		git push "$remote" "${refspecs[@]}"
+		nonBareRemotePushURL[$remote]=$pushurl
 	fi
+done
+
+echo "remotes: ${!nonBareRemotePushURL[*]}" >&2
+
+for remote in "${!nonBareRemotePushURL[@]}"
+do
+	echo "remote: $remote" >&2
+	pushurl=${nonBareRemotePushURL[$remote]}
+	if [[ $pushurl =~ ^([^:/]+):(.+)$ ]]
+	then
+		remoteHost=${BASH_REMATCH[1]}
+		remotePath=${BASH_REMATCH[2]}
+		ssh "$remoteHost" multicmd --delimiter=+ --errexit mkdir -p "$remotePath" + git init -q "$remotePath"
+	fi
+	
+	refspecs=()
+	for branch in `git for-each-ref 'refs/heads/*' --format='%(refname:lstrip=2)' | grep -v ^sync/`
+	do
+		refspecs+=("refs/heads/$branch:refs/heads/sync/$branch")
+	done
+	git push "$remote" "${refspecs[@]}"
 done

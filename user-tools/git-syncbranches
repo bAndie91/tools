@@ -11,6 +11,8 @@ else
 	remotes=($(git remote))
 fi
 
+echo "remotes: ${remotes[*]}" >&2
+
 for remote in "${remotes[@]}"
 do
 	pushurl=$(git config --get remote.$remote.url)

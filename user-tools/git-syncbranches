@@ -18,6 +18,12 @@ do
 	pushurl=$(git config --get remote.$remote.url)
 	if [[ $pushurl =~ /\.git$ ]]
 	then
+		if [[ $pushurl =~ ^([^:/]+):(.+)$ ]]
+		then
+			remoteHost=${BASH_REMATCH[1]}
+			remotePath=${BASH_REMATCH[2]}
+			ssh "$remoteHost" multicmd --delimiter=+ --errexit mkdir -p "$remotePath" + git init -q "$remotePath"
+		fi
 		refspecs=()
 		for branch in `git for-each-ref 'refs/heads/*' --format='%(refname:lstrip=2)' | grep -v ^sync/`
 		do

@@ -33,6 +33,7 @@ Run I<COMMAND> in a way most scheduled jobs are intended to run, ie:
 
 Delay program execution at most I<SEC> seconds.
 Default is to wait nothing.
+Also can be set by B<CRONRUN_DELAY> environment.
 
 =item --wait-lock, -W
 
@@ -66,6 +67,10 @@ Lock files stored in this directory.
 
 Recommended practice is to set C<CRONJOBID=something> in your crontab before each C<cronrun ...> job definition.
 
+=item CRONRUN_DELAY
+
+Set value for the B<--random-delay> option.
+
 =back
 
 =head1 LIMITATIONS
@@ -80,7 +85,7 @@ EOF
 
 
 scriptname=${0##*/}
-random_delay_sec=0
+random_delay_sec=${CRONRUN_DELAY:-0}
 wait_lock=''
 
 while [ $# != 0 ]

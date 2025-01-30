@@ -15,7 +15,12 @@ declare -A nonBareRemotePushURL=()
 
 for remote in "${remotes[@]}"
 do
-	pushurl=$(git config --get remote.$remote.url)
+	if [[ $remote =~ : ]] || [[ $remote =~ /\.git$ ]]
+	then
+		pushurl=$remote
+	else
+		pushurl=$(git config --get remote.$remote.url)
+	fi
 	if [[ $pushurl =~ /\.git$ ]]
 	then
 		nonBareRemotePushURL[$remote]=$pushurl
@@ -28,7 +33,7 @@ for remote in "${!nonBareRemotePushURL[@]}"
 do
 	echo "remote: $remote" >&2
 	pushurl=${nonBareRemotePushURL[$remote]}
-	if [[ $pushurl =~ ^([^:/]+):(.+)$ ]]
+	if [[ $pushurl =~ ^([^:/]+):(.+?)/\.git$ ]]
 	then
 		remoteHost=${BASH_REMATCH[1]}
 		remotePath=${BASH_REMATCH[2]}

@@ -13,6 +13,11 @@ no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 @initialARGV = @ARGV;
 
 
+sub debug
+{
+	warn @_ if $ENV{DEBUG};
+}
+
 sub process_args
 {
 	@ARGV = @initialARGV;
@@ -61,7 +66,7 @@ sub parse_filter_expr
 	local $_ = shift;
 	my $prev_filters = shift;
 	my $prev_filter = $prev_filters->[-1];
-	my $filt = {};
+	my $filt = { expr=>$_, };
 	
 	if(@$prev_filters and %{$prev_filter->{section_tags}})
 	{
@@ -71,6 +76,7 @@ sub parse_filter_expr
 	my $remainder = $_;
 	while($_)
 	{
+		s/^\s*//;
 		if(s{^(?'negate'!|)\s*/(?'pattern'.*?)(?<!\\)/(?'modifiers'[a-zA-Z]*)\s*(\+(?'offset'\d+))?}{})
 		{
 			if(exists $filt->{replacer})
@@ -82,18 +88,18 @@ sub parse_filter_expr
 			$filt->{modifiers} = $+{modifiers};
 			$filt->{offset} = $+{offset};
 		}
-		elsif(s/\[\/(.+?)\]//)
+		elsif(s/^\[\/(.+?)\]//)
 		{
 			if(exists $filt->{pattern})
 			{
-				$filt->{tag_end} = $1;
+				push @{$filt->{tag_end}}, $1;
 			}
 			else
 			{
 				delete $filt->{match_tags}->{$1};
 			}
 		}
-		elsif(s/\[(.+?)\]//)
+		elsif(s/^\[(.+?)\]//)
 		{
 			if(exists $filt->{pattern})
 			{
@@ -104,10 +110,10 @@ sub parse_filter_expr
 				$filt->{match_tags}->{$1} = 1;
 			}
 		}
-		elsif(s{(s/.*?(?<!\\)/.*?(?<!\\)/[a-zA-Z]*)}{})
+		elsif(s{^(s/.*?(?<!\\)/.*?(?<!\\)/[a-zA-Z]*)}{})
 		{
 			my $replacer = $1;
-			eval '"" =~ '.$replacer.'; 1' or die "$0: error in s/// expression: $@\n";
+			eval 'my $test = ""; $test =~ '.$replacer.'; 1' or die "$0: error in s/// expression: $@\n";
 			$filt->{replacer} = $replacer;
 		}
 		else
@@ -115,21 +121,20 @@ sub parse_filter_expr
 			die "$0: can not parse expression: $_\n";
 		}
 		
-		s/^\s*//;
 		$remainder = $_;
 	}
 	
-	# if it's a "[blue]" type line, ie. a lone tag specification, then it opens a section of rules, all of which must match to "blue" tag.
-	if(all {not exists $filt->{$_}} qw/replacer tag_start tag_end/)
+	# if it's a "[blue]" type of line, ie. a lone tag specification, then it opens a section of rules, all of which must match to "blue" tag.
+	if(all {not exists $filt->{$_}} qw/pattern replacer tag_start tag_end/)
 	{
 		if(exists $filt->{match_tags})
 		{
 			$filt->{section_tags} = {};
-			$filt->{section_tags}->{$_} = $filt->{match_tags}->{$_} for keys %{$filt->{match_tags}->{$_}};
+			$filt->{section_tags}->{$_} = $filt->{match_tags}->{$_} for keys %{$filt->{match_tags}};
 		}
 	}
 	
-	#warn Dumper $filt;
+	debug Dumper $filt;
 	return $filt;
 }
 
@@ -146,20 +151,25 @@ sub apply_filter_rule
 	my $line = shift;
 	my $context = shift;
 	my $result = shift;
+	my $applied = 0;
 	
 	if(exists $rule->{replacer})
 	{
 		eval '$line =~ '.$rule->{replacer}.'; 1' or warn "$0: $@\n";
 		$result->{line} = $line;
+		$applied = 1;
 	}
 	if(exists $rule->{tag_start})
 	{
 		$context->{tags}->{$_} = 1 for @{$rule->{tag_start}};
+		$applied = 1;
 	}
 	if(exists $rule->{tag_end})
 	{
 		delete $context->{tags}->{$_} for @{$rule->{tag_end}};
+		$applied = 1;
 	}
+	return $applied;
 }
 
 sub evaluate_filters
@@ -172,41 +182,49 @@ sub evaluate_filters
 	{
 		my $filt = $Filters[$fnum];
 		
+		debug Dumper { filter => $filt, context => $context, };
+		
 		$context->{delayed_rule}->[$fnum]->{count_down} -= 1 if $context->{delayed_rule}->[$fnum]->{count_down} > 0;
-		if($context->{delayed_rule}->[$fnum]->{count_down} == 0)
+		if(%{$context->{delayed_rule}->[$fnum]} and $context->{delayed_rule}->[$fnum]->{count_down} <= 0)
 		{
+			debug Dumper { apply_delayed_rule => $context->{delayed_rule}->[$fnum]->{rule}, };
 			apply_filter_rule($context->{delayed_rule}->[$fnum]->{rule}, $line, $context, $result);
 			delete $context->{delayed_rule}->[$fnum];
 		}
 		
 		next if not stream_tags_match($context->{tags}, $filt->{match_tags});
 		
-		my %rule = map {($_=>$filt->{$_})} grep {$_ ~~ [qw/tag_start tag_end replacer/]} keys %$filt;
-		my $apply_rule = 1;
-		my $pattern_matched = 0;
+		my %applicable_rule = map {($_=>$filt->{$_})} grep {$_ ~~ [qw/tag_start tag_end replacer/]} keys %$filt;
 		
 		if(exists $filt->{pattern})
 		{
-			$apply_rule = 0;
-			$pattern_matched = $line =~ m/(?$filt->{modifiers})$filt->{pattern}/;
+			my $pattern_matched = $line =~ m/(?$filt->{modifiers})$filt->{pattern}/;
 			$pattern_matched = !$pattern_matched if $filt->{negate};
 			if($pattern_matched)
 			{
 				if($filt->{offset})
 				{
+					debug Dumper { delay_rule_application => \%applicable_rule, };
 					$context->{delayed_rule}->[$fnum]->{count_down} = $filt->{offset};
-					$context->{delayed_rule}->[$fnum]->{rule} = \%rule;
+					$context->{delayed_rule}->[$fnum]->{rule} = \%applicable_rule;
 				}
 				else
 				{
-					$apply_rule = 1;
+					$result->{pass} = 1;
+					apply_filter_rule(\%applicable_rule, $line, $context, $result);
+				}
+			}
+			else
+			{
+				if(not %applicable_rule)
+				{
+					$result->{pass} = 0;
 				}
 			}
 		}
-		
-		if($apply_rule)
+		else
 		{
-			apply_filter_rule(\%rule, $line, $context, $result);
+			apply_filter_rule(\%applicable_rule, $line, $context, $result);
 		}
 	}
 	
@@ -368,6 +386,8 @@ stdfilt [I<OPTIONS>] [--] I<COMMAND> [I<ARGS>]
 
 Run I<COMMAND> and match each of its output lines (both stdout and stderr separately) against
 the filter rules given by command arguments (B<-f>) or in files (B<-F>).
+All filter expressions are evaluated and the last matching rule wins.
+So it's a good idea to add wider matching patterns first, then the more specific ones later.
 
 =head1 OPTIONS
 
@@ -396,8 +416,17 @@ Tag names, each of them in square-bracket (eg. C<[blue] [red]>).
 The rest of the rule will be evaluated only if the tags are on the current stream.
 Tags can be added, removed by the B<set_tags> element.
 
-If a rule only consists of tags, it opens a section in the filter file.
+If a rule only consists of B<match_tags> tags, it opens a section in the filter file (and in B<-f> arguments too).
 In this section, all rules are interpreted as they had the given B<match_tags> of the section written in them.
+For example this filter-set selects all ranges in the output (and stderr) stream bound by those regexp patterns inclusively,
+and blocks everying in them except "errors":
+
+ /begin checking procedure/ [checking]
+ /checking finished/+1 [/checking]
+ [checking]
+ !//
+ /error/i
+ [/checking]
 
 The 2 streams, stdout and stderr are tagged by default by "STDOUT" and "STDERR" respectively:
 So this filters out everying in the stdout except "errors":
@@ -438,6 +467,8 @@ should take effect after the given number of lines.
 
 This way you can exclude the triggering line from the tagging.
 
+A B<pattern> with B<offset> but without B<replacer> or B<set_tags> is meaningless.
+
 =item B<replacer>
 
 A C<s///> string substitution Perl expression.
@@ -450,7 +481,9 @@ The syntax is the same as for B<match_tags>.
 But is the square-bracketed tags are at the right of the B<pattern>,
 then the tags are applied to the stream.
 
-Remove tags by eg. C<[/blue]>.
+Remove tags by a leading slash, like C<[/blue]>.
+
+B<set_tags> is useful with a B<pattern>.
 
 Example filter:
 

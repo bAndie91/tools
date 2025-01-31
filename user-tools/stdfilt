@@ -5,34 +5,38 @@ use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat/;
 use Fcntl qw/F_GETFL F_SETFL O_NONBLOCK/;
 use POSIX;
 use Pod::Usage;
+use List::MoreUtils qw/all any none/;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 
-$Filters = {
-	'out' => [],
-	'err' => [],
-};
+@Filters = ();
 @initialARGV = @ARGV;
 
+
+sub debug
+{
+	warn @_ if $ENV{DEBUG};
+}
 
 sub process_args
 {
 	@ARGV = @initialARGV;
-	pop @{$Filters->{'out'}} while scalar @{$Filters->{'out'}};
-	pop @{$Filters->{'err'}} while scalar @{$Filters->{'err'}};
+	pop @Filters while @Filters;
 	return GetOptions(
-		'F|filter-file=s@' => sub { process_filter_file($_[1]); },
-		'o|po|pass-stdout=s@' => sub { push @{$Filters->{'out'}}, {'pass'=>1, 'pattern'=>$_[1]}; },
-		'e|pe|pass-stderr=s@' => sub { push @{$Filters->{'err'}}, {'pass'=>1, 'pattern'=>$_[1]}; },
-		'O|fo|filter-stdout=s@' => sub { push @{$Filters->{'out'}}, {'pass'=>0, 'pattern'=>$_[1]}; },
-		'E|fe|filter-stderr=s@' => sub { push @{$Filters->{'err'}}, {'pass'=>0, 'pattern'=>$_[1]}; },
-		'p|pass=s@' =>   sub { push @{$Filters->{$_}}, {'pass'=>1, 'pattern'=>$_[1]} for ('out', 'err'); },
-		'f|filter=s@' => sub { push @{$Filters->{$_}}, {'pass'=>0, 'pattern'=>$_[1]} for ('out', 'err'); },
+		'F|filter-file=s@' => sub { parse_filter_file($_[1]); },
+		'f|filter=s@' => sub {
+			eval { push @Filters, parse_filter_expr($_[1], \@Filters); 1; }
+			or die sprintf "%s: error in filter expression %d: %s\n%s", $0, scalar @Filters, $_[1], $@;
+		},
+		'help' => sub {
+			pod2usage(-exitval=>0, -verbose=>99);
+			exit 0;
+		},
 		'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
 	);
 }
 
-
-process_args or pod2usage(-exitval=>2, -verbose=>99);
+process_args or exit 2;
 
 if(not @ARGV)
 {
@@ -40,56 +44,199 @@ if(not @ARGV)
 }
 
 
-sub process_filter_file
+sub parse_filter_file
 {
 	my $filepath = shift;
 	open my $fh, '<', $filepath or die "$filepath: $!\n";
-	my @channels = ('out', 'err');
 	while(<$fh>)
 	{
 		chomp;
-		s/^\s*//;
-		next if /^(#|$)/;
-		if(/^\[std(out|err)\]$/)
-		{
-			@channels = ($1);
-			next;
-		}
-		if(/^\[\*\]$/)
-		{
-			@channels = ('out', 'err');
-			next;
-		}
-		my $pass = 0;
-		$pass = 1 if s/^!\s*//;
-		my $pattern = $_;
-		push @{$Filters->{$_}}, {'pass'=>$pass, 'pattern'=>$pattern} for @channels;
+		s/(^|\s+)#.*$//;
+		next if /^$/;
+		eval {
+			push @Filters, parse_filter_expr($_, \@Filters);
+			1;
+		} or die "$0: filter expression error in $filepath in line $.:\n$@";
 	}
 	close $fh;
 }
 
-
-sub filter_pass
+sub parse_filter_expr
 {
-	my $line = shift;
-	my $filters = shift;
-	my $pass = 1;
+	local $_ = shift;
+	my $prev_filters = shift;
+	my $prev_filter = $prev_filters->[-1];
+	my $filt = { expr=>$_, };
 	
-	for my $filt (@$filters)
+	if(@$prev_filters and %{$prev_filter->{section_tags}})
 	{
-		if($line =~ $filt->{'pattern'})
+		$filt->{section_tags}->{$_} = $filt->{match_tags}->{$_} = $prev_filter->{section_tags}->{$_} for keys %{$prev_filter->{section_tags}};
+	}
+	
+	my $remainder = $_;
+	while($_)
+	{
+		s/^\s*//;
+		if(s{^(?'negate'!|)\s*/(?'pattern'.*?)(?<!\\)/(?'modifiers'[a-zA-Z]*)\s*(\+(?'offset'\d+))?}{})
 		{
-			$pass = $filt->{'pass'};
+			if(exists $filt->{replacer})
+			{
+				die "$0: pattern matching can not follow a replace: $remainder\n";
+			}
+			$filt->{negate} = $+{negate} ? 1 : 0;
+			$filt->{pattern} = $+{pattern};
+			$filt->{modifiers} = $+{modifiers};
+			$filt->{offset} = $+{offset};
+		}
+		elsif(s/^\[\/(.+?)\]//)
+		{
+			if(exists $filt->{pattern})
+			{
+				push @{$filt->{tag_end}}, $1;
+			}
+			else
+			{
+				delete $filt->{match_tags}->{$1};
+			}
+		}
+		elsif(s/^\[(.+?)\]//)
+		{
+			if(exists $filt->{pattern})
+			{
+				push @{$filt->{tag_start}}, $1;
+			}
+			else
+			{
+				$filt->{match_tags}->{$1} = 1;
+			}
+		}
+		elsif(s{^(s/.*?(?<!\\)/.*?(?<!\\)/[a-zA-Z]*)}{})
+		{
+			my $replacer = $1;
+			eval 'my $test = ""; $test =~ '.$replacer.'; 1' or die "$0: error in s/// expression: $@\n";
+			$filt->{replacer} = $replacer;
+		}
+		else
+		{
+			die "$0: can not parse expression: $_\n";
+		}
+		
+		$remainder = $_;
+	}
+	
+	# if it's a "[blue]" type of line, ie. a lone tag specification, then it opens a section of rules, all of which must match to "blue" tag.
+	if(all {not exists $filt->{$_}} qw/pattern replacer tag_start tag_end/)
+	{
+		if(exists $filt->{match_tags})
+		{
+			$filt->{section_tags} = {};
+			$filt->{section_tags}->{$_} = $filt->{match_tags}->{$_} for keys %{$filt->{match_tags}};
 		}
 	}
-	return $pass;
+	
+	debug Dumper $filt;
+	return $filt;
+}
+
+sub stream_tags_match
+{
+	my $current_tags = shift;
+	my $mandatory_tags = shift;
+	return all { $_ ~~ [keys %$current_tags] } keys %$mandatory_tags;
+}
+
+sub apply_filter_rule
+{
+	my $rule = shift;
+	my $line = shift;
+	my $context = shift;
+	my $result = shift;
+	my $applied = 0;
+	
+	if(exists $rule->{replacer})
+	{
+		eval '$line =~ '.$rule->{replacer}.'; 1' or warn "$0: $@\n";
+		$result->{line} = $line;
+		$applied = 1;
+	}
+	if(exists $rule->{tag_start})
+	{
+		$context->{tags}->{$_} = 1 for @{$rule->{tag_start}};
+		$applied = 1;
+	}
+	if(exists $rule->{tag_end})
+	{
+		delete $context->{tags}->{$_} for @{$rule->{tag_end}};
+		$applied = 1;
+	}
+	return $applied;
+}
+
+sub evaluate_filters
+{
+	my $line = shift;
+	my $context = shift;
+	my $result = {pass => 1, line => $line,};
+	
+	for my $fnum (0 .. $#Filters)
+	{
+		my $filt = $Filters[$fnum];
+		
+		debug Dumper { filter => $filt, context => $context, };
+		
+		$context->{delayed_rule}->[$fnum]->{count_down} -= 1 if $context->{delayed_rule}->[$fnum]->{count_down} > 0;
+		if(%{$context->{delayed_rule}->[$fnum]} and $context->{delayed_rule}->[$fnum]->{count_down} <= 0)
+		{
+			debug Dumper { apply_delayed_rule => $context->{delayed_rule}->[$fnum]->{rule}, };
+			apply_filter_rule($context->{delayed_rule}->[$fnum]->{rule}, $line, $context, $result);
+			delete $context->{delayed_rule}->[$fnum];
+		}
+		
+		next if not stream_tags_match($context->{tags}, $filt->{match_tags});
+		
+		my %applicable_rule = map {($_=>$filt->{$_})} grep {$_ ~~ [qw/tag_start tag_end replacer/]} keys %$filt;
+		
+		if(exists $filt->{pattern})
+		{
+			my $pattern_matched = $line =~ m/(?$filt->{modifiers})$filt->{pattern}/;
+			$pattern_matched = !$pattern_matched if $filt->{negate};
+			if($pattern_matched)
+			{
+				if($filt->{offset})
+				{
+					debug Dumper { delay_rule_application => \%applicable_rule, };
+					$context->{delayed_rule}->[$fnum]->{count_down} = $filt->{offset};
+					$context->{delayed_rule}->[$fnum]->{rule} = \%applicable_rule;
+				}
+				else
+				{
+					$result->{pass} = 1;
+					apply_filter_rule(\%applicable_rule, $line, $context, $result);
+				}
+			}
+			else
+			{
+				if(not %applicable_rule)
+				{
+					$result->{pass} = 0;
+				}
+			}
+		}
+		else
+		{
+			apply_filter_rule(\%applicable_rule, $line, $context, $result);
+		}
+	}
+	
+	return $result;
 }
 
 sub process_line
 {
 	my $line = shift;
 	my $stream = shift;
-	print {$stream->{'write_fh'}} $line if filter_pass $line, $stream->{'filter'};
+	my $filt_result = evaluate_filters($line, $stream->{filter_context});
+	print {$stream->{'write_fh'}} $filt_result->{line} if $filt_result->{pass};
 }
 
 sub process_stream
@@ -140,23 +287,36 @@ select STDERR; $|++;
 select STDOUT; $|++;
 
 
-$pipe = {
+$streams = {
 	'out' => {
 		'fh' => $stdout_r,
 		'write_fh' => \*STDOUT,
 		'fd' => fileno $stdout_r,
 		'buf' => '',
-		'filter' => $Filters->{'out'},
 	},
 	'err' => {
 		'fh' => $stderr_r,
 		'write_fh' => \*STDERR,
 		'fd' => fileno $stderr_r,
 		'buf' => '',
-		'filter' => $Filters->{'err'},
 	},
 };
 
+sub reset_stream_contexts
+{
+	$streams->{'out'}->{'filter_context'} = {
+		'tags' => {
+			'STDOUT' => 1,
+		},
+	};
+	$streams->{'err'}->{'filter_context'} = {
+		'tags' => {
+			'STDERR' => 1,
+		},
+	};
+}
+
+reset_stream_contexts();
 
 $SIG{'HUP'} = sub { $do_reload = 1; };
 
@@ -164,9 +324,9 @@ $SIG{'HUP'} = sub { $do_reload = 1; };
 while(1)
 {
 	$fds = '';
-	for my $n ('out', 'err')
+	for my $stream_name (keys %$streams)
 	{
-		vec($fds, $pipe->{$n}->{'fd'}, 1) = 1 if defined $pipe->{$n}->{'fh'};
+		vec($fds, $streams->{$stream_name}->{'fd'}, 1) = 1 if defined $streams->{$stream_name}->{'fh'};
 	}
 	last if $fds eq '';
 	
@@ -177,26 +337,27 @@ while(1)
 	if($do_reload)
 	{
 		$do_reload = 0;
-		process_args;
+		reset_stream_contexts();
+		process_args();
 	}
 	
 	next if $errno;
 	
-	for my $n ('out', 'err')
+	for my $stream_name (keys %$streams)
 	{
-		if(vec($fds, $pipe->{$n}->{'fd'}, 1) == 1)
+		if(vec($fds, $streams->{$stream_name}->{'fd'}, 1) == 1)
 		{
-			my $bytes = sysread $pipe->{$n}->{'fh'}, $pipe->{$n}->{'buf'}, 1024, length $pipe->{$n}->{'buf'};
+			my $bytes = sysread $streams->{$stream_name}->{'fh'}, $streams->{$stream_name}->{'buf'}, 1024, length $streams->{$stream_name}->{'buf'};
 			if($bytes)
 			{
-				process_stream($pipe->{$n});
+				process_stream($streams->{$stream_name});
 			}
 			else
 			{
 				# this stream is closed.
-				undef $pipe->{$n}->{'fh'};
+				undef $streams->{$stream_name}->{'fh'};
 				# process last unterminated line (if any)
-				process_line($pipe->{$n}->{'buf'}, $pipe->{$n}) if length $pipe->{$n}->{'buf'};
+				process_line($streams->{$stream_name}->{'buf'}, $streams->{$stream_name}) if length $streams->{$stream_name}->{'buf'};
 			}
 		}
 	}
@@ -221,41 +382,118 @@ stdfilt - Run a command but filter its STDOUT and STDERR
 
 stdfilt [I<OPTIONS>] [--] I<COMMAND> [I<ARGS>]
 
+=head1 DESCRIPTION
+
+Run I<COMMAND> and match each of its output lines (both stdout and stderr separately) against
+the filter rules given by command arguments (B<-f>) or in files (B<-F>).
+All filter expressions are evaluated and the last matching rule wins.
+So it's a good idea to add wider matching patterns first, then the more specific ones later.
+
 =head1 OPTIONS
 
 =over 4
 
 =item -F, --filter-file I<FILE>
 
-=item -o, -po, --pass-stdout I<PATTERN>
-
-=item -e, -pe, --pass-stderr I<PATTERN>
-
-=item -p, --pass I<PATTERN>
-
-=item -O, -fo, --filter-stdout I<PATTERN>
-
-=item -E, -fe, --filter-stderr I<PATTERN>
-
-=item -f, --filter I<PATTERN>
+=item -f, --filter I<EXPR>
 
 =back
 
-=head1 DESCRIPTION
-
-Run I<COMMAND> and match each of its output lines (both stdout and stderr separately) against
-the given perl-compatible regexp (see perlre(1)) patterns.
-
 =head1 FILTER FILE FORMAT
 
-Empty and comment lines (starting with C<#> hashmark) are ignored as well as leading whitespace.
-Each line is either a filter pattern,
-or the literal string C<[stdout]>, C<[stderr]>, or C<[*]>,
-which indicates which standard fd will be filtered through the subsequent patterns.
-If not indicated, C<[*]> (all fd) is implied.
+Empty and comments are ignored as well as leading whitespace.
+Comment is everything after a hashmark (C<#>) preceded by whitespace or the while line if it starts with a hashmark.
 
-A pattern may start with an C<!> exclamation mark, in which case, the lines matching it,
-will be passed, not filtered.
+Each line is a filter rule, of which syntax is:
+
+[B<match_tags>] [B<pattern> [B<offset>]] [B<replacer>] [B<set_tags>]
+
+=over 4
+
+=item B<match_tags>
+
+Tag names, each of them in square-bracket (eg. C<[blue] [red]>).
+The rest of the rule will be evaluated only if the tags are on the current stream.
+Tags can be added, removed by the B<set_tags> element.
+
+If a rule only consists of B<match_tags> tags, it opens a section in the filter file (and in B<-f> arguments too).
+In this section, all rules are interpreted as they had the given B<match_tags> of the section written in them.
+For example this filter-set selects all ranges in the output (and stderr) stream bound by those regexp patterns inclusively,
+and blocks everying in them except "errors":
+
+ /begin checking procedure/ [checking]
+ /checking finished/+1 [/checking]
+ [checking]
+ !//
+ /error/i
+ [/checking]
+
+The 2 streams, stdout and stderr are tagged by default by "STDOUT" and "STDERR" respectively:
+So this filters out everying in the stdout except "errors":
+
+ [STDOUT]
+ !//
+ /error/i
+ [/STDOUT]
+
+=item B<pattern>
+
+Regexp pattern (perlre(1)) to match to the streams' (stdout and stderr) lines.
+In the form of C<< /B<PATTERN>/B<MODIFIERS> >>.
+Optionally prefixed with an exclamation mark (C<!>) which negates the result.
+
+Pass every line by C<//>.
+Exclude every line by C<!//>.
+
+If there is a B<pattern> in the rule, replacement or tagging will only take place
+if the pattern matched (or not matched if it was negated).
+
+If there is no B<pattern>, only B<match_tags> controls if the rest will be applied or not.
+
+You may escape slash (C</>) in the B<PATTERN> normally as it's customary in Perl,
+by backslash, but to keep the filter expression parsing simple,
+an escaped backslash itself (double backslash) at the end of the regexp pattern,
+ie. just before the closing slash,
+won't be noticed.
+So type it as C<\x5C> instead.
+
+Further limitation, that only slash C</> can be used, others, eg. C<m{...}> not.
+
+=item B<offset>
+
+A B<pattern> may be followed by a plus sign and a number (C<< +B<N> >>)
+to denote that the given action (string replacement, or tagging)
+should take effect after the given number of lines.
+
+This way you can exclude the triggering line from the tagging.
+
+A B<pattern> with B<offset> but without B<replacer> or B<set_tags> is meaningless.
+
+=item B<replacer>
+
+A C<s///> string substitution Perl expression.
+Optionally with modifiers.
+This can be abused to execute any perl code (with the "e" modifier).
+
+=item B<set_tags>
+
+The syntax is the same as for B<match_tags>.
+But is the square-bracketed tags are at the right of the B<pattern>,
+then the tags are applied to the stream.
+
+Remove tags by a leading slash, like C<[/blue]>.
+
+B<set_tags> is useful with a B<pattern>.
+
+Example filter:
+
+ /BEGIN/ [keyblock]
+ /END/ [/keyblock]
+ [keyblock] s/^/\t/
+
+This prepends a TAB char to each lines in the output stream which are between the lines containing "BEGIN" and "END".
+
+=back
 
 =head1 SIGNALS
 

@@ -1,0 +1,30 @@
+#! perl
+
+use POSIX ();
+use Data::Dumper;
+
+sub on_button_press {
+	my ($self, $event) = @_;
+
+	return () unless $event->{state} & urxvt::ControlMask;
+	
+	my $font = $self->resource('font');
+	my $delta = 0;
+	
+	if($event->{button} == 4)
+	{
+		$delta = +1;
+	}
+	elsif($event->{button} == 5)
+	{
+		$delta = -1;
+	}
+	
+	if($delta != 0)
+	{
+		my $newfont = $font =~ s/^(.*)size=(\d+)(.*)$/$1."size=".($2+$delta).$3/er;
+		$self->cmd_parse("\033]710;$newfont\033\\");
+	}
+	
+	1;
+}

@@ -24,12 +24,11 @@ $(TOOLS_TARGET_DIR)/perl-repl: /usr/libexec/perlshell
 $(TOOLS_TARGET_DIR)/rsync-semichroot: /usr/share/doc/tool/rsync-semichroot.txt
 $(TOOLS_TARGET_DIR)/multithrottler: /usr/lib/multithrottler/Throttler.pm
 $(TOOLS_TARGET_DIR)/git-mirrors: /usr/share/bash-completion/completions/git-mirrors
+$(TOOLS_TARGET_DIR)/git-syncbranches: /usr/share/bash-completion/completions/git-syncbranches
 
-/etc/bash_completion.d/msg: $(REPO_ROOT)/bash/bash_completion.d/msg
-	install $< $@
-	@echo remove $@ >> uninstall.sh
+COMPLETION_BASH_SCRIPTS = $(foreach path,$(wildcard $(REPO_ROOT)/bash/bash_completion.d/*),$(notdir $(path)))
 
-/usr/share/bash-completion/completions/git-mirrors: $(REPO_ROOT)/bash/bash_completion.d/git-mirrors
+$(addprefix /usr/share/bash-completion/completions/,$(COMPLETION_BASH_SCRIPTS)): /usr/share/bash-completion/completions/%: $(REPO_ROOT)/bash/bash_completion.d/%
 	install $< $@
 	@echo remove $@ >> uninstall.sh
 

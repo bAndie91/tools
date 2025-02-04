@@ -261,9 +261,9 @@ pipe($stdout_r, $stdout_w) or die "$0: pipe: $!\n";
 pipe($stderr_r, $stderr_w) or die "$0: pipe: $!\n";
 
 
-my $child_pid = fork // die "$0: fork: $!\n";
+$CHILD_PID = fork // die "$0: fork: $!\n";
 
-if($child_pid == 0)
+if($CHILD_PID == 0)
 {
 	open STDOUT, '>&', $stdout_w or die "$0: replace stdout: $!\n";
 	open STDERR, '>&', $stderr_w or die "$0: replace stderr: $!\n";
@@ -363,7 +363,7 @@ while(1)
 	}
 }
 
-waitpid($child_pid, 0);
+waitpid($CHILD_PID, 0);
 $child_status = $?;
 $exit_status = WEXITSTATUS($child_status);
 $exit_status = 128 + WTERMSIG($child_status) if WIFSIGNALED($child_status);
@@ -498,6 +498,16 @@ This prepends a TAB char to each lines in the output stream which are between th
 =head1 SIGNALS
 
 HUP - re-read filter files given at command line
+
+=head1 EXAMPLES
+
+Prefix each output (and stderr) lines with the I<COMMAND> process'es PID:
+
+ stdfilt -f 's/^/$CHILD_PID: /' some_command...
+
+Prefix each line with STDOUT/STDERR:
+
+ stdfile -f '[STDOUT]' -f 's/^/STDOUT: /' -f '[/STDOUT]' -f '[STDERR]' -f 's/^/STDERR: /' -f '[/STDERR]' some_command...
 
 =head1 SEE ALSO
 

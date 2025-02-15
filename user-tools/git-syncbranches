@@ -41,7 +41,7 @@ do
 	fi
 	
 	refspecs=()
-	for branch in `git for-each-ref 'refs/heads/*' --format='%(refname:lstrip=2)' | grep -v ^sync/`
+	for branch in `git for-each-ref 'refs/heads/**' --format='%(refname:lstrip=2)' | grep -v ^sync/`
 	do
 		refspecs+=("refs/heads/$branch:refs/heads/sync/$branch")
 	done

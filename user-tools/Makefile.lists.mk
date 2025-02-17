@@ -122,6 +122,7 @@ TOOLS ?= \
   oded \
   organizebydate \
   palemoon-current-url \
+  pararun \
   parsel \
   partial \
   paths2indent \

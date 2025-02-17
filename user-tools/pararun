@@ -1,0 +1,180 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+pararun - run commands parallelly
+
+=head1 SYNOPSIS
+
+pararun [I<OPTIONS>] [I<COMMON_ARGS>] --- I<PARTICULAR_ARGS> [+ I<PARTICULAR_ARGS> [+ ...]]
+
+=head1 DESCRIPTION
+
+=head1 OPTIONS
+
+=over 4
+
+=item -s, --common-sep I<SEP>
+
+Let the string I<SEP> close the common arguments (including the command if it is common as well)
+instead of the default triple dash (C<--->).
+
+=item -S, --particular-sep I<SEP>
+
+The string I<SEP> separates the particular arguments
+instead of the default plus sign (C<+>).
+
+=item -p, --prefix-first-particular-arg
+
+Prefix each output line with the given command's first particular argument.
+
+=item -C, --colorize-prefix
+
+Colorize each particular command's prefix.
+
+=item -T, --prefix-trailer I<STR>
+
+Separate prefix from the rest of the line with this string.
+Default is one space.
+
+=item -e, --end-summary
+
+Show textual summary at the end about how each command exited.
+Exit code, exit signal.
+
+=back
+
+=head1 EXIT STATUS
+
+Exit with the highest exit status of the children processes.
+
+=head1 LIMITATIONS
+
+If a command terminates due to a signal, and prefixing and/or prefix coloring is turned on,
+then the signaled state is not preserved because pararun(1) pipes commands through
+stdfilt(1) for get them prefixed and/or colored.
+
+=head1 SEE ALSO
+
+parallel(1)
+
+=cut
+
+
+use Errno qw/:POSIX/;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
+use IPC::Run qw/run harness/;
+use POSIX;
+use Pod::Usage;
+use Data::Dumper;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+
+$OptCommonSep = '---';
+$OptParticularSep = '+';
+$OptPrefixFirstParticularArg = 0;
+$OptColorizePrefix = 0;
+$OptPrefixTrailer = ' ';
+$OptEndSummary = 0;
+
+GetOptions(
+	's|common-sep=s' => \$OptCommonSep,
+	'S|particular-sep=s' => \$OptParticularSep,
+	'p|prefix-first-particular-arg!' => \$OptPrefixFirstParticularArg,
+	'C|colorize-prefix!' => \$OptColorizePrefix,
+	'T|prefix-trailer=s' => \$OptPrefixTrailer,
+	'e|end-summary!' => \$OptEndSummary,
+	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+
+@CommonArgs = ();
+@ParticularArgs = ();
+
+while(@ARGV)
+{
+	my $arg = shift @ARGV;
+	last if $arg eq $OptCommonSep;
+	push @CommonArgs, $arg;
+}
+
+$particular_cmd_idx = 0;
+while(@ARGV)
+{
+	my $arg = shift @ARGV;
+	if($arg eq $OptParticularSep)
+	{
+		$particular_cmd_idx++;
+		@{$ParticularArgs[$particular_cmd_idx]} = ();
+		next;
+	}
+	push @{$ParticularArgs[$particular_cmd_idx]}, $arg;
+}
+
+if($particular_cmd_idx == 0 and $#ParticularArgs < 0)
+{
+	@{$ParticularArgs[$particular_cmd_idx]} = ();
+}
+
+
+@Commands = ();
+$CmdColorCode = 0;
+
+for my $particular_cmd_idx (0 .. $#ParticularArgs)
+{
+	my @particular_args = @{$ParticularArgs[$particular_cmd_idx]};
+	my $prefix;
+	my $prefix_qm;
+	if($OptPrefixFirstParticularArg)
+	{
+		$prefix = $particular_args[0] . $OptPrefixTrailer;
+	}
+	if($OptColorizePrefix)
+	{
+		$CmdColorCode++; $CmdColorCode = 1 if $CmdColorCode == 8;
+		$prefix_qm = '\x1B[3'.$CmdColorCode.'m'.quotemeta($prefix).'\x1B[0m';
+		undef $prefix;
+	}
+	if(defined $prefix and not defined $prefix_qm)
+	{
+		$prefix_qm = quotemeta($prefix);
+		undef $prefix;
+	}
+	if(defined $prefix_qm)
+	{
+		push @{$Commands[$particular_cmd_idx]}, 'stdfilt', '-f', 's/^/'.$prefix_qm.'/';
+	}
+	push @{$Commands[$particular_cmd_idx]}, @CommonArgs, @particular_args;
+}
+
+
+@ipc_run_args = ();
+for my $cmdargs_ref (@Commands)
+{
+	push @ipc_run_args, $cmdargs_ref, '&';
+}
+
+$h = harness @ipc_run_args;
+$h->run;
+
+$highest_exit_code = 0;
+@full_results = $h->full_results;
+for my $cmd_idx (0 .. $#Commands)
+{
+	my $result = $full_results[$cmd_idx];
+	my $exit_code = WEXITSTATUS($result);
+	my $signaled = WIFSIGNALED($result);
+	my $termsig = WTERMSIG($result);
+	$exit_code = 128 + $termsig if $signaled;
+	$highest_exit_code = $exit_code if $highest_exit_code < $exit_code;
+	
+	if($OptEndSummary)
+	{
+		printf STDERR "pararun: status %3d, %6s %3d, args: %s\n", $exit_code,
+			$signaled ? ("signal", $termsig) : ("exit", $exit_code),
+			join ' ', @{$ParticularArgs[$cmd_idx]};
+	}
+}
+exit $highest_exit_code;

@@ -61,7 +61,7 @@ TOOLS ?= \
   gitconfigexec \
   git_diff \
   git-submodule-auto-add \
-  git-syncbranches \
+  git-push-sync-branches \
   glob \
   grepdatetime \
   Head \

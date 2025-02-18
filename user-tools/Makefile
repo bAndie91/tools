@@ -19,7 +19,7 @@ default:
 .PHONY: default
 
 
-$(TOOLS_TARGET_DIR)/msg: /etc/bash_completion.d/msg
+$(TOOLS_TARGET_DIR)/msg: /usr/share/bash-completion/completions/msg
 $(TOOLS_TARGET_DIR)/perl-repl: /usr/libexec/perlshell
 $(TOOLS_TARGET_DIR)/rsync-semichroot: /usr/share/doc/tool/rsync-semichroot.txt
 $(TOOLS_TARGET_DIR)/multithrottler: /usr/lib/multithrottler/Throttler.pm

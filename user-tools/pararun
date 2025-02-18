@@ -44,6 +44,10 @@ Default is one space.
 Show textual summary at the end about how each command exited.
 Exit code, exit signal.
 
+=item -B, --no-bold
+
+Don't use ANSI bold colors.
+
 =back
 
 =head1 EXIT STATUS
@@ -77,6 +81,7 @@ $OptPrefixFirstParticularArg = 0;
 $OptColorizePrefix = 0;
 $OptPrefixTrailer = ' ';
 $OptEndSummary = 0;
+$OptBoldColors = 1;
 
 GetOptions(
 	's|common-sep=s' => \$OptCommonSep,
@@ -85,6 +90,7 @@ GetOptions(
 	'C|colorize-prefix!' => \$OptColorizePrefix,
 	'T|prefix-trailer=s' => \$OptPrefixTrailer,
 	'e|end-summary!' => \$OptEndSummary,
+	'B|no-bold' => sub { $OptBoldColors = 0; },
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
 ) or pod2usage(-exitval=>2, -verbose=>99);
@@ -121,6 +127,7 @@ if($particular_cmd_idx == 0 and $#ParticularArgs < 0)
 
 @Commands = ();
 $CmdColorCode = 0;
+$CmdColorBold = 0;
 
 for my $particular_cmd_idx (0 .. $#ParticularArgs)
 {
@@ -133,8 +140,18 @@ for my $particular_cmd_idx (0 .. $#ParticularArgs)
 	}
 	if($OptColorizePrefix)
 	{
-		$CmdColorCode++; $CmdColorCode = 1 if $CmdColorCode == 8;
-		$prefix_qm = '\x1B[3'.$CmdColorCode.'m'.quotemeta($prefix).'\x1B[0m';
+		# TODO: detect which colors are supported by the current terminal (8 ansi colors, bold, 256 colors, ...)
+		# NOTE: assuming black background
+		$CmdColorCode++;
+		if($CmdColorCode == 8)
+		{
+			$CmdColorCode = 1;
+			if($OptBoldColors)
+			{
+				$CmdColorBold = ($CmdColorBold + 1) % 2;
+			}
+		}
+		$prefix_qm = '\x1B['.$CmdColorBold.';'.'3'.$CmdColorCode.'m'.quotemeta($prefix).'\x1B[0m';
 		undef $prefix;
 	}
 	if(defined $prefix and not defined $prefix_qm)

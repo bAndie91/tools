@@ -43,6 +43,16 @@ instead of the default triple dash (C<--->).
 The string I<SEP> separates the particular arguments
 instead of the default plus sign (C<+>).
 
+=item -i, --particular-args-stdin
+
+Read additional I<PARTICULAR_ARGS> from STDIN.
+Each line is taken as 1 argument unless B<-d> is given.
+
+=item -d, --stdin-delimiter I<PATTERN>
+
+When reading I<PARTICULAR_ARGS> from STDIN, split up lines into arguments by I<PATTERN> regex pattern.
+Useful delimiter is C<\t> TAB which you may need to quote in your shell, like C<'\t'> in bash(1).
+
 =item -p, --prefix-first-particular-arg
 
 Prefix each output line with the given command's first particular argument.
@@ -95,6 +105,8 @@ no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 $OptCommonSep = '---';
 $OptParticularSep = '+';
+$OptParticularArgsStdin = 0;
+$OptStdinDelimiter = undef;
 $OptPrefixFirstParticularArg = 0;
 $OptColorizePrefix = 0;
 $OptPrefixTrailer = ' ';
@@ -104,6 +116,8 @@ $OptBoldColors = 1;
 GetOptions(
 	's|common-sep=s' => \$OptCommonSep,
 	'S|particular-sep=s' => \$OptParticularSep,
+	'i|particular-args-stdin!' => \$OptParticularArgsStdin,
+	'd|stdin-delimiter=s' => \$OptStdinDelimiter,
 	'p|prefix-first-particular-arg!' => \$OptPrefixFirstParticularArg,
 	'C|colorize-prefix!' => \$OptColorizePrefix,
 	'T|prefix-trailer=s' => \$OptPrefixTrailer,
@@ -118,15 +132,20 @@ $OptPrefixFirstParticularArg = 1 if $OptColorizePrefix;
 
 @CommonArgs = ();
 @ParticularArgs = ();
+$particular_cmd_idx = -1;
 
 while(@ARGV)
 {
 	my $arg = shift @ARGV;
-	last if $arg eq $OptCommonSep;
+	if($arg eq $OptCommonSep)
+	{
+		$particular_cmd_idx = 0;
+		last;
+	}
 	push @CommonArgs, $arg;
 }
 
-$particular_cmd_idx = 0;
+
 while(@ARGV)
 {
 	my $arg = shift @ARGV;
@@ -139,9 +158,24 @@ while(@ARGV)
 	push @{$ParticularArgs[$particular_cmd_idx]}, $arg;
 }
 
-if($particular_cmd_idx == 0 and $#ParticularArgs < 0)
+if($OptParticularArgsStdin)
 {
-	@{$ParticularArgs[$particular_cmd_idx]} = ();
+	while(<STDIN>)
+	{
+		chomp;
+		my @particular_args = ($_);
+		if(defined $OptStdinDelimiter)
+		{
+			@particular_args = split /$OptStdinDelimiter/, $_;
+		}
+		$particular_cmd_idx++;
+		push @{$ParticularArgs[$particular_cmd_idx]}, @particular_args;
+	}
+}
+
+if($#ParticularArgs < 0)
+{
+	@{$ParticularArgs[0]} = ();
 }
 
 

@@ -12,6 +12,23 @@ pararun [I<OPTIONS>] [I<COMMON_ARGS>] --- I<PARTICULAR_ARGS> [+ I<PARTICULAR_ARG
 
 =head1 DESCRIPTION
 
+Start several processes simultaneously.
+Starting several different commands and starting the same command with different arguments are not distinguished:
+I<COMMON_ARGS> may be empty - in this case each I<PARTICULAR_ARGS> is a command followed by its arguments;
+When I<COMMON_ARGS> consists at least 1 argument,
+then it's the command to be started with the rest of the I<COMMON_ARGS> arguments
+appended by each I<PARTICULAR_ARGS> arguments per each child process.
+
+=head1 EXAMPLES
+
+ pararun --- ./server + ./client
+ 
+Runs C<./server> and C<./client> programms in parallel.
+ 
+ pararun ls --- /usr + /etc + /var
+ 
+Runs C<ls /usr>, C<ls /etc>, and C<ls /var>.
+
 =head1 OPTIONS
 
 =over 4
@@ -33,6 +50,7 @@ Prefix each output line with the given command's first particular argument.
 =item -C, --colorize-prefix
 
 Colorize each particular command's prefix.
+Implies B<-p>.
 
 =item -T, --prefix-trailer I<STR>
 
@@ -95,6 +113,8 @@ GetOptions(
 	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
+
+$OptPrefixFirstParticularArg = 1 if $OptColorizePrefix;
 
 @CommonArgs = ();
 @ParticularArgs = ();

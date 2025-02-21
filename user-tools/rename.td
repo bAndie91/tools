@@ -36,15 +36,18 @@ use strict;
 
 use Getopt::Long;
 Getopt::Long::Configure('bundling', 'permute');
+use File::Path qw/make_path/;
+use File::Basename qw/dirname/;
 
 my $verbose = 0;
-my ($no_act, $force, $op);
+my ($no_act, $force, $op, $opt_mkdir);
 
 die "Usage: rename [-v[v]] [-n] [-f] perlexpr [filenames]\n"
 unless GetOptions(
 	'v|verbose+' => \$verbose,
 	'n|no-act|dry-run|dryrun' => \$no_act,
 	'f|force' => \$force,
+	'mkdir!' => \$opt_mkdir,
 ) and $op = shift;
 
 if (!@ARGV) {
@@ -88,6 +91,12 @@ for (@ARGV)
         }
         else
         {
+        	if($opt_mkdir)
+        	{
+        		my $dir = dirname($_);
+        		make_path($dir);
+        	}
+        	
             if(rename $was, $_)
             {
             	$status = "OK" if $verbose;
@@ -159,6 +168,10 @@ No Action: show what files would have been renamed, or skipped.
 =item B<-f>, B<--force>
 
 Force: overwrite existing files.
+
+=item B<--mkdir>
+
+Create missing directories.
 
 =back
 

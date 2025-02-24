@@ -28,6 +28,8 @@ If the programm succeeds, delete the file.
 
 =item -d, --directory I<DIRECTORY>
 
+This option is repeatable.
+
 =item --1-by-1 <-- TODO
 
 =item -g, --group I<BASENAME>
@@ -35,9 +37,10 @@ If the programm succeeds, delete the file.
 Process only those files with I<BASENAME>.
 This option is repeatable.
 
-=item --scriptdir I<DIR>
+=item -S, --scriptdir I<DIR>
 
 Lookup programms in I<DIR> instead of F</etc/spoolprocess>.
+This option is repeatable.
 
 =back
 
@@ -66,6 +69,7 @@ use Errno qw/:POSIX/;
 use Fcntl qw/:flock :seek F_GETFL F_SETFL O_NONBLOCK F_GETFD F_SETFD FD_CLOEXEC/;
 use File::Basename;
 use File::Temp qw/tempfile/;
+use File::Glob;
 use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
 use IPC::Run qw/run/;
 use List::MoreUtils qw/all any none/;
@@ -75,14 +79,41 @@ use Socket qw/AF_UNIX AF_INET SOCK_STREAM pack_sockaddr_in inet_aton sockaddr_un
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 $OptVerbose = 0;
-$OptDirectory = undef;
+@OptDirectories = ();
+@OptGroups = ();
+@OptScriptdirs = ();
 
 GetOptions(
 	'v|verbose!' => \$OptVerbose,
-	'd|directory=s' => \$OptDirectory,
+	'd|directory=s@' => \@OptDirectories,
+	'S|scriptdir=s@' => \@OptScriptdirs,
+	'g|group=s@' => \@OptGroups,
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
+if(not @OptDirectories)
+{
+	die "$0: need a directory\n";
+}
 
-opendir
+if(not @OptScriptdirs)
+{
+	push @OptScriptdirs, "/etc/spoolprocess";
+}
+
+%TriggerFiles = ();
+
+for my $trigger_dir (@OptDirectories)
+{
+	opendir $dh, $trigger_dir;
+	while(my $filename = readdir $dh)
+	{
+		
+	}
+	closedir $dh;
+}
+
+for my $trigger_file (keys %TriggerFiles)
+{
+}

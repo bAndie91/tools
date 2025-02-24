@@ -1,0 +1,6 @@
+#!/bin/bash
+
+_git_push_sync_branches()
+{
+	__gitcomp_nl "$(__git_remotes)"
+}

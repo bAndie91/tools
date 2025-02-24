@@ -11,6 +11,7 @@ Tail - output as many lines from the end of files as many lines on the terminal 
 a8e - Abbreviate words in the input stream
 adr2html - Convert Opera Hostlist 2.0 bookmarks to HTML
 args2env - Turns command arguments into environment variables and executes command with the remained arguments
+args2stdin - Turns command arguments into input stream on STDIN
 asterisk-log-separator - Split up Asterisk PBX log file into multiple files based on which process wrote each part
 awk-cut - Select fields from input stream with awk
 base58 - Encode to (decode from) Base58
@@ -24,6 +25,7 @@ chshebang - Change a script's default interpreter
 cled - Command Line-Editor - Edit text file lines by commands directly from shell
 convert_chromium_cookies_to_netscape.sh - Convert Chromium and derivative web browser's cookies to Netscape format (used by wget and curl)
 corner_time - Place a digital clock in the upper right hand corner of the terminal
+cpyfattr - Copy file attributes (xattr)
 cred - Credentials and secrets management in command line
 cronrun - convenience features to run commands in task scheduler environment
 cut.awk - Output only the selected fields from the input stream, parameters follow awk(1) syntax
@@ -31,6 +33,7 @@ daemonctl - Manage preconfigured libslack daemon(1) daemons more conveniently
 dataurl2bin - Decode "data:..." URLs from input stream and output the raw binary data
 dbus-call - Browse DBus and call its methods
 debdiff - Display differences between 2 Debian packages (*.deb files)
+delfattr - Removes given attributes (xattr) from files
 descpids - List all descendant process PIDs of the given process(es)
 dfbar - Display disk space usage with simple bar chart (as reported by df(1))
 digasn - Query Autonom System Number (ASN) from DNS
@@ -97,6 +100,7 @@ notashell - A non-interactive shell lacking of any shell syntax
 oded - On-disk editor - edit text files by commands directly from shell
 organizebydate - Rename files based on their date-time
 palemoon-current-url - Display the webpage's URL which is currently open in Palemoon web browser
+pararun - run commands parallelly
 parsel - Select parts of a HTML document based on CSS selectors
 partial - Show an earlier started long-running command's partial output
 paths2indent - Transform list of filesystem paths to an indented list of the leaf elements
@@ -124,6 +128,7 @@ screen-notify - Send status-line message to the current GNU/Screen instance
 screenconsole - Interactive CLI to run GNU/screen commands against current or specified screen session
 screenreattach - Reattach to GNU/screen and import environment variables
 screens - List all GNU/Screen sessions accessible by the user and all of their inner windows as well
+seekstdin - Makes STDIN seekable for a given command
 set-sys-path - Set PATH according to /etc/environment and run the given command
 set-xcursor-lock-and-run - Set X11 cursor to a padlock and run a command
 ssh-agent-finder - Find a working ssh agent on the system so you get the same in each of your logon sessions
@@ -144,10 +149,12 @@ text2img-dataurl - Convert text input to image in "data:..." URL representation
 timestamper - Prepend a timestamp to each input line
 touchx - set execution bit on files and creates them if neccessary
 trackrun - Record when the given command was started and ended and expose to it in environment variables
+triggerexec - Run a command and do various specified actions depending on what command does
 ttinput - Inject console input in a terminal as if the user typed
 uchmod - chmod files according to umask
 unicodestyle - Add font styles to input text using Unicode
 uniproc - Universal data processing tool
+untabularize - Revert the formatting done by tabularize(1)
 upsidedown - Transliterate input stream to text with upsidedown-looking chars
 url-parts - Extract specified parts from URLs given in input stream
 url_encode - Escape URL-unsafe chars in text given either in parameters or in stdin by percent-encoding

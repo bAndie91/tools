@@ -1,0 +1,251 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+pararun - run commands parallelly
+
+=head1 SYNOPSIS
+
+pararun [I<OPTIONS>] [I<COMMON_ARGS>] --- I<PARTICULAR_ARGS> [+ I<PARTICULAR_ARGS> [+ ...]]
+
+=head1 DESCRIPTION
+
+Start several processes simultaneously.
+Starting several different commands and starting the same command with different arguments are not distinguished:
+I<COMMON_ARGS> may be empty - in this case each I<PARTICULAR_ARGS> is a command followed by its arguments;
+When I<COMMON_ARGS> consists at least 1 argument,
+then it's the command to be started with the rest of the I<COMMON_ARGS> arguments
+appended by each I<PARTICULAR_ARGS> arguments per each child process.
+
+=head1 EXAMPLES
+
+ pararun --- ./server + ./client
+ 
+Runs C<./server> and C<./client> programms in parallel.
+ 
+ pararun ls --- /usr + /etc + /var
+ 
+Runs C<ls /usr>, C<ls /etc>, and C<ls /var>.
+
+=head1 OPTIONS
+
+=over 4
+
+=item -s, --common-sep I<SEP>
+
+Let the string I<SEP> close the common arguments (including the command if it is common as well)
+instead of the default triple dash (C<--->).
+
+=item -S, --particular-sep I<SEP>
+
+The string I<SEP> separates the particular arguments
+instead of the default plus sign (C<+>).
+
+=item -i, --particular-args-stdin
+
+Read additional I<PARTICULAR_ARGS> from STDIN.
+Each line is taken as 1 argument unless B<-d> is given.
+
+=item -d, --stdin-delimiter I<PATTERN>
+
+When reading I<PARTICULAR_ARGS> from STDIN, split up lines into arguments by I<PATTERN> regex pattern.
+Useful delimiter is C<\t> TAB which you may need to quote in your shell, like C<'\t'> in bash(1).
+
+=item -p, --prefix-first-particular-arg
+
+Prefix each output line with the given command's first particular argument.
+
+=item -C, --colorize-prefix
+
+Colorize each particular command's prefix.
+Implies B<-p>.
+
+=item -T, --prefix-trailer I<STR>
+
+Separate prefix from the rest of the line with this string.
+Default is one space.
+
+=item -e, --end-summary
+
+Show textual summary at the end about how each command exited.
+Exit code, exit signal.
+
+=item -B, --no-bold
+
+Don't use ANSI bold colors.
+
+=back
+
+=head1 EXIT STATUS
+
+Exit with the highest exit status of the children processes.
+
+=head1 LIMITATIONS
+
+If a command terminates due to a signal, and prefixing and/or prefix coloring is turned on,
+then the signaled state is not preserved because pararun(1) pipes commands through
+stdfilt(1) for get them prefixed and/or colored.
+
+=head1 SEE ALSO
+
+parallel(1)
+
+=cut
+
+
+use Errno qw/:POSIX/;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
+use IPC::Run qw/run harness/;
+use POSIX;
+use Pod::Usage;
+use Data::Dumper;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+
+$OptCommonSep = '---';
+$OptParticularSep = '+';
+$OptParticularArgsStdin = 0;
+$OptStdinDelimiter = undef;
+$OptPrefixFirstParticularArg = 0;
+$OptColorizePrefix = 0;
+$OptPrefixTrailer = ' ';
+$OptEndSummary = 0;
+$OptBoldColors = 1;
+
+GetOptions(
+	's|common-sep=s' => \$OptCommonSep,
+	'S|particular-sep=s' => \$OptParticularSep,
+	'i|particular-args-stdin!' => \$OptParticularArgsStdin,
+	'd|stdin-delimiter=s' => \$OptStdinDelimiter,
+	'p|prefix-first-particular-arg!' => \$OptPrefixFirstParticularArg,
+	'C|colorize-prefix!' => \$OptColorizePrefix,
+	'T|prefix-trailer=s' => \$OptPrefixTrailer,
+	'e|end-summary!' => \$OptEndSummary,
+	'B|no-bold' => sub { $OptBoldColors = 0; },
+	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+
+$OptPrefixFirstParticularArg = 1 if $OptColorizePrefix;
+
+@CommonArgs = ();
+@ParticularArgs = ();
+$particular_cmd_idx = -1;
+
+while(@ARGV)
+{
+	my $arg = shift @ARGV;
+	if($arg eq $OptCommonSep)
+	{
+		$particular_cmd_idx = 0;
+		last;
+	}
+	push @CommonArgs, $arg;
+}
+
+
+while(@ARGV)
+{
+	my $arg = shift @ARGV;
+	if($arg eq $OptParticularSep)
+	{
+		$particular_cmd_idx++;
+		@{$ParticularArgs[$particular_cmd_idx]} = ();
+		next;
+	}
+	push @{$ParticularArgs[$particular_cmd_idx]}, $arg;
+}
+
+if($OptParticularArgsStdin)
+{
+	while(<STDIN>)
+	{
+		chomp;
+		my @particular_args = ($_);
+		if(defined $OptStdinDelimiter)
+		{
+			@particular_args = split /$OptStdinDelimiter/, $_;
+		}
+		$particular_cmd_idx++;
+		push @{$ParticularArgs[$particular_cmd_idx]}, @particular_args;
+	}
+}
+
+if($#ParticularArgs < 0)
+{
+	@{$ParticularArgs[0]} = ();
+}
+
+
+@Commands = ();
+$CmdColorCode = 0;
+$CmdColorBold = 0;
+
+for my $particular_cmd_idx (0 .. $#ParticularArgs)
+{
+	my @particular_args = @{$ParticularArgs[$particular_cmd_idx]};
+	my $prefix;
+	my $prefix_qm;
+	if($OptPrefixFirstParticularArg)
+	{
+		$prefix = $particular_args[0] . $OptPrefixTrailer;
+	}
+	if($OptColorizePrefix)
+	{
+		# TODO: detect which colors are supported by the current terminal (8 ansi colors, bold, 256 colors, ...)
+		# NOTE: assuming black background
+		$CmdColorCode++;
+		if($CmdColorCode == 8)
+		{
+			$CmdColorCode = 1;
+			if($OptBoldColors)
+			{
+				$CmdColorBold = ($CmdColorBold + 1) % 2;
+			}
+		}
+		$prefix_qm = '\x1B['.$CmdColorBold.';'.'3'.$CmdColorCode.'m'.quotemeta($prefix).'\x1B[0m';
+		undef $prefix;
+	}
+	if(defined $prefix and not defined $prefix_qm)
+	{
+		$prefix_qm = quotemeta($prefix);
+		undef $prefix;
+	}
+	if(defined $prefix_qm)
+	{
+		push @{$Commands[$particular_cmd_idx]}, 'stdfilt', '-f', 's/^/'.$prefix_qm.'/';
+	}
+	push @{$Commands[$particular_cmd_idx]}, @CommonArgs, @particular_args;
+}
+
+
+@ipc_run_args = ();
+for my $cmdargs_ref (@Commands)
+{
+	push @ipc_run_args, $cmdargs_ref, '&';
+}
+
+$h = harness @ipc_run_args;
+$h->run;
+
+$highest_exit_code = 0;
+@full_results = $h->full_results;
+for my $cmd_idx (0 .. $#Commands)
+{
+	my $result = $full_results[$cmd_idx];
+	my $exit_code = WEXITSTATUS($result);
+	my $signaled = WIFSIGNALED($result);
+	my $termsig = WTERMSIG($result);
+	$exit_code = 128 + $termsig if $signaled;
+	$highest_exit_code = $exit_code if $highest_exit_code < $exit_code;
+	
+	if($OptEndSummary)
+	{
+		printf STDERR "pararun: status %3d, %6s %3d, args: %s\n", $exit_code,
+			$signaled ? ("signal", $termsig) : ("exit", $exit_code),
+			join ' ', @{$ParticularArgs[$cmd_idx]};
+	}
+}
+exit $highest_exit_code;

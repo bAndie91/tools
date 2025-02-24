@@ -187,7 +187,7 @@ int connect(int sockfd, const struct sockaddr_in *orig_sockaddr, socklen_t addrl
 	}
 	
 	if(!getenv("AUTOSSL_SILENT"))
-		fprintf(stderr, "autossl: redirecting %s:%d -> fd#%d\n", inet_ntoa(orig_sockaddr->sin_addr), ntohs(orig_sockaddr->sin_port), sockpair[0]);
+		fprintf(stderr, "autossl: redirecting fd#%d [%s:%d] -> fd#%d\n", sockfd, inet_ntoa(orig_sockaddr->sin_addr), ntohs(orig_sockaddr->sin_port), sockpair[0]);
 	
 	_note_sockfd_peername(sockfd, orig_sockaddr, addrlen);
 	

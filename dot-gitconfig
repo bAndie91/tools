@@ -115,7 +115,7 @@
 	
 	hash = show -s --format=%H
 	root = rev-parse --show-toplevel
-	b = for-each-ref --sort=committerdate refs/heads/ refs/remotes/ --format="[33m%(authorname)[0m%09[32m%(committerdate:relative)[0m%09[1;33m%(HEAD)[0m%(if)%(HEAD)%(then)[1m%(end)%(if:equals=refs/remotes)%(refname:rstrip=-2)%(then)[31m%(else)[35m%(end)%(refname:lstrip=2)[0m%09%(contents:subject)[0m"
+	b = for-each-ref --sort=committerdate refs/heads/ refs/remotes/ --format="[35m%(objectname:short=7)[0m%09[32m%(committerdate:relative)[0m%09%(if)%(HEAD)%(then)[1;33m*[0m[1m%(else)%20%(end)%(if:equals=refs/remotes)%(refname:rstrip=-2)%(then)[31m%(else)%(if:equals=refs/tags)%(refname:rstrip=-2)%(then)[36m%(else)[35m%(end)%(end)%(refname:lstrip=2)[0m%09[33m%(authorname)[0m%09%(contents:subject)[0m"
 	br = branch -v
 	unmerged-branches = branch -v --no-merged
 	
@@ -202,9 +202,8 @@
 	current-branch-name = symbolic-ref --quiet --short HEAD
 	current-branch-tracking-remote = ! "fn(){ branch=$1; [ -n \"$branch\" ] || branch=$(git current-branch-name); git config --get \"branch.$branch.remote\"; }; fn"
 	push-branch = ! "fn(){ branch=$(git symbolic-ref --quiet --short HEAD); if [ -z \"$branch\" ]; then echo \"not on a branch\" >&2; return 1; fi; remote=$(git config --get \"branch.$branch.remote\"); git push \"${remote:-origin}\" \"$branch\"; }; fn"
-	push-all = ! "fn(){ git config-remotes-push-refs; for remote in $(git remote); do echo \"+ git push $remote $*\" >&2; git push \"$remote\" \"$@\"; done; }; fn"
+	push-all = ! "fn(){ git for remote in $(git remote); do echo \"+ git push $remote $*\" >&2; git push \"$remote\" \"$@\"; done; }; fn"
 	push-multi = ! "fn(){ for remote in \"$@\"; do echo git push $remote | colorize cyan; git push \"$remote\"; done; }; fn"
-	config-remotes-push-refs = ! "fn(){ for remote in $(git remote); do pushurl=$(git config --get remote.$remote.url); if expr match \"$pushurl\" '.*/\\.git$' >/dev/null; then git config --get-all remote.$remote.push | grep -qxF 'refs/heads/sync/*' || git config --add remote.$remote.push 'refs/heads/sync/*'; git config --get-regex \"^remote\\.$remote\\.push$\"; fi; done; }; fn"
 
 	# stash
 	

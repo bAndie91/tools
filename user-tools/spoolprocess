@@ -30,17 +30,22 @@ If the programm succeeds, delete the file.
 
 This option is repeatable.
 
-=item --1-by-1 <-- TODO
-
 =item -g, --group I<BASENAME>
 
 Process only those files with I<BASENAME>.
 This option is repeatable.
 
+=item -L, --latest
+
+Process only the latest (highest version number) file in each group.
+The default is to process all files in ascending order of version numbers.
+
 =item -S, --scriptdir I<DIR>
 
 Lookup programms in I<DIR> instead of F</etc/spoolprocess>.
 This option is repeatable.
+
+=item -v, --verbose
 
 =back
 
@@ -71,7 +76,7 @@ use File::Basename;
 use File::Temp qw/tempfile/;
 use File::Glob;
 use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
-use IPC::Run qw/run/;
+use IPC::Run qw/run harness/;
 use List::MoreUtils qw/all any none/;
 use Pod::Usage;
 use POSIX;
@@ -82,12 +87,15 @@ $OptVerbose = 0;
 @OptDirectories = ();
 @OptGroups = ();
 @OptScriptdirs = ();
+$OptProcessLatest = 0;
+
 
 GetOptions(
 	'v|verbose!' => \$OptVerbose,
 	'd|directory=s@' => \@OptDirectories,
 	'S|scriptdir=s@' => \@OptScriptdirs,
 	'g|group=s@' => \@OptGroups,
+	'L|latest!' => \$OptProcessLatest,
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
 ) or pod2usage(-exitval=>2, -verbose=>99);
@@ -109,11 +117,74 @@ for my $trigger_dir (@OptDirectories)
 	opendir $dh, $trigger_dir;
 	while(my $filename = readdir $dh)
 	{
+		my $filepath = "$trigger_dir/$filename";
+		next if ! -f $filepath;
 		
+		my $basename = $filename;
+		my $ver = -1;
+		if($filename =~ /^(.+)\.(\d+)$/)
+		{
+			$basename = $1;
+			$ver = $2;
+		}
+		next if @OptGroups and not $basename ~~ [@OptGroups];
+		push @{$TriggerFiles{$basename}->{files}}, {path => $filepath, ver => $ver};
 	}
 	closedir $dh;
 }
 
-for my $trigger_file (keys %TriggerFiles)
+for my $basename (keys %TriggerFiles)
 {
+	my @trigger_filepaths = map {$_->{path}} sort {$a->{ver} <=> $b->{ver}} @{$TriggerFiles{$basename}->{files}};
+	my $handler_found = 0;
+	
+	for my $script_dir (@OptScriptdirs)
+	{
+		my $script_path = "$script_dir/$basename";
+		if(-x $script_path)
+		{
+			$handler_found = 1;
+			my @files_to_process;
+			if($OptProcessLatest)
+			{
+				@files_to_process = ($trigger_filepaths[-1]);
+			}
+			else
+			{
+				@files_to_process = @trigger_filepaths;
+			}
+			
+			for my $trigger_filepath (@files_to_process)
+			{
+				warn "$0: running $script_path $trigger_filepath\n" if $OptVerbose;
+				my $harness = harness [$script_path, $trigger_filepath];
+				$harness->run;
+				my $result = $harness->full_result;
+				
+				if($result == 0)
+				{
+					warn "$0: successful\n" if $OptVerbose;
+					if($OptProcessLatest)
+					{
+						# delete all versions when only the latest file is requested to process.
+						unlink $_ for @trigger_filepaths;
+					}
+					else
+					{
+						unlink $trigger_filepath;
+					}
+				}
+				else
+				{
+					warn sprintf "%s: error %d signal %d\n", $0, WEXITSTATUS($result), WTERMSIG($result) if $OptVerbose;
+				}
+			}
+			last;
+		}
+	}
+	
+	if(not $handler_found)
+	{
+		warn "$0: handler not found for: $basename\n";
+	}
 }

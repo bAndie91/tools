@@ -33,18 +33,30 @@ do
 				false;;
 			esac
 			
-			AtomicParsley "$mediafile" --artwork "$tn_path_new" -o "$mediafile_new"
-			mv "$mediafile_new" "$mediafile"
-			[ ! -e "$tn_path_new" ] || rm "$tn_path_new"
-			[ ! -e "$tn_path" ] || rm "$tn_path"
+			case "$ext" in
+			(mkv)
+				mkvpropedit "$mediafile" --attachment-name cover --attachment-mime-type image/png --add-attachment "$tn_path_new"
+				[ ! -e "$tn_path_new" ] || rm "$tn_path_new"
+				[ ! -e "$tn_path" ] || rm "$tn_path"
+				
+				tn_found=1
+				;;
+			(mp4|*)
+				AtomicParsley "$mediafile" --artwork "$tn_path_new" -o "$mediafile_new"
+				mv "$mediafile_new" "$mediafile"
+				[ ! -e "$tn_path_new" ] || rm "$tn_path_new"
+				[ ! -e "$tn_path" ] || rm "$tn_path"
+				
+				tn_found=1
+				;;
+			esac
 			
-			tn_found=1
 			break
 		fi
 	done
 	
 	if [ ! $tn_found ]
 	then
-		warnx "thumbnail not found for $mediafile"
+		warnx "thumbnail not found for: $mediafile"
 	fi
 done

@@ -66,7 +66,7 @@ These operators are supported, semantics are the same as in Perl, see perlop(1).
 
  == != <= >= < > =~ !~ eq ne gt lt
 
-For your convenience, not to bother with escaping, you may also use these operators as alternatives to the canonical ones above:
+For your convenience, not to bother with character escaping, you may also use these operators as alternatives to the canonical ones above:
 
 =over 4
 
@@ -258,7 +258,7 @@ sub parse_operator
 		{ phrase => 'not END with',                         operator => 'ends-with',       negation => 1},
 		{ phrase => 'DOES not end with',                    operator => 'ends-with',       negation => 1},
 	);
-	my @canonical_operators = uniq map {$_->{operator}} @opdef;
+	my @canonical_operators = uniq 'gt', 'lt', map {$_->{operator}} @opdef;
 	for my $opdef (@opdef)
 	{
 		my $phrase = $opdef->{phrase};
@@ -280,7 +280,7 @@ sub parse_operator
 	{
 		return {operator => $args[0], remaining_args => [@args[1..$#args]]};
 	}
-	die "valid operator expected; found this: @args";
+	die "valid operator expected; found this: @args\n";
 }
 
 

@@ -8,7 +8,7 @@ pararun - run commands parallelly
 
 =head1 SYNOPSIS
 
-pararun [I<OPTIONS>] [I<COMMON_ARGS>] --- I<PARTICULAR_ARGS> [+ I<PARTICULAR_ARGS> [+ ...]]
+pararun [I<OPTIONS>] [I<COMMON_ARGS>] --- I<PARTICULAR_ARGS> [+ I<PARTICULAR_ARGS> [+ ...]] [--- I<COMMON_ARGS>]
 
 =head1 DESCRIPTION
 
@@ -29,6 +29,10 @@ Runs C<./server> and C<./client> programms in parallel.
  
 Runs C<ls /usr>, C<ls /etc>, and C<ls /var>.
 
+ pararun --- ./server + ./client --- --port=12345
+ 
+Runs C<./server> and C<./client> programms in parallel with the same command line argument.
+ 
 =head1 OPTIONS
 
 =over 4
@@ -96,7 +100,7 @@ parallel(1)
 
 
 use Errno qw/:POSIX/;
-use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev pass_through require_order/;
 use IPC::Run qw/run harness/;
 use POSIX;
 use Pod::Usage;
@@ -127,10 +131,15 @@ GetOptions(
 	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
+if($ARGV[0] ne $OptCommonSep and $ARGV[0] ne $OptParticularSep and $ARGV[0] =~ /^-/)
+{
+	die "unknown option: $ARGV[0]\n";
+}
 
 $OptPrefixFirstParticularArg = 1 if $OptColorizePrefix;
 
-@CommonArgs = ();
+@CommonArgsPre = ();
+@CommonArgsPost = ();
 @ParticularArgs = ();
 $particular_cmd_idx = -1;
 
@@ -142,13 +151,17 @@ while(@ARGV)
 		$particular_cmd_idx = 0;
 		last;
 	}
-	push @CommonArgs, $arg;
+	push @CommonArgsPre, $arg;
 }
 
 
 while(@ARGV)
 {
 	my $arg = shift @ARGV;
+	if($arg eq $OptCommonSep)
+	{
+		last;
+	}
 	if($arg eq $OptParticularSep)
 	{
 		$particular_cmd_idx++;
@@ -156,6 +169,16 @@ while(@ARGV)
 		next;
 	}
 	push @{$ParticularArgs[$particular_cmd_idx]}, $arg;
+}
+
+while(@ARGV)
+{
+	my $arg = shift @ARGV;
+	if($arg eq $OptCommonSep)
+	{
+		last;
+	}
+	push @CommonArgsPost, $arg;
 }
 
 if($OptParticularArgsStdin)
@@ -217,7 +240,7 @@ for my $particular_cmd_idx (0 .. $#ParticularArgs)
 	{
 		push @{$Commands[$particular_cmd_idx]}, 'stdfilt', '-f', 's/^/'.$prefix_qm.'/';
 	}
-	push @{$Commands[$particular_cmd_idx]}, @CommonArgs, @particular_args;
+	push @{$Commands[$particular_cmd_idx]}, @CommonArgsPre, @particular_args, @CommonArgsPost;
 }
 
 

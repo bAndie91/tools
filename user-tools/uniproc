@@ -56,6 +56,8 @@ besides the unprocessed ones.
 Process only 1 item, then exit.
 Default is to process as many items in series as possible.
 
+=item -v, --verbose
+
 =back
 
 =head1 FILES
@@ -140,7 +142,7 @@ Display data number, processing status, input data, (last line of) output data i
 
 use Fcntl qw/:flock :seek/;
 use Data::Dumper;
-use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
+use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat no_auto_abbrev require_order/;
 use IPC::Run qw/run/;
 use POSIX;
 use Pod::Usage;
@@ -148,15 +150,17 @@ use Pod::Usage;
 $OptRetry = 0;
 $OptDebug = 0;
 $OptShots = undef;
+$OptVerbose = 0;
 
 GetOptions(
 	'retry' => \$OptRetry,
 	'1|oneshot|one-shot' => sub { $OptShots = 1; },
+	'v|verbose+' => \$OptVerbose,  # need Getopt::Long 'bundling' for this
 	'debug' => \$OptDebug,
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
-pod2usage(-exitval=>2, -verbose=>99) unless scalar @ARGV >= 2;
+die "$0: missing command\n" unless scalar @ARGV >= 2;
 
 
 sub debug_msg
@@ -261,6 +265,7 @@ sub count_input_records
 	my $linenum = 0;
 	$linenum++ while scalar <$fh>;
 	close $fh;
+	$TotalDataNum = $linenum;
 	return $linenum;
 }
 
@@ -343,12 +348,14 @@ $ResultsRecordLength = 4;
 $ResultsFile = "$InputFile.uniproc";
 $Results_fh = undef;
 $num_shots = 0;
+$TotalDataNum = undef;
 
 while(not defined $OptShots or $num_shots < $OptShots)
 {
 	$Results_fh = fopen $ResultsFile, {rw=>1, lock=>1};
 	my $LineNum = get_next_data_number();
 	last if not defined $LineNum;
+	count_input_records if not defined $TotalDataNum;
 	
 	my $Data = input_data($LineNum);
 	
@@ -357,6 +364,8 @@ while(not defined $OptShots or $num_shots < $OptShots)
 	
 	record_status($LineNum, '...');
 	close $Results_fh;
+	
+	printf STDERR "uniproc: %d/%d%s%s\n", $LineNum+1, $TotalDataNum, ($OptVerbose > 1 ? (": ", $Data) : ("", "")) if $OptVerbose;
 	
 	$ENV{'UNIPROC_DATANUM'} = $LineNum;
 	run [$Command, @Args, $Data];

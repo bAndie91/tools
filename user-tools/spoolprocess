@@ -45,6 +45,14 @@ The default is to process all files in ascending order of version numbers.
 Lookup programms in I<DIR> instead of F</etc/spoolprocess>.
 This option is repeatable.
 
+=item -w, --wrapper I<COMMAND>
+
+Prepend I<COMMAND> to handler scripts found in B<--scriptdir>.
+I<COMMAND> is tokenized by whitespaces.
+So B<-w "bash -x"> makes script invoked like this for example:
+
+ bash -x /etc/spoolprocess/something spooldir/something.1
+
 =item -v, --verbose
 
 =back
@@ -87,6 +95,7 @@ $OptVerbose = 0;
 @OptDirectories = ();
 @OptGroups = ();
 @OptScriptdirs = ();
+$OptWrapperCmd = undef;
 $OptProcessLatest = 0;
 
 
@@ -94,6 +103,7 @@ GetOptions(
 	'v|verbose!' => \$OptVerbose,
 	'd|directory=s@' => \@OptDirectories,
 	'S|scriptdir=s@' => \@OptScriptdirs,
+	'w|wrapper=s' => \$OptWrapperCmd,
 	'g|group=s@' => \@OptGroups,
 	'L|latest!' => \$OptProcessLatest,
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
@@ -108,6 +118,11 @@ if(not @OptDirectories)
 if(not @OptScriptdirs)
 {
 	push @OptScriptdirs, "/etc/spoolprocess";
+}
+
+if(defined $OptWrapperCmd)
+{
+	@WrapperCmd = split /\s+/, $OptWrapperCmd;
 }
 
 %TriggerFiles = ();
@@ -156,14 +171,19 @@ for my $basename (keys %TriggerFiles)
 			
 			for my $trigger_filepath (@files_to_process)
 			{
-				warn "$0: running $script_path $trigger_filepath\n" if $OptVerbose;
-				my $harness = harness [$script_path, $trigger_filepath];
+				my @handler_cmd = ();
+				push @handler_cmd, @WrapperCmd if defined $OptWrapperCmd;
+				push @handler_cmd, $script_path, $trigger_filepath;
+				
+				warn "$0: running ".join(" ", @handler_cmd)."\n" if $OptVerbose;
+				my $stdin = '';
+				my $harness = harness [@handler_cmd], \$stdin;
 				$harness->run;
 				my $result = $harness->full_result;
 				
 				if($result == 0)
 				{
-					warn "$0: successful\n" if $OptVerbose;
+					warn "$0: successful: $basename\n" if $OptVerbose;
 					if($OptProcessLatest)
 					{
 						# delete all versions when only the latest file is requested to process.

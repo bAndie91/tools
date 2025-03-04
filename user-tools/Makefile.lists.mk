@@ -168,6 +168,7 @@ TOOLS ?= \
   set-xcursor-lock-and-run \
   singleinstance \
   sockio \
+  spoolprocess \
   ssh-agent-finder \
   stdfilt \
   stdmux \

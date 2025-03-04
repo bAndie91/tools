@@ -8,19 +8,19 @@ spoolprocess - process files in a spool directory
 
 =head1 SYNOPSIS
 
-spoolprocess [I<OPTIONS>]
+spoolprocess [I<OPTIONS>] -d I<DIRECTORY>
 
 =head1 DESCRIPTION
 
-Take all files in I<DIRECTORY> (specified by B<-d> option>),
+Take all files in I<DIRECTORY> specified by B<-d> option,
 group them by their basename, ie. name without an optional "dot + number" suffix
 (C<.1>, C<.2>, ..., also known as B<version number>),
-and call F<< /etc/spoolprocess/B<BASENAME> >> programm for each group for processing
+and call F<< /etc/spoolprocess/B<BASENAME> >> programm for each group to handle each files.
 
-The programm (usually a script) gets the spool file's path as arguments
-(or arguments if there are more files in the group).
+The handler programm (usually a script) gets the spool file's path as an argument.
 
-If the programm succeeds, delete the file.
+If the programm succeeds, spoolprocess(1) deletes the files for which the handler script was successful,
+or all files in the group if B<--latest> asked and it was successful.
 
 =head1 OPTIONS
 

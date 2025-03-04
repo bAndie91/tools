@@ -12,14 +12,15 @@ uniproc [I<OPTIONS>] I<INPUTFILE> I<COMMAND> [I<ARGS>]
 
 =head1 DESCRIPTION
 
-Take each line from I<INPUTFILE> as B<DATA>,
-pass each piece of B<DATA> to I<COMMAND> as the last argument,
+Take each line from I<INPUTFILE> as B<DATA> (chopping end-of-line chars),
+pass each piece of B<DATA> to I<COMMAND> as the last argument (unless placeholder is in I<COMMAND> or I<ARGS>),
 then record the exit status.
 
-Can be well parallelized.
+Can be parallelized well.
 uniproc(1) itself does not run multiple instances of I<COMMAND> in parallel, just in series,
 but if you start multiple instances of uniproc(1), then you can run I<COMMAND>s concurrently.
-Locking ensures no overlapping data being processes.
+Locking ensures no overlapping data being processed.
+So you don't need special precautions (locking, data partitioning) when starting uniproc(1) multiple times on the same I<INPUTFILE>.
 
 Use a wrapper command/script for I<COMMAND> if you want either of these:
 
@@ -28,35 +29,61 @@ Use a wrapper command/script for I<COMMAND> if you want either of these:
 =item save I<COMMAND>'s output as well.
 
 By default it goes to STDOUT.
-See redirexec(1) for example.
+Use redirexec(1) for example.
 
 =item pass B<DATA> on the STDIN or in environment variable instead of command argument.
 
-See args2env(1) for example.
+Use args2env(1) or args2stdin(1) for example.
 
 =back
 
 If re-run after an interrupt, won't process already processed data.
-But you may re-try the failed ones by B<--retry> option.
+But you may re-try the failed ones by the B<--retry> option.
 
-The user may append new lines of data to I<INPUTFILE> between executions or during runtime,
-but not edit or reorder old ones, otherwise results get confused.
+The user is allowed to append new lines of data to I<INPUTFILE> between executions or during runtime - it won't mess up the processing.
+However editing or reordering lines which are already in the file, confuses the results - don't do it.
+
+I<COMMAND> (and I<ARGS>) supports placeholders.
+A courly bracket-pair C<{}> is replaced to B<DATA> anywhere in I<COMMAND> I<ARGS>.
+If there is a number in it, B<{>I<N>B<}>, then the I<N>th TAB-delimited field is gonna be substituted in.
+Indexing starts at 1.
+If there is any placeholder, B<DATA> won't be added to I<ARGS> as the last argument.
 
 =head1 OPTIONS
 
 =over 4
 
-=item --retry
+=item -r, --retry
 
-Process those data which were previously failed (according to B<< I<INPUTFILE>.uniproc >> state file) too,
+Process those data which were earlier failed (according to B<< I<INPUTFILE>.uniproc >> state file) too,
 besides the unprocessed ones.
 
-=item -1, --one-shot
+=item -f, --failed
+
+Process only the earlier failed items.
+
+=item -1, --one-item
 
 Process only 1 item, then exit.
 Default is to process as many items in series as possible.
 
-=item -v, --verbose
+=item -n, --items I<NUM>
+
+How many items to process.
+
+=item -sp, --show-progress
+
+Show which item is being started to process.
+
+=item -sd, --show-data
+
+Show the raw data what is being started to process.
+
+=item -ss, --show-summary
+
+Show stats summary when exit.
+
+=item
 
 =back
 
@@ -68,25 +95,25 @@ Processing status is either:
 
 =over 4
 
-=item all spaces (   )
+=item all spaces (C<   >)
 
 processing not yet started
 
-=item periods (...)
+=item periods (C<...>)
 
 in progress
 
-=item digits, possibly padded by spaces (  0)
+=item digits, possibly padded by spaces (C<  0>)
 
 result status (exit code)
 
-=item exclamation mark (C<!>) followed by hexadecimal digits (!0f)
+=item exclamation mark (C<!>) followed by hexadecimal digits (C<!0f>)
 
 termination signal (I<COMMAND> teminated abnormally)
 
 =item EOF (ie. fewer lines than input data)
 
-processing not yet started
+processing of this item has not started yet
 
 =back
 
@@ -98,7 +125,7 @@ to detect if the processing is still going or the process crashed.
 
 =head1 LIMITATION
 
-Due to currently used locking mechanism (Fcntl(3perl)), running on multiple hosts may void locking.
+Due to currently used locking mechanism (Fcntl(3perl)), running on multiple hosts may disrespect locking.
 
 =head1 ENVIRONMENT
 
@@ -127,11 +154,16 @@ Output:
 
   total: 8, completed: 4 (50%), in-progress: 1 (12.5%), failed: 1 (12.5%)
 
-Record output of data processing into a file per each piece of data:
+Record output of data processing into a file per each data item:
 
   uniproc datafile sh -c 'some-command "$@" | tee output-$UNIPROC_DATANUM' --
 
   uniproc datafile substenv -e UNIPROC_DATANUM redirexec '1:a:file:output-$UNIPROC_DATANUM' some-command
+
+Same as above, plus keep the output on STDOUT as well as in separate files.
+Note, the C<{}> argument is there to pass B<DATA> to the right command:
+
+  uniproc datafile substenv -e UNIPROC_DATANUM pipecmd some-command {} -- tee -a 'output-$UNIPROC_DATANUM'
 
 Display data number, processing status, input data, (last line of) output data in a table:
 
@@ -142,21 +174,28 @@ Display data number, processing status, input data, (last line of) output data i
 
 use Fcntl qw/:flock :seek/;
 use Data::Dumper;
-use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat no_auto_abbrev require_order/;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
 use IPC::Run qw/run/;
 use POSIX;
 use Pod::Usage;
 
-$OptRetry = 0;
-$OptDebug = 0;
+$OptProcessNew = 1;
+$OptProcessFailed = 0;
 $OptShots = undef;
-$OptVerbose = 0;
+$OptShowProgress = 0;
+$OptShowData = 0;
+$OptShowSummary = 0;
+$OptDebug = 0;
 
 GetOptions(
-	'retry' => \$OptRetry,
-	'1|oneshot|one-shot' => sub { $OptShots = 1; },
-	'v|verbose+' => \$OptVerbose,  # need Getopt::Long 'bundling' for this
-	'debug' => \$OptDebug,
+	'r|retry' => sub { $OptProcessFailed = 1; $OptProcessNew = 1; },
+	'f|failed' => sub { $OptProcessFailed = 1; $OptProcessNew = 0; },
+	'1|oneshot|one-item' => sub { $OptShots = 1; },
+	'n|items=i' => \$OptShots,
+	'sp|show-progress' => \$OptShowProgress,
+	'sd|show-data' => \$OptShowData,
+	'ss|show-summary' => \$OptShowSummary,
+	'debug!' => \$OptDebug,
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
@@ -299,13 +338,13 @@ sub get_next_data_number
 		last if $nbytes < $ResultsRecordLength;
 		chomp $result;
 		
-		if($result eq '   ')
+		if($result eq '   ' and $OptProcessNew)
 		{
 			$FirstUnprocessedRecord = $record_num+1;
 			debug_msg "uninitialized $record_num\n";
 			return $record_num;
 		}
-		if($result eq '...')
+		if($result eq '...' and $OptProcessNew)
 		{
 			# check if still locked
 			if(not still_in_progress($record_num))
@@ -315,7 +354,7 @@ sub get_next_data_number
 				return $record_num;
 			}
 		}
-		if($OptRetry and ($result =~ /^!/ or ($result =~ /^\s*\d+$/ and $result > 0)))
+		if($OptProcessFailed and ($result =~ /^!/ or ($result =~ /^\s*\d+$/ and $result > 0)))
 		{
 			$FirstUnprocessedRecord = $record_num+1;
 			debug_msg "retry $record_num\n";
@@ -324,6 +363,8 @@ sub get_next_data_number
 		
 		$record_num++;
 	}
+	
+	return undef if not $OptProcessNew;
 	
 	# check here if there are more input data than result records
 	my $input_records = count_input_records();
@@ -340,8 +381,20 @@ sub get_next_data_number
 	return undef;
 }
 
+sub subst_data
+{
+	my $data = shift;
+	my $field_num = shift;
+	if($field_num)
+	{
+		my @fields = split /\t/, $data;
+		return $fields[$field_num-1];
+	}
+	return $data;
+}
 
-($InputFile, $Command, @Args) = @ARGV;
+
+($InputFile, @CommandArgs) = @ARGV;
 
 $FirstUnprocessedRecord = 0;
 $ResultsRecordLength = 4;
@@ -365,18 +418,30 @@ while(not defined $OptShots or $num_shots < $OptShots)
 	record_status($LineNum, '...');
 	close $Results_fh;
 	
-	printf STDERR "uniproc: %d/%d%s%s\n", $LineNum+1, $TotalDataNum, ($OptVerbose > 1 ? (": ", $Data) : ("", "")) if $OptVerbose;
+	printf STDERR "uniproc: %d/%d%s%s\n", $LineNum+1, $TotalDataNum, ($OptShowData ? (": ", $Data) : ("", "")) if $OptShowProgress;
 	
 	$ENV{'UNIPROC_DATANUM'} = $LineNum;
-	run [$Command, @Args, $Data];
+	my $placeholder_found = 0;
+	my @command_args = map { my $arg = $_; $arg =~ s/\{(\d*)\}/subst_data($Data, $1)/eg and $placeholder_found = 1; $arg } @CommandArgs;
+	push @command_args, $Data if not $placeholder_found;
+	my $stdin = '';
+	run [@command_args], \$stdin;
 	my $status = $?;
 	
 	$Results_fh = fopen $ResultsFile, {rw=>1, lock=>1};
 	record_status($LineNum, deriv_processing_status($status));
 	close $Results_fh;
 	
+	if(WIFSIGNALED($status) or WEXITSTATUS($status)) { $CountFailed++; }
+	else { $CountSuccess++; }
+	
 	unlink $InprogressFile;
 	close $inprogress_fh;
 	
 	$num_shots++;
+}
+
+if($OptShowSummary)
+{
+	printf STDERR "uniproc: %d total, %d processed in this session, %d successful, %d failed\n", $TotalDataNum, $CountSuccess+$CountFailed, $CountSuccess, $CountFailed;
 }

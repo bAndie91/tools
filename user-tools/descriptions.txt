@@ -116,7 +116,7 @@ pyzor-files - Run a pyzor(1) command on the given files
 qrwifi - Generate a string, used in WiFi-setup QR codes, containing a hotspot name and password
 randstr - Generate random string from a given set of characters and with a given length.
 rcmod - Run a given command and modify its Return Code according to the rules given by the user
-redirexec - Execute a command with some file descriptiors redirected.
+redirexec - Execute a command with some file descriptors redirected.
 rename.td - rename multiple files by a Perl expression
 renamemanual - Interactive file rename tool
 repeat - Run a give command repeatedly
@@ -131,6 +131,7 @@ screens - List all GNU/Screen sessions accessible by the user and all of their i
 seekstdin - Makes STDIN seekable for a given command
 set-sys-path - Set PATH according to /etc/environment and run the given command
 set-xcursor-lock-and-run - Set X11 cursor to a padlock and run a command
+spoolprocess - process files in a spool directory
 ssh-agent-finder - Find a working ssh agent on the system so you get the same in each of your logon sessions
 stdfilt - Run a command but filter its STDOUT and STDERR
 stdmux - Multiplex the given command's STDOUT and STDERR by prefixing lines

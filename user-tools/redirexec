@@ -5,13 +5,13 @@
 
 =head1 NAME
 
-redirexec - Execute a command with some file descriptiors redirected.
+redirexec - Execute a command with some file descriptors redirected.
 
 =head1 SYNOPSIS
 
 redirexec [I<FILENO>:I<MODE>:file:I<PATH>] [--] I<COMMAND> I<ARGS>
 
-redirexec [I<FILENO>:I<MODE>:fd:I<FD>] [--] I<COMMAND> I<ARGS>
+redirexec [I<FILENO>:I<MODE>:fd:I<FILENO>] [--] I<COMMAND> I<ARGS>
 
 redirexec [I<FILENO>:-] [--] I<COMMAND> I<ARGS>
 
@@ -20,7 +20,7 @@ redirexec [I<FILENO>:-] [--] I<COMMAND> I<ARGS>
 Setup redirections before executing I<COMMAND>.
 You can setup the same type of file and file descriptor redirections as in shell.
 
-I<FILENO> and I<FD> are file descriptor integers or literal "stdin", "stdout", or "stderr".
+I<FILENO> is file descriptor integers or names: "stdin", "stdout", and "stderr" for the stadard file descriptors.
 
 I<MODE> is one of:
 
@@ -44,22 +44,40 @@ append
 
 =back
 
+=head1 SHORTHANDS
+
+=over 4
+
+=item --I<STD_FD_NAME>-B<file>=I<PATH>
+
+=item --I<STD_FD_NAME>-B<fd>=I<FILENO>
+
+=item --I<STD_FD_NAME>-B<close>
+
+=back
+
 =head1 EXAMPLES
 
-  +-----------------+--------------------------+
-  | shell syntax    | redirexec(1) equivalents |
-  +=================+==========================+
-  | > output.txt    | stdout:c:file:output.txt |
-  |                 | 1:c:file:output.txt      |
-  +-----------------+--------------------------+
-  | 2>&1            | stderr:c:fd:stdout       |
-  |                 | 2:c:fd:1                 |
-  +-----------------+--------------------------+
-  | </dev/null      | 0:r:file:/dev/null       |
-  |                 | 0:-                      |
-  +-----------------+--------------------------+
-  | >/dev/null 2>&1 | 1:- 2:-                  |
-  +-----------------+--------------------------+
+  +-----------------+-------------------------------+
+  | shell syntax    | redirexec(1) equivalents      |
+  +=================+===============================+
+  | > output.txt    | stdout:c:file:output.txt      |
+  |                 | 1:c:file:output.txt           |
+  |                 | --stdout-file=output.txt      |
+  +-----------------+-------------------------------+
+  | 2>&1            | stderr:c:fd:stdout            |
+  |                 | 2:c:fd:1                      |
+  |                 | --stderr-fd=1                 |
+  +-----------------+-------------------------------+
+  | < /dev/null     | 0:r:file:/dev/null            |
+  |                 | 0:-                           |
+  |                 | --stdin-close                 |
+  +-----------------+-------------------------------+
+  | 10< pwd         | 10:r:file:pwd                 |
+  +-----------------+-------------------------------+
+  | >/dev/null 2>&1 | 1:- 2:-                       |
+  |                 | --stdout-close --stderr-close |
+  +-----------------+-------------------------------+
   
 
 =head1 SEE ALSO
@@ -86,16 +104,25 @@ while(@ARGV)
 {
 	my $fdspec = shift @ARGV;
 	if($fdspec eq '--') { last; }
-	if($fdspec =~ /^(?'fd'\d+|std(in|out|err)):(?'dest'-|(?'mode'r|c|rw|a):(file:(?'path'.+)|fd:(?'fileno'\d+|std(in|out|err))))$/)
+	if($fdspec =~ /^(?'fd'\d+|std(in|out|err)):(?'dest'-|(?'mode'r|c|rw|a):(file:(?'path'.+)|fd:(?'fileno'\d+|std(in|out|err))))$/
+	   or $fdspec =~ /^--(?'fd'std(in|out|err))-(?'dest'close|(?'writemode'file|append)=(?'path'.+)|fd=(?'fileno'\d+|std(in|out|err)))$/)
 	{
-		my ($fd, $dest, $mode, $path, $fileno) = ($+{'fd'}, $+{'dest'}, $+{'mode'}, $+{'path'}, $+{'fileno'});
+		my ($fd, $dest, $mode, $writemode, $path, $fileno) = ($+{'fd'}, $+{'dest'}, $+{'mode'}, $+{'writemode'}, $+{'path'}, $+{'fileno'});
+		if(not defined $mode)
+		{
+			$mode = 'r' if $fd eq 'stdin';
+			if($fd =~ /out|err/)
+			{
+				$mode = $writemode eq 'append' ? 'a' : 'c';
+			}
+		}
 		$fd = 0 if $fd eq 'stdin';
 		$fd = 1 if $fd eq 'stdout';
 		$fd = 2 if $fd eq 'stderr';
 		$fileno = 0 if $fileno eq 'stdin';
 		$fileno = 1 if $fileno eq 'stdout';
 		$fileno = 2 if $fileno eq 'stderr';
-		if($dest eq '-')
+		if($dest =~ /^(close|-)/)
 		{
 			$mode = 'rw';
 			$path = '/dev/null';
@@ -109,13 +136,23 @@ while(@ARGV)
 	}
 	else
 	{
-		# does not seem to be a redirection specification, take it as the command
+		# does not seem to be a redirection specification
+		if($fdspec =~ /^-/)
+		{
+			die "$0: unknown option: $fdspec\n";
+		}
+		# take it as the command
 		unshift @ARGV, $fdspec;
 		last;
 	}
 }
 
 @command = @ARGV;
+
+if(not @command)
+{
+	die "$0: no command given.\n";
+}
 
 for my $redir (@redirs)
 {

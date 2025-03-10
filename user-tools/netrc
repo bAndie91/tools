@@ -1,0 +1,196 @@
+#!/usr/bin/env perl
+
+use Data::Dumper;
+
+
+sub parse_dotnetrc_file
+{
+	my $netrc = {};
+	
+	open my $fh, '<', $DotNetRcFile;
+	local $/ = undef;
+	local $_ = <$fh>;
+	close $fh;
+	
+	# ignore comments while keeping file positions
+	s/\x23.*$/" " x length $&/gem;
+	# don't stop parsing at newlines (also keeping positions)
+	s/\n/ /g;
+	
+	my $machine_ref = {};
+	my $offset = 0;
+	
+	while(s/(\S+)//)
+	{
+		my $token = $1;
+		$offset += length $`;
+		
+		if($token eq 'default')
+		{
+			if(exists $netrc->{default})
+			{
+				warn "netrc: default machine at offset $offset is already defined at offset $netrc->{default}->{offset}\n";
+			}
+			$netrc->{default}->{offset} = $offset;
+		}
+		else
+		{
+			s/(\S+)//;
+			my $next_token = $1;
+			$offset += length $`;
+			
+			if($token eq 'machine')
+			{
+				my $machine = $next_token;
+				if(exists $netrc->{machine}->{$machine})
+				{
+					warn "netrc: machine $machine at offset $offset is already defined at offset $netrc->{machine}->{$machine}->{prop}->{machine}->{offset}\n";
+					$machine_ref = {};
+					# TODO support multiple machines with the same name, eg. in a non-standard "login@machine" form
+				}
+				else
+				{
+					$netrc->{machine}->{$machine} = {};
+					$machine_ref = $netrc->{machine}->{$machine};
+					$machine_ref->{prop}->{machine}->{value} = $machine;
+					$machine_ref->{prop}->{machine}->{offset} = $offset;
+				}
+			}
+			else
+			{
+				$machine_ref->{prop}->{$token}->{value} = $next_token;
+				$machine_ref->{prop}->{$token}->{offset} = $offset;
+			}
+			
+			# TODO support 'macdef' token
+		}
+	}
+	return $netrc;
+}
+
+sub list
+{
+	my $netrc = shift;
+	my $out = '';
+	$out .= "MACHINE\tLOGIN\n";
+	for my $machine (sort keys %{$netrc->{machine}})
+	{
+		my $login = $netrc->{machine}->{$machine}->{prop}->{login}->{value};
+		$out .= join("\t", $machine, $login) . "\n";
+	}
+	return $out;
+}
+
+sub criteria_meet
+{
+	my $entry = shift;
+	my $criteria = shift;
+	my $meet = 1;
+	for my $prop (keys %$criteria)
+	{
+		if($entry->{prop}->{$prop}->{value} ne $criteria->{$prop})
+		{
+			$meet = 0;
+			last;
+		}
+	}
+	return $meet;
+}
+
+
+$DotNetRcFile = $ENV{NETRC_PATH} || $ENV{HOME}."/.netrc";
+$cmd = shift @ARGV;
+
+
+if($cmd eq 'list')
+{
+	my $netrc = parse_dotnetrc_file;
+	print list($netrc);
+}
+elsif($cmd =~ /^select(-(one|all)|)$/)
+{
+	my $limit = $2;
+	my $usage_text = "usage: netrc select-[one|all] <prop_1> <value_1> [<prop_2> <value_2> [...]] -- [get | set] <prop_act> [<value_act>]\n";
+	
+	if(not @ARGV)
+	{
+		die $usage_text;
+	}
+	
+	my %criteria = ();
+	while(@ARGV and $ARGV[0] ne '--')
+	{
+		my $prop = shift @ARGV;
+		my $propval = shift @ARGV;
+		$criteria{$prop} = $propval;
+	}
+	
+	shift @ARGV;  # --
+	my $action = shift @ARGV;
+	if(not $action =~ /^(get|set)$/)
+	{
+		die $usage_text;
+	}
+	my $prop_act = shift @ARGV;
+	my $value_act = shift @ARGV;
+	
+	my @Entries = parse_dotnetrc_file;
+	my @Selected = ();
+	for my $entry (@Entries)
+	{
+		if(criteria_meet($entry, \%criteria))
+		{
+			push @Selected, $entry;
+		}
+	}
+	
+	if($limit eq 'one' and scalar @Selected > 1)
+	{
+		print STDERR list(\@Selected);
+		die "$0: more than 1 matches.\n";
+	}
+	
+	if($action eq 'get')
+	{
+		for my $entry (@Selected)
+		{
+			print $entry->{prop}->{$prop_act}->{value} . "\n";
+		}
+	}
+	elsif($action eq 'set')
+	{
+		my %edited_line = ();
+		open my $fh, '+<', $DotNetRcFile or die "$0: $DotNetRcFile: $!\n";
+		for my $entry (@Selected)
+		{
+			seek $fh, $entry->{fpos}, 0;
+			local $_ = <$fh>;
+			chomp;
+			my $value_offset = $entry->{prop}->{$prop_act}->{value_offset};
+			my $new_line = substr($_, 0, $value_offset) . $value_act . substr($_, $value_offset+length($entry->{prop}->{$prop_act}->{value}));
+			my $length_diff = length($_) - length($new_line);
+			my $rest_of_the_file;
+			if($length_diff < 0)
+			{
+				local $/ = undef;
+				$rest_of_the_file = <$fh>;
+			}
+			seek $fh, $entry->{fpos}, 0;
+			print {$fh} $new_line;
+			if($length_diff < 0)
+			{
+				print {$fh} "\n";
+				print {$fh} $rest_of_the_file;
+			}
+			else
+			{
+				print {$fh} " " x $length_diff;
+			}
+		}
+		close $fh;
+	}
+}
+else
+{
+	die "usage: netrc [ list | select ... ]\n";
+}

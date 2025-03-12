@@ -113,6 +113,7 @@ TOOLS ?= \
   multicmd \
   multithrottler \
   mysql-fix-orphan-privileges.php \
+  netrc \
   noacute \
   nocomment \
   nopath \

@@ -1,6 +1,46 @@
 #!/usr/bin/env perl
 
 use Data::Dumper;
+use POSIX qw/SEEK_END SEEK_SET/;
+use Pod::Usage;
+
+
+=pod
+
+=head1 NAME
+
+netrc - manage ~/.netrc file
+
+=head1 SYNOPSIS
+
+netrc list [I<PROPERTY_NAME> [I<PROPERTY_NAME> [...]]]
+
+netrc set [machine I<MACHINE_NAME> | default] I<PROPERTY_NAME> I<PROPERTY_VALUE> [I<PROPERTY_NAME> I<PROPERTY_VALUE> [...]]
+
+=head1 DESCRIPTION
+
+Query entries from F<~/.netrc> file.
+Set and add properties as well as new entries.
+
+=head1 ENVIRONMENT
+
+=over 4
+
+=item NETRC_PATH
+
+Alternative path instead of F<~/.netrc>.
+
+=back
+
+=head1 LIMITATIONS
+
+File is not locked during read/write.
+
+=head1 SEE ALSO
+
+netrc(5)
+
+=cut
 
 
 sub parse_dotnetrc_file
@@ -139,7 +179,16 @@ elsif($cmd eq 'set')
 		
 		if(not exists $netrc->{machine}->{$machine_name})
 		{
-			die "$0: machine '$machine_name' not found.\n";
+			seek $fh, -1, SEEK_END or die "$0: seek: $!\n";
+			my $endchar;
+			read $fh, $endchar, 1 or die "$0: read: $!\n";
+			my $fpos = tell $fh;
+			my $insert_1 = ($endchar eq "\n" ? '' : "\n") . "machine ";
+			print {$fh} $insert_1 . $machine_name or die "$0: write: $!\n";
+			$netrc->{machine}->{$machine_name}->{prop}->{machine} = {
+				offset => $fpos + length $insert_1,
+				value => $machine_name,
+			};
 		}
 		
 		my $insert_text;
@@ -156,6 +205,7 @@ elsif($cmd eq 'set')
 			# no such property for this machine.
 			# append to the end of the last property value.
 			my @props = sort {$b->{offset} <=> $a->{offset}} values %{$netrc->{machine}->{$machine_name}->{prop}};
+			die unless @props;
 			$fpos = $props[0]->{offset} + length $props[0]->{value};
 			$insert_text = " $prop_name $prop_value";
 		}
@@ -164,13 +214,13 @@ elsif($cmd eq 'set')
 		my $length_diff = $insert_length - $erase_length;
 		my $rest_of_the_file;
 		
-		seek $fh, $fpos, 0 or die "$0: seek: $!\n";
+		seek $fh, $fpos, SEEK_SET or die "$0: seek: $!\n";
 		{
 			local $/ = undef;
 			$rest_of_the_file = substr <$fh>, $erase_length;
 		}
-		seek $fh, $fpos, 0 or die "$0: seek: $!\n";
-		print {$fh} $insert_text.$rest_of_the_file;
+		seek $fh, $fpos, SEEK_SET or die "$0: seek: $!\n";
+		print {$fh} $insert_text.$rest_of_the_file or die "$0: write: $!\n";
 		truncate $fh, $fpos + $insert_length + length $rest_of_the_file;
 		
 		# adjust offsets
@@ -187,7 +237,5 @@ elsif($cmd eq 'set')
 }
 else
 {
-	die "usage:
-  netrc list [<PROPERTY_NAME> [<PROPERTY_NAME> [...]]]
-  netrc set [machine <MACHINE_NAME> | default] <PROPERTY_NAME> <PROPERTY_VALUE> [<PROPERTY_NAME> <PROPERTY_VALUE> [...]]\n";
+	pod2usage(-exitval=>2, -verbose=>99);
 }

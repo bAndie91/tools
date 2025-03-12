@@ -5,12 +5,11 @@ use Data::Dumper;
 
 sub parse_dotnetrc_file
 {
+	my $fh = shift;
 	my $netrc = {};
 	
-	open my $fh, '<', $DotNetRcFile;
 	local $/ = undef;
 	local $_ = <$fh>;
-	close $fh;
 	
 	# ignore comments while keeping file positions
 	s/\x23.*$/" " x length $&/gem;
@@ -18,33 +17,42 @@ sub parse_dotnetrc_file
 	s/\n/ /g;
 	
 	my $machine_ref = {};
-	my $offset = 0;
+	my $offset_token_start = 0;
+	my $offset_token_end = 0;
 	
-	while(s/(\S+)//)
+	while(s/(.*?)(\S+)//)
 	{
-		my $token = $1;
-		$offset += length $`;
+		my $token = $2;
+		$offset_token_start = $offset_token_end + length $1;
+		$offset_token_end += length($1) + length($2);
 		
 		if($token eq 'default')
 		{
-			if(exists $netrc->{default})
+			if(exists $netrc->{machine}->{''})
 			{
-				warn "netrc: default machine at offset $offset is already defined at offset $netrc->{default}->{offset}\n";
+				warn "$0: default machine at offset $offset_token_start is already defined at offset $netrc->{machine}->{''}->{offset}\n";
+				$machine_ref = {};
 			}
-			$netrc->{default}->{offset} = $offset;
+			else
+			{
+				$netrc->{machine}->{''} = {};
+				$machine_ref = $netrc->{machine}->{''};
+				$machine_ref->{offset} = $offset_token_start;
+			}
 		}
 		else
 		{
-			s/(\S+)//;
-			my $next_token = $1;
-			$offset += length $`;
-			
+			s/(.*?)(\S+)//;
+			my $next_token = $2;
+			$offset_token_start = $offset_token_end + length $1;
+			$offset_token_end += length($1) + length($2);
+		
 			if($token eq 'machine')
 			{
 				my $machine = $next_token;
 				if(exists $netrc->{machine}->{$machine})
 				{
-					warn "netrc: machine $machine at offset $offset is already defined at offset $netrc->{machine}->{$machine}->{prop}->{machine}->{offset}\n";
+					warn "$0: machine $machine at offset $offset_token_start is already defined at offset $netrc->{machine}->{$machine}->{prop}->{machine}->{offset}\n";
 					$machine_ref = {};
 					# TODO support multiple machines with the same name, eg. in a non-standard "login@machine" form
 				}
@@ -53,13 +61,13 @@ sub parse_dotnetrc_file
 					$netrc->{machine}->{$machine} = {};
 					$machine_ref = $netrc->{machine}->{$machine};
 					$machine_ref->{prop}->{machine}->{value} = $machine;
-					$machine_ref->{prop}->{machine}->{offset} = $offset;
+					$machine_ref->{prop}->{machine}->{offset} = $offset_token_start;
 				}
 			}
 			else
 			{
 				$machine_ref->{prop}->{$token}->{value} = $next_token;
-				$machine_ref->{prop}->{$token}->{offset} = $offset;
+				$machine_ref->{prop}->{$token}->{offset} = $offset_token_start;
 			}
 			
 			# TODO support 'macdef' token
@@ -71,31 +79,21 @@ sub parse_dotnetrc_file
 sub list
 {
 	my $netrc = shift;
+	my @props = @_;
 	my $out = '';
-	$out .= "MACHINE\tLOGIN\n";
+	$out .= "MACHINE\t".(join "\t", map {uc} @props)."\n";
 	for my $machine (sort keys %{$netrc->{machine}})
 	{
-		my $login = $netrc->{machine}->{$machine}->{prop}->{login}->{value};
-		$out .= join("\t", $machine, $login) . "\n";
+		$out .= join("\t",
+			$machine,
+			map {$netrc->{machine}->{$machine}->{prop}->{$_}->{value}}
+				@props
+			).
+		"\n";
 	}
 	return $out;
 }
 
-sub criteria_meet
-{
-	my $entry = shift;
-	my $criteria = shift;
-	my $meet = 1;
-	for my $prop (keys %$criteria)
-	{
-		if($entry->{prop}->{$prop}->{value} ne $criteria->{$prop})
-		{
-			$meet = 0;
-			last;
-		}
-	}
-	return $meet;
-}
 
 
 $DotNetRcFile = $ENV{NETRC_PATH} || $ENV{HOME}."/.netrc";
@@ -104,93 +102,92 @@ $cmd = shift @ARGV;
 
 if($cmd eq 'list')
 {
-	my $netrc = parse_dotnetrc_file;
-	print list($netrc);
+	open my $fh, '<', $DotNetRcFile;
+	my $netrc = parse_dotnetrc_file $fh;
+	close $fh;
+	
+	my @props = @ARGV;
+	if(not @props) { @props = ('login',); }
+	print list($netrc, @props);
 }
-elsif($cmd =~ /^select(-(one|all)|)$/)
+elsif($cmd eq 'set')
 {
-	my $limit = $2;
-	my $usage_text = "usage: netrc select-[one|all] <prop_1> <value_1> [<prop_2> <value_2> [...]] -- [get | set] <prop_act> [<value_act>]\n";
-	
-	if(not @ARGV)
+	my $machine_name;
 	{
-		die $usage_text;
-	}
-	
-	my %criteria = ();
-	while(@ARGV and $ARGV[0] ne '--')
-	{
-		my $prop = shift @ARGV;
-		my $propval = shift @ARGV;
-		$criteria{$prop} = $propval;
-	}
-	
-	shift @ARGV;  # --
-	my $action = shift @ARGV;
-	if(not $action =~ /^(get|set)$/)
-	{
-		die $usage_text;
-	}
-	my $prop_act = shift @ARGV;
-	my $value_act = shift @ARGV;
-	
-	my @Entries = parse_dotnetrc_file;
-	my @Selected = ();
-	for my $entry (@Entries)
-	{
-		if(criteria_meet($entry, \%criteria))
+		my $match_prop_name = shift @ARGV;
+		if($match_prop_name eq 'machine')
 		{
-			push @Selected, $entry;
+			$machine_name = shift @ARGV;
+		}
+		elsif($match_prop_name eq 'default')
+		{
+			$machine_name = '';
+		}
+		else
+		{
+			die;
 		}
 	}
 	
-	if($limit eq 'one' and scalar @Selected > 1)
+	open my $fh, '+<', $DotNetRcFile or die "$0: $DotNetRcFile: $!\n";
+	my $netrc = parse_dotnetrc_file $fh;
+	
+	while(@ARGV)
 	{
-		print STDERR list(\@Selected);
-		die "$0: more than 1 matches.\n";
+		my $prop_name = shift @ARGV;
+		my $prop_value = shift @ARGV;
+		
+		if(not exists $netrc->{machine}->{$machine_name})
+		{
+			die "$0: machine '$machine_name' not found.\n";
+		}
+		
+		my $insert_text;
+		my $erase_length = 0;
+		my $fpos = $netrc->{machine}->{$machine_name}->{prop}->{$prop_name}->{offset};
+		
+		if(defined $fpos)
+		{
+			$insert_text = $prop_value;
+			$erase_length = length $netrc->{machine}->{$machine_name}->{prop}->{$prop_name}->{value};
+		}
+		else
+		{
+			# no such property for this machine.
+			# append to the end of the last property value.
+			my @props = sort {$b->{offset} <=> $a->{offset}} values %{$netrc->{machine}->{$machine_name}->{prop}};
+			$fpos = $props[0]->{offset} + length $props[0]->{value};
+			$insert_text = " $prop_name $prop_value";
+		}
+		
+		my $insert_length = length $insert_text;
+		my $length_diff = $insert_length - $erase_length;
+		my $rest_of_the_file;
+		
+		seek $fh, $fpos, 0 or die "$0: seek: $!\n";
+		{
+			local $/ = undef;
+			$rest_of_the_file = substr <$fh>, $erase_length;
+		}
+		seek $fh, $fpos, 0 or die "$0: seek: $!\n";
+		print {$fh} $insert_text.$rest_of_the_file;
+		truncate $fh, $fpos + $insert_length + length $rest_of_the_file;
+		
+		# adjust offsets
+		for my $machine (values %{$netrc->{machine}})
+		{
+			for my $prop ($machine, values %{$machine->{prop}})
+			{
+				$prop->{offset} += $length_diff if defined $prop->{offset} and $prop->{offset} > $fpos;
+			}
+		}
 	}
 	
-	if($action eq 'get')
-	{
-		for my $entry (@Selected)
-		{
-			print $entry->{prop}->{$prop_act}->{value} . "\n";
-		}
-	}
-	elsif($action eq 'set')
-	{
-		my %edited_line = ();
-		open my $fh, '+<', $DotNetRcFile or die "$0: $DotNetRcFile: $!\n";
-		for my $entry (@Selected)
-		{
-			seek $fh, $entry->{fpos}, 0;
-			local $_ = <$fh>;
-			chomp;
-			my $value_offset = $entry->{prop}->{$prop_act}->{value_offset};
-			my $new_line = substr($_, 0, $value_offset) . $value_act . substr($_, $value_offset+length($entry->{prop}->{$prop_act}->{value}));
-			my $length_diff = length($_) - length($new_line);
-			my $rest_of_the_file;
-			if($length_diff < 0)
-			{
-				local $/ = undef;
-				$rest_of_the_file = <$fh>;
-			}
-			seek $fh, $entry->{fpos}, 0;
-			print {$fh} $new_line;
-			if($length_diff < 0)
-			{
-				print {$fh} "\n";
-				print {$fh} $rest_of_the_file;
-			}
-			else
-			{
-				print {$fh} " " x $length_diff;
-			}
-		}
-		close $fh;
-	}
+	close $fh;
 }
 else
 {
-	die "usage: netrc [ list | select ... ]\n";
+	die "usage:
+  netrc list [<PROPERTY_NAME> [<PROPERTY_NAME> [...]]]
+  netrc set [machine <MACHINE_NAME> | default] <PROPERTY_NAME> <PROPERTY_VALUE> [<PROPERTY_NAME> <PROPERTY_VALUE> [...]]\n";
 }

@@ -138,10 +138,13 @@ sub parse_dotnetrc_file
 				if($token eq 'login')
 				{
 					my $key = $next_token . '@' . $machine_ref->{prop}->{machine}->{value};
-					$netrc->{machine}->{$key} = $machine_ref;
-					if(not exists $machine_ref->{canon_key})
+					if(not exists $netrc->{machine}->{$key})
 					{
-						$machine_ref->{canon_key} = $key;
+						$netrc->{machine}->{$key} = $machine_ref;
+						if(not exists $machine_ref->{canon_key})
+						{
+							$machine_ref->{canon_key} = $key;
+						}
 					}
 				}
 			}
@@ -185,7 +188,7 @@ if($cmd eq 'list')
 	close $fh;
 	
 	my @props = @ARGV;
-	if(not @props) { @props = ('login',); }
+	@props = ('login',) if not @props;
 	print list($netrc, @props);
 }
 elsif($cmd eq 'set')

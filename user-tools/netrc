@@ -1,0 +1,326 @@
+#!/usr/bin/env perl
+
+use Data::Dumper;
+use POSIX qw/SEEK_END SEEK_SET/;
+use Pod::Usage;
+
+
+=pod
+
+=head1 NAME
+
+netrc - manage ~/.netrc file
+
+=head1 SYNOPSIS
+
+netrc list [I<PROPERTY_NAME> [I<PROPERTY_NAME> [...]]]
+
+netrc set [machine I<MACHINE_NAME> | default] I<PROPERTY_NAME> I<PROPERTY_VALUE> [I<PROPERTY_NAME> I<PROPERTY_VALUE> [...]]
+
+=head1 DESCRIPTION
+
+Query entries from F<~/.netrc> file.
+Set and add properties as well as new entries.
+
+C<netrc list> command lists machine and login names by default in tabular data format.
+Supply I<PROPERTY_NAME>s to display other properies besides machine names.
+Machine name is the key, so it's always displayed.
+
+C<netrc set> command set one or more property of the given I<MACHINE_NAME> machine.
+If the property does not exist yet, it's appended after the last property.
+If the machine does not exist yet, it's appended after the last machine entry.
+
+As the machine name is the key, if there are multiple entries with the same B<machine> name,
+yet different B<login> names,
+refer to one of those by I<LOGIN_NAME>@I<MACHINE_NAME>.
+A B<login> token has to be there in this case.
+While the simple I<MACHINE_NAME> keeps referring to the first occurrance.
+
+Refer to the B<default> entry by an empty machine name.
+
+=head1 ENVIRONMENT
+
+=over 4
+
+=item NETRC_PATH
+
+Alternative path instead of F<~/.netrc>.
+
+=back
+
+=head1 LIMITATIONS
+
+File is not locked during read/write.
+
+Does not support B<macdef> token.
+
+=head1 SEE ALSO
+
+netrc(5)
+
+=cut
+
+
+sub parse_dotnetrc_file
+{
+	my $fh = shift;
+	my $netrc = {};
+	
+	local $/ = undef;
+	local $_ = <$fh>;
+	
+	# ignore comments while keeping file positions
+	s/\x23.*$/" " x length $&/gem;
+	# don't stop parsing at newlines (also keeping positions)
+	s/\n/ /g;
+	
+	my $machine_ref = undef;
+	my $offset_token_start = 0;
+	my $offset_token_end = 0;
+	
+	while(s/(.*?)(\S+)//)
+	{
+		my $token = $2;
+		$offset_token_start = $offset_token_end + length $1;
+		$offset_token_end += length($1) + length($2);
+		
+		if($token eq 'default')
+		{
+			if(exists $netrc->{machine}->{''})
+			{
+				warn "$0: default machine at offset $offset_token_start is already defined at offset $netrc->{machine}->{''}->{offset}\n";
+				$machine_ref = {};
+			}
+			else
+			{
+				$machine_ref = $netrc->{machine}->{''} = {};
+				$machine_ref->{canon_key} = '';
+			}
+			$machine_ref->{offset} = $offset_token_start;
+		}
+		else
+		{
+			s/(.*?)(\S+)//;
+			my $next_token = $2;
+			$offset_token_start = $offset_token_end + length $1;
+			$offset_token_end += length($1) + length($2);
+		
+			if($token eq 'machine')
+			{
+				my $machine = $next_token;
+				if(exists $netrc->{machine}->{$machine})
+				{
+					warn "$0: machine '$machine' at offset $offset_token_start is already defined at offset $netrc->{machine}->{$machine}->{prop}->{machine}->{offset}\n";
+					$machine_ref = {};
+				}
+				else
+				{
+					$machine_ref = $netrc->{machine}->{$machine} = {};
+					$machine_ref->{canon_key} = $machine;
+				}
+			}
+			
+			if(not defined $machine_ref)
+			{
+				warn "$0: no current machine section at offset $offset_token_start\n";
+				next;
+			}
+			
+			if(exists $machine_ref->{prop}->{$token})
+			{
+				warn "$0: property '$token' at offset $offset_token_start of machine '$machine_ref->{prop}->{machine}->{value}' is already defined at offset $machine_ref->{prop}->{$token}->{offset}\n";
+			}
+			else
+			{
+				$machine_ref->{prop}->{$token}->{value} = $next_token;
+				$machine_ref->{prop}->{$token}->{offset} = $offset_token_start;
+				
+				if($token eq 'login')
+				{
+					my $key = $next_token . '@' . $machine_ref->{prop}->{machine}->{value};
+					if(not exists $netrc->{machine}->{$key})
+					{
+						$netrc->{machine}->{$key} = $machine_ref;
+						if(not exists $machine_ref->{canon_key})
+						{
+							$machine_ref->{canon_key} = $key;
+						}
+					}
+				}
+			}
+			
+			# TODO support 'macdef' token
+		}
+	}
+	return $netrc;
+}
+
+sub list
+{
+	my $netrc = shift;
+	my @props = @_;
+	my $out = '';
+	$out .= "MACHINE\t".(join "\t", map {uc} @props)."\n";
+	
+	for my $machine (sort {$a->{prop}->{machine}->{value} cmp $b->{prop}->{machine}->{value}} 
+	                 map {$netrc->{machine}->{$_}}
+	                 grep {$_ eq $netrc->{machine}->{$_}->{canon_key}} 
+	                 keys %{$netrc->{machine}})
+	{
+		$out .= join("\t",
+			$machine->{prop}->{machine}->{value},
+			map {$machine->{prop}->{$_}->{value}} @props
+		)."\n";
+	}
+	return $out;
+}
+
+
+
+$DotNetRcFile = $ENV{NETRC_PATH} || $ENV{HOME}."/.netrc";
+$cmd = shift @ARGV;
+
+
+if($cmd eq 'list')
+{
+	open my $fh, '<', $DotNetRcFile;
+	my $netrc = parse_dotnetrc_file $fh;
+	close $fh;
+	
+	my @props = @ARGV;
+	@props = ('login',) if not @props;
+	print list($netrc, @props);
+}
+elsif($cmd eq 'set')
+{
+	my $machine_key;
+	{
+		my $match_prop_name = shift @ARGV;
+		if($match_prop_name eq 'machine')
+		{
+			$machine_key = shift @ARGV;
+		}
+		elsif($match_prop_name eq 'default')
+		{
+			$machine_key = '';
+		}
+		else
+		{
+			pod2usage(-exitval=>2, -verbose=>99);
+		}
+	}
+	
+	open my $fh, '+<', $DotNetRcFile or die "$0: $DotNetRcFile: $!\n";
+	my $netrc = parse_dotnetrc_file $fh;
+	
+	while(1)
+	{
+		if(not exists $netrc->{machine}->{$machine_key})
+		{
+			my $machine_name = $machine_key;
+			if($machine_key =~ /^(.+?)@(.*)$/)
+			{
+				unshift @ARGV, 'login', $1;
+				$machine_name = $2;
+			}
+			
+			seek $fh, -1, SEEK_END or die "$0: seek: $!\n";
+			my $endchar;
+			read $fh, $endchar, 1 or die "$0: read: $!\n";
+			my $fpos = tell $fh;
+			my $insert_1 = $endchar eq "\n" ? '' : "\n";
+			my $insert_2 = $machine_name eq '' ? "default" : "machine ";
+			print {$fh} $insert_1 . $insert_2 . $machine_name or die "$0: write: $!\n";
+			
+			$netrc->{machine}->{$machine_key} = {
+				offset => $fpos + length($insert_1),
+				canon_key => $machine_key,
+				prop => {
+					machine => {
+						offset => $fpos + length($insert_1) + length($insert_2),
+						value => $machine_name,
+					},
+				},
+			};
+		}
+		
+		last unless @ARGV;
+		
+		my $prop_name = shift @ARGV;
+		my $prop_value = shift @ARGV;
+		die "$0: empty tokens are not supported.\n" if $prop_name eq '' or $prop_value eq '';
+		
+		my $insert_text;
+		my $erase_length = 0;
+		my $insert_pos = $netrc->{machine}->{$machine_key}->{prop}->{$prop_name}->{offset};
+		my $is_new_property = 0;
+		
+		if(defined $insert_pos)
+		{
+			$insert_text = $prop_value;
+			$erase_length = length $netrc->{machine}->{$machine_key}->{prop}->{$prop_name}->{value};
+		}
+		else
+		{
+			# no such property for this machine.
+			# append to the end of the last property value.
+			my @props = sort {$b->{offset} <=> $a->{offset}} values %{$netrc->{machine}->{$machine_key}->{prop}};
+			die unless @props;
+			$insert_pos = $props[0]->{offset} + length $props[0]->{value};
+			$insert_text = " $prop_name $prop_value";
+			$is_new_property = 1;
+		}
+		
+		my $insert_length = length $insert_text;
+		my $length_diff = $insert_length - $erase_length;
+		my $rest_of_the_file;
+		
+		seek $fh, $insert_pos, SEEK_SET or die "$0: seek: $!\n";
+		{
+			local $/ = undef;
+			$rest_of_the_file = substr <$fh>, $erase_length;
+		}
+		seek $fh, $insert_pos, SEEK_SET or die "$0: seek: $!\n";
+		print {$fh} $insert_text.$rest_of_the_file or die "$0: write: $!\n";
+		truncate $fh, $insert_pos + $insert_length + length $rest_of_the_file;
+		
+		# record changed property
+		if(not $is_new_property)
+		{
+			$netrc->{machine}->{$machine_key}->{prop}->{$prop_name}->{value} = $prop_value;
+		}
+		
+		# adjust offsets
+		for my $machine (values %{$netrc->{machine}})
+		{
+			for my $prop ($machine, values %{$machine->{prop}})
+			{
+				if(defined $prop->{offset} and $prop->{offset} > $insert_pos and not $prop->{offset_adjusted})
+				{
+					$prop->{offset} += $length_diff;
+					$prop->{offset_adjusted} = 1;
+				}
+			}
+		}
+		for my $machine (values %{$netrc->{machine}})
+		{
+			for my $prop ($machine, values %{$machine->{prop}})
+			{
+				delete $prop->{offset_adjusted};
+			}
+		}
+		
+		# record new property
+		if($is_new_property)
+		{
+			my $new_prop_value_offset = $insert_pos + 1 + length($prop_name) + 1;
+			$netrc->{machine}->{$machine_key}->{prop}->{$prop_name} = {value => $prop_value, offset => $new_prop_value_offset};
+		}
+	}
+	
+	close $fh;
+}
+else
+{
+	pod2usage(-exitval=>2, -verbose=>99);
+}

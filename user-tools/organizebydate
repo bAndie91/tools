@@ -24,7 +24,7 @@ do_touch=''
 overwrite_opt='--no-clobber'
 
 usage() {
-	echo -n "Usage: organizebydate [-t <template>] [-c | -m | -a] [-v] [-n] [[-i | -x] <num>] <files, directories>
+	echo -n "Usage: organizebydate [-t <template>] [-c | -m | -a] [-v] [-n] [[-i | -x] <num>] <files-and-directories> [<find-options>]
  --template, -t   Target path name using strftime(3) macros
                   Default: $target_template
                   Extra macros accepted:
@@ -135,21 +135,28 @@ find "$@" ${minlevel:+-mindepth $minlevel} ${maxlevel:+-maxdepth $maxlevel} -typ
 				# Date/Time Original, Create Date, Modify Date, Date
 				for tagid in 0x9003 0x9004 0x0132 0x0006
 				do
-					datetime=`exif -m -t $tagid "$file"`
+					datetime=`exif -m -t $tagid "$file" || true`
 					if [ -n "$datetime" ]
 					then
 						break
 					fi
 				done
-			else
+			fi
+			if [ -z "$datetime" ] && type exiftool >/dev/null 2>&1
+			then
 				for tag in DateTimeOriginal CreateDate ModifyDate Date
 				do
-					datetime=`exiftool -d "%Y-%m-%d %H:%M:%S" -$tag -s3 "$file"`
+					datetime=`exiftool -d "%Y-%m-%d %H:%M:%S" -$tag -s3 "$file" || true`
 					if [ -n "$datetime" ]
 					then
 						break
 					fi
 				done
+			fi
+			if [ -z "$datetime" ]
+			then
+				echo "$0: can not determine date/time of file $file" >&2
+				false
 			fi
 			date=${datetime:0:10}
 			time=${datetime:10}

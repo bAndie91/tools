@@ -1,0 +1,7 @@
+#!/bin/bash
+
+_git_push_remotes()
+{
+	__gitcomp_nl "$(__git_remotes)"
+	__gitcompappend "-l" '' "$cur" ''
+}

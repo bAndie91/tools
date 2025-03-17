@@ -43,21 +43,21 @@ opt_verbose=no
 while [ $# != 0 ]
 do
 	case "$1" in
-	--help)
+	(--help)
 		pod2text "$0"
 		exit 0
 		;;
-	-v|--verbose)
+	(-v|--verbose)
 		opt_verbose=yes
 		;;
-	--)
+	(--)
 		shift
 		break
 		;;
-	-*)
+	(-*)
 		errx -1 "unknown option: $1"
 		;;
-	*)
+	(*)
 		break
 		;;
 	esac

@@ -14,15 +14,17 @@ visymlinks [<PATH> [<PATH> [...]]]
 
 Open up your default editor (see sensible-editor(1)) to edit the targets of I<PATH> symlinks
 given in command arguments.
-If no I<PATH> given, all symlinks will be edited in the current working directory.
-Once finished in the editor, changes the target of those symlinks which were edited.
+If no I<PATH> given, all symlinks in the current working directory will be loaded into the editor.
+Once finished editing, visymlinks(1) changes the target of those symlinks which were edited.
 Contrary to visymlinks(1)'s relative, vidir(1),
 if a I<PATH> symlink is removed in the editor, it won't be removed from the filesystem.
 
 =head1 RETURN VALUE
 
-Returns zero if everything went fine.
-Returns the exit status of the editor if it was not zero (also skip changing symlinks).
+Returns B<zero> if everything went well.
+
+Returns the exit status of the editor if it was B<not zero> (also won't change symlinks).
+
 Returns the error code of symlink(2) if any of such calls failed.
 
 =head1 SEE ALSO
@@ -60,20 +62,24 @@ if($editor_err == 0)
 	{
 		chomp;
 		my ($path, $new_target) = split /\t/;
-		if(-e $path and !-l $path)
+		if(!-e $path and !-l $path)
 		{
-			warn "$0: $path: no longer a symlink!\n";
+			warn "$0: $path: does not exist\n";
+			next;
 		}
-		else
+		if(!-l $path)
 		{
-			my $old_target = readlink $path;
-			if($old_target ne $new_target)
-			{
-				warn "$0: $path: old target: $old_target\n";
-				warn "$0: $path: new target: $new_target\n";
-				unlink $path;
-				symlink $new_target, $path or croak "$0: $path: symlink: $!";
-			}
+			warn "$0: $path: is not a symlink\n";
+			next;
+		}
+		
+		my $old_target = readlink $path;
+		if($old_target ne $new_target)
+		{
+			warn "$0: $path: old target: $old_target\n";
+			warn "$0: $path: new target: $new_target\n";
+			unlink $path;
+			symlink $new_target, $path or croak "$0: $path: symlink: $!";
 		}
 	}
 }

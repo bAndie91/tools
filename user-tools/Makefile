@@ -24,7 +24,7 @@ $(TOOLS_TARGET_DIR)/perl-repl: /usr/libexec/perlshell
 $(TOOLS_TARGET_DIR)/rsync-semichroot: /usr/share/doc/tool/rsync-semichroot.txt
 $(TOOLS_TARGET_DIR)/multithrottler: /usr/lib/multithrottler/Throttler.pm
 $(TOOLS_TARGET_DIR)/git-mirrors: /usr/share/bash-completion/completions/git-mirrors
-$(TOOLS_TARGET_DIR)/git-push-sync-branches: /usr/share/bash-completion/completions/git-push-sync-branches
+$(TOOLS_TARGET_DIR)/git-push-remotes: /usr/share/bash-completion/completions/git-push-remotes
 
 COMPLETION_BASH_SCRIPTS = $(foreach path,$(wildcard $(REPO_ROOT)/bash/bash_completion.d/*),$(notdir $(path)))
 

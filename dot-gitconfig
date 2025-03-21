@@ -99,6 +99,7 @@
     # creating refs
 
 	newbranch = checkout -b
+	nb = newbranch
 	newtree = checkout --orphan -b
 	# move a tag to the current HEAD
 	retag = ! "fn(){ git tag -d \"$1\" && git tag \"$1\"; }; fn"
@@ -129,7 +130,7 @@
 	st = status -s -b --untracked-files=normal
 	stt = status -s -b --untracked-files=no
 	status-tracked = status --untracked-files=no
-	conflicts = ! "fn(){ git diff --name-only --diff-filter=UXB | xargs -l sh -c 'f=$1; echo \"\\033[1;37;41m$f\\033[m\"; sed -ne \"/^<<<<<<</,/^>>>>>>>/p\" \"$f\" | sed -e \"s/^[<>=|]\\{7\\}.*/[1;33m&[m/\"' -- ; }; fn"
+	conflicts = ! "fn(){ git diff --name-only --diff-filter=UXB -z | xargs --null -L 1 sh -c 'f=$1; echo \"\\033[1;37;41m$f\\033[m\"; sed -ne \"/^<<<<<<</,/^>>>>>>>/p\" \"$f\" | sed -e \"s/^[<>=|]\\{7\\}.*/[1;33m&[m/\"' -- ; }; fn"
 	choose = ! "fn(){ local side=$1; shift; git checkout -m "$@"; git checkout --$side "$@"; git add "$@"; }; fn"
 	choose-theirs = choose theirs
 	choose-ours = choose ours
@@ -164,7 +165,7 @@
 	drop-untracked-files = clean -dfx
 	unstage = ! "fn(){ git reset -q HEAD -- \"$@\"; git st; }; fn"
 
-	restore = checkout HEAD --
+	restore-head = restore --worktree --staged
 	discard-all = checkout HEAD -- '*'
 	discard-unstaged = checkout -- '*'
 	
@@ -202,7 +203,7 @@
 	current-branch-name = symbolic-ref --quiet --short HEAD
 	current-branch-tracking-remote = ! "fn(){ branch=$1; [ -n \"$branch\" ] || branch=$(git current-branch-name); git config --get \"branch.$branch.remote\"; }; fn"
 	push-branch = ! "fn(){ branch=$(git symbolic-ref --quiet --short HEAD); if [ -z \"$branch\" ]; then echo \"not on a branch\" >&2; return 1; fi; remote=$(git config --get \"branch.$branch.remote\"); git push \"${remote:-origin}\" \"$branch\"; }; fn"
-	push-all = ! "fn(){ git for remote in $(git remote); do echo \"+ git push $remote $*\" >&2; git push \"$remote\" \"$@\"; done; }; fn"
+	push-all = ! "fn(){ parallel git push {} \"$@\" ::: $(git remote); }; fn"
 	push-multi = ! "fn(){ for remote in \"$@\"; do echo git push $remote | colorize cyan; git push \"$remote\"; done; }; fn"
 
 	# stash

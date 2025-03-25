@@ -16,34 +16,39 @@ set -e
 
 if [ $# -ne 2 ]
 then
-	echo "swap: 2 arguments needed"
-	exit 1
-fi
-if [ ! -e "$1" ]
-then
-	echo "swap: file does not exist: $1"
-	exit 1
-fi
-if [ ! -e "$2" ]
-then
-	echo "swap: file does not exist: $2"
+	echo "Usage: swap [<FILE-1>] [<FILE-2>]" >&2
 	exit 1
 fi
 
 
-TMP=`TMPDIR=. mktemp $([ -d "$1" ] && echo --directory) --dry-run -t .swap.XXXXXX`
-
-if mv -Tv "$1" "$TMP"
+if [ ! -e "$1" -a -e "$2" ]
 then
-	if mv -Tv "$2" "$1"
+	f1=$2
+	f2=$1
+else
+	f1=$1
+	f2=$2
+fi
+
+
+if [ ! -e "$f2" ]
+then
+	mv -v --no-target-directory "$f1" "$f2"
+else
+	TMP=`TMPDIR=. mktemp $([ -d "$f1" ] && echo --directory) --dry-run -t .swap.XXXXXX`
+	
+	if mv -v --no-target-directory "$f1" "$TMP"
 	then
-		if mv -Tv "$TMP" "$2"
+		if mv -v --no-target-directory "$f2" "$f1"
 		then
-			exit 0
+			if mv -v --no-target-directory "$TMP" "$f2"
+			then
+				exit 0
+			fi
+			exit 4
 		fi
-		exit 4
+		exit 3
 	fi
-	exit 3
 fi
 
 exit 2

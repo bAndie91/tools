@@ -72,7 +72,7 @@ Terminate output records (lines) by NUL char instead of LineFeed.
 
 =head1 SEE ALSO
 
-cut(1)
+cut(1), L<hck|https://github.com/sstadick/hck>
 
 =cut
 

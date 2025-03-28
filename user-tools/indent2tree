@@ -1,23 +1,45 @@
 #!/usr/bin/env perl
 
+use Data::Dumper;
 use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat/;
 use Pod::Usage;
+use utf8;
+binmode STDIN, ':utf8';
+binmode STDOUT, ':utf8';
 
-$char_vert = '│';
-$char_hori = '──';
-$char_chld = '├';
-$char_last = '└';
+%Charset = (
+	vert => '│',
+	hori => '──',
+	chld => '├',
+	last => '└',
+	pgap => ' ',
+);
+%EmptyChars = (
+	vert => '',
+	hori => '',
+	chld => '',
+	last => '',
+	pgap => '',
+);
+$OptOutputPaths = 0;
+$OptPathSep = '/';
 
 GetOptions(
-	'v|vertical=s' => \$char_vert,
-	'h|horizontal=s' => \$char_hori,
-	'c|child=s' => \$char_chld,
-	'l|last=s' => \$char_last,
-	'a|ascii!' => sub {
-		$char_vert = '|';
-		$char_hori = '--';
-		$char_chld = '+';
-		$char_last = '`';
+	'v|vertical=s' => \$Charset{vert},
+	'h|horizontal=s' => \$Charset{hori},
+	'c|child=s' => \$Charset{chld},
+	'l|last=s' => \$Charset{last},
+	'g|gap=s' => \$Charset{pgap},
+	'a|ascii' => sub {
+		$Charset{vert} = '|';
+		$Charset{hori} = '--';
+		$Charset{chld} = '+';
+		$Charset{last} = '`';
+		$Charset{pgap} = ' ';
+	},
+	'p|paths:s' => sub {
+		$OptOutputPaths = 1;
+		if(length $_[1]) { $OptPathSep = $_[1]; }
 	},
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
@@ -74,30 +96,47 @@ sub print_subtree
 	for my $node (@$subtree)
 	{
 		my $last = $pos == $#$subtree;
+		my $next_level_sidebranches = '';
 		
-		if($level == 0)
+		if($OptOutputPaths)
 		{
-			printf "%s\n", $node->{data};
-			
-			print_subtree($node->{subtree}, $level+1, '');
+			my $n = $node;
+			my $path = $OptPathSep . $n->{data};
+			while(defined $n->{parent}->{data})
+			{
+				$n = $n->{parent};
+				$path = $OptPathSep . $n->{data} . $path;
+			}
+			print "$path\n";
 		}
 		else
 		{
 			my $childindex = 0;
+			my $cs = \%Charset;
+			
+			if($level == 0)
+			{
+				$cs = \%EmptyChars;
+			}
 			
 			for my $data (split /\n/, $node->{data})
 			{
-				printf "%s%s %s\n",
+				printf "%s%s%s%s\n",
 					$sidebranches,
 					$childindex == 0
-						? ($last ? $char_last : $char_chld).$char_hori
-						: ($last ? ' '        : $char_vert).'  ',
+						? ($last ? $cs->{last}                : $cs->{chld}).$cs->{hori}
+						: ($last ? (' ' x length $cs->{last}) : $cs->{vert}).(' ' x length $cs->{hori}),
+					$childindex == 0
+						? $cs->{pgap}
+						: ' ' x length $cs->{pgap},
 					$data;
 				$childindex++;
 			}
 			
-			print_subtree($node->{subtree}, $level+1, $sidebranches . ($last ? '    ' : $char_vert.'   '));
+			$next_level_sidebranches = $last ? ' ' x length($cs->{chld}.$cs->{hori}.$cs->{pgap}) : $cs->{vert}.(' ' x length($cs->{hori}.$cs->{pgap}));
 		}
+		
+		print_subtree($node->{subtree}, $level+1, $sidebranches.$next_level_sidebranches);
 		
 		$pos++;
 	}
@@ -120,6 +159,8 @@ indent2tree - Makes TAB-indented text into ascii tree chart
 
 =item -a, --ascii
 
+Set B<-v>, B<-h>, B<-c>, and B<-l> options' values to ASCII line-art chars.
+
 =item -v, --vertical I<CHAR>
 
 =item -h, --horizontal I<CHAR>
@@ -128,19 +169,44 @@ indent2tree - Makes TAB-indented text into ascii tree chart
 
 =item -l, --last I<CHAR>
 
+=item -p, --paths [ I<SEP> ]
+
+Output path-like strings per line, instead of tree-like diagram.
+If I<SEP> is specified, take it as path separator
+instead of the default B<slash> (C</>) char.
+
 =back
 
 =head1 DESCRIPTION
 
-Input: lines with leading tabs representing the depth in the tree.
+Input: lines with leading B<TAB> chars representing the depth in the tree.
 Multiline records are supported by terminating lines (all but the last one) by backslash.
 
 Output: tree diagramm with (ascii or unicode) drawing chars.
 Set custom drawing chars by B<-v>, B<-h>, B<-c>, and B<-l> options.
 
+=head1 LIMITATIONS
+
+Input data must have at least one "root" item,
+ie. text starting at the beginning of the line,
+without preceeding B<TAB>.
+
+Tree depth needs to be denoted by B<TAB> chars, not any other whitespace.
+Pre-format it if you need to.
+
+Since there can be multiple root items
+and root items do not have ancestry lines,
+a multiline root item can be confused with multiple items all having zero children (except maybe the last one).
+If it matters to you, put a common parent above the tree
+by inserting a root item to the 0th line and indenting all other lines by 1 level.
+
+Multiline items are not supported in B<--paths> mode.
+
 =head1 SEE ALSO
 
 =over 4
+
+=item paths2indent(1)
 
 =item https://github.com/jez/as-tree
 

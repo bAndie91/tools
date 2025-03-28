@@ -25,35 +25,47 @@ do
 done
 
 
-if [ -n "${1:-}" ]
-then
-	remotes=($@)
-else
-	remotes=($(git remote))
-fi
-
-declare -A nonBareRemotePushURL=()
-
-for remote in "${remotes[@]}"
-do
+get_pushurl()
+{
+	local remote=$1
+	local pushurl
 	if [[ $remote =~ : ]] || [[ $remote =~ /\.git$ ]]
 	then
 		pushurl=$remote
 	else
 		pushurl=$(git config --get remote.$remote.url)
 	fi
-	if [[ $pushurl =~ /\.git$ ]]
-	then
-		nonBareRemotePushURL[$remote]=$pushurl
-	fi
-done
+	echo "$pushurl"
+}
+
+
+declare -A nonBareRemotePushURL=()
+
+if [ $# -gt 0 ]
+then
+	for remote in "$@"
+	do
+		nonBareRemotePushURL[$remote]=`get_pushurl "$remote"`
+	done
+else
+	remotes=($(git remote))
+	for remote in "${remotes[@]}"
+	do
+		pushurl=`get_pushurl "$remote"`
+		if [[ $pushurl =~ /\.git$ ]]
+		then
+			nonBareRemotePushURL[$remote]=$pushurl
+		fi
+	done
+fi
+
 
 echo "remotes: ${!nonBareRemotePushURL[*]}" >&2
 
 for remote in "${!nonBareRemotePushURL[@]}"
 do
-	echo "remote: $remote" >&2
 	pushurl=${nonBareRemotePushURL[$remote]}
+	echo "remote: $remote, push-url: $pushurl" >&2
 	if [[ $pushurl =~ ^([^:/]+):(.+?)/\.git$ ]]
 	then
 		remoteHost=${BASH_REMATCH[1]}

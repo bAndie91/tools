@@ -1,0 +1,31 @@
+#!/usr/bin/env python3
+
+import json
+import sys
+
+def comparator(x):
+	try:
+		k1 = 0
+		k2 = float(x)
+		k3 = 0
+	except (ValueError, TypeError):
+		k1 = 1
+		k2 = x.__class__.__name__
+		k3 = str(x)
+	return (k1, k2, k3)
+
+def sortlists(obj):
+	if isinstance(obj, list):
+		if isinstance(obj[0], (str, int)):
+			obj.sort(key=comparator)
+		
+		for it in obj:
+			sortlists(it)
+
+	if isinstance(obj, dict):
+		for it in obj.values():
+			sortlists(it)
+
+obj = json.load(sys.stdin)
+sortlists(obj)
+sys.stdout.write(json.dumps(obj, sort_keys=True))

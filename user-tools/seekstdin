@@ -28,6 +28,8 @@ because they possibly do not fit on the temporary files' filesystem.
 
 =head1 SEE ALSO
 
+ordinargs(1)
+
 =cut
 
 
@@ -36,8 +38,10 @@ use Fcntl qw/:flock :seek/;
 
 ($tmpfh, undef) = tempfile( "seekstdin-XXXXXX", TMPDIR => 1, UNLINK => 1 );
 
-$/ = undef;
-print {$tmpfh} <STDIN>;
+while(<STDIN>)
+{
+	print {$tmpfh};
+}
 
 seek $tmpfh, 0, SEEK_SET or die "$0: $!\n";
 open \*STDIN, '+<&='.fileno($tmpfh) or die "$0: $!\n";

@@ -1,0 +1,59 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+ordinargs - Replace non-ordinary file arguments to ordinary ones
+
+=head1 SYNOPSIS
+
+ordinargs I<COMMAND> [I<ARGS>]
+
+=head1 DESCRIPTION
+
+Saves the content of non-ordinary files found in I<ARGS> into a temporary file,
+then runs I<COMMAND> I<ARGS> with the non-ordinary file arguments replace to the ordinary (yet temporary) ones.
+
+This is useful if I<COMMAND> does not support reading from pipes or other non-seekable files.
+
+=head1 LIMITATIONS
+
+Impractical with huge files,
+because they possibly do not fit on the temporary files' filesystem.
+
+=head1 SEE ALSO
+
+ordinargs(1) is a generalization of seekstdin(1).
+
+=cut
+
+
+use File::Temp qw/tempfile/;
+use Fcntl qw/:flock :seek/;
+
+$Command = shift @ARGV;
+@Arguments = ();
+
+for my $arg (@ARGV)
+{
+	if(-e $arg and !-f $arg)
+	{
+		my ($tmpfh, $tmpfilename) = tempfile( "ordinargs-XXXXXX", TMPDIR => 1, UNLINK => 0 );
+		warn "$0: replace '$arg' to '$tmpfilename'\n";
+		open my $fh, '<', $arg or die "$0: $!: $arg\n";
+		while($_ = <$fh>)
+		{
+			print {$tmpfh} $_;
+		}
+		close $fh;
+		close $tmpfh;
+		$arg = $tmpfilename;
+	}
+	push @Arguments, $arg;
+}
+
+exec {$Command} $Command, @Arguments;
+($errno, $errstr) = (int $!, $!);
+warn "$0: $Command: $errstr\n";
+exit 125+$errno;

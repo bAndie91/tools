@@ -122,6 +122,7 @@ TOOLS ?= \
   nthash.py \
   ocspverify \
   oded \
+  ordinargs \
   organizebydate \
   palemoon-current-url \
   pararun \

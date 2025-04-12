@@ -117,7 +117,6 @@ TOOLS ?= \
   netrc \
   noacute \
   nocomment \
-  nopath \
   notashell \
   nthash.py \
   ocspverify \
@@ -128,6 +127,7 @@ TOOLS ?= \
   pararun \
   parsel \
   partial \
+  pathmod \
   paths2indent \
   pcut \
   perlprintf \

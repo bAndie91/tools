@@ -18,11 +18,48 @@ pathmod [I<OPTIONS>] [--] I<COMMAND> [I<ARGS>]
 
 =item -d, --direct
 
+Lookup only I<COMMAND> according to the modified B<PATH>.
+Command calls by I<COMMAND> and its children still inherits B<PATH> environment variable from pathmod(1)'s caller.
+Unless of course I<COMMAND> changes it on its own.
+
+If neither B<-d> nor B<-s> is given, the default mode is B<-d>.
+
 =item -s, --subsequent
 
-=item -r, --remove I<ITEM>
+Modify B<PATH> environment for I<COMMAND>,
+so I<COMMAND> is still looked up according to the same B<PATH> as pathmod(1),
+but its children are going to be looked up according to the modified path.
 
-=item -v, --verbose
+=item -d -s
+
+Simultaneous B<--direct> and B<--subsequent> is supported.
+In this case I<COMMAND> is looked up according to the modified B<PATH>
+and the B<PATH> environment is changed too.
+This is nearly the same as C<env PATH=MOD_PATH COMMAND ARGS>.
+
+=item -r, --remove I<DIR>
+
+Remove I<DIR> directory from the B<PATH>.
+Note, items in B<PATH> are normalized first.
+Normalization rules:
+
+=item --remove-regex I<PATTERN>
+
+=item -a, --append I<DIR>
+
+=item -p, --prepend I<DIR>
+
+=item -i, --insert-before I<PATTERN>:I<DIR>
+
+Insert I<DIR> before each item in the B<PATH> which matches to I<PATTERN> regexp.
+
+=over 8
+
+=item empty item is the self (F<.> "dot") directory
+
+=item remove trailing slash
+
+=back
 
 =back
 
@@ -52,48 +89,87 @@ use Socket qw/AF_UNIX AF_INET SOCK_STREAM pack_sockaddr_in inet_aton sockaddr_un
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 $OptVerbose = 0;
-$OptDirect = 1;
-$OptSubsequent = 0;
+$OptDirect = undef;
+$OptSubsequent = undef;
 @OptRemove = ();
+@OptAppend = ();
+@OptPrepend = ();
+
+@ParentPATH = map { s{^$}{.}; s{/+$}{}; $_ } split /:/, $ENV{PATH};
+@NewPATH = @ParentPATH;
 
 GetOptions(
 	'v|verbose!' => \$OptVerbose,
 	'd|direct!' => \$OptDirect,
 	's|subsequent!' => \$OptSubsequent,
-	'r|remove=s@' => \@OptRemove,
+	'r|remove=s@' => sub {
+		my ($getopt, $remove_item) = @_;
+		@NewPATH = grep { $_ ne $remove_item } @NewPATH
+	},
+	'remove-regex=s@' => sub {
+		my ($getopt, $remove_pattern) = @_;
+		@NewPATH = grep { $_ !~ $remove_pattern } @NewPATH
+	},
+	'a|append=s@' => sub {
+		my ($getopt, $item) = @_;
+		push @NewPATH, $item;
+	},
+	'p|prepend=s@' => sub {
+		my ($getopt, $item) = @_;
+		unshift @NewPATH, $item;
+	},
+	'i|insert-before=s@' => sub {
+		my ($getopt, $pattern_item) = @_;
+		my ($pattern, $item) = $pattern_item =~ /^(.*):([^:]+)$/;
+		@NewPATH = map { $_ =~ $pattern ? ($item, $_) : $_ } @NewPATH;
+	},
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
 
-@PATH = grep { my $path_item = $_; none {$path_item eq $_} @OptRemove } 
-	map { s{^$}{.}; s{/+$}{}; $_ } 
-	split /:/, $ENV{PATH};
+if(not defined $OptDirect and not defined $OptSubsequent)
+{
+	$OptDirect = 1;
+}
+
 
 ($Command, @Arguments) = @ARGV;
-$CommandPath = $Command;
+$ExecCommand = $Command;
 
 if($OptSubsequent)
 {
-	$ENV{PATH} = join ':', @PATH;
+	$ENV{PATH} = join ':', @NewPATH;
 }
-if($OptDirect)
+
+if($OptDirect or $OptSubsequent and not ($OptDirect and $OptSubsequent))
 {
-	undef $CommandPath;
-	for my $dir (@PATH)
+	my @lookupPATH = $OptDirect ? (@NewPATH) : (@ParentPATH);
+	
+	undef $ExecCommand;
+	for my $dir (@lookupPATH)
 	{
-		$CommandPath = "$dir/$Command";
-		last if -x "$dir/$Command";
-		undef $CommandPath;
+		$ExecCommand = "$dir/$Command";
+		last if -x $ExecCommand;
+		undef $ExecCommand;
 	}
-	if(not defined $CommandPath)
+	
+	if(not defined $ExecCommand)
 	{
 		warn "$0: $Command: not found\n";
 		exit 127;
 	}
 }
 
-exec {$CommandPath} $Command, @Arguments;
+exec {$ExecCommand} $Command, @Arguments;
 ($errno, $errstr) = (int $!, $!);
-warn "$0: $Command: $errstr\n";
+warn "$0: $ExecCommand: $errstr\n";
 exit 125+$errno;
+
+
+__END__
+
+                direct only     subsequent only     direct+subsequent   none
+---------------	---------------	-------------------	-------------------	---------------
+PATH env        no change       change              change              no change
+command path    lookup new      lookup old          keep                keep

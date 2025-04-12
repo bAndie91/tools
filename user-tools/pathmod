@@ -1,0 +1,99 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+pathmod - Run command with a modified PATH
+
+=head1 SYNOPSIS
+
+pathmod [I<OPTIONS>] [--] I<COMMAND> [I<ARGS>]
+
+=head1 DESCRIPTION
+
+=head1 OPTIONS
+
+=over 4
+
+=item -d, --direct
+
+=item -s, --subsequent
+
+=item -r, --remove I<ITEM>
+
+=item -v, --verbose
+
+=back
+
+=head1 LIMITATIONS
+
+=head1 SEE ALSO
+
+=cut
+
+
+use constant { STAT_DEV=>0, STAT_INODE=>1, STAT_PERM=>2, STAT_NLINKS=>3, STAT_UID=>4, STAT_GID=>5, STAT_RDEV=>6, STAT_SIZE=>7, STAT_ATIME=>8, STAT_MTIME=>9, STAT_CTIME=>10, STAT_BLOCKSIZE=>11, STAT_BLOCKS=>12, };
+use Cwd qw/getcwd realpath/;
+use Data::Dumper;
+use Date::Parse;
+use DateTime::Format::Strptime;
+use Encode qw/decode encode decode_utf8 encode_utf8/;
+use Errno qw/:POSIX/;
+use Fcntl qw/:flock :seek F_GETFL F_SETFL O_NONBLOCK F_GETFD F_SETFD FD_CLOEXEC/;
+use File::Basename;
+use File::Temp qw/tempfile/;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
+use IPC::Run qw/run/;
+use List::MoreUtils qw/all any none/;
+use Pod::Usage;
+use POSIX;
+use Socket qw/AF_UNIX AF_INET SOCK_STREAM pack_sockaddr_in inet_aton sockaddr_un/;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+
+$OptVerbose = 0;
+$OptDirect = 1;
+$OptSubsequent = 0;
+@OptRemove = ();
+
+GetOptions(
+	'v|verbose!' => \$OptVerbose,
+	'd|direct!' => \$OptDirect,
+	's|subsequent!' => \$OptSubsequent,
+	'r|remove=s@' => \@OptRemove,
+	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+
+@PATH = grep { my $path_item = $_; none {$path_item eq $_} @OptRemove } 
+	map { s{^$}{.}; s{/+$}{}; $_ } 
+	split /:/, $ENV{PATH};
+
+($Command, @Arguments) = @ARGV;
+$CommandPath = $Command;
+
+if($OptSubsequent)
+{
+	$ENV{PATH} = join ':', @PATH;
+}
+if($OptDirect)
+{
+	undef $CommandPath;
+	for my $dir (@PATH)
+	{
+		$CommandPath = "$dir/$Command";
+		last if -x "$dir/$Command";
+		undef $CommandPath;
+	}
+	if(not defined $CommandPath)
+	{
+		warn "$0: $Command: not found\n";
+		exit 127;
+	}
+}
+
+exec {$CommandPath} $Command, @Arguments;
+($errno, $errstr) = (int $!, $!);
+warn "$0: $Command: $errstr\n";
+exit 125+$errno;

@@ -107,6 +107,9 @@ use Pod::Usage;
 use Data::Dumper;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
+sub AnsiColorCode { chr(0x1B) . '[' . $_[0] . 'm' }
+sub AnsiColorReset { AnsiColorCode(0) }
+
 $OptCommonSep = '---';
 $OptParticularSep = '+';
 $OptParticularArgsStdin = 0;
@@ -228,10 +231,11 @@ for my $particular_cmd_idx (0 .. $#ParticularArgs)
 				$CmdColorBold = ($CmdColorBold + 1) % 2;
 			}
 		}
-		$prefix_qm = '\x1B['.$CmdColorBold.';'.'3'.$CmdColorCode.'m'.quotemeta($prefix).'\x1B[0m';
-		undef $prefix;
+		my $color = $CmdColorBold.';'.'3'.$CmdColorCode;
+		$CommandAnsiColorCode[$particular_cmd_idx] = $color;
+		$prefix = AnsiColorCode($color) . $prefix . AnsiColorReset;
 	}
-	if(defined $prefix and not defined $prefix_qm)
+	if(defined $prefix)
 	{
 		$prefix_qm = quotemeta($prefix);
 		undef $prefix;
@@ -266,9 +270,11 @@ for my $cmd_idx (0 .. $#Commands)
 	
 	if($OptEndSummary)
 	{
-		printf STDERR "pararun: status %3d, %6s %3d, args: %s\n", $exit_code,
+		printf STDERR "pararun: status %3d, %6s %3d, args: %s%s%s\n", $exit_code,
 			$signaled ? ("signal", $termsig) : ("exit", $exit_code),
-			join ' ', @{$ParticularArgs[$cmd_idx]};
+			$OptColorizePrefix ? AnsiColorCode($CommandAnsiColorCode[$cmd_idx]) : '',
+			join(' ', @{$ParticularArgs[$cmd_idx]}),
+			$OptColorizePrefix ? AnsiColorReset : '';
 	}
 }
 exit $highest_exit_code;

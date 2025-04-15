@@ -22,6 +22,10 @@ This is useful if I<COMMAND> does not support reading from pipes or other non-se
 Impractical with huge files,
 because they possibly do not fit on the temporary files' filesystem.
 
+=head1 BUGS
+
+Command name (ordinargs) is not very telling.
+
 =head1 SEE ALSO
 
 ordinargs(1) is a generalization of seekstdin(1).

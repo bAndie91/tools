@@ -93,7 +93,7 @@ while (1)
             next if exists $sent_msgid{$msgid} or exists $received_msgid{$msgid};
             
             chomp $data;
-            $data =~ s/[\x00-\x1F\x7F]/sprintf "\\x%02X", ord $&/eg;
+            $data =~ s/[\x00-\x1F\x7F]/sprintf "\x1B[7m\\x%02X\x1B[27m", ord $&/eg;
             print "\r\x1B[K"; $prompt_was_erased = 1;
             print "$ip >>> $data\n";
             $received_msgid{$msgid} = 1 if defined $msgid;

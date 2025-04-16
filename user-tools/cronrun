@@ -92,7 +92,9 @@ while [ $# != 0 ]
 do
 	case "$1" in
 	--help)
-		exit;;
+		pod2text "$0"
+		exit
+		;;
 	-d|--random-delay)
 		shift
 		random_delay_sec=$1

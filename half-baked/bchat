@@ -69,11 +69,14 @@ while (1)
 	            $select->remove(\*STDIN);
 	            next;
             }
+            chomp $line;
+            next if $line eq '';
+            
             my $msgid = uuidgen();
             $line = sprintf "[msgid=%s]%s", $msgid, $line;
             $sent_msgid{$msgid} = 1;
             
-            $_->send($line, 0) for @net_writers;
+            $_->send("$line\n", 0) for @net_writers;
         }
         elsif ($fh eq $net_read)
         {

@@ -6,6 +6,8 @@ use Pod::Usage;
 use IO::Socket::INET;
 use IO::Socket::Multicast;
 use IO::Select;
+use Sys::Hostname;
+use List::MoreUtils qw/all any none/;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 sub uuidgen
@@ -33,6 +35,12 @@ sub local_ipv4_addresses
 	return grep { /^[\d\.]+$/; } split /\s+/, `hostname -I`;
 }
 
+sub erase_prompt
+{
+	print STDERR "\r\x1B[K";
+	$prompt_was_erased = 1;
+}
+
 
 $anycast_addr = '0.0.0.0';
 $broadcast_addr = '255.255.255.255';
@@ -42,6 +50,7 @@ $OptPort = 1992;
 $OptMulticastAddr = '239.199.2.0';  # i chose this address for this application
 $OptBroadcastSend = 0;
 $OptBroadcastRead = 0;
+$OptNick = hostname;
 
 =pod
 
@@ -64,7 +73,13 @@ Default is multicast-only.
 
 =item -p, --port I<NUM>
 
+=item -n, --nick I<STRING>
+
 =back
+
+=head1 SEE ALSO
+
+write(1), wall(1), rlwrap(1)
 
 =cut
 
@@ -73,10 +88,63 @@ GetOptions(
 	'b|broadcast-read!' => \$OptBroadcastRead,
 	'multicast-addr=s' => \$OptMulticastAddr,
 	'p|port=i' => \$OptPort,
+	'n|nick=s' => \$OptNick,
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
+
+
+sub shout
+{
+	my $line = shift;
+	my $meta = shift;
+	
+	$meta->{msgid} = uuidgen() unless exists $meta->{msgid};
+	$meta->{nick} = $OptNick unless exists $meta->{nick};
+	$sent_msgid{$meta->{msgid}} = 1;
+	
+	my $prepend = '';
+	for my $metakey (keys %$meta)
+	{
+		$prepend .= chr(1) . $metakey;
+		$prepend .= '=' . $meta->{$metakey} if defined $meta->{$metakey};
+	}
+	$line = $prepend . chr(2) . $line;
+	
+	my $sent = 0;
+	for my $writer (@net_writers)
+	{
+		if(ref $writer eq 'IO::Socket::Multicast')
+		{
+			for my $iface (network_interfaces())
+			{
+				if(eval { $writer->mcast_if($iface); 1 })
+				{
+					$writer->mcast_send($line, $mcast_dest);
+					$sent++;
+				}
+				else
+				{
+					unless($!{EADDRNOTAVAIL})
+					{
+						warn "Could not set interface to $iface: $!: $@\n";
+					}
+				}
+			}
+		}
+		else
+		{
+			$writer->send($line, 0);
+			$sent++;
+		}
+	}
+	
+	if($sent == 0)
+	{
+		warn "there was no working socket to send to.\n";
+	}
+}
 
 
 $select = IO::Select->new();
@@ -86,10 +154,10 @@ $select->add(\*STDIN);
 if($OptBroadcastRead)
 {
 	my $bcast_reader = IO::Socket::INET->new(
-	    LocalPort => $OptPort,
-	    Proto     => 'udp',
-	    ReuseAddr => 1,
-	    ReusePort => 1,
+		LocalPort => $OptPort,
+		Proto	 => 'udp',
+		ReuseAddr => 1,
+		ReusePort => 1,
 	) or die "Could not create broadcast receiver socket: $!\n";
 	warn "broadcast receiver created\n";
 	push @net_readers, $bcast_reader;
@@ -97,10 +165,10 @@ if($OptBroadcastRead)
 }
 
 my $multicast_reader = IO::Socket::Multicast->new(
-    LocalPort => $OptPort,
-    Proto     => 'udp',
-    ReuseAddr => 1,
-    ReusePort => 1,
+	LocalPort => $OptPort,
+	Proto	 => 'udp',
+	ReuseAddr => 1,
+	ReusePort => 1,
 ) or die "Could not create multicast receiver socket: $!\n";
 for my $local_ip (local_ipv4_addresses())
 {
@@ -123,14 +191,14 @@ if($OptBroadcastSend)
 	for my $local_ip (local_ipv4_addresses())
 	{
 		my $net_write = IO::Socket::INET->new(
-		    LocalPort => $OptPort,
-	    	LocalAddr => $local_ip,
-		    PeerPort  => $OptPort,
-		    PeerAddr  => $broadcast_addr,
-		    Broadcast => 1,
-		    ReuseAddr => 1,
-		    ReusePort => 1,
-		    Proto     => 'udp',
+			LocalPort => $OptPort,
+			LocalAddr => $local_ip,
+			PeerPort  => $OptPort,
+			PeerAddr  => $broadcast_addr,
+			Broadcast => 1,
+			ReuseAddr => 1,
+			ReusePort => 1,
+			Proto	 => 'udp',
 		) or warn "Could not create broadcast sender socket on local interface $local_ip: $!\n";
 		next unless $net_write;
 		warn "broadcast sender bound to local IP $local_ip\n";
@@ -141,7 +209,7 @@ if($OptBroadcastSend)
 $mcast_dest = sockaddr_in($OptPort, inet_aton($OptMulticastAddr));
 $multicast_write = IO::Socket::Multicast->new(
 	LocalPort => $OptPort,
-	Proto     => 'udp',
+	Proto	 => 'udp',
 	ReuseAddr => 1,
 	ReusePort => 1,
 ) or warn "Could not create multicast sender socket: $!\n";
@@ -158,86 +226,80 @@ warn "no any network interface to bind to!\n" unless @net_writers;
 
 %sent_msgid = ();
 %received_msgid = ();
+%nick_at_ip = ();
 $prompt_was_erased = 1;
+
+shout(undef, {scan=>undef,});
 
 while (1)
 {
 	print STDERR ">>> " if $prompt_was_erased and $select->exists(\*STDIN);
 	$prompt_was_erased = 0;
 	
-    my @ready = $select->can_read();
-    for my $fh (@ready)
-    {
-        if ($fh eq \*STDIN)
-        {
-            my $line = <STDIN>;
-            $prompt_was_erased = 1;
-            unless(defined $line)
-            {
-	            print "\r\x1B[K"; $prompt_was_erased = 1;
-	            $select->remove(\*STDIN);
-	            next;
-            }
-            chomp $line;
-            next if $line eq '';
-            
-            my $msgid = uuidgen();
-            $line = sprintf "%cmsgid=%s%c%s", 1, $msgid, 2, $line;
-            $sent_msgid{$msgid} = 1;
-            
-            my $sent = 0;
-			for my $writer (@net_writers)
+	my @ready = $select->can_read();
+	for my $fh (@ready)
+	{
+		if ($fh eq \*STDIN)
+		{
+			my $line = <STDIN>;
+			$prompt_was_erased = 1;
+			unless(defined $line)
 			{
-				if(ref $writer eq 'IO::Socket::Multicast')
-				{
-					for my $iface (network_interfaces())
-					{
-						if(eval { $writer->mcast_if($iface); 1 })
-						{
-							$writer->mcast_send("$line\n", $mcast_dest);
-							$sent++;
-						}
-						else
-						{
-							unless($!{EADDRNOTAVAIL})
-							{
-								warn "Could not set interface to $iface: $!: $@\n";
-							}
-						}
-					}
-				}
-				else
-				{
-					$writer->send("$line\n", 0);
-					$sent++;
-				}
+				erase_prompt;
+				$select->remove(\*STDIN);
+				next;
+			}
+			next if $line eq $/;
+			shout($line, {});
+		}
+		else
+		{
+			my $remote = $fh->recv(my $data, 4096);
+			my ($peerport, $peeraddr) = sockaddr_in($remote);
+			my $peer_ip = inet_ntoa($peeraddr);
+			
+			my %metadata = ();
+			while($data =~ s/^\x01([^=\x00-\x1F]+)(?:=([^\x01\x02]*))?//)
+			{
+				$metadata{$1} = $2;
 			}
 			
-			if($sent == 0)
+			my $msgid = $metadata{msgid} // uuidgen();
+			next if exists $sent_msgid{$msgid};
+			my $nick = $metadata{nick};
+			
+			if(not $peer_ip ~~ [keys %nick_at_ip])
 			{
-				warn "there was no working socket to send to.\n";
+				erase_prompt;
+				printf "%s is at %s\n", $nick || '(anon)', $peer_ip;
 			}
-        }
-        else
-        {
-            # Receive UDP packet
-            my $remote = $fh->recv(my $data, 4096);
-            my ($peerport, $peeraddr) = sockaddr_in($remote);
-            my $peer_ip = inet_ntoa($peeraddr);
-            
-            my %metadata = ();
-            while($data =~ s/^\x01([^=\x00-\x1F]+)(?:=([^\x01\x02]*))//)
-            {
-            	$metadata{$1} = $2;
-            }
-            next if exists $sent_msgid{$metadata{msgid}} or exists $received_msgid{$metadata{msgid}};
-            $data =~ s/^\x02//;
-            
-            chomp $data;
-            $data =~ s/[\x00-\x1F\x7F]/my $c = ord $&; sprintf "\x1B[7m^%c\x1B[27m", $c < 0x60 ? $c+0x40 : $c-0x40/eg;
-            print STDERR "\r\x1B[K"; $prompt_was_erased = 1;
-            print "$peer_ip >>> $data\n";
-            $received_msgid{$metadata{msgid}} = 1 if defined $metadata{msgid};
-        }
-    }
+			
+			if(exists $nick_at_ip{$peer_ip} and $nick_at_ip{$peer_ip} ne $nick)
+			{
+				erase_prompt;
+				printf "%s is transmitting from %s, from now on, instead of %s\n", $nick || '(anon)', $peer_ip, $nick_at_ip{$peer_ip};
+			}
+			if(defined $nick)
+			{
+				$nick_at_ip{$peer_ip} = $nick;
+			}
+			
+			next if exists $received_msgid{$msgid};
+			$received_msgid{$msgid} = 1 if defined $metadata{msgid};  # remember this message only if the sender set the msgid, not us.
+			
+			$data =~ s/^\x02//;
+			if(length $data and $data ne $/)
+			{
+				chomp $data;
+				$data =~ s/[\x00-\x1F\x7F]/my $c = ord $&; sprintf "\x1B[7m^%c\x1B[27m", $c < 0x60 ? $c+0x40 : $c-0x40/eg;
+				erase_prompt;
+				printf "%s >>> %s\n", $nick || $peer_ip, $data;
+			}
+			
+			if(exists $metadata{scan})
+			{
+				shout(undef, {present=>1,});
+			}
+		}
+	}
 }

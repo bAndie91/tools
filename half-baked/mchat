@@ -1,0 +1,243 @@
+#!/usr/bin/perl
+
+use Data::Dumper;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
+use Pod::Usage;
+use IO::Socket::INET;
+use IO::Socket::Multicast;
+use IO::Select;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+
+sub uuidgen
+{
+	open my $f, '<', '/proc/sys/kernel/random/uuid' or die "$0: open: $!\n";
+	my $uuid = <$f>;
+	chomp $uuid;
+	close $f;
+	return $uuid;
+}
+
+sub network_interfaces
+{
+	my @ifaces;
+	for my $iface_path (glob "/sys/class/net/*")
+	{
+		my ($iface) = $iface_path =~ m{/([^/]+)$};
+		push @ifaces, $iface;
+	}
+	return @ifaces;
+}
+
+sub local_ipv4_addresses
+{
+	return grep { /^[\d\.]+$/; } split /\s+/, `hostname -I`;
+}
+
+
+$anycast_addr = '0.0.0.0';
+$broadcast_addr = '255.255.255.255';
+$|++;
+
+$OptPort = 1992;
+$OptMulticastAddr = '239.199.2.0';  # i chose this address for this application
+$OptBroadcastSend = 0;
+$OptBroadcastRead = 0;
+
+=pod
+
+=head1 NAME
+
+mchat - IP Multicast chat
+
+=head1 OPTIONS
+
+=over 4
+
+=item -B, --broadcast-send
+
+=item -b, --broadcast-read
+
+Send and/or receive messages on broadcast.
+Default is multicast-only.
+
+=item --multicast-addr I<ADDR>
+
+=item -p, --port I<NUM>
+
+=back
+
+=cut
+
+GetOptions(
+	'B|broadcast-send!' => \$OptBroadcastSend,
+	'b|broadcast-read!' => \$OptBroadcastRead,
+	'multicast-addr=s' => \$OptMulticastAddr,
+	'p|port=i' => \$OptPort,
+	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+
+
+$select = IO::Select->new();
+$select->add(\*STDIN);
+
+@net_readers = ();
+if($OptBroadcastRead)
+{
+	my $bcast_reader = IO::Socket::INET->new(
+	    LocalPort => $OptPort,
+	    Proto     => 'udp',
+	    ReuseAddr => 1,
+	    ReusePort => 1,
+	) or die "Could not create broadcast receiver socket: $!\n";
+	warn "broadcast receiver created\n";
+	push @net_readers, $bcast_reader;
+	$select->add($bcast_reader);
+}
+
+my $multicast_reader = IO::Socket::Multicast->new(
+    LocalPort => $OptPort,
+    Proto     => 'udp',
+    ReuseAddr => 1,
+    ReusePort => 1,
+) or die "Could not create multicast receiver socket: $!\n";
+for my $local_ip (local_ipv4_addresses())
+{
+	if($multicast_reader->mcast_add($OptMulticastAddr, $local_ip))
+	{
+		push @net_readers, $multicast_reader;
+	}
+	else
+	{
+		warn "Could not join to multicast group $OptMulticastAddr on local interface $local_ip: $!\n";
+	}
+}
+warn "multicast receiver created\n";
+$select->add($multicast_reader);
+
+
+@net_writers = ();
+if($OptBroadcastSend)
+{
+	for my $local_ip (local_ipv4_addresses())
+	{
+		my $net_write = IO::Socket::INET->new(
+		    LocalPort => $OptPort,
+	    	LocalAddr => $local_ip,
+		    PeerPort  => $OptPort,
+		    PeerAddr  => $broadcast_addr,
+		    Broadcast => 1,
+		    ReuseAddr => 1,
+		    ReusePort => 1,
+		    Proto     => 'udp',
+		) or warn "Could not create broadcast sender socket on local interface $local_ip: $!\n";
+		next unless $net_write;
+		warn "broadcast sender bound to local IP $local_ip\n";
+		push @net_writers, $net_write;
+	}
+}
+
+$mcast_dest = sockaddr_in($OptPort, inet_aton($OptMulticastAddr));
+$multicast_write = IO::Socket::Multicast->new(
+	LocalPort => $OptPort,
+	Proto     => 'udp',
+	ReuseAddr => 1,
+	ReusePort => 1,
+) or warn "Could not create multicast sender socket: $!\n";
+$multicast_write->mcast_loopback(0);
+$multicast_write->mcast_add($OptMulticastAddr) or die "Could not join to multicast group $OptMulticastAddr: $!\n";
+warn "multicast sender created\n";
+push @net_writers, $multicast_write;
+
+
+
+warn "no any network interface to listen to!\n" unless @net_readers;
+warn "no any network interface to bind to!\n" unless @net_writers;
+
+
+%sent_msgid = ();
+%received_msgid = ();
+$prompt_was_erased = 1;
+
+while (1)
+{
+	print STDERR ">>> " if $prompt_was_erased and $select->exists(\*STDIN);
+	$prompt_was_erased = 0;
+	
+    my @ready = $select->can_read();
+    for my $fh (@ready)
+    {
+        if ($fh eq \*STDIN)
+        {
+            my $line = <STDIN>;
+            $prompt_was_erased = 1;
+            unless(defined $line)
+            {
+	            print "\r\x1B[K"; $prompt_was_erased = 1;
+	            $select->remove(\*STDIN);
+	            next;
+            }
+            chomp $line;
+            next if $line eq '';
+            
+            my $msgid = uuidgen();
+            $line = sprintf "%cmsgid=%s%c%s", 1, $msgid, 2, $line;
+            $sent_msgid{$msgid} = 1;
+            
+            my $sent = 0;
+			for my $writer (@net_writers)
+			{
+				if(ref $writer eq 'IO::Socket::Multicast')
+				{
+					for my $iface (network_interfaces())
+					{
+						if(eval { $writer->mcast_if($iface); 1 })
+						{
+							$writer->mcast_send("$line\n", $mcast_dest);
+							$sent++;
+						}
+						else
+						{
+							unless($!{EADDRNOTAVAIL})
+							{
+								warn "Could not set interface to $iface: $!: $@\n";
+							}
+						}
+					}
+				}
+				else
+				{
+					$writer->send("$line\n", 0);
+					$sent++;
+				}
+			}
+			
+			if($sent == 0)
+			{
+				warn "there was no working socket to send to.\n";
+			}
+        }
+        else
+        {
+            # Receive UDP packet
+            my $remote = $fh->recv(my $data, 4096);
+            my ($peerport, $peeraddr) = sockaddr_in($remote);
+            my $peer_ip = inet_ntoa($peeraddr);
+            
+            my %metadata = ();
+            while($data =~ s/^\x01([^=\x00-\x1F]+)(?:=([^\x01\x02]*))//)
+            {
+            	$metadata{$1} = $2;
+            }
+            next if exists $sent_msgid{$metadata{msgid}} or exists $received_msgid{$metadata{msgid}};
+            $data =~ s/^\x02//;
+            
+            chomp $data;
+            $data =~ s/[\x00-\x1F\x7F]/my $c = ord $&; sprintf "\x1B[7m^%c\x1B[27m", $c < 0x60 ? $c+0x40 : $c-0x40/eg;
+            print STDERR "\r\x1B[K"; $prompt_was_erased = 1;
+            print "$peer_ip >>> $data\n";
+            $received_msgid{$metadata{msgid}} = 1 if defined $metadata{msgid};
+        }
+    }
+}

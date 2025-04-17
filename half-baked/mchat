@@ -277,12 +277,9 @@ while (1)
 			if(exists $nick_at_ip{$peer_ip} and $nick_at_ip{$peer_ip} ne $nick)
 			{
 				erase_prompt;
-				printf "%s is transmitting from %s, from now on, instead of %s\n", $nick || '(anon)', $peer_ip, $nick_at_ip{$peer_ip};
+				printf "%s is transmitting from %s, from now on, instead of %s\n", $nick || '(anon)', $peer_ip, $nick_at_ip{$peer_ip} || '(anon)';
 			}
-			if(defined $nick)
-			{
-				$nick_at_ip{$peer_ip} = $nick;
-			}
+			$nick_at_ip{$peer_ip} = $nick;
 			
 			next if exists $received_msgid{$msgid};
 			$received_msgid{$msgid} = 1 if defined $metadata{msgid};  # remember this message only if the sender set the msgid, not us.

@@ -7,8 +7,15 @@ use IO::Socket::INET;
 use IO::Socket::Multicast;
 use IO::Select;
 use Sys::Hostname;
-use List::MoreUtils qw/all any none/;
+use List::MoreUtils qw/all any none first_index/;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+
+$NUL = chr 0;
+$SOH = chr 1;
+$STX = chr 2;
+$ETX = chr 3;
+$EOT = chr 4;
+$LF = "\n";
 
 sub uuidgen
 {
@@ -41,6 +48,21 @@ sub erase_prompt
 	$prompt_was_erased = 1;
 }
 
+sub protocolname
+{
+	my $num = shift;
+	foreach my $const_name (keys %Socket::)
+	{
+		if($const_name =~ /^IPPROTO_(.+)/)
+		{
+			my $proto = $1;
+			my $name = "Socket::$const_name";
+			return $proto if $num == &$name();
+		}
+	}
+	return "UNKNOWN($num)";
+}
+
 
 $anycast_addr = '0.0.0.0';
 $broadcast_addr = '255.255.255.255';
@@ -51,6 +73,7 @@ $OptMulticastAddr = '239.199.2.0';  # i chose this address for this application
 $OptBroadcastSend = 0;
 $OptBroadcastRead = 0;
 $OptNick = hostname;
+@OptUnicast = ();
 
 =pod
 
@@ -87,6 +110,7 @@ GetOptions(
 	'B|broadcast-send!' => \$OptBroadcastSend,
 	'b|broadcast-read!' => \$OptBroadcastRead,
 	'multicast-addr=s' => \$OptMulticastAddr,
+	'u|unicast=s@' => \@OptUnicast,
 	'p|port=i' => \$OptPort,
 	'n|nick=s' => \$OptNick,
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
@@ -107,10 +131,10 @@ sub shout
 	my $prepend = '';
 	for my $metakey (keys %$meta)
 	{
-		$prepend .= chr(1) . $metakey;
+		$prepend .= $SOH . $metakey;
 		$prepend .= '=' . $meta->{$metakey} if defined $meta->{$metakey};
 	}
-	$line = $prepend . chr(2) . $line;
+	$line = $prepend . $STX . $line;
 	
 	my $sent = 0;
 	for my $writer (@net_writers)
@@ -126,7 +150,7 @@ sub shout
 				}
 				else
 				{
-					unless($!{EADDRNOTAVAIL})
+					unless($!{EADDRNOTAVAIL} or $@ =~ /^interface is not multicast capable/)
 					{
 						warn "Could not set interface to $iface: $!: $@\n";
 					}
@@ -135,8 +159,14 @@ sub shout
 		}
 		else
 		{
-			$writer->send($line, 0);
-			$sent++;
+			if($writer->protocol == Socket::IPPROTO_TCP and not $writer->connected)
+			{
+			}
+			else
+			{
+				$writer->send($line . ($writer->protocol == Socket::IPPROTO_TCP ? $EOT : ''), 0);
+				$sent++;
+			}
 		}
 	}
 	
@@ -185,13 +215,39 @@ warn "multicast receiver created\n";
 $select->add($multicast_reader);
 
 
+# TODO support icmp listener
+# TODO support raw ip listener
+my $anycast_listener_udp = IO::Socket::INET->new(
+	LocalAddr => '0.0.0.0',
+	LocalPort => $OptPort,
+	Proto	  => 'udp',
+	ReuseAddr => 1,
+	ReusePort => 1,
+) or die "Could not create anycast receiver UDP socket: %s\n", $!;
+warn "anycast udp receiver created\n";
+push @net_readers, $anycast_listener_udp;
+$select->add($anycast_listener_udp);
+
+my $anycast_listener_tcp = IO::Socket::INET->new(
+	LocalAddr => '0.0.0.0',
+	LocalPort => $OptPort,
+	Proto	  => 'tcp',
+	Listen    => SOMAXCONN,
+	ReuseAddr => 1,
+	ReusePort => 1,
+) or die "Could not create anycast receiver TCP socket: %s\n", $!;
+warn "anycast tcp receiver created\n";
+push @net_readers, $anycast_listener_tcp;
+$select->add($anycast_listener_tcp);
+
+
+
 @net_writers = ();
 if($OptBroadcastSend)
 {
 	for my $local_ip (local_ipv4_addresses())
 	{
 		my $net_write = IO::Socket::INET->new(
-			LocalPort => $OptPort,
 			LocalAddr => $local_ip,
 			PeerPort  => $OptPort,
 			PeerAddr  => $broadcast_addr,
@@ -217,6 +273,30 @@ $multicast_write->mcast_loopback(0);
 $multicast_write->mcast_add($OptMulticastAddr) or die "Could not join to multicast group $OptMulticastAddr: $!\n";
 warn "multicast sender created\n";
 push @net_writers, $multicast_write;
+
+
+for my $target (@OptUnicast)
+{
+	my ($addr, $port, $proto) = $target =~ /^([^:]+)(?::(\d+))?(?:\/(tcp|udp))?$/;
+	# TODO support icmp, raw ip
+	if(not length $addr)
+	{
+		die "unknown target address '$target'\n";
+	}
+	my $proto = $proto || 'udp';
+	my $port = $port || $OptPort;
+	my $sock = IO::Socket::INET->new(
+		PeerAddr  => $addr,
+		PeerPort  => $port,
+		Proto	  => $proto,
+		ReuseAddr => 1,
+		ReusePort => 1,
+		Blocking  => 0,
+	) or die sprintf "Could not create unicast sender %s:%d/%s socket: %s\n", $addr, $port, $proto, $!;
+	warn sprintf "unicast sender %s:%d/%s created\n", $addr, $port, $proto;
+	push @net_writers, $sock;
+	$select->add($sock);
+}
 
 
 
@@ -254,9 +334,56 @@ while (1)
 		}
 		else
 		{
-			my $remote = $fh->recv(my $data, 4096);
-			my ($peerport, $peeraddr) = sockaddr_in($remote);
-			my $peer_ip = inet_ntoa($peeraddr);
+			my $data;
+			my $peer_ip;
+			
+			if($fh->protocol == Socket::IPPROTO_TCP)
+			{
+				if(any {$fh eq $_} @net_readers)
+				{
+					if(my $connection = $fh->accept)
+					{
+						$connection->autoflush(1);
+						erase_prompt;
+						warn sprintf "new connection from %s:%d on %s:%d/%s listener\n",
+							$connection->peerhost, $connection->peerport,
+							$connection->sockhost, $connection->sockport, protocolname($connection->protocol);
+						$select->add($connection);
+						push @net_writers, $connection;
+					}
+					else
+					{
+						erase_prompt;
+						warn sprintf "can not accept connection on %s:%s/%s listener: %s\n", $fh->sockaddr, $fh->sockport, protocolname($fh->protocol), $!;
+					}
+					next;
+				}
+				else
+				{
+					# TODO restart unicast sender if...
+					if(eof($fh))
+					{
+						$select->remove($fh);
+						delete $net_writers[first_index {$_ eq $connection} @net_writers];
+						erase_prompt;
+						warn sprintf "connection from %s:%d on %s:%d/%s listener closed\n",
+							$fh->peerhost, $fh->peerport,
+							$fh->sockhost, $fh->sockport, protocolname($fh->protocol);
+						$fh->close;
+						next;
+					}
+					local $/ = $EOT;
+					$data = <$fh>;
+					chomp $data;
+					$peer_ip = $fh->peerhost;
+				}
+			}
+			else
+			{
+				my $remote = $fh->recv($data, 4096);
+				my ($peerport, $peeraddr) = sockaddr_in($remote);
+				$peer_ip = inet_ntoa($peeraddr);
+			}
 			
 			my %metadata = ();
 			while($data =~ s/^\x01([^=\x00-\x1F]+)(?:=([^\x01\x02]*))?//)
@@ -285,9 +412,9 @@ while (1)
 			$received_msgid{$msgid} = 1 if defined $metadata{msgid};  # remember this message only if the sender set the msgid, not us.
 			
 			$data =~ s/^\x02//;
-			if(length $data and $data ne $/)
+			$data =~ s/$LF$//;
+			if(length $data)
 			{
-				chomp $data;
 				$data =~ s/[\x00-\x1F\x7F]/my $c = ord $&; sprintf "\x1B[7m^%c\x1B[27m", $c < 0x60 ? $c+0x40 : $c-0x40/eg;
 				erase_prompt;
 				printf "%s >>> %s\n", $nick || $peer_ip, $data;

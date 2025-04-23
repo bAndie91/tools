@@ -459,6 +459,7 @@ while(1)
 			}
 			else
 			{
+				next if not defined $remote;  # no data on UDP socket
 				my ($peerport, $peeraddr) = sockaddr_in($remote);
 				$peer_ip = inet_ntoa($peeraddr);
 			}

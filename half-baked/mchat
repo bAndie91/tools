@@ -8,6 +8,7 @@ use IO::Socket::Multicast;
 use IO::Select;
 use Sys::Hostname;
 use List::MoreUtils qw/all any none first_index/;
+use Errno;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 $NUL = chr 0;
@@ -16,6 +17,9 @@ $STX = chr 2;
 $ETX = chr 3;
 $EOT = chr 4;
 $LF = "\n";
+
+$max_msg_len = 4096;
+
 
 sub uuidgen
 {
@@ -123,6 +127,7 @@ sub shout
 {
 	my $line = shift;
 	my $meta = shift;
+	my $only_senders = shift;
 	
 	$meta->{msgid} = uuidgen() unless exists $meta->{msgid};
 	$meta->{nick} = $OptNick unless exists $meta->{nick};
@@ -137,7 +142,7 @@ sub shout
 	$line = $prepend . $STX . $line;
 	
 	my $sent = 0;
-	for my $writer (@net_writers)
+	for my $writer (defined $only_senders ? @$only_senders : @net_writers)
 	{
 		if(ref $writer eq 'IO::Socket::Multicast')
 		{
@@ -164,7 +169,7 @@ sub shout
 			}
 			else
 			{
-				$writer->send($line . ($writer->protocol == Socket::IPPROTO_TCP ? $EOT : ''), 0);
+				$writer->send($line, 0);
 				$sent++;
 			}
 		}
@@ -177,10 +182,10 @@ sub shout
 }
 
 
-$select = IO::Select->new();
-$select->add(\*STDIN);
+$read_handles = IO::Select->new();
+$connecting_handles = IO::Select->new();
+$read_handles->add(\*STDIN);
 
-@net_readers = ();
 if($OptBroadcastRead)
 {
 	my $bcast_reader = IO::Socket::INET->new(
@@ -190,8 +195,7 @@ if($OptBroadcastRead)
 		ReusePort => 1,
 	) or die "Could not create broadcast receiver socket: $!\n";
 	warn "broadcast receiver created\n";
-	push @net_readers, $bcast_reader;
-	$select->add($bcast_reader);
+	$read_handles->add($bcast_reader);
 }
 
 my $multicast_reader = IO::Socket::Multicast->new(
@@ -202,17 +206,13 @@ my $multicast_reader = IO::Socket::Multicast->new(
 ) or die "Could not create multicast receiver socket: $!\n";
 for my $local_ip (local_ipv4_addresses())
 {
-	if($multicast_reader->mcast_add($OptMulticastAddr, $local_ip))
-	{
-		push @net_readers, $multicast_reader;
-	}
-	else
+	unless($multicast_reader->mcast_add($OptMulticastAddr, $local_ip))
 	{
 		warn "Could not join to multicast group $OptMulticastAddr on local interface $local_ip: $!\n";
 	}
 }
 warn "multicast receiver created\n";
-$select->add($multicast_reader);
+$read_handles->add($multicast_reader);
 
 
 # TODO support icmp listener
@@ -225,8 +225,8 @@ my $anycast_listener_udp = IO::Socket::INET->new(
 	ReusePort => 1,
 ) or die "Could not create anycast receiver UDP socket: %s\n", $!;
 warn "anycast udp receiver created\n";
-push @net_readers, $anycast_listener_udp;
-$select->add($anycast_listener_udp);
+push @net_listeners, $anycast_listener_udp;
+$read_handles->add($anycast_listener_udp);
 
 my $anycast_listener_tcp = IO::Socket::INET->new(
 	LocalAddr => '0.0.0.0',
@@ -237,8 +237,8 @@ my $anycast_listener_tcp = IO::Socket::INET->new(
 	ReusePort => 1,
 ) or die "Could not create anycast receiver TCP socket: %s\n", $!;
 warn "anycast tcp receiver created\n";
-push @net_readers, $anycast_listener_tcp;
-$select->add($anycast_listener_tcp);
+push @net_listeners, $anycast_listener_tcp;
+$read_handles->add($anycast_listener_tcp);
 
 
 
@@ -275,49 +275,140 @@ warn "multicast sender created\n";
 push @net_writers, $multicast_write;
 
 
-for my $target (@OptUnicast)
+sub create_unicast_sender
 {
+	my $target = shift;
 	my ($addr, $port, $proto) = $target =~ /^([^:]+)(?::(\d+))?(?:\/(tcp|udp))?$/;
-	# TODO support icmp, raw ip
 	if(not length $addr)
 	{
 		die "unknown target address '$target'\n";
 	}
-	my $proto = $proto || 'udp';
+	# TODO support icmp, raw ip
+	my $proto = lc $proto || 'udp';
+	my $blocking = $proto eq 'tcp' ? 0 : 1;
 	my $port = $port || $OptPort;
+	my $canon_target = sprintf "%s:%d/%s", $addr, $port, $proto;
+	
 	my $sock = IO::Socket::INET->new(
 		PeerAddr  => $addr,
 		PeerPort  => $port,
 		Proto	  => $proto,
 		ReuseAddr => 1,
 		ReusePort => 1,
-		Blocking  => 0,
-	) or die sprintf "Could not create unicast sender %s:%d/%s socket: %s\n", $addr, $port, $proto, $!;
-	warn sprintf "unicast sender %s:%d/%s created\n", $addr, $port, $proto;
-	push @net_writers, $sock;
-	$select->add($sock);
+		Blocking  => $blocking,
+	) or warn sprintf "Could not create unicast sender %s socket: %s\n", $canon_target, $!;
+	$unicast_senders{$target} = { target=>$target, canon_target=>$canon_target, addr=>$addr, port=>$port, proto=>$proto, } unless exists $unicast_senders{$target};
+	$unicast_senders{$target}->{sock} = $sock;
+	if($proto eq 'tcp')
+	{
+		# connection-oriented sockets need to be connected first
+		$connecting_handles->add($sock);
+	}
+	else
+	{
+		# connection-less sockets can be read right away
+		push @net_writers, $sock;
+		$read_handles->add($sock);
+	}
+	return $sock;
 }
 
+sub schedule_connect
+{
+	my $sender = shift;
+	my $reconnect_interval_base = 2;
+	my $reconnect_interval = $reconnect_interval_base * $sender->{reconnect_count};
+	$sender->{scheduled_reconnect} = $sender->{end} + $reconnect_interval;
+}
 
+sub manage_poll_timeout
+{
+	my @schedules = sort {$a<=>$b} grep {defined} map {$_->{scheduled_reconnect}} values %unicast_senders;
+	if(@schedules)
+	{
+		my $soonest = $schedules[0];
+		$poll_timeout = $soonest - time;
+		$poll_timeout = 0 if $poll_timeout <= 0;
+	}
+	else
+	{
+		$poll_timeout = undef;
+	}
+}
 
-warn "no any network interface to listen to!\n" unless @net_readers;
-warn "no any network interface to bind to!\n" unless @net_writers;
+sub manage_reconnects
+{
+	for my $sender (values %unicast_senders)
+	{
+		if(defined $sender->{scheduled_reconnect} and $sender->{scheduled_reconnect} le time)
+		{
+			if(eval { create_unicast_sender($sender->{target}); 1; })
+			{
+				delete $sender->{scheduled_reconnect};
+			}
+			else
+			{
+				warn $@;
+			}
+		}
+	}
+}
+
+%unicast_senders = ();
+for my $target (@OptUnicast)
+{
+	eval { create_unicast_sender($target); 1; } or die $@;
+	warn sprintf "unicast sender %s created\n", $unicast_senders{$target}->{canon_target};
+}
+
 
 
 %sent_msgid = ();
 %received_msgid = ();
 %nick_at_ip = ();
 $prompt_was_erased = 1;
+$poll_timeout = undef;
 
 shout(undef, {scan=>undef,});
 
-while (1)
+while(1)
 {
-	print STDERR ">>> " if $prompt_was_erased and $select->exists(\*STDIN);
+	print STDERR ">>> " if $prompt_was_erased and $read_handles->exists(\*STDIN);
 	$prompt_was_erased = 0;
 	
-	my @ready = $select->can_read();
-	for my $fh (@ready)
+	manage_poll_timeout;
+	my ($read_ready, $write_ready, undef) = IO::Select::select($read_handles, $connecting_handles, undef, $poll_timeout);
+	manage_reconnects;
+	
+	for my $fh (@$write_ready)
+	{
+		my ($sender) = grep {;$_->{sock} eq $fh} values %unicast_senders;
+		erase_prompt;
+		$connecting_handles->remove($fh);
+		
+		$! = unpack('i', getsockopt($fh, SOL_SOCKET, SO_ERROR));
+		if($!)
+		{
+			warn sprintf "can not connect to %s, error %d: %s\n", $sender->{canon_target}, $!, $!;
+			$fh->close;
+			
+			# restart connection
+			$sender->{end} = time;
+			$sender->{reconnect_count}++;
+			schedule_connect($sender);
+		}
+		else
+		{
+			# TCP connection established.
+			warn sprintf "connected to %s\n", $sender->{canon_target};
+			$sender->{reconnect_count} = 0;
+			push @net_writers, $fh;
+			$read_handles->add($fh);
+			shout(undef, {scan=>undef,}, [$fh]);
+		}
+	}
+	
+	for my $fh (@$read_ready)
 	{
 		if ($fh eq \*STDIN)
 		{
@@ -326,7 +417,7 @@ while (1)
 			unless(defined $line)
 			{
 				erase_prompt;
-				$select->remove(\*STDIN);
+				$read_handles->remove(\*STDIN);
 				next;
 			}
 			next if $line eq $/;
@@ -334,13 +425,12 @@ while (1)
 		}
 		else
 		{
-			my $data;
-			my $peer_ip;
-			
 			if($fh->protocol == Socket::IPPROTO_TCP)
 			{
-				if(any {$fh eq $_} @net_readers)
+				if(any {;$fh eq $_} @net_listeners)
 				{
+					# this is a TCP listener socket, receiving a new client.
+					
 					if(my $connection = $fh->accept)
 					{
 						$connection->autoflush(1);
@@ -348,8 +438,8 @@ while (1)
 						warn sprintf "new connection from %s:%d on %s:%d/%s listener\n",
 							$connection->peerhost, $connection->peerport,
 							$connection->sockhost, $connection->sockport, protocolname($connection->protocol);
-						$select->add($connection);
 						push @net_writers, $connection;
+						$read_handles->add($connection);
 					}
 					else
 					{
@@ -358,31 +448,54 @@ while (1)
 					}
 					next;
 				}
-				else
-				{
-					# TODO restart unicast sender if...
-					if(eof($fh))
-					{
-						$select->remove($fh);
-						delete $net_writers[first_index {$_ eq $connection} @net_writers];
-						erase_prompt;
-						warn sprintf "connection from %s:%d on %s:%d/%s listener closed\n",
-							$fh->peerhost, $fh->peerport,
-							$fh->sockhost, $fh->sockport, protocolname($fh->protocol);
-						$fh->close;
-						next;
-					}
-					local $/ = $EOT;
-					$data = <$fh>;
-					chomp $data;
-					$peer_ip = $fh->peerhost;
-				}
+			}
+			
+			my $data;
+			my $peer_ip;
+			my $remote = $fh->recv($data, $max_msg_len);
+			if($fh->protocol == Socket::IPPROTO_TCP)
+			{
+				$peer_ip = $fh->peerhost;
 			}
 			else
 			{
-				my $remote = $fh->recv($data, 4096);
 				my ($peerport, $peeraddr) = sockaddr_in($remote);
 				$peer_ip = inet_ntoa($peeraddr);
+			}
+			
+			if($fh->protocol == Socket::IPPROTO_TCP and not length $data)
+			{
+				# this is TCP client connection (accepted or initiated) closed the connection.
+				# if an accepted connection got closed, just drop it.
+				# if an initiated connection got closed, restart it.
+				
+				my ($sender) = grep {;$_->{sock} eq $fh} values %unicast_senders;
+				
+				$read_handles->remove($fh);
+				delete $net_writers[first_index {$_ eq $fh} @net_writers];
+				erase_prompt;
+				
+				if(defined $sender)
+				{
+					warn sprintf "unicast sender %s:%d/%s closed\n",
+						$fh->peerhost, $fh->peerport, protocolname($fh->protocol);
+				}
+				else
+				{
+					warn sprintf "connection from %s:%d on %s:%d/%s listener closed\n",
+						$fh->peerhost, $fh->peerport,
+						$fh->sockhost, $fh->sockport, protocolname($fh->protocol);
+				}
+				$fh->close;
+				
+				if(defined $sender)
+				{
+					# restart TCP unicast sender
+					$sender->{end} = time;
+					schedule_connect($sender);
+				}
+				
+				next;
 			}
 			
 			my %metadata = ();
@@ -394,17 +507,18 @@ while (1)
 			my $msgid = $metadata{msgid} // uuidgen();
 			next if exists $sent_msgid{$msgid};
 			my $nick = $metadata{nick};
+			my $nickprint = $nick || '(anon)';
 			
 			if(not $peer_ip ~~ [keys %nick_at_ip])
 			{
 				erase_prompt;
-				printf "%s is at %s\n", $nick || '(anon)', $peer_ip;
+				printf "%s is at %s\n", $nickprint, $peer_ip;
 			}
 			
 			if(exists $nick_at_ip{$peer_ip} and $nick_at_ip{$peer_ip} ne $nick)
 			{
 				erase_prompt;
-				printf "%s is transmitting from %s, from now on, instead of %s\n", $nick || '(anon)', $peer_ip, $nick_at_ip{$peer_ip} || '(anon)';
+				printf "%s is transmitting from %s instead of %s\n", $nickprint, $peer_ip, $nick_at_ip{$peer_ip} || '(anon)';
 			}
 			$nick_at_ip{$peer_ip} = $nick;
 			

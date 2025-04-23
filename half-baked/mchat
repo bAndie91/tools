@@ -98,15 +98,24 @@ Default is multicast-only.
 
 =item --multicast-addr I<ADDR>
 
+=item -u, --unicast I<ADDR>[:I<PORT>][/[B<tcp> | B<udp>]]
+
+Initiate connection to this target.
+
 =item -p, --port I<NUM>
 
+Default port to communicate on.
+
 =item -n, --nick I<STRING>
+
+Specify this node's name.
+Default is the hostname.
 
 =back
 
 =head1 SEE ALSO
 
-write(1), wall(1), rlwrap(1)
+write(1), wall(1), rwall(1), rlwrap(1)
 
 =cut
 
@@ -278,7 +287,8 @@ push @net_writers, $multicast_write;
 sub create_unicast_sender
 {
 	my $target = shift;
-	my ($addr, $port, $proto) = $target =~ /^([^:]+)(?::(\d+))?(?:\/(tcp|udp))?$/;
+	my $io_socket_inet_params = shift || {};
+	my ($addr, $port, $proto) = $target =~ m{^([^:/]+)(?::(\d+))?(?:/(tcp|udp))?$};
 	if(not length $addr)
 	{
 		die "unknown target address '$target'\n";
@@ -296,8 +306,9 @@ sub create_unicast_sender
 		ReuseAddr => 1,
 		ReusePort => 1,
 		Blocking  => $blocking,
+		%$io_socket_inet_params,
 	) or warn sprintf "Could not create unicast sender %s socket: %s\n", $canon_target, $!;
-	$unicast_senders{$target} = { target=>$target, canon_target=>$canon_target, addr=>$addr, port=>$port, proto=>$proto, } unless exists $unicast_senders{$target};
+	$unicast_senders{$target} = { target=>$target, canon_target=>$canon_target, addr=>$addr, port=>$port, proto=>$proto, protonum=>$sock->protocol, } unless exists $unicast_senders{$target};
 	$unicast_senders{$target}->{sock} = $sock;
 	if($proto eq 'tcp')
 	{
@@ -431,10 +442,10 @@ while(1)
 				{
 					# this is a TCP listener socket, receiving a new client.
 					
+					erase_prompt;
 					if(my $connection = $fh->accept)
 					{
 						$connection->autoflush(1);
-						erase_prompt;
 						warn sprintf "new connection from %s:%d on %s:%d/%s listener\n",
 							$connection->peerhost, $connection->peerport,
 							$connection->sockhost, $connection->sockport, protocolname($connection->protocol);
@@ -443,7 +454,6 @@ while(1)
 					}
 					else
 					{
-						erase_prompt;
 						warn sprintf "can not accept connection on %s:%s/%s listener: %s\n", $fh->sockaddr, $fh->sockport, protocolname($fh->protocol), $!;
 					}
 					next;
@@ -459,9 +469,21 @@ while(1)
 			}
 			else
 			{
-				next if not defined $remote;  # no data on UDP socket
+				next if not defined $remote;  # no data on connection-less (udp, raw IP, icmp, ...) socket
 				my ($peerport, $peeraddr) = sockaddr_in($remote);
 				$peer_ip = inet_ntoa($peeraddr);
+				
+				# add connection-less unicast peer if it is not there yet
+				if(not grep {$_->{addr} eq $peer_ip and $_->{port} eq $peerport and $_->{protonum} eq $fh->protocol} values %unicast_senders)
+				{
+					my $proto = lc protocolname($fh->protocol);
+					my $target = "$peer_ip:$peerport/$proto";
+					erase_prompt;
+					if(eval { create_unicast_sender($target, {LocalPort=>$fh->sockport}); 1; }) {
+						warn sprintf "unicast sender %s created\n", $unicast_senders{$target}->{canon_target};
+					}
+					else { warn $@; }
+				}
 			}
 			
 			if($fh->protocol == Socket::IPPROTO_TCP and not length $data)

@@ -379,6 +379,7 @@ for my $target (@OptUnicast)
 %nick_at_ip = ();
 $prompt_was_erased = 1;
 $poll_timeout = undef;
+%unicast_back_senders = ();
 
 shout(undef, {scan=>undef,});
 
@@ -469,11 +470,30 @@ while(1)
 			}
 			else
 			{
-				next if not defined $remote;  # no data on connection-less (udp, raw IP, icmp, ...) socket
+				if(not defined $remote)
+				{
+					if($!{ECONNREFUSED})
+					{
+						my ($back_sender) = grep {;$_ eq $fh} values %unicast_back_senders;
+						if(defined $back_sender)
+						{
+							# remove expired connection-less client
+							$read_handles->remove($fh);
+							delete $net_writers[first_index {$_ eq $fh} @net_writers];
+							erase_prompt;
+							warn sprintf "connection from %s:%d on %s:%d/%s listener closed\n",
+								$fh->peerhost, $fh->peerport,
+								$fh->sockhost, $fh->sockport, protocolname($fh->protocol);
+							$fh->close;
+						}
+					}
+					next;
+				}
+				
 				my ($peerport, $peeraddr) = sockaddr_in($remote);
 				$peer_ip = inet_ntoa($peeraddr);
 				
-				# add connection-less unicast peer if it is not there yet
+				# add connection-less unicast peer if it is not there yet:
 				if(not grep {$_->{addr} eq $peer_ip and $_->{port} eq $peerport and $_->{protonum} eq $fh->protocol} values %unicast_senders)
 				{
 					my $proto = lc protocolname($fh->protocol);
@@ -481,6 +501,7 @@ while(1)
 					erase_prompt;
 					if(eval { create_unicast_sender($target, {LocalPort=>$fh->sockport}); 1; }) {
 						warn sprintf "unicast sender %s created\n", $unicast_senders{$target}->{canon_target};
+						$unicast_back_senders{$target} = $unicast_senders{$target}->{sock};
 					}
 					else { warn $@; }
 				}

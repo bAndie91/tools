@@ -19,6 +19,8 @@ $EOT = chr 4;
 $LF = "\n";
 
 $max_msg_len = 4096;
+$relay_mark = " \x1B[1m>\x1B[0m ";
+$talk_mark = " \x1B[1m>>>\x1B[0m ";
 
 
 sub uuidgen
@@ -66,6 +68,16 @@ sub protocolname
 	}
 	return "UNKNOWN($num)";
 }
+
+sub escape_nonsafe_chars
+{
+	# show non-terminal-safe chars as their ASCII representation in ANSI inverse
+	# eg. 0x01 -> ^A, 0x1B -> ^[, 0x7F -> ^?
+	my $s = shift;
+	$s =~ s/[\x00-\x1F\x7F]/my $c = ord $&; sprintf "\x1B[7m^%c\x1B[27m", ($c+0x40) % 0x80/eg;
+	return $s;
+}
+
 
 
 $anycast_addr = '0.0.0.0';
@@ -131,6 +143,17 @@ GetOptions(
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
 
+sub system_message
+{
+	erase_prompt;
+	print "\x1B[1;30m" . $_[0] . "\x1B[0m\n";
+}
+
+sub system_warning
+{
+	erase_prompt;
+	print STDERR "\x1B[31m" . $_[0] . "\x1B[0m\n";
+}
 
 sub shout
 {
@@ -166,7 +189,7 @@ sub shout
 				{
 					unless($!{EADDRNOTAVAIL} or $@ =~ /^interface is not multicast capable/)
 					{
-						warn "Could not set interface to $iface: $!: $@\n";
+						system_warning "Could not set interface to $iface: $!: $@";
 					}
 				}
 			}
@@ -186,7 +209,7 @@ sub shout
 	
 	if($sent == 0)
 	{
-		warn "there was no working socket to send to.\n";
+		system_warning "there was no working socket to send to";
 	}
 }
 
@@ -203,7 +226,7 @@ if($OptBroadcastRead)
 		ReuseAddr => 1,
 		ReusePort => 1,
 	) or die "Could not create broadcast receiver socket: $!\n";
-	warn "broadcast receiver created\n";
+	system_message "broadcast receiver created";
 	$read_handles->add($bcast_reader);
 }
 
@@ -217,10 +240,10 @@ for my $local_ip (local_ipv4_addresses())
 {
 	unless($multicast_reader->mcast_add($OptMulticastAddr, $local_ip))
 	{
-		warn "Could not join to multicast group $OptMulticastAddr on local interface $local_ip: $!\n";
+		system_warning "Could not join to multicast group $OptMulticastAddr on local interface $local_ip: $!";
 	}
 }
-warn "multicast receiver created\n";
+system_message "multicast receiver created";
 $read_handles->add($multicast_reader);
 
 
@@ -233,7 +256,7 @@ my $anycast_listener_udp = IO::Socket::INET->new(
 	ReuseAddr => 1,
 	ReusePort => 1,
 ) or die "Could not create anycast receiver UDP socket: %s\n", $!;
-warn "anycast udp receiver created\n";
+system_message "anycast udp receiver created";
 push @net_listeners, $anycast_listener_udp;
 $read_handles->add($anycast_listener_udp);
 
@@ -245,7 +268,7 @@ my $anycast_listener_tcp = IO::Socket::INET->new(
 	ReuseAddr => 1,
 	ReusePort => 1,
 ) or die "Could not create anycast receiver TCP socket: %s\n", $!;
-warn "anycast tcp receiver created\n";
+system_message "anycast tcp receiver created";
 push @net_listeners, $anycast_listener_tcp;
 $read_handles->add($anycast_listener_tcp);
 
@@ -264,9 +287,9 @@ if($OptBroadcastSend)
 			ReuseAddr => 1,
 			ReusePort => 1,
 			Proto	 => 'udp',
-		) or warn "Could not create broadcast sender socket on local interface $local_ip: $!\n";
+		) or system_warning "Could not create broadcast sender socket on local interface $local_ip: $!";
 		next unless $net_write;
-		warn "broadcast sender bound to local IP $local_ip\n";
+		system_message "broadcast sender bound to local IP $local_ip";
 		push @net_writers, $net_write;
 	}
 }
@@ -277,10 +300,10 @@ $multicast_write = IO::Socket::Multicast->new(
 	Proto	 => 'udp',
 	ReuseAddr => 1,
 	ReusePort => 1,
-) or warn "Could not create multicast sender socket: $!\n";
+) or system_warning "Could not create multicast sender socket: $!";
 $multicast_write->mcast_loopback(0);
 $multicast_write->mcast_add($OptMulticastAddr) or die "Could not join to multicast group $OptMulticastAddr: $!\n";
-warn "multicast sender created\n";
+system_message "multicast sender created";
 push @net_writers, $multicast_write;
 
 
@@ -291,7 +314,7 @@ sub create_unicast_sender
 	my ($addr, $port, $proto) = $target =~ m{^([^:/]+)(?::(\d+))?(?:/(tcp|udp))?$};
 	if(not length $addr)
 	{
-		die "unknown target address '$target'\n";
+		die "unknown target address '$target'";
 	}
 	# TODO support icmp, raw ip
 	my $proto = lc $proto || 'udp';
@@ -307,7 +330,7 @@ sub create_unicast_sender
 		ReusePort => 1,
 		Blocking  => $blocking,
 		%$io_socket_inet_params,
-	) or warn sprintf "Could not create unicast sender %s socket: %s\n", $canon_target, $!;
+	) or system_warning sprintf "Could not create unicast sender %s socket: %s", $canon_target, $!;
 	$unicast_senders{$target} = { target=>$target, canon_target=>$canon_target, addr=>$addr, port=>$port, proto=>$proto, protonum=>$sock->protocol, } unless exists $unicast_senders{$target};
 	$unicast_senders{$target}->{sock} = $sock;
 	if($proto eq 'tcp')
@@ -359,7 +382,7 @@ sub manage_reconnects
 			}
 			else
 			{
-				warn $@;
+				system_warning $@;
 			}
 		}
 	}
@@ -369,7 +392,7 @@ sub manage_reconnects
 for my $target (@OptUnicast)
 {
 	eval { create_unicast_sender($target); 1; } or die $@;
-	warn sprintf "unicast sender %s created\n", $unicast_senders{$target}->{canon_target};
+	system_message sprintf "unicast sender %s created", $unicast_senders{$target}->{canon_target};
 }
 
 
@@ -395,13 +418,12 @@ while(1)
 	for my $fh (@$write_ready)
 	{
 		my ($sender) = grep {;$_->{sock} eq $fh} values %unicast_senders;
-		erase_prompt;
 		$connecting_handles->remove($fh);
 		
 		$! = unpack('i', getsockopt($fh, SOL_SOCKET, SO_ERROR));
 		if($!)
 		{
-			warn sprintf "can not connect to %s, error %d: %s\n", $sender->{canon_target}, $!, $!;
+			system_warning sprintf "can not connect to %s, error %d: %s", $sender->{canon_target}, $!, $!;
 			$fh->close;
 			
 			# restart connection
@@ -412,7 +434,7 @@ while(1)
 		else
 		{
 			# TCP connection established.
-			warn sprintf "connected to %s\n", $sender->{canon_target};
+			system_message sprintf "connected to %s", $sender->{canon_target};
 			$sender->{reconnect_count} = 0;
 			push @net_writers, $fh;
 			$read_handles->add($fh);
@@ -443,11 +465,10 @@ while(1)
 				{
 					# this is a TCP listener socket, receiving a new client.
 					
-					erase_prompt;
 					if(my $connection = $fh->accept)
 					{
 						$connection->autoflush(1);
-						warn sprintf "new connection from %s:%d on %s:%d/%s listener\n",
+						system_message sprintf "new connection from %s:%d on %s:%d/%s listener",
 							$connection->peerhost, $connection->peerport,
 							$connection->sockhost, $connection->sockport, protocolname($connection->protocol);
 						push @net_writers, $connection;
@@ -455,7 +476,7 @@ while(1)
 					}
 					else
 					{
-						warn sprintf "can not accept connection on %s:%s/%s listener: %s\n", $fh->sockaddr, $fh->sockport, protocolname($fh->protocol), $!;
+						system_warning sprintf "can not accept connection on %s:%s/%s listener: %s", $fh->sockaddr, $fh->sockport, protocolname($fh->protocol), $!;
 					}
 					next;
 				}
@@ -479,9 +500,8 @@ while(1)
 						{
 							# remove expired connection-less client
 							$read_handles->remove($fh);
-							delete $net_writers[first_index {$_ eq $fh} @net_writers];
-							erase_prompt;
-							warn sprintf "connection from %s:%d on %s:%d/%s listener closed\n",
+							splice @net_writers, (first_index {$_ eq $fh} @net_writers), 1;
+							system_message sprintf "connection from %s:%d on %s:%d/%s listener closed",
 								$fh->peerhost, $fh->peerport,
 								$fh->sockhost, $fh->sockport, protocolname($fh->protocol);
 							$fh->close;
@@ -498,12 +518,11 @@ while(1)
 				{
 					my $proto = lc protocolname($fh->protocol);
 					my $target = "$peer_ip:$peerport/$proto";
-					erase_prompt;
 					if(eval { create_unicast_sender($target, {LocalPort=>$fh->sockport}); 1; }) {
-						warn sprintf "unicast sender %s created\n", $unicast_senders{$target}->{canon_target};
+						system_message sprintf "unicast sender %s created", $unicast_senders{$target}->{canon_target};
 						$unicast_back_senders{$target} = $unicast_senders{$target}->{sock};
 					}
-					else { warn $@; }
+					else { system_warning $@; }
 				}
 			}
 			
@@ -516,17 +535,16 @@ while(1)
 				my ($sender) = grep {;$_->{sock} eq $fh} values %unicast_senders;
 				
 				$read_handles->remove($fh);
-				delete $net_writers[first_index {$_ eq $fh} @net_writers];
-				erase_prompt;
+				splice @net_writers, (first_index {$_ eq $fh} @net_writers), 1;
 				
 				if(defined $sender)
 				{
-					warn sprintf "unicast sender %s:%d/%s closed\n",
+					system_message sprintf "unicast sender %s:%d/%s closed",
 						$fh->peerhost, $fh->peerport, protocolname($fh->protocol);
 				}
 				else
 				{
-					warn sprintf "connection from %s:%d on %s:%d/%s listener closed\n",
+					system_message sprintf "connection from %s:%d on %s:%d/%s listener closed",
 						$fh->peerhost, $fh->peerport,
 						$fh->sockhost, $fh->sockport, protocolname($fh->protocol);
 				}
@@ -543,45 +561,55 @@ while(1)
 			}
 			
 			my %metadata = ();
-			while($data =~ s/^\x01([^=\x00-\x1F]+)(?:=([^\x01\x02]*))?//)
+			while($data =~ s/^$SOH([^=\x00-\x1F]+)(?:=([^$SOH$STX]*))?//)
 			{
 				$metadata{$1} = $2;
 			}
+			$data =~ s/^$STX//;
 			
-			my $msgid = $metadata{msgid} // uuidgen();
+			my $msgid = $metadata{msgid} || uuidgen();
 			next if exists $sent_msgid{$msgid};
 			my $nick = $metadata{nick};
 			my $nickprint = $nick || '(anon)';
 			
-			if(not $peer_ip ~~ [keys %nick_at_ip])
+			if(not $metadata{relay_from})
 			{
-				erase_prompt;
-				printf "%s is at %s\n", $nickprint, $peer_ip;
+				if(not $peer_ip ~~ [keys %nick_at_ip])
+				{
+					system_message sprintf "%s is at %s", $nickprint, $peer_ip;
+				}
+				
+				if(exists $nick_at_ip{$peer_ip} and $nick_at_ip{$peer_ip} ne $nick)
+				{
+					system_message sprintf "%s is transmitting from %s instead of %s", $nickprint, $peer_ip, $nick_at_ip{$peer_ip} || '(anon)';
+				}
+				$nick_at_ip{$peer_ip} = $nick;
 			}
-			
-			if(exists $nick_at_ip{$peer_ip} and $nick_at_ip{$peer_ip} ne $nick)
-			{
-				erase_prompt;
-				printf "%s is transmitting from %s instead of %s\n", $nickprint, $peer_ip, $nick_at_ip{$peer_ip} || '(anon)';
-			}
-			$nick_at_ip{$peer_ip} = $nick;
 			
 			next if exists $received_msgid{$msgid};
 			$received_msgid{$msgid} = 1 if defined $metadata{msgid};  # remember this message only if the sender set the msgid, not us.
 			
-			$data =~ s/^\x02//;
-			$data =~ s/$LF$//;
-			if(length $data)
+			my $dataprint = $data =~ s/$LF$//r;
+			if(length $dataprint)
 			{
-				$data =~ s/[\x00-\x1F\x7F]/my $c = ord $&; sprintf "\x1B[7m^%c\x1B[27m", $c < 0x60 ? $c+0x40 : $c-0x40/eg;
+				$dataprint = escape_nonsafe_chars($dataprint);
 				erase_prompt;
-				printf "%s >>> %s\n", $nick || $peer_ip, $data;
+				printf "%s%s%s%s%s%s\n",
+					(exists $metadata{relay_from} ? join '', map {escape_nonsafe_chars($_).$relay_mark} split /\s+/, $metadata{relay_from} : ''),
+					$peer_ip, $relay_mark,
+					$nickprint, $talk_mark, $dataprint;
 			}
 			
 			if(exists $metadata{scan})
 			{
 				shout(undef, {present=>1,});
 			}
+			
+			# relay message on all sockets other than the one the message came in
+			my @relay_sockets = grep {$fh ne $_} @net_writers;
+			$metadata{msgid} = $msgid unless defined $metadata{msgid};
+			$metadata{relay_from} .= ' ' if $metadata{relay_from}; $metadata{relay_from} .= $peer_ip;
+			shout($data, \%metadata, \@relay_sockets);
 		}
 	}
 }

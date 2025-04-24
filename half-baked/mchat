@@ -1,5 +1,11 @@
 #!/usr/bin/perl
 
+# TODO
+#  - control commands by Ctrl-/ (^_), eg. /who, /map, /scan, /connections, /file
+#  - draw network map using the relay_from records
+#  - disclose the connection type (mcast, bcast, ucast, tcp, udp, ...) in relay_from metadata
+#  - persistent (distributed/redundant) storage across the network (files, chat log, pinned messages, MOTD, etc.)
+
 use Data::Dumper;
 use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
 use Pod::Usage;
@@ -19,7 +25,7 @@ $EOT = chr 4;
 $LF = "\n";
 
 $max_msg_len = 4096;
-$relay_mark = " \x1B[1m>\x1B[0m ";
+$relay_mark = " \x1B[1m→\x1B[0m ";
 $talk_mark = " \x1B[1m>>>\x1B[0m ";
 
 
@@ -178,7 +184,7 @@ sub shout
 		$prepend .= $SOH . $metakey;
 		$prepend .= '=' . $meta->{$metakey} if defined $meta->{$metakey};
 	}
-	$line = $prepend . $STX . $line;
+	my $data = $prepend . $STX . $line . $EOT;
 	
 	my $sent = 0;
 	for my $writer (defined $only_senders ? @$only_senders : @net_writers)
@@ -189,7 +195,7 @@ sub shout
 			{
 				if(eval { $writer->mcast_if($iface); 1 })
 				{
-					$writer->mcast_send($line, $mcast_dest);
+					$writer->mcast_send($data, $mcast_dest);
 					$sent++;
 				}
 				else
@@ -208,7 +214,7 @@ sub shout
 			}
 			else
 			{
-				$writer->send($line, 0);
+				$writer->send($data, 0);
 				$sent++;
 			}
 		}
@@ -406,7 +412,7 @@ for my $target (@OptUnicast)
 
 %sent_msgid = ();
 %received_msgid = ();
-%nick_at_ip = ();
+%nicks_are_from = ();
 $prompt_was_erased = 1;
 $poll_timeout = undef;
 %unicast_back_senders = ();
@@ -489,9 +495,9 @@ while(1)
 				}
 			}
 			
-			my $data;
+			my $datagrams;
 			my $peer_ip;
-			my $remote = $fh->recv($data, $max_msg_len);
+			my $remote = $fh->recv($datagrams, $max_msg_len);
 			if($fh->protocol == Socket::IPPROTO_TCP)
 			{
 				$peer_ip = $fh->peerhost;
@@ -535,90 +541,102 @@ while(1)
 				}
 			}
 			
-			if($fh->protocol == Socket::IPPROTO_TCP and not length $data)
+			for my $data (split $EOT, $datagrams)
 			{
-				# this is TCP client connection (accepted or initiated) closed the connection.
-				# if an accepted connection got closed, just drop it.
-				# if an initiated connection got closed, restart it.
-				
-				my ($sender) = grep {;$_->{sock} eq $fh} values %unicast_senders;
-				
-				$read_handles->remove($fh);
-				delete_first \@net_writers, $fh;
-				
-				if(defined $sender)
+				if($fh->protocol == Socket::IPPROTO_TCP and not length $data)
 				{
-					system_message sprintf "unicast sender %s:%d/%s closed",
-						$fh->peerhost, $fh->peerport, protocolname($fh->protocol);
-				}
-				else
-				{
-					system_message sprintf "connection from %s:%d on %s:%d/%s listener closed",
-						$fh->peerhost, $fh->peerport,
-						$fh->sockhost, $fh->sockport, protocolname($fh->protocol);
-				}
-				$fh->close;
+					# this is TCP client connection (accepted or initiated) closed the connection.
+					# if an accepted connection got closed, just drop it.
+					# if an initiated connection got closed, restart it.
+					
+					my ($sender) = grep {;$_->{sock} eq $fh} values %unicast_senders;
+					
+					$read_handles->remove($fh);
+					delete_first \@net_writers, $fh;
+					
+					if(defined $sender)
+					{
+						system_message sprintf "unicast sender %s:%d/%s closed",
+							$fh->peerhost, $fh->peerport, protocolname($fh->protocol);
+					}
+					else
+					{
+						system_message sprintf "connection from %s:%d on %s:%d/%s listener closed",
+							$fh->peerhost, $fh->peerport,
+							$fh->sockhost, $fh->sockport, protocolname($fh->protocol);
+					}
+					$fh->close;
 				
-				if(defined $sender)
-				{
-					# restart TCP unicast sender
-					$sender->{end} = time;
-					schedule_connect($sender);
-				}
-				
-				next;
-			}
-			
-			my %metadata = ();
-			while($data =~ s/^$SOH([^=\x00-\x1F]+)(?:=([^$SOH$STX]*))?//)
-			{
-				$metadata{$1} = $2;
-			}
-			$data =~ s/^$STX//;
-			
-			my $msgid = $metadata{msgid} || uuidgen();
-			next if exists $sent_msgid{$msgid};
-			my $nick = $metadata{nick};
-			my $nickprint = $nick || '(anon)';
-			
-			if(not $metadata{relay_from})
-			{
-				if(not $peer_ip ~~ [keys %nick_at_ip])
-				{
-					system_message sprintf "%s is at %s", $nickprint, $peer_ip;
+					if(defined $sender)
+					{
+						# restart TCP unicast sender
+						$sender->{end} = time;
+						schedule_connect($sender);
+					}
+					
+					next;
 				}
 				
-				if(exists $nick_at_ip{$peer_ip} and $nick_at_ip{$peer_ip} ne $nick)
+				my %metadata = ();
+				while($data =~ s/^$SOH([^=\x00-\x1F]+)(?:=([^$SOH$STX]*))?//)
 				{
-					system_message sprintf "%s is transmitting from %s instead of %s", $nickprint, $peer_ip, $nick_at_ip{$peer_ip} || '(anon)';
+					$metadata{$1} = $2;
 				}
-				$nick_at_ip{$peer_ip} = $nick;
+				$data =~ s/^$STX//;
+				
+				my $msgid = $metadata{msgid} || uuidgen();
+				next if exists $sent_msgid{$msgid};
+				my $nick = $metadata{nick};
+				my $nickprint = escape_nonsafe_chars($nick) || '(anon)';
+				
+				
+				my @relay_chain = split /\s+/, $metadata{relay_from};
+				my $relay_chain_print = join(' → ', (map {escape_nonsafe_chars($_)} @relay_chain), $peer_ip);
+				my $nick_is_from = $peer_ip;
+				if($metadata{relay_from})
+				{
+					$nick_is_from = join ' ', @relay_chain, $peer_ip;
+				}
+				
+				if(not $nick_is_from ~~ [keys %nicks_are_from])
+				{
+					system_message sprintf "%s is from %s", $nickprint, $relay_chain_print;
+				}
+				
+				if(defined $nicks_are_from{$nick_is_from} and $nicks_are_from{$nick_is_from} ne $nick)
+				{
+					system_message sprintf "instead of %s, %s is transmitting from %s",
+						escape_nonsafe_chars($nicks_are_from{$nick_is_from}) || '(anon)', 
+						$nickprint, $relay_chain_print;
+				}
+				$nicks_are_from{$nick_is_from} = $nick;
+				
+				
+				next if exists $received_msgid{$msgid};
+				$received_msgid{$msgid} = 1 if defined $metadata{msgid};  # remember this message only if the sender set the msgid, not us.
+				
+				my $dataprint = $data =~ s/$LF$//r;
+				if(length $dataprint)
+				{
+					$dataprint = escape_nonsafe_chars($dataprint);
+					erase_prompt;
+					printf "%s%s%s%s%s%s\n",
+						(exists $metadata{relay_from} ? join '', map {escape_nonsafe_chars($_).$relay_mark} @relay_chain : ''),
+						$peer_ip, $relay_mark,
+						$nickprint, $talk_mark, $dataprint;
+				}
+				
+				if(exists $metadata{scan})
+				{
+					shout(undef, {present=>1,});
+				}
+				
+				# relay message on all sockets other than the one the message came in
+				my @relay_sockets = grep {$fh ne $_} @net_writers;
+				$metadata{msgid} = $msgid unless defined $metadata{msgid};
+				$metadata{relay_from} .= ' ' if $metadata{relay_from}; $metadata{relay_from} .= $peer_ip;
+				shout($data, \%metadata, \@relay_sockets);
 			}
-			
-			next if exists $received_msgid{$msgid};
-			$received_msgid{$msgid} = 1 if defined $metadata{msgid};  # remember this message only if the sender set the msgid, not us.
-			
-			my $dataprint = $data =~ s/$LF$//r;
-			if(length $dataprint)
-			{
-				$dataprint = escape_nonsafe_chars($dataprint);
-				erase_prompt;
-				printf "%s%s%s%s%s%s\n",
-					(exists $metadata{relay_from} ? join '', map {escape_nonsafe_chars($_).$relay_mark} split /\s+/, $metadata{relay_from} : ''),
-					$peer_ip, $relay_mark,
-					$nickprint, $talk_mark, $dataprint;
-			}
-			
-			if(exists $metadata{scan})
-			{
-				shout(undef, {present=>1,});
-			}
-			
-			# relay message on all sockets other than the one the message came in
-			my @relay_sockets = grep {$fh ne $_} @net_writers;
-			$metadata{msgid} = $msgid unless defined $metadata{msgid};
-			$metadata{relay_from} .= ' ' if $metadata{relay_from}; $metadata{relay_from} .= $peer_ip;
-			shout($data, \%metadata, \@relay_sockets);
 		}
 	}
 }

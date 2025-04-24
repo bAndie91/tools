@@ -23,6 +23,13 @@ $relay_mark = " \x1B[1m>\x1B[0m ";
 $talk_mark = " \x1B[1m>>>\x1B[0m ";
 
 
+sub delete_first
+{
+	my $arrayref = shift;
+	my $item = shift;
+	splice @$arrayref, (first_index {$_ eq $item} @$arrayref), 1;
+}
+
 sub uuidgen
 {
 	open my $f, '<', '/proc/sys/kernel/random/uuid' or die "$0: open: $!\n";
@@ -493,6 +500,7 @@ while(1)
 			{
 				if(not defined $remote)
 				{
+					# could not read anything from the socket
 					if($!{ECONNREFUSED})
 					{
 						my ($back_sender) = grep {;$_ eq $fh} values %unicast_back_senders;
@@ -500,13 +508,14 @@ while(1)
 						{
 							# remove expired connection-less client
 							$read_handles->remove($fh);
-							splice @net_writers, (first_index {$_ eq $fh} @net_writers), 1;
+							delete_first \@net_writers, $fh;
 							system_message sprintf "connection from %s:%d on %s:%d/%s listener closed",
 								$fh->peerhost, $fh->peerport,
 								$fh->sockhost, $fh->sockport, protocolname($fh->protocol);
 							$fh->close;
 						}
 					}
+					# TODO handle other type of errors
 					next;
 				}
 				
@@ -535,7 +544,7 @@ while(1)
 				my ($sender) = grep {;$_->{sock} eq $fh} values %unicast_senders;
 				
 				$read_handles->remove($fh);
-				splice @net_writers, (first_index {$_ eq $fh} @net_writers), 1;
+				delete_first \@net_writers, $fh;
 				
 				if(defined $sender)
 				{

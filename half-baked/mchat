@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 # TODO
-#  - control commands by Ctrl-/ (^_), eg. /who, /map, /scan, /connections, /file
+#  - control commands eg. /map, /scan, /connections, /file
 #  - draw network map using the relay_from records
 #  - disclose the connection type (mcast, bcast, ucast, tcp, udp, ...) in relay_from metadata
 #  - persistent (distributed/redundant) storage across the network (files, chat log, pinned messages, MOTD, etc.)
@@ -67,19 +67,39 @@ sub erase_prompt
 	$prompt_was_erased = 1;
 }
 
-sub protocolname
+sub socket_constant_name
 {
+	my $prefix = shift;
 	my $num = shift;
 	foreach my $const_name (keys %Socket::)
 	{
-		if($const_name =~ /^IPPROTO_(.+)/)
+		if($const_name =~ /^$prefix(.+)/)
 		{
-			my $proto = $1;
-			my $name = "Socket::$const_name";
-			return $proto if $num == &$name();
+			my $name = $1;
+			my $fullname = "Socket::$const_name";
+			eval { &$fullname(); 1; } or next;
+			return $name if $num == &$fullname();
 		}
 	}
 	return "UNKNOWN($num)";
+}
+
+sub protocolname
+{
+	return socket_constant_name('IPPROTO_', $_[0]);
+}
+
+sub dump_io_socket
+{
+	my $s = shift;
+	return {
+		class => ref $s,
+		endpoints => sprintf("%s:%d => %s:%d", $s->sockhost, $s->sockport, $s->peerhost, $s->peerport),
+		timeout => $s->timeout,
+		domain => socket_constant_name('AF_', $s->sockdomain),
+		type => socket_constant_name('SOCK_', $s->socktype),
+		protocol => protocolname($s->protocol),
+	};
 }
 
 sub escape_nonsafe_chars
@@ -468,6 +488,30 @@ while(1)
 				next;
 			}
 			next if $line eq $/;
+			
+			if($line =~ s/^\x1F//)
+			{
+				# 0x1F char is Ctrl-/
+				$line =~ s/^(\S+)\s*//;
+				my $cmd = $1;
+				if($cmd eq "dump")
+				{
+					warn Dumper {
+						'nicks_from_nodes' => \%nicks_are_from,
+						'net_writers' => [map {dump_io_socket($_)} @net_writers],
+						'unicast_senders' => {map {
+							my $v = $unicast_senders{$_};
+							$_=>{%$v, sock=>dump_io_socket($v->{sock})}
+						} keys %unicast_senders},
+					};
+				}
+				elsif($cmd eq "who")
+				{
+					print join '', map {($nicks_are_from{$_}||'(anon)')."\t".$_."\n"} sort {lc $nicks_are_from{$a} cmp lc $nicks_are_from{$b}} keys %nicks_are_from;
+				}
+				next;
+			}
+			
 			shout($line, {});
 		}
 		else

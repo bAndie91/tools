@@ -7,6 +7,7 @@ for my $wd (glob "/proc/[0-9]*/cwd")
 
 for my $dir (sort keys %dir)
 {
+	next if $dir =~ m{/proc/\d+/fdinfo$};
 	my $wd = $dir{$dir};
 	
 	my $opendir = $dir;

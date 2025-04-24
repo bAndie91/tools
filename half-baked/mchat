@@ -31,6 +31,7 @@ $talk_mark = " \x1B[1m>>>\x1B[0m ";
 
 sub delete_first
 {
+	# delete the first occurrance of item in the array
 	my $arrayref = shift;
 	my $item = shift;
 	splice @$arrayref, (first_index {$_ eq $item} @$arrayref), 1;
@@ -250,6 +251,7 @@ sub shout
 $read_handles = IO::Select->new();
 $connecting_handles = IO::Select->new();
 $read_handles->add(\*STDIN);
+@net_readers = ();
 
 if($OptBroadcastRead)
 {
@@ -261,6 +263,7 @@ if($OptBroadcastRead)
 	) or die "Could not create broadcast receiver socket: $!\n";
 	system_message "broadcast receiver created";
 	$read_handles->add($bcast_reader);
+	push @net_readers, $bcast_reader;
 }
 
 my $multicast_reader = IO::Socket::Multicast->new(
@@ -278,6 +281,7 @@ for my $local_ip (local_ipv4_addresses())
 }
 system_message "multicast receiver created";
 $read_handles->add($multicast_reader);
+push @net_readers, $multicast_reader;
 
 
 # TODO support icmp listener
@@ -489,9 +493,8 @@ while(1)
 			}
 			next if $line eq $/;
 			
-			if($line =~ s/^\x1F//)
+			if($line =~ s/^\x1F//)  # 0x1F char is Ctrl-/
 			{
-				# 0x1F char is Ctrl-/
 				$line =~ s/^(\S+)\s*//;
 				my $cmd = $1;
 				if($cmd eq "dump")
@@ -499,6 +502,8 @@ while(1)
 					warn Dumper {
 						'nicks_from_nodes' => \%nicks_are_from,
 						'net_writers' => [map {dump_io_socket($_)} @net_writers],
+						'net_listeners' => [map {dump_io_socket($_)} @net_listeners],
+						'net_readers' => [map {dump_io_socket($_)} @net_readers],
 						'unicast_senders' => {map {
 							my $v = $unicast_senders{$_};
 							$_=>{%$v, sock=>dump_io_socket($v->{sock})}
@@ -507,7 +512,11 @@ while(1)
 				}
 				elsif($cmd eq "who")
 				{
-					print join '', map {($nicks_are_from{$_}||'(anon)')."\t".$_."\n"} sort {lc $nicks_are_from{$a} cmp lc $nicks_are_from{$b}} keys %nicks_are_from;
+					print join '', map {sprintf "%s\t%s\n", ($nicks_are_from{$_}||'(anon)'), $_} sort {lc $nicks_are_from{$a} cmp lc $nicks_are_from{$b}} keys %nicks_are_from;
+				}
+				elsif($cmd eq "help")
+				{
+					print "Commands:\n" . join '', map {"/$_\n"} qw/who dump/;
 				}
 				next;
 			}

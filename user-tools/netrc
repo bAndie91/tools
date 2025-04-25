@@ -160,17 +160,14 @@ sub list
 	my $netrc = shift;
 	my @props = @_;
 	my $out = '';
-	$out .= "MACHINE\t".(join "\t", map {uc} @props)."\n";
+	$out .= join("\t", @props)."\n";
 	
 	for my $machine (sort {$a->{prop}->{machine}->{value} cmp $b->{prop}->{machine}->{value}} 
 	                 map {$netrc->{machine}->{$_}}
 	                 grep {$_ eq $netrc->{machine}->{$_}->{canon_key}} 
 	                 keys %{$netrc->{machine}})
 	{
-		$out .= join("\t",
-			$machine->{prop}->{machine}->{value},
-			map {$machine->{prop}->{$_}->{value}} @props
-		)."\n";
+		$out .= join("\t", map {$machine->{prop}->{$_}->{value}} @props)."\n";
 	}
 	return $out;
 }
@@ -188,7 +185,7 @@ if($cmd eq 'list')
 	close $fh;
 	
 	my @props = @ARGV;
-	@props = ('login',) if not @props;
+	@props = ('machine',) if not @props;
 	print list($netrc, @props);
 }
 elsif($cmd eq 'set')

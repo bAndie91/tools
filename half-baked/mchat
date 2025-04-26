@@ -23,11 +23,15 @@ $SOH = chr 1;
 $STX = chr 2;
 $ETX = chr 3;
 $EOT = chr 4;
+$CAN = chr 24;
 $LF = "\n";
 
 $max_msg_len = 4096;
 $relay_mark = " \x1B[1m→\x1B[0m ";
 $talk_mark = " \x1B[1m>>>\x1B[0m ";
+$command_prefix = chr(0x1F);  # Ctrl-/
+$input_prompt = '>>> ';
+$multiline_input_prompt = '... ';
 
 
 sub delete_first
@@ -109,7 +113,8 @@ sub escape_nonsafe_chars
 	# show non-terminal-safe chars as their ASCII representation in ANSI inverse
 	# eg. 0x01 -> ^A, 0x1B -> ^[, 0x7F -> ^?
 	my $s = shift;
-	$s =~ s/[\x00-\x1F\x7F]/my $c = ord $&; sprintf "\x1B[7m^%c\x1B[27m", ($c+0x40) % 0x80/eg;
+	my $repl = shift || {};
+	$s =~ s/[\x00-\x1F\x7F]/if(exists $repl->{$&}){ $repl->{$&} }else{ my $c = ord $&; sprintf "\x1B[7m^%c\x1B[27m", ($c+0x40) % 0x80 }/eg;
 	return $s;
 }
 
@@ -441,13 +446,18 @@ for my $target (@OptUnicast)
 $prompt_was_erased = 1;
 $poll_timeout = undef;
 %unicast_back_senders = ();
+$multiline_input_mode = 0;
+$multiline_input = '';
 
 shout(undef, {scan=>undef,});
 
 while(1)
 {
-	print STDERR ">>> " if $prompt_was_erased and $read_handles->exists(\*STDIN);
-	$prompt_was_erased = 0;
+	if($prompt_was_erased and $read_handles->exists(\*STDIN))
+	{
+		print STDERR $multiline_input_mode ? $multiline_input_prompt : $input_prompt;
+		$prompt_was_erased = 0;
+	}
 	
 	manage_poll_timeout;
 	my ($read_ready, $write_ready, undef) = IO::Select::select($read_handles, $connecting_handles, undef, $poll_timeout);
@@ -492,13 +502,57 @@ while(1)
 				$read_handles->remove(\*STDIN);
 				next;
 			}
-			next if $line eq $/;
 			
-			if($line =~ s/^\x1F//)  # 0x1F char is Ctrl-/
+			my $multiline_input_done = 0;
+			if($multiline_input_mode)
+			{
+				if($line =~ /^$CAN/)
+				{
+					# discard input by Ctrl-X [Return]
+					undef $line;
+					$multiline_input_mode = 0;
+					next;
+				}
+				if($line =~ s/\Q$command_prefix\Eend.*//)
+				{
+					$multiline_input_done = 1;
+					$multiline_input_mode = 0;
+				}
+				$multiline_input .= $line;
+				undef $line;
+			}
+			else
+			{
+				# support multiline messages by ending each input lines with backslash.
+				while($line =~ s{\\($/)$}{$1})
+				{
+					print STDERR $multiline_input_prompt;
+					$line .= <STDIN>;  # FIXME this blocks processing of other filehandles
+					if($line =~ /$CAN/)
+					{
+						# discard input by Ctrl-X [Return]
+						undef $line;
+						last;
+					}
+				}
+			}
+			
+			if($multiline_input_done)
+			{
+				$line = $multiline_input;
+			}
+			
+			next if $line eq $/ or not length $line;
+			
+			if($line =~ s/^\Q$command_prefix\E//)
 			{
 				$line =~ s/^(\S+)\s*//;
 				my $cmd = $1;
-				if($cmd eq "dump")
+				if($cmd eq "help")
+				{
+					print "Commands:\n" . join '', map {" ^/$_\n"} qw/who dump msg end/;
+				}
+				elsif($cmd eq "dump")
 				{
 					warn Dumper {
 						'nicks_from_nodes' => \%nicks_are_from,
@@ -515,9 +569,10 @@ while(1)
 				{
 					print join '', map {sprintf "%s\t%s\n", ($nicks_are_from{$_}||'(anon)'), $_} sort {lc $nicks_are_from{$a} cmp lc $nicks_are_from{$b}} keys %nicks_are_from;
 				}
-				elsif($cmd eq "help")
+				elsif($cmd eq "msg")
 				{
-					print "Commands:\n" . join '', map {"/$_\n"} qw/who dump/;
+					$multiline_input_mode = 1;
+					$multiline_input = '';
 				}
 				next;
 			}
@@ -672,7 +727,8 @@ while(1)
 				my $dataprint = $data =~ s/$LF$//r;
 				if(length $dataprint)
 				{
-					$dataprint = escape_nonsafe_chars($dataprint);
+					$dataprint = escape_nonsafe_chars($dataprint, {$LF=>$LF,});
+					$dataprint = $LF . $dataprint if $dataprint =~ /$LF/;
 					erase_prompt;
 					printf "%s%s%s%s%s%s\n",
 						(exists $metadata{relay_from} ? join '', map {escape_nonsafe_chars($_).$relay_mark} @relay_chain : ''),

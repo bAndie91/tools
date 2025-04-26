@@ -18,13 +18,13 @@ use List::MoreUtils qw/all any none first_index/;
 use Errno;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
-$NUL = chr 0;
-$SOH = chr 1;
-$STX = chr 2;
-$ETX = chr 3;
-$EOT = chr 4;
+$NUL = chr  0;
+$SOH = chr  1;
+$STX = chr  2;
+$ETX = chr  3;
+$EOT = chr  4;
+$LF  = "\n";
 $CAN = chr 24;
-$LF = "\n";
 
 $max_msg_len = 4096;
 $relay_mark = " \x1B[1m→\x1B[0m ";
@@ -150,9 +150,12 @@ Default is multicast-only.
 
 =item --multicast-addr I<ADDR>
 
+Default is B<239.199.2.0>.
+
 =item -u, --unicast I<ADDR>[:I<PORT>][/[B<tcp> | B<udp>]]
 
 Initiate connection to this target.
+This option can be repeated.
 
 =item -p, --port I<NUM>
 
@@ -164,6 +167,121 @@ Specify this node's name.
 Default is the hostname.
 
 =back
+
+=head1 DESCRIPTION
+
+
+=head1 FILES
+
+
+=head1 WIRE PROTOCOL
+
+Messages are directly put on datagram sockets (UDP, RAW IP, etc.) as ASCII text,
+TCP is also supported but connection-oriented features are not relied upon.
+
+Some ascii(7) control chars are used to indicate metadata or control data-flow.
+Start Of Heading (B<SOH>) char is followed by metadata up to the next SOH, STX, or EOT.
+Metadata is also ASCII text, at the beginning of message, in B<KEY>[=B<VALUE>] format,
+ie. B<VALUE> is optional and B<KEY> can not contain equal sign (C<=>).
+
+Start of TeXt (B<STX>) char is followed by the message submitted by a user.
+End Of Transmission (B<EOT>) terminates the message.
+
+Other control chars in the range of B<0x00>-B<0x1F> and B<0x7F> are reserved and
+should not be expected to be neither preserved nor filtered out in user-submitted input.
+
+=head1 KEYS
+
+No line-editing is built in, but you may supplement it by running mchat(1) by a readline wrapper eg. rlwrap(1).
+When using a readline addon, control keys go to it, not to mchat(1)'s input,
+so you may press B<Ctrl-V> before control keys to make them go through.
+
+=over 4
+
+=item B<Ctrl-/>
+
+Start control commands with this key-combination.
+It usually appear as B<^_> on the terminal.
+This produces the Unit Separator ascii(7) control char, but this is not related.
+This is chosen because slash (C</>) is the command prefix is many chat applications.
+
+=item B<Ctrl-X>
+
+Cancel multiline message.
+This produces the B<CAN>cel ascii(7) control char.
+
+=item B<Ctrl-C>
+
+Quit.
+
+=item B<Ctrl-D>
+
+Stop reading local input.
+Incoming messages are still processed.
+
+=back
+
+=head1 CONTROL COMMANDS
+
+=over 4
+
+=item B<who>
+
+Show learned node nick names and address.
+
+=item B<dump>
+
+Dump internal state on screen.
+
+=item B<msg>
+
+Start multiline message.
+
+Terminate the message by [B<Ctrl-/>]B<end>.
+It may appear at the end of a non-empty line, or on its own.
+Content preceding it is included in the message.
+Anything after it, including the final newline, is discarded.
+
+If you changed your mind and don't want to send the already started multiline message,
+type B<Ctrl-X> in a line on its own (trailing newline char is allowed).
+
+=back
+
+=head1 MESSAGE METADATA
+
+=over 4
+
+=item msgid
+
+=item nick
+
+=item scan
+
+=item present
+
+=item relay_from
+
+=back
+
+=head1 SECURITY
+
+There is no rate limiting on incoming messages.
+
+Control chars in incoming messages are escaped before displayed on the temrinal,
+so remote users can not inject terminal control sequences in the local user's temrinal.
+Escaping here means to replace chars to their caret-representation and printed in ANSI-inverse,
+so eg. literal C<^[> can be distinguished visually from the escaped B<ESC> char,
+which also look like C<^[> but printed in inverse colors.
+
+Incoming message signs are also printed in an ANSI style, bold, which is never shown in incoming messages themself,
+so a remote user can not trick the local user that an other message is also received.
+
+If a nick name changed in respect of a peer node,
+a notice is shown to the local user.
+
+Messages are relayed to all peers (except on the socket where the message came in).
+A node in the network can tamper with the relayed messages and the relay-chain information.
+This is by design. If you want tamper-proof, build authentication/cryptography on top of it.
 
 =head1 SEE ALSO
 
@@ -293,7 +411,7 @@ push @net_readers, $multicast_reader;
 # TODO support icmp listener
 # TODO support raw ip listener
 my $anycast_listener_udp = IO::Socket::INET->new(
-	LocalAddr => '0.0.0.0',
+	LocalAddr => $anycast_addr,
 	LocalPort => $OptPort,
 	Proto	  => 'udp',
 	ReuseAddr => 1,
@@ -304,7 +422,7 @@ push @net_listeners, $anycast_listener_udp;
 $read_handles->add($anycast_listener_udp);
 
 my $anycast_listener_tcp = IO::Socket::INET->new(
-	LocalAddr => '0.0.0.0',
+	LocalAddr => $anycast_addr,
 	LocalPort => $OptPort,
 	Proto	  => 'tcp',
 	Listen    => SOMAXCONN,
@@ -506,7 +624,7 @@ while(1)
 			my $multiline_input_done = 0;
 			if($multiline_input_mode)
 			{
-				if($line =~ /^$CAN/)
+				if($line =~ m{^$CAN$/?$})
 				{
 					# discard input by Ctrl-X [Return]
 					undef $line;
@@ -527,13 +645,14 @@ while(1)
 				while($line =~ s{\\($/)$}{$1})
 				{
 					print STDERR $multiline_input_prompt;
-					$line .= <STDIN>;  # FIXME this blocks processing of other filehandles
-					if($line =~ /$CAN/)
+					my $nextline = <STDIN>;  # FIXME this blocks processing other filehandles
+					if($nextline =~ m{^$CAN$/?$})
 					{
 						# discard input by Ctrl-X [Return]
 						undef $line;
 						last;
 					}
+					$line .= $nextline;
 				}
 			}
 			
@@ -728,7 +847,7 @@ while(1)
 				if(length $dataprint)
 				{
 					$dataprint = escape_nonsafe_chars($dataprint, {$LF=>$LF,});
-					$dataprint = $LF . $dataprint if $dataprint =~ /$LF/;
+					$dataprint = $LF . $dataprint if $dataprint =~ /$LF/;  # place the first line of a multiline message on its own separate line as well, not only subsequent lines, so char columns line-up just like for the sender.
 					erase_prompt;
 					printf "%s%s%s%s%s%s\n",
 						(exists $metadata{relay_from} ? join '', map {escape_nonsafe_chars($_).$relay_mark} @relay_chain : ''),

@@ -170,6 +170,12 @@ Default is the hostname.
 
 =head1 DESCRIPTION
 
+mchat(1) is a minimalistic peer-to-peer chat application
+intended for small groups on trusted networks.
+It operates over multicast, broadcast, and unicast IP channels.
+
+It is designed to be small, self-contained, and suitable for quick communication
+without the overhead of complex messaging systems.
 
 =head1 FILES
 

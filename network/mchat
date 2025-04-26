@@ -1,12 +1,5 @@
 #!/usr/bin/perl
 
-# TODO
-#  - control commands eg. /map, /scan, /connections, /file
-#  - draw network map using the relay_from records
-#  - disclose the connection type (mcast, bcast, ucast, tcp, udp, ...) in relay_from metadata
-#  - persistent (distributed/redundant) storage across the network (files, chat log, pinned messages, MOTD, etc.)
-#  - save learned connections (unicast_back_senders)
-
 use Data::Dumper;
 use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
 use Pod::Usage;
@@ -250,6 +243,8 @@ Anything after it, including the final newline, is discarded.
 
 If you changed your mind and don't want to send the already started multiline message,
 type B<Ctrl-X> in a line on its own (trailing newline char is allowed).
+
+=item B<scan>
 
 =back
 
@@ -698,6 +693,10 @@ while(1)
 				{
 					$multiline_input_mode = 1;
 					$multiline_input = '';
+				}
+				elsif($cmd eq "scan")
+				{
+					shout(undef, {scan=>undef,});
 				}
 				next;
 			}

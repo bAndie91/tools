@@ -1,0 +1,46 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+td-nup - Transform lines of text into tabluar data by unroll N lines into a row
+
+=head1 OPTIONS
+
+=over 4
+
+=item -n I<NUM>
+
+=back
+
+=cut
+
+$OptNup = undef;
+%OptionDefs = (
+	'n=i' => \$OptNup,
+);
+
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
+
+$n = 0;
+while(<STDIN>)
+{
+        chomp;
+        $output .= "\t" if defined $output;
+        $output .= $_;
+        $n++;
+        if($n == $OptNup)
+        {
+                print "$output\n";
+                undef $output;
+                $n = 0;
+        }
+}
+
+if(defined $output)
+{
+        print "$output\n";
+}

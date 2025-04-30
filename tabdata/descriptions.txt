@@ -13,6 +13,7 @@ td-gnuplot - Graph tabular data using gnuplot(1)
 td-keepheader - Plug a non header-aware program in the tabular-data processing pipeline
 td-lpstat - lpstat(1) wrapper to output printers status in Tabular Data format
 td-ls - ls(1)-like file list but more machine-parseable
+td-nup - Transform lines of text into tabluar data by unroll N lines into a row
 td-pivot - Switch columns for rows in tabular data
 td-rename - Rename tabular data columns
 td-select - Show only the specified columns from the input tabular data stream.

@@ -21,6 +21,7 @@ TOOLS = \
   td-keepheader \
   td-lpstat \
   td-ls \
+  td-nup \
   td-pivot \
   td-ps \
   td-rename \

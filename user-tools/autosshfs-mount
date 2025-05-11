@@ -14,13 +14,16 @@ fi
 connection_params=$2
 connection_params=${connection_params##*/}
 
+remote_root=$3
+
 # connection_params is in form of:
 # %r@%n(%h):%p
 # relevant ssh config option: ControlPath /home/.../somewhere/%r@%n(%h):%p
 # see man ssh_config(5) for details.
 #
 # example incrontab:
-# /home/.../somewhere IN_CREATE autosshfs-mount mnt/ssh $#
+# /home/.../somewhere IN_CREATE autosshfs-mount mnt/ssh $# /
+# /home/.../somewhere IN_CREATE autosshfs-mount mnt/rhome $# .
 
 if [[ $connection_params =~ ^([^@]+)@([^\(]+)\(([^\)]+)\):([0-9]+) ]]
 then
@@ -41,7 +44,7 @@ then
 		if ! mountpoint "$mountpoint"
 		then
 			if [ -e ~/.ssh/autosshfs-extra-options ]; then extra_options=,`cat ~/.ssh/autosshfs-extra-options`; else extra_options=''; fi
-			sshfs -o allow_root,auto_unmount,Port=$port,ControlMaster=no,transform_symlinks,reconnect,Hostname="$hostname"$extra_options "$user@$host:/" "$mountpoint" {lockfd}>&-
+			sshfs -o allow_root,auto_unmount,Port=$port,ControlMaster=no,transform_symlinks,reconnect,Hostname="$hostname"$extra_options "$user@$host:$remote_root" "$mountpoint" {lockfd}>&-
 			err=$?
 			if [ $err != 0 ]
 			then

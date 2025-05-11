@@ -40,7 +40,8 @@ then
 		ln -snfT "$mountname" "$mountpoint_basedir/$host"
 		if ! mountpoint "$mountpoint"
 		then
-			sshfs -o allow_root,auto_unmount,Port=$port,ControlMaster=no,transform_symlinks,Include=autosshfs.conf,reconnect,Hostname="$hostname" "$user@$host:/" "$mountpoint" {lockfd}>&-
+			if [ -e ~/.ssh/autosshfs-extra-options ]; then extra_options=,`cat ~/.ssh/autosshfs-extra-options`; else extra_options=''; fi
+			sshfs -o allow_root,auto_unmount,Port=$port,ControlMaster=no,transform_symlinks,reconnect,Hostname="$hostname"$extra_options "$user@$host:/" "$mountpoint" {lockfd}>&-
 			err=$?
 			if [ $err != 0 ]
 			then

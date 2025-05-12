@@ -110,13 +110,7 @@ while($line = <STDIN>)
 	for my $d (@Derives)
 	{
 		my $cidx = $Header{$d->{'column'}};
-		my $expr_prerun = '';
-		for my $col (grep {/^[A-Z_][A-Z0-9_]*$/} @Header)
-		{
-			# define all (uppercase alpha-numeric only) column name as a subroutine
-			# which return the given field's value.
-			$expr_prerun .= sprintf('sub %s { $F{"%s"} };', $col, $col);
-		}
+		my $expr_prerun = gen_fieldname_barewords_code(\@Header);
 		$expr_prerun .= '$_ = $F[$cidx];';
 		my $expr = $expr_prerun . $d->{'expr'};
 		

@@ -325,6 +325,11 @@ else
 
 process_header(scalar <STDIN>);
 
+if(defined $Expr)
+{
+	$Expr = gen_fieldname_barewords_code(\@Header) . $Expr;
+}
+
 if(not defined $Expr)
 {
 	for my $filter (@Filter)

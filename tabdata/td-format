@@ -12,6 +12,8 @@ td-format I<TEMPLATE>
 
 =head1 DESCRIPTION
 
+Field names in I<TEMPLATE> are enclosed in curly brackets.
+
 =head1 OPTIONS
 
 =over 4

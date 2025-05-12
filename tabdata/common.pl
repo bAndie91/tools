@@ -140,4 +140,17 @@ sub kvpair_unescape
 	return $s;
 }
 
+sub gen_fieldname_barewords_code
+{
+	my $fieldnames = shift;  # ARRAY ref
+	my $code = '';
+	for my $col (grep {/^[A-Z_][A-Z0-9_]*$/} @$fieldnames)
+	{
+		# define all (uppercase alpha-numeric only) column name as a subroutine
+		# which return the given field's value.
+		$code .= sprintf('sub %s { $F{"%s"} };', $col, $col);
+	}
+	return $code;
+}
+
 1;

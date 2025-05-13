@@ -8,7 +8,7 @@ td-filter - Show only those records from the input tabular data stream which mat
 
 =head1 USAGE
 
-td-filter [I<OPTIONS>] [--] I<COLUMN> I<OPERATOR> I<R-VALUE> [[B<or>] I<COLUMN> I<OPERATOR> I<R-VALUE> [[B<or>] ...]]
+td-filter [I<OPTIONS>] [--] I<COLUMN> I<OPERATOR> [I<R-VALUE> | B<field> I<R-COLUMN>] [[B<or>] I<COLUMN> I<OPERATOR> [I<R-VALUE> | B<field> I<R-COLUMN>] [[B<or>] ...]]
 
 td-filter [I<OPTIONS>] --perl I<EXPR>
 
@@ -16,6 +16,8 @@ td-filter [I<OPTIONS>] --perl I<EXPR>
 
 Pass through those records which match at least one of the conditions (inclusive OR).
 A condition consists of a triplet of I<COLUMN>, I<OPERATOR>, and I<R-VALUE>.
+Instead of I<R-VALUE>, may put B<field> I<R-COLUMN>,
+in which case I<COLUMN> is compared not to a constant r-value, but to the value of I<R-COLUMN> field per each row.
 You may put together conditions conjunctively (AND) by chaining multiple td-filter(1) commands by shell pipes.
 Example:
 
@@ -280,7 +282,7 @@ sub parse_operator
 	{
 		return {operator => $args[0], remaining_args => [@args[1..$#args]]};
 	}
-	die "valid operator expected; found this: @args\n";
+	die "valid operator expected; found this: '@args'\n";
 }
 
 
@@ -313,13 +315,24 @@ else
 		my $rvalue = shift @ARGV;
 		die "$0: missing r-value for: $column $operator\n" if not defined $rvalue;
 		
-		if($operator ~~ [qw/== != <= >= < >/] and $rvalue !~ /^[+-]?[0-9]\d*(.\d+|)(E[+-]?\d+|)$/i)
+		my $ref_field;
+		if($rvalue eq 'field')
+		{
+			$rvalue = undef;
+			$ref_field = shift @ARGV;
+			die "$0: missing r-value field name for: $column $operator\n" if not defined $ref_field;
+		}
+		
+		if(defined $rvalue and $operator ~~ [qw/== != <= >= < >/] and $rvalue !~ /^[+-]?[0-9]\d*(.\d+|)(E[+-]?\d+|)$/i)
 		{
 			warn "$0: operator ($operator) is numeric but r-value ($rvalue) is not\n" if $OptWarnNonNumericRValue;
 			exit -1 if $OptFailNonNumericRValue;
 		}
 		
-		push @Filter, {'field'=>$column, 'operator'=>$operator, 'negation'=>$negation, 'value'=>$rvalue, 'wholeword'=>$wholeword};
+		push @Filter, {
+			'field'=>$column, 'operator'=>$operator, 'negation'=>$negation,
+			'value'=>$rvalue, 'value_ref_field'=>$ref_field, 'wholeword'=>$wholeword,
+		};
 	}
 }
 
@@ -332,14 +345,16 @@ if(defined $Expr)
 
 if(not defined $Expr)
 {
+	my $valid_colnames = join ", ", @Header;
 	for my $filter (@Filter)
 	{
-		my $colname = $filter->{'field'};
-		if(not exists $Header{$colname})
+		for my $colname ($filter->{'field'}, $filter->{'value_ref_field'})
 		{
-			my $cols = join ", ", @Header;
-			warn "$0: $colname: no such column. known columns: $cols\n" if $OptWarnBadColumnNames;
-			exit 3 if $OptFailBadColumnNames;
+			if(defined $colname and not exists $Header{$colname})
+			{
+				warn "$0: $colname: no such column. known columns: $valid_colnames\n" if $OptWarnBadColumnNames;
+				exit 3 if $OptFailBadColumnNames;
+			}
 		}
 	}
 }
@@ -367,7 +382,15 @@ while(not eof STDIN)
 		for my $filter (@Filter)
 		{
 			my $left_data = exists $Header{$filter->{'field'}} ? $Field[$Header{$filter->{'field'}}] : '';
-			my $right_data = $filter->{'value'};
+			my $right_data;
+			if(defined $filter->{'value'})
+			{
+				$right_data = $filter->{'value'};
+			}
+			else
+			{
+				$right_data = $Field[$Header{$filter->{'value_ref_field'}}];
+			}
 			my $operator = $filter->{'operator'};
 			my $result;
 			

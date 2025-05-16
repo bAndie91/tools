@@ -9,6 +9,7 @@ cd "$mydir" || exit -1
 
 for repo in ~/src/*/
 do
+	(
 	author=''
 	if [ -d "$repo/.git" ]
 	then
@@ -32,4 +33,7 @@ do
 			echo "unknown author of $repo" >&2
 		fi
 	fi
+	) &
 done
+
+wait

@@ -1,6 +1,7 @@
 # Tabdata commands
 
 - [csv2td](#csv2td)
+- [ics2td](#ics2td)
 - [kvpairs2td](#kvpairs2td)
 - [mrkv2td](#mrkv2td)
 - [td2html](#td2html)
@@ -10,12 +11,15 @@
 - [td-alter](#td-alter)
 - [td-collapse](#td-collapse)
 - [td-disamb-headers](#td-disamb-headers)
+- [td-env](#td-env)
 - [td-expand](#td-expand)
 - [td-filter](#td-filter)
+- [td-format](#td-format)
 - [td-gnuplot](#td-gnuplot)
 - [td-keepheader](#td-keepheader)
 - [td-lpstat](#td-lpstat)
 - [td-ls](#td-ls)
+- [td-nup](#td-nup)
 - [td-pivot](#td-pivot)
 - [td-ps](#td-ps)
 - [td-rename](#td-rename)
@@ -63,6 +67,10 @@ Why would you go back to ugly CSV when you have nice shiny Tabdata?
 ## SEE ALSO
 
 [csv2](#csv2)(1), [mrkv2td](#mrkv2td)(1)
+
+# ics2td
+
+
 
 # kvpairs2td
 
@@ -119,6 +127,11 @@ and it's usual for all records to have all fields anyways.
     Default is TAB (`\t`).
 
 - -g, --multiline-glue _STRING_
+- -i, --ignore-non-existing-columns
+- -w, --warn-non-existing-columns
+- -c, --column _NAME_
+
+    Repeatable option.
 
 ## SEE ALSO
 
@@ -170,6 +183,12 @@ td2mrkv - Transform tabular data into multi-record key-value (MRKV) format.
 
     String to separate field name from content.
     Default is TAB (`\t`).
+
+- -K, --sort-keys
+
+    Note, sorting by keys does not support duplicated column names.
+
+- -V, --sort-values
 
 ## EXAMPLE
 
@@ -318,7 +337,7 @@ reorder the columns by [td-select](#td-select)(1). Eg. `td-select KEYCOLUMN +RES
         16 | pause  | 11:04 |
         16 | resume | 11:05 |
         
-        td-collapse -u EVENT
+        td-collapse -u EVENT -z
         
         COUNT | ID | EVENT        | TIME        | TIME_start | TIME_end | STATUS | STATUS_start | STATUS_end
         2     | 15 |              |             | 10:00      | 10:05    |        |              | ok
@@ -331,6 +350,15 @@ reorder the columns by [td-select](#td-select)(1). Eg. `td-select KEYCOLUMN +RES
     by _STR_ string.
     See example at **-u** option description.
     Default is underscore `_`.
+
+- -k, --keep-equivalent-cells-united
+
+    Don't repeat the original cells' content
+    in the collapsed cell if all of the original cell are the same.
+
+- -z, --empty-distributed-cells
+
+    Clear cells of which data moved to other columns by **-u** option.
 
 ## EXAMPLES
 
@@ -397,6 +425,52 @@ Output:
 
     PID   PID3    PID2    PID4    USER    CMD
 
+# td-env
+
+## NAME
+
+td-env - Add tabular data fields to environment and invoke a command for each record
+
+## SYNOPSIS
+
+td-env \[_OPTIONS_\] \[--\] _COMMAND_ \[_ARGS_\]
+
+## DESCRIPTION
+
+Takes Tabular Data on its input
+and adding fields to the environment for _COMMAND_
+and executes it for each input record.
+
+## EXAMPLE
+
+Data:
+
+    | username | score |
+    |----------|-------|
+    | joe      | 1.0   |
+    | james    | 2.1   |
+    | jeremy   | n/a   |
+
+Command:
+
+    td-env sh -c 'Hi $username, your score is $score!'
+
+Output:
+
+    Hi joe, your score is 1.0!
+    Hi james, your score is 2.1!
+    Hi jeremy, your score is n/a!
+
+## OPTIONS
+
+- -e, --errexit
+
+    Stop processing records once a command failed.
+
+## SEE ALSO
+
+[env](#env)(1), [environ](#environ)(7)
+
 # td-expand
 
 ## NAME
@@ -454,7 +528,7 @@ td-filter - Show only those records from the input tabular data stream which mat
 
 ## USAGE
 
-td-filter \[_OPTIONS_\] \[--\] _COLUMN_ _OPERATOR_ _R-VALUE_ \[\[**or**\] _COLUMN_ _OPERATOR_ _R-VALUE_ \[\[**or**\] ...\]\]
+td-filter \[_OPTIONS_\] \[--\] _COLUMN_ _OPERATOR_ \[_R-VALUE_ | **field** _R-COLUMN_\] \[\[**or**\] _COLUMN_ _OPERATOR_ \[_R-VALUE_ | **field** _R-COLUMN_\] \[\[**or**\] ...\]\]
 
 td-filter \[_OPTIONS_\] --perl _EXPR_
 
@@ -462,6 +536,8 @@ td-filter \[_OPTIONS_\] --perl _EXPR_
 
 Pass through those records which match at least one of the conditions (inclusive OR).
 A condition consists of a triplet of _COLUMN_, _OPERATOR_, and _R-VALUE_.
+Instead of _R-VALUE_, may put **field** _R-COLUMN_,
+in which case _COLUMN_ is compared not to a constant r-value, but to the value of _R-COLUMN_ field per each row.
 You may put together conditions conjunctively (AND) by chaining multiple [td-filter](#td-filter)(1) commands by shell pipes.
 Example:
 
@@ -508,7 +584,7 @@ These operators are supported, semantics are the same as in Perl, see [perlop](#
 
     == != <= >= < > =~ !~ eq ne gt lt
 
-For your convenience, not to bother with escaping, you may also use these operators as alternatives to the canonical ones above:
+For your convenience, not to bother with character escaping, you may also use these operators as alternatives to the canonical ones above:
 
 - is
 - = _(single equal sign)_
@@ -595,6 +671,54 @@ If there is no _COLUMN_ column in the input data, it's silently considered empty
 ## REFERENCES
 
 [td-filter](#td-filter)(1) is analogous to SQL WHERE.
+
+# td-format
+
+## NAME
+
+td-format - Print formatted lines per Tabular Data record
+
+## SYNOPSIS
+
+td-format _TEMPLATE_
+
+## DESCRIPTION
+
+Field names in _TEMPLATE_ are enclosed in curly brackets.
+
+## OPTIONS
+
+- --nofield=\[**empty**|**leave**|**name**|**skip-record**|**fail**\]
+
+    How to resolve non-existent field names in template variables?
+
+    - **empty**
+
+        Replace with empty string.
+        This is the default.
+
+    - **leave**
+
+        Leave the `{field_name`}> string there unresolved.
+
+    - **name**
+
+        Replace with the field name itself.
+
+    - **skip-record**
+
+        Don't output anything for the given record.
+        Continue with the next one.
+
+    - **fail**
+
+        Exit the program immediately with error code.
+
+- -n
+
+    No newline.
+
+## SEE ALSO
 
 # td-gnuplot
 
@@ -776,7 +900,17 @@ including NUL, vertical-tab, and form-feed are left as-is.
 
 ## SEE ALSO
 
-[td-select](#td-select)(1), [td-filter](#td-filter)(1), [td-trans-ls](#td-trans-ls)(1)
+[td-select](#td-select)(1), [td-filter](#td-filter)(1), [td-trans-ls](#td-trans-ls)(1), [lr](https://github.com/leahneukirchen/lr)
+
+# td-nup
+
+## NAME
+
+td-nup - Transform lines of text into tabluar data by unroll N lines into a row
+
+## OPTIONS
+
+- -n _NUM_
 
 # td-pivot
 

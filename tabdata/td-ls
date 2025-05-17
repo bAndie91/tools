@@ -205,7 +205,7 @@ if($show_header)
 	@header = ();
 	push @header, map {uc} @fields;
 	push @header, @extra_macros;
-	print join($FS, @header).$RS;
+	output_record(@header);
 }
 
 # since we can't ask find(1) to escape meta chars properly

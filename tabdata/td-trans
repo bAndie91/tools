@@ -4,7 +4,7 @@
 
 =head1 NAME
 
-td-trans - Transform whitespace-delimited into TAB-delimited lines ignoring sorrounding whitespace.
+td-trans - Transform whitespace-delimited into TAB-delimited lines ignoring sorrounding spaces.
 
 =head1 OPTIONS
 
@@ -31,8 +31,8 @@ do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 while(my $line = <STDIN>)
 {
 	chomp $line;
-	$line =~ s/^\s*//g;
-	$line =~ s/\s*$//g;
+	$line =~ s/^[ ]*//g;
+	$line =~ s/[ ]*$//g;
 
 	if($. == 1 and not defined $OptMaxColumns)
 	{
@@ -43,5 +43,5 @@ while(my $line = <STDIN>)
 	
 	my @Fields = split /\s+/, $line, $OptMaxColumns;
 	
-	print join($FS, @Fields).$RS;
+	output_record(@Fields);
 }

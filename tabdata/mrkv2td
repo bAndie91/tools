@@ -65,11 +65,11 @@ sub flush_record
 	
 	if(not $header_sent)
 	{
-		print join($FS, map {escape_tabdata($_)} @Headers).$RS;
+		output_record(@Headers);
 		$header_sent = 1;
 	}
 	
-	print join($FS, map { escape_tabdata($record->{$_}) } @Headers).$RS;
+	output_record(map { $record->{$_} } @Headers);
 }
 
 @Headers = ();

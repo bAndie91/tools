@@ -68,7 +68,7 @@ $Column[$#Column]->{width} = undef if scalar @Column;
 
 if($OptShowHeader and @Column)
 {
-	print join($FS, map {$_->{name}} @Column).$RS;
+	output_record(map {$_->{name}} @Column);
 }
 
 while(my $line = <STDIN>)
@@ -83,5 +83,5 @@ while(my $line = <STDIN>)
 		push @Fields, $field;
 	}
 	
-	print join($FS, @Fields).$RS;
+	output_record(@Fields);
 }

@@ -454,6 +454,6 @@ while(not eof STDIN)
 	
 	if($pass)
 	{
-		print join($FS, @Field).$RS;
+		output_record(@Field);
 	}
 }

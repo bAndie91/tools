@@ -12,35 +12,50 @@ td-nup - Transform lines of text into tabluar data by unroll N lines into a row
 
 =item -n I<NUM>
 
+=item -E, --no-escape
+
+Don't escape text.
+By default, td-nup(1) assumes input lines are raw text data,
+thus need to escape tabular data special chars in them.
+
 =back
 
 =cut
 
 $OptNup = undef;
+$OptEscape = 1;
 %OptionDefs = (
 	'n=i' => \$OptNup,
+	'E|no-escape' => sub { $OptEscape = 0; },
 );
 
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 
+sub outp
+{
+	local $_ = shift;
+	$_ = escape_tabdata($_) if $OptEscape;
+	print $_ . $RS;
+}
+
 $n = 0;
 while(<STDIN>)
 {
-        chomp;
-        $output .= "\t" if defined $output;
-        $output .= $_;
-        $n++;
-        if($n == $OptNup)
-        {
-                print "$output\n";
-                undef $output;
-                $n = 0;
-        }
+	chomp;
+	$output .= $FS if defined $output;
+	$output .= $_;
+	$n++;
+	if($n == $OptNup)
+	{
+		outp($output);
+		undef $output;
+		$n = 0;
+	}
 }
 
 if(defined $output)
 {
-        print "$output\n";
+	outp($output);
 }

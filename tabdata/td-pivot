@@ -35,6 +35,5 @@ while(not eof STDIN)
 
 for my $cnum (0..$max_col)
 {
-	print join $FS, map {$_->[$cnum]} @data;
-	print $RS;
+	output_record(map {$_->[$cnum]} @data);
 }

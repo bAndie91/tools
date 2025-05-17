@@ -180,7 +180,7 @@ sub commit_group
 				}
 			}
 		}
-		print join($FS, "COUNT", @Header).$RS;
+		output_record("COUNT", @Header);
 	}
 	
 	if($OptDistUniqueField)

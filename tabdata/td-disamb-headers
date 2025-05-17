@@ -44,6 +44,6 @@ for my $colname (@Header)
 }
 @Header = @new_Columns;
 
-print join($FS, @Header).$RS;
+output_record(@Header);
 
 print while <STDIN>;

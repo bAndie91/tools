@@ -74,6 +74,11 @@ sub read_record
 	return @record;
 }
 
+sub output_record
+{
+	print join($FS, map { escape_tabdata($_) } @_).$RS;
+}
+
 sub escape_tabdata
 {
 	my $arbitrary_data = shift;

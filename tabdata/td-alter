@@ -97,7 +97,7 @@ while(scalar @ARGV)
 
 if($OptShowHeader and @Header)
 {
-	print join($FS, @Header).$RS;
+	output_record(@Header);
 }
 
 while($line = <STDIN>)
@@ -124,5 +124,5 @@ while($line = <STDIN>)
 		$F[$idx] = '' if not defined $F[$idx];
 	}
 	
-	print join($FS, @F).$RS;
+	output_record(@F);
 }

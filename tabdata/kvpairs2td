@@ -149,12 +149,12 @@ while(my $Line = <STDIN>)
 	{
 		push @Headers, grep { not $_ ~~ @Headers } @OptPredefColumns, $OptRestColumnName;
 		$rest_column_idx = $#Headers;
-		print join($FS, map {escape_tabdata($_)} @Headers).$RS;
+		output_record(@Headers);
 	}
 	
 	$record[$rest_column_idx] = $Rest . $Line;
 	
-	print join($FS, map {escape_tabdata($_)} @record) . $RS;
+	output_record(@record);
 	
 	$RN++;
 }

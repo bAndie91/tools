@@ -150,7 +150,7 @@ if($OptShowHeader and @Columns)
 	{
 		push @Output, defined $Header{$col} ? $Header[$Header{$col}] : '';
 	}
-	print join($FS, @Output).$RS;
+	output_record(@Output);
 }
 
 
@@ -166,5 +166,5 @@ while(not eof STDIN)
 		push @Output, defined $Header{$col} ? $Input[$Header{$col}] : '';
 	}
 	
-	print join($FS, @Output).$RS;
+	output_record(@Output);
 }

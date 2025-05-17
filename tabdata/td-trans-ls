@@ -59,7 +59,7 @@ if($first_line !~ /^\S+ \d+$/)
 @Headers = qw/INODE MODE LINKS OWNER GROUP SIZE MAJOR MINOR DATETIME NAME SYMLINKTARGET/;
 push @Headers, 'DIRECTORY' if $recursive_mode;
 
-print join($FS, @Headers).$/;
+output_record(@Headers);
 
 $mode_links_owner_group = qr/(\S+)\s+(\S+)\s+(\S+)\s+(\S+)/;
 
@@ -110,5 +110,5 @@ while(<STDIN>)
 	unshift @Fields, $inode;
 	push @Fields, $current_directory if $recursive_mode;
 	
-	print join($FS, @Fields).$RS;
+	output_record(@Fields);
 }

@@ -98,10 +98,10 @@ sub write_record
 	
 	if($RN == 0)
 	{
-		print join($FS, map {escape_tabdata($_)} @columns) . $RS;
+		output_record(@columns);
 	}
 	
-	print join($FS, map {escape_tabdata($record->{$_})} @columns) . $RS;
+	output_record(map {$record->{$_}} @columns);
 }
 
 

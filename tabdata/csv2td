@@ -62,5 +62,5 @@ $Data = csv(in=>\*STDIN, %csv_opts);
 
 for my $row (@$Data)
 {
-	print join($FS, map {escape_tabdata($_)} @$row).$RS;
+	output_record(@$row);
 }

@@ -45,6 +45,6 @@ for my $oldname (keys %renames)
 	}
 }
 
-print join($FS, @Header).$RS;
+output_record(@Header);
 
 print while <STDIN>;

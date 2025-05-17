@@ -68,7 +68,7 @@ else
 	$first_line = undef;
 }
 
-print join($FS, @Headers).$RS;
+output_record(@Headers);
 print $first_line.$RS if defined $first_line;
 while(<STDIN>)
 {

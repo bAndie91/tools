@@ -68,7 +68,7 @@ do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 
 process_header(scalar <STDIN>);
-print join($FS, @Header).$RS;
+output_record(@Header);
 
 while(not eof STDIN)
 {
@@ -85,6 +85,6 @@ while(not eof STDIN)
 	{
 		my @row_copy = @row;
 		$row_copy[$Header{$OptFieldName}] = $part;
-		print join($FS, @row_copy) . $RS;
+		output_record(@row_copy);
 	}
 }

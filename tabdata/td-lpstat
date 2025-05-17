@@ -66,10 +66,10 @@ while(<$pipe>)
 #warn Dumper \%Printer;
 
 @Headers = qw/PRINTER DEFAULT STATUS SINCE STAGE JOB ACCEPTANCE ACCEPTANCE_SINCE REASON/;
-print join($FS, @Headers).$RS;
+output_record(@Headers);
 
 for my $printer (sort {$a cmp $b} keys %Printer)
 {
 	$Printer{$printer}->{'DEFAULT'} = $printer eq $default_printer ? "yes" : "no";
-	print join($FS, map {escape_tabdata($Printer{$printer}->{$_})} @Headers).$RS;
+	output_record(map {$Printer{$printer}->{$_}} @Headers);
 }

@@ -10,7 +10,12 @@ td-trans - Transform whitespace-delimited into TAB-delimited lines ignoring sorr
 
 =over 4
 
-=item -m, --max-columns I<NUM>
+=item -n, --min-columns I<NUM>
+
+Register at least this many columns
+even if the first records has less than this many.
+
+=item -x, --max-columns I<NUM>
 
 Maximum number of columns.
 The I<NUM>th column may have any whitespace.
@@ -20,9 +25,11 @@ By default it's the number of fields in the header (first line).
 
 =cut
 
+$OptMinColumns = undef;
 $OptMaxColumns = undef;
 %OptionDefs = (
-	'm|max-columns=i' => \$OptMaxColumns,
+	'n|min-columns=i' => \$OptMinColumns,
+	'x|max-columns=i' => \$OptMaxColumns,
 );
 
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
@@ -33,15 +40,17 @@ while(my $line = <STDIN>)
 	chomp $line;
 	$line =~ s/^[ ]*//g;
 	$line =~ s/[ ]*$//g;
-
+	
+	my @Fields = split /\s+/, $line, $OptMaxColumns;
+	
 	if($. == 1 and not defined $OptMaxColumns)
 	{
 		# the first line considered header,
 		# and the number of fields dictates (at most) how many fields are there in the rest of the stream.
-		$OptMaxColumns = scalar split /\s+/, $line;
+		$OptMaxColumns = scalar @Fields;
+		# if the caller wants more fields, let them.
+		$OptMaxColumns = $OptMinColumns if defined $OptMinColumns and $OptMaxColumns < $OptMinColumns;
 	}
-	
-	my @Fields = split /\s+/, $line, $OptMaxColumns;
 	
 	output_record(@Fields);
 }

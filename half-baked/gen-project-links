@@ -4,10 +4,21 @@
 # and place these symlinks in directories names after the git project's author,
 # which is generally the github owner's username.
 
+if [ $# = 0 ]
+then
+	dirs=(~/src/*/)
+else
+	dirs=()
+	for dir in "$@"
+	do
+		dirs+=("$(readlink -f "$dir")")
+	done
+fi
+
 mydir=`dirname "$0"`
 cd "$mydir" || exit -1
 
-for repo in ~/src/*/
+for repo in "${dirs[@]}"
 do
 	(
 	author=''

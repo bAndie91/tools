@@ -93,16 +93,18 @@ msg - Write to given user's open terminals
 multicmd - Run multiple commands in series
 multithrottler - Run given command if not reached the defined rate limit
 mysql-fix-orphan-privileges.php - Suggest SQL commands to clean up unused records in system tables which hold permission data
+netrc - manage ~/.netrc file
 noacute - Strip diacritics (acute, umlaut, ...) from letters on the input stream
 nocomment - remove comment lines from input stream
-nopath - Run command by disregarding some PATH directories
 notashell - A non-interactive shell lacking of any shell syntax
 oded - On-disk editor - edit text files by commands directly from shell
+ordinargs - Replace non-ordinary file arguments to ordinary ones
 organizebydate - Rename files based on their date-time
 palemoon-current-url - Display the webpage's URL which is currently open in Palemoon web browser
 pararun - run commands parallelly
 parsel - Select parts of a HTML document based on CSS selectors
 partial - Show an earlier started long-running command's partial output
+pathmod - Run command with a modified PATH
 paths2indent - Transform list of filesystem paths to an indented list of the leaf elements
 pcut - Cut given fields of text input separated by the given Perl regex
 perl-repl - Read-Evaluate-Print-Loop wrapper for perl(1)

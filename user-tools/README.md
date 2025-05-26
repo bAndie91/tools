@@ -1,1 +1,1 @@
-See [descriptions.txt](descriptions).
+See [descriptions](descriptions.txt).

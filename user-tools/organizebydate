@@ -251,6 +251,11 @@ set_file_attr_env()
 	done
 }
 
+echone()
+{
+	if [ -n "$*" ]; then echo "$@"; fi
+}
+
 
 while [ $# -gt 0 ]
 do
@@ -491,7 +496,7 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 					solution=${resolver_stdout##*$'\n'}  # take the last line only
 					resolver_stdout=${resolver_stdout:0:-${#solution}}  # keep everything except the last line
 					resolver_stdout=${resolver_stdout%$'\n'}  # strip 1 trailing newline again
-					if [ -n "$resolver_stdout" ]; then echo "$resolver_stdout"; fi
+					echone "$resolver_stdout"
 					
 					if [ "$solution" = skip ]
 					then
@@ -510,7 +515,7 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 						continue
 					fi
 				else
-					echo "$resolver_stdout"
+					echone "$resolver_stdout"
 					warnx "conflict resolver error $resolver_err: $file"
 					failed "conflict resolve" "$file"
 					continue

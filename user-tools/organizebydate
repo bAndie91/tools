@@ -12,6 +12,7 @@ all_files_type=''
 datetime_from_embedmeta=''  # determine datetime from embedded metadata?
 fallback_to_filetime=''
 export ORGANIZEBYDATE_MODE=copy
+custom_handler=''
 set_mtime=''
 set_atime=''
 overwrite_opt='--no-clobber'
@@ -63,7 +64,7 @@ File's directory path
 
 =item %.
 
-File's name itself
+File's name itself (basename)
 
 =back
 
@@ -76,6 +77,18 @@ Default is copy.
 
 Overwrite already existing target files.
 Default is to silently ignore them.
+Note, this affects only B<--copy> and B<--move>, not B<--handler>.
+
+=item --handler I<PROG>
+
+Execute I<PROG> to handle files 1-by-1 instead of internal copy or move.
+You may do C<< --handler "rsync -Pvit" --template I<HOSTNAME>:I<PATH> >>
+for fast upload or implement any file transfer method here.
+Arguments passed (after those which are given in I<PROG>) are
+the source file path and the target file path.
+Conflicting target path is still checked and resolver is run before I<PROG>
+if B<--conflict-resolver-cmd> or B<--conflict-resolver-script> is specified;
+if not, I<PROG> should implement conflicting file name resolution logic.
 
 =item --conflict-resolver-cmd I<CMD>, --conflict-resolver-script I<SCRIPT>
 
@@ -329,6 +342,11 @@ do
 	(--move)
 		ORGANIZEBYDATE_MODE=move
 		;;
+	(--handler)
+		shift
+		custom_handler=$1
+		ORGANIZEBYDATE_MODE=custom
+		;;
 	(--overwrite)
 		overwrite_opt=''
 		;;
@@ -457,7 +475,7 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 			continue
 		fi
 		
-		target=`date +"$target_template" -d "@$filetimestamp" | sed -e "s,%@,${basedir//,/\\,},g; s,%\.,${basename//,/\\,},g;"`
+		target=`date +"$target_template" -d "@$filetimestamp" | sd -F '%@' "$basedir" | sd -F '%.' "$basename"`
 		
 		if [ "$dryrun" = 1 ]
 		then
@@ -468,6 +486,7 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 			if [ "${target: -1}" = / ]
 			then
 				target_dir=$target
+				target="$target$basename"
 			else
 				target_dir=`dirname "$target"`
 			fi
@@ -522,12 +541,17 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 				fi
 			fi
 			
-			if [ "$ORGANIZEBYDATE_MODE" = copy ]
-			then
-				cp $verbose $local_overwrite_opt "$file" "$target" || failed copy "$file"
-			else
+			case "$ORGANIZEBYDATE_MODE" in
+			(copy)
+				cp $verbose $local_overwrite_opt --preserve=timestamps "$file" "$target" || failed copy "$file"
+				;;
+			(move)
 				mv $verbose $local_overwrite_opt "$file" "$target" || failed move "$file"
-			fi
+				;;
+			(custom)
+				command $custom_handler "$file" "$target" || failed handle "$file"
+				;;
+			esac
 			
 			if [ "$set_atime" = 1 -o "$set_mtime" = 1 ]
 			then

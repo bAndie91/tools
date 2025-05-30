@@ -97,6 +97,25 @@ Environment variables passed:
 
 B<copy> or B<move>
 
+=item SOURCE_FILE_MTIME
+
+=item TARGET_FILE_MTIME
+
+=item SOURCE_FILE_CTIME
+
+=item TARGET_FILE_CTIME
+
+=item SOURCE_FILE_ATIME
+
+=item TARGET_FILE_ATIME
+
+=item SOURCE_FILE_SIZE
+
+=item TARGET_FILE_SIZE
+
+Some attributes of the source and target files to help the resolver.
+File time attributes are in unix timestamp, size is in bytes.
+
 =back
 
 Non-zero exit status is considered failure (and recorded if B<--faillog> is given).
@@ -127,6 +146,9 @@ remove source file and signal B<skip> - this is useful in B<move> mode.
 
 If you want to ask the user interactively, don't read from stdin(3),
 rather re-open the tty(4).
+
+stdout(3) is buffered and then echoed except the last line.
+stderr(3) is let through as-is.
 
 =item -c, -m, -a, --ctime, --mtime, --atime
 
@@ -214,6 +236,19 @@ failed()
 	then
 		echo "$file" >> "$faillog"
 	fi
+}
+
+set_file_attr_env()
+{
+	local varprefix=$1
+	local path=$2
+	local stat=(`stat -c '%X %Y %Z %s' "$path"`)
+	local attridx=([ATIME]=0 [MTIME]=1 [CTIME]=2 [SIZE]=3)
+	local attr
+	for attr in ATIME MTIME CTIME SIZE
+	do
+		declare -x ${varprefix}_FILE_${attr}=${stat[${attridx[$attr]}]}
+	done
 }
 
 
@@ -437,20 +472,26 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 			
 			if [ -e "$target" -a \( -n "$conflict_resolver_cmd" -o -n "$conflict_resolver_script" \) ]
 			then
+				set_file_attr_env SOURCE "$file"
+				set_file_attr_env TARGET "$target"
+				
 				set +e
 				if [ -n "$conflict_resolver_cmd" ]
 				then
-					solution=`command $conflict_resolver_cmd "$file" "$target" </dev/null`
-					err=$?
+					resolver_stdout=`command $conflict_resolver_cmd "$file" "$target" </dev/null`
+					resolver_err=$?
 				else
-					solution=`bash -c "$conflict_resolver_script" -- "$file" "$target" </dev/null`
-					err=$?
+					resolver_stdout=`bash -c "$conflict_resolver_script" -- "$file" "$target" </dev/null`
+					resolver_err=$?
 				fi
 				set -e
-				if [ $err = 0 ]
+				if [ $resolver_err = 0 ]
 				then
-					solution=${solution%$'\n'}  # strip 1 trailing newline
-					solution=${solution##*$'\n'}  # keep last line only
+					resolver_stdout=${resolver_stdout%$'\n'}  # strip 1 trailing newline
+					solution=${resolver_stdout##*$'\n'}  # take the last line only
+					resolver_stdout=${resolver_stdout:0:-${#solution}}  # keep everything except the last line
+					resolver_stdout=${resolver_stdout%$'\n'}  # strip 1 trailing newline again
+					if [ -n "$resolver_stdout" ]; then echo "$resolver_stdout"; fi
 					
 					if [ "$solution" = skip ]
 					then
@@ -469,6 +510,8 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 						continue
 					fi
 				else
+					echo "$resolver_stdout"
+					warnx "command status $resolver_err"
 					failed "conflict resolve" "$file"
 					continue
 				fi

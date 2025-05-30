@@ -82,8 +82,9 @@ Note, this affects only B<--copy> and B<--move>, not B<--handler>.
 =item --handler I<PROG>
 
 Execute I<PROG> to handle files 1-by-1 instead of internal copy or move.
-You may do C<< --handler "rsync -Pvit" --template I<HOSTNAME>:I<PATH> >>
-for fast upload or implement any file transfer method here.
+You may do C<< --handler "rsync -Pvit --mkpath" --template I<HOSTNAME>:I<PATH> >>
+for fast upload (beware, B<< --set-I<*>time >> and conflicting filename checking work only on local paths)
+or implement any file transfer method here.
 Arguments passed (after those which are given in I<PROG>) are
 the source file path and the target file path.
 Conflicting target path is still checked and resolver is run before I<PROG>
@@ -490,7 +491,6 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 			else
 				target_dir=`dirname "$target"`
 			fi
-			[ -d "$target_dir" ] || mkdir -p "$target_dir"
 			
 			local_overwrite_opt=$overwrite_opt
 			
@@ -542,6 +542,9 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 			fi
 			
 			case "$ORGANIZEBYDATE_MODE" in
+			(copy|move)
+				[ -d "$target_dir" ] || mkdir -p "$target_dir"
+				;;&
 			(copy)
 				cp $verbose $local_overwrite_opt --preserve=timestamps "$file" "$target" || failed copy "$file"
 				;;

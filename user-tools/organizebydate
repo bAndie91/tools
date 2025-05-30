@@ -1,188 +1,428 @@
 #!/bin/bash
 
-true <<EOF
+
+target_template="%Y/%m/%d/"
+time_stat_field=Y
+time_field_name=mtime
+verbose=''
+dryrun=0
+minlevel=''
+maxlevel=''
+all_files_type=''
+datetime_from_embedmeta=''  # determine datetime from embedded metadata?
+fallback_to_filetime=''
+export ORGANIZEBYDATE_MODE=copy
+set_mtime=''
+set_atime=''
+overwrite_opt='--no-clobber'
+conflict_resolver_cmd=''
+conflict_resolver_script=''
+faillog=''
+failed_count=0
+
+
+print_usage()
+{
+cat <<EOF
 =pod
 
 =head1 NAME
 
 organizebydate - Rename files based on their date-time
 
+=head1 SYNOPSIS
+
+organizebydate [I<OPTIONS>] I<PATHS> [I<FIND-PARAM>]
+
+=head1 DESCRIPTION
+
+Organize files by date and time, typically into a directory structure.
+
+I<PATHS> are file and/or directory paths.
+
+I<FIND-PARAM> are find(1) expressions (predicates) to filter which files to work on,
+or B<-H>, B<-L>, or B<-P> options - see find(1).
+
+=head1 OPTIONS
+
+=over 4
+
+=item -t, --template I<TMPL>
+
+Target path name template using strftime(3) macros.
+
+Default: $target_template
+
+Extra macros accepted:
+
+=over 8
+
+=item %@
+
+File's directory path
+
+=item %.
+
+File's name itself
+
+=back
+
+=item --move, --copy
+
+Move or copy files.
+Default is copy.
+
+=item --overwrite
+
+Overwrite already existing target files.
+Default is to silently ignore them.
+
+=item --conflict-resolver-cmd I<CMD>, --conflict-resolver-script I<SCRIPT>
+
+Run a custom conflict resolver logic on already existing target files.
+Default is not ignore conflicts silently (or B<--overwrite>).
+It can be either a single word command or a command and its arguments if I<CMD> contains space
+(in this case you can not pass argument itself with spaces to the command
+because each space-delimited words go to separate arguments),
+or a whole bash(1) script if B<--conflict-resolver-script> is given.
+I<SCRIPT> is run as a separate command too, not in organizebydate(1)'s own context.
+
+Arguments passed to this command are the source file's path first
+and the target path secondly.
+Environment variables passed:
+
+=over 8
+
+=item ORGANIZEBYDATE_MODE
+
+B<copy> or B<move>
+
+=back
+
+Non-zero exit status is considered failure (and recorded if B<--faillog> is given).
+On zero exit status, the conflict resolution is get from the last line in the command's output.
+Don't write more than 1 newline char (C<\n>) to the very end.
+Conflict resolutions:
+
+=over 8
+
+=item B<skip>
+
+Don't copy (move) source file.
+
+=item B<proceed> [B<new-target>]
+
+Copy (move) source to target.
+Optionally with a new target path.
+This overwrites the target even if B<--overwrite> is not given,
+and both when and when you don't give a B<new-target>.
+
+=item other words are considered failure for now
+
+=back
+
+You may do extra steps in the conflict resolver's logic:
+eg. rename old target or move to an other directory and signal B<proceed>,
+remove source file and signal B<skip> - this is useful in B<move> mode.
+
+If you want to ask the user interactively, don't read from stdin(3),
+rather re-open the tty(4).
+
+=item -c, -m, -a, --ctime, --mtime, --atime
+
+Determining timestamps is based on the file's change-, modify-, or access-time.
+Default is mtime.
+
+=item -E, --email
+
+Files are raw Emails.
+
+Determining timestamps is based on the Date header.
+
+=item -J, --jpeg
+
+Files are JPEG images.
+
+Determining timestamps is based on EXIF tags.
+
+=item --fallback-to-filetime
+
+Fall back to file mtime (ctime, atime) if datetime info is not found in embedded metadata (RFC-822, Exif, ...)
+
+=item --set-mtime, --set-atime
+
+Set the copied (moved) files' mtime (atime) to the datetime used in the template.
+
+=item --faillog I<FILE>
+
+Save failed paths to I<FILE>.
+
+=item -v, --verbose
+
+Verbose mode
+
+=item -n, --dry-run
+
+Dry run. Do not copy (move) files.
+Output what would be done in C<< SOURCE -> TARGET >> for move
+or in C<< SOURCE => TARGET >> format for copy.
+It's knowningly error-prone for machine-parsing.
+
+=item --help, --pod, --troff
+
+Output documentation in plain text, POD, or troff (for man(1)) formats.
+
+=item -i, --min
+
+Minimum directory level to traverse.
+Equivalent to find(1)'s -mindepth option.
+
+=item -x, --max
+
+Maximum directory level to traverse.
+Equivalent to find(1)'s -maxdepth option.
+
+=back
+
+=head1 EXIT STATUS
+
+Exit 0 if all files processed successfuly.
+
+Exit 1 on parameter error.
+
+Exit 2 if at least 1 file is failed.
+
 =cut
 
 EOF
-
-
-target_template="%Y/%m/%d/"
-time_field=Y
-verbose=''
-dryrun=0
-minlevel=''
-maxlevel=''
-files_type=''
-copy=1
-do_touch=''
-overwrite_opt='--no-clobber'
-
-usage() {
-	echo -n "Usage: organizebydate [-t <template>] [-c | -m | -a] [-v] [-n] [[-i | -x] <num>] <files-and-directories> [<find-options>]
- --template, -t   Target path name using strftime(3) macros
-                  Default: $target_template
-                  Extra macros accepted:
-                   %@    File's directory path
-                   %.    File's name itself
- --move, --copy   Move or copy files, default is copy
- --overwrite      Enable overwrite, default is no-clobber
- --ctime, -c, --mtime, -m, --atime, -a
-                  Timestamping based on change-, modify- (default) or access-time
- --email, -E      Files are raw Emails, timestamping based on Date header
- --jpeg, -J       Files are JPEG images, timestamping based on EXIF tags
- --touch          Change copied (moved) files' mtime
- --verbose, -v    Verbose mode
- --dry-run, -n    Dry run
- --min, -i        Minimum directory level
- --max, -x        Maximum directory level
-"
 }
 
-while [ -n "$1" ]; do
+
+set -e
+. /usr/lib/tool/bash-utils
+set +e
+
+
+failed()
+{
+	local reason=$1
+	local file=$2
+	
+	failed_count=$[failed_count + 1]
+	warnx "$reason failed: $file"
+	if [ -n "$faillog" ]
+	then
+		echo "$file" >> "$faillog"
+	fi
+}
+
+
+while [ $# -gt 0 ]
+do
 	case "$1" in
-	-h|--help)
-		usage
+	(-h|--help)
+		print_usage | pod2text
+		exit $?
+		;;
+	(--pod)
+		print_usage
 		exit 0
 		;;
-	-t|--target|--template)
+	(--troff)
+		print_usage | pod2man
+		exit $?
+		;;
+	(-t|--target|--template)
 		shift
 		target_template="$1"
 		;;
-	-c|--ctime)
-		time_field=Z
+	(-c|--ctime)
+		time_stat_field=Z
+		time_field_name=ctime
 		;;
-	-m|--mtime)
-		time_field=Y
+	(-m|--mtime)
+		time_stat_field=Y
+		time_field_name=mtime
 		;;
-	-a|--atime)
-		time_field=X
+	(-a|--atime)
+		time_stat_field=X
+		time_field_name=atime
 		;;
-	-E|--rfc822|--email)
-		files_type=email
+	(-E|--rfc822|--email)
+		all_files_type=email
+		datetime_from_embedmeta=1
 		;;
-	-J|--jpeg)
-		files_type=jpeg
+	(-J|--jpeg)
+		all_files_type=jpeg
+		datetime_from_embedmeta=1
 		;;
-	--touch)
-		do_touch=1
+	(--fallback-to-filetime)
+		fallback_to_filetime=1
 		;;
-	-v|--verbose)
+	(--faillog)
+		shift
+		faillog=$1
+		;;
+	(--set-atime)
+		set_atime=1
+		;;
+	(--set-mtime)
+		set_mtime=1
+		;;
+	(-v|--verbose)
 		verbose=-v
 		;;
-	-n|--dry-run)
+	(-n|--dry-run)
 		dryrun=1
 		;;
-	-i|--min)
+	(-i|--min)
 		shift
 		minlevel=$1
 		;;
-	-x|--max)
+	(-x|--max)
 		shift
 		maxlevel=$1
 		;;
-	--move)
-		copy=0
+	(--copy)
+		ORGANIZEBYDATE_MODE=copy
 		;;
-	--overwrite)
+	(--move)
+		ORGANIZEBYDATE_MODE=move
+		;;
+	(--overwrite)
 		overwrite_opt=''
 		;;
-	--copy)
-		copy=1
+	(--conflict-resolver-cmd)
+		if [ -n "$conflict_resolver_script" ]
+		then
+			errx 1 "conflict-resolver-cmd is mutually exclusive with conflict-resolver-script"
+		fi
+		shift
+		conflict_resolver_cmd=$1
 		;;
-	-*)
-		echo "$0: unknown option: $1" >&2
-		exit 1
+	(--conflict-resolver-script)
+		if [ -n "$conflict_resolver_cmd" ]
+		then
+			errx 1 "conflict-resolver-script is mutually exclusive with conflict-resolver-cmd"
+		fi
+		shift
+		conflict_resolver_script=$1
 		;;
-	--)
+	(-*)
+		errx 1 "unknown option: $1"
+		;;
+	(--)
 		shift
 		break
 		;;
-	*)
+	(*)
 		break
 		;;
 	esac
 	shift
 done
 
-if [ -z "$1" ]; then
-	usage
+if [ $# = 0 ]
+then
+	print_usage | pod2text >&2
 	exit 1
 fi
 
-find "$@" ${minlevel:+-mindepth $minlevel} ${maxlevel:+-maxdepth $maxlevel} -type f -print | \
+
+find_opts=()
+find_args=()
+
+while [ $# -gt 0 ]
+do
+	case "$1" in
+	(-H|-L|-P)	find_opts+=("$1");;
+	(*)			find_args+=("$1");;
+	esac
+	shift
+done
+
+find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxlevel:+-maxdepth $maxlevel} -type f -print0 |\
 {
 	set -e
-	while read file
+	while read -d '' file
 	do
 		basedir=`dirname "$file"`
 		basename=`basename "$file"`
 		datetime=''
-		filetime=''
+		filetimestamp=''
+		missing_embedmeta=''
 		
-		case "$files_type" in
-		email)
-			datetime=`grep -m 1 -i -E ^Date: "$file" | cut -d' ' -f2-`
-			;;
-		jpeg)
-			if type exif >/dev/null 2>&1
-			then
-				# Date/Time Original, Create Date, Modify Date, Date
-				for tagid in 0x9003 0x9004 0x0132 0x0006
-				do
-					datetime=`exif -m -t $tagid "$file" || true`
-					if [ -n "$datetime" ]
-					then
-						break
-					fi
-				done
-			fi
-			if [ -z "$datetime" ] && type exiftool >/dev/null 2>&1
-			then
-				for tag in DateTimeOriginal CreateDate ModifyDate Date
-				do
-					datetime=`exiftool -d "%Y-%m-%d %H:%M:%S" -$tag -s3 "$file" || true`
-					if [ -n "$datetime" ]
-					then
-						break
-					fi
-				done
-			fi
-			if [ -z "$datetime" ]
-			then
-				echo "$0: can not determine date/time of file $file" >&2
-				false
-			fi
-			date=${datetime:0:10}
-			time=${datetime:10}
-			datetime=${date//:/-}${time}
-			;;
-		'')
-			filetime=`stat -c %$time_field "$file"`
-			;;
-		esac
-
-		if [ -n "$datetime" ]
+		if [ $datetime_from_embedmeta ]
 		then
-			filetime=`date +%s -d "$datetime"`
+			case "$all_files_type" in
+			(email)
+				datetime=`grep -m 1 -i -E '^Date:' "$file" | cut -d':' -f2-`
+				datetime=${datetime##+( )}
+				;;
+			(jpeg)
+				if type exif >/dev/null 2>&1
+				then
+					# Date/Time Original, Create Date, Modify Date, Date
+					for tagid in 0x9003 0x9004 0x0132 0x0006
+					do
+						datetime=`exif -m -t $tagid "$file" </dev/null 2>/dev/null || true`
+						if [ -n "$datetime" ]
+						then
+							break
+						else
+							warnx "no tag $tagid: $file"
+						fi
+					done
+				fi
+				if [ -z "$datetime" ] && type exiftool >/dev/null 2>&1
+				then
+					for tag in DateTimeOriginal CreateDate ModifyDate Date
+					do
+						datetime=`exiftool -d "%Y-%m-%d %H:%M:%S" -$tag -s3 "$file" </dev/null 2>/dev/null || true`
+						if [ -n "$datetime" ]
+						then
+							break
+						else
+							warnx "no $tag tag: $file"
+						fi
+					done
+				fi
+				date=${datetime:0:10}
+				time=${datetime:10}
+				datetime=${date//:/-}${time}
+				;;
+			esac
+			
+			if [ -n "$datetime" ]
+			then
+				filetimestamp=`date +%s -d "$datetime"`
+			else
+				missing_embedmeta=1
+				warnx "can not determine datetime: $file"
+				if [ "$fallback_to_filetime" = 1 ]
+				then
+					warnx "fallback to file $time_field_name"
+				fi
+			fi
 		fi
 		
-		if [ -z "$filetime" ]
+		if [ ! $datetime_from_embedmeta ] || [ "$missing_embedmeta" = 1 -a "$fallback_to_filetime" = 1 ]
 		then
+			filetimestamp=`stat -c %$time_stat_field "$file"`
+		fi
+		
+		if [ -z "$filetimestamp" ]
+		then
+			failed "determine datetime" "$file"
 			continue
 		fi
 		
-		target=`date +"$target_template" -d "@$filetime" | sed -e "s,%@,${basedir//,/\\,},g; s,%\.,${basename//,/\\,},g;"`
+		target=`date +"$target_template" -d "@$filetimestamp" | sed -e "s,%@,${basedir//,/\\,},g; s,%\.,${basename//,/\\,},g;"`
 		
 		if [ "$dryrun" = 1 ]
 		then
 			sgn='-'
-			[ "$copy" = 1 ] && sgn='='
+			[ "$ORGANIZEBYDATE_MODE" = copy ] && sgn='='
 			echo "$file $sgn> $target"
 		else
 			if [ "${target: -1}" = / ]
@@ -193,17 +433,69 @@ find "$@" ${minlevel:+-mindepth $minlevel} ${maxlevel:+-maxdepth $maxlevel} -typ
 			fi
 			[ -d "$target_dir" ] || mkdir -p "$target_dir"
 			
-			if [ "$copy" = 1 ]
+			local_overwrite_opt=$overwrite_opt
+			
+			if [ -e "$target" -a \( -n "$conflict_resolver_cmd" -o -n "$conflict_resolver_script" \) ]
 			then
-				cp $verbose $overwrite_opt "$file" "$target"
-			else
-				mv $verbose $overwrite_opt "$file" "$target"
+				set +e
+				if [ -n "$conflict_resolver_cmd" ]
+				then
+					solution=`command $conflict_resolver_cmd "$file" "$target" </dev/null`
+					err=$?
+				else
+					solution=`bash -c "$conflict_resolver_script" -- "$file" "$target" </dev/null`
+					err=$?
+				fi
+				set -e
+				if [ $err = 0 ]
+				then
+					solution=${solution%$'\n'}  # strip 1 trailing newline
+					solution=${solution##*$'\n'}  # keep last line only
+					
+					if [ "$solution" = skip ]
+					then
+						continue
+					elif [[ $solution =~ ^proceed(| (.+))$ ]]
+					then
+						newtarget=${BASH_REMATCH[2]}
+						if [ -n "$newtarget" ]
+						then
+							target=$newtarget
+						fi
+						local_overwrite_opt=''  # let cp (mv) overwrite the target
+					else
+						warnx "unknown conflict resolution: $solution"
+						failed "conflict resolve" "$file"
+						continue
+					fi
+				else
+					failed "conflict resolve" "$file"
+					continue
+				fi
 			fi
-			if [ "$do_touch" = 1 ]
+			
+			if [ "$ORGANIZEBYDATE_MODE" = copy ]
 			then
-				touch -t `date +%Y%m%d%H%M.%S -d "@$filetime"` "$target"
+				cp $verbose $local_overwrite_opt "$file" "$target" || failed copy "$file"
+			else
+				mv $verbose $local_overwrite_opt "$file" "$target" || failed move "$file"
+			fi
+			
+			if [ "$set_atime" = 1 -o "$set_mtime" = 1 ]
+			then
+				touch_opts=()
+				if [ "$set_atime" = 1 ]; then touch_opts+=(-a); fi
+				if [ "$set_mtime" = 1 ]; then touch_opts+=(-m); fi
+				touch -t `date +%Y%m%d%H%M.%S -d "@$filetimestamp"` "${touch_opts[@]}" "$target"
 			fi
 		fi
 	done
+	
+	if [ $failed_count -gt 0 ]
+	then
+		exit 2
+	else
+		exit 0
+	fi
 }
-
+exit ${PIPESTATUS[1]}

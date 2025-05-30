@@ -242,12 +242,12 @@ set_file_attr_env()
 {
 	local varprefix=$1
 	local path=$2
-	local stat=(`stat -c '%X %Y %Z %s' "$path"`)
-	local attridx=([ATIME]=0 [MTIME]=1 [CTIME]=2 [SIZE]=3)
+	local -a stat=(`stat -c '%X %Y %Z %s' "$path"`)
+	local -A attridx=([ATIME]=0 [MTIME]=1 [CTIME]=2 [SIZE]=3)
 	local attr
 	for attr in ATIME MTIME CTIME SIZE
 	do
-		declare -x ${varprefix}_FILE_${attr}=${stat[${attridx[$attr]}]}
+		declare -x -g ${varprefix}_FILE_${attr}=${stat[${attridx[$attr]}]}
 	done
 }
 
@@ -511,7 +511,7 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 					fi
 				else
 					echo "$resolver_stdout"
-					warnx "command status $resolver_err"
+					warnx "conflict resolver error $resolver_err: $file"
 					failed "conflict resolve" "$file"
 					continue
 				fi

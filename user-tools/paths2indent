@@ -20,20 +20,18 @@ while(my $line = <STDIN>)
 {
 	chomp $line;
 	my $ref = \%parsed;
-	my ($path, $sep, $suffix);
+	my ($path, $stopsep, $suffix);
 	
 	if(defined $stop_pattern)
 	{
-		($path, $sep, $suffix) = split /($stop_pattern)/, $line, 2;
+		($path, $stopsep, $suffix) = split /($stop_pattern)/, $line, 2;
 	}
 	else
 	{
 		$path = $line;
-		$sep = $suffix = '';
 	}
 	
 	my @elements = split /\Q$DIRSEP\E/, $path;
-	$elements[$#elements] .= $sep . $suffix if @elements;
 	
 	for my $element (@elements)
 	{
@@ -42,8 +40,17 @@ while(my $line = <STDIN>)
 			'index' => (scalar keys %{$ref->{'children'}}),
 			'name' => $element,
 			'children' => {},
+			'suffixes' => [],
 		} if not exists $ref->{'children'}->{$element};
 		$ref = $ref->{'children'}->{$element};
+	}
+	
+	if(defined $stop_pattern and @elements)
+	{
+		push @{$ref->{'suffixes'}}, {
+			'sep' => $stopsep,
+			'suffix' => $suffix,
+		};
 	}
 }
 
@@ -53,7 +60,7 @@ sub output
 	my $ref = shift;
 	for my $child (sort {$do_sort ? ($a->{'name'} cmp $b->{'name'}) : ($a->{'index'} <=> $b->{'index'})} values %{$ref->{'children'}})
 	{
-		printf "%s%s\n", "\t"x$indent, $child->{'name'};
+		printf "%s%s%s\n", "\t"x$indent, $child->{'name'}, join('', map {$_->{'sep'}.$_->{'suffix'}} @{$child->{'suffixes'}});
 		output($indent+1, $child);
 	}
 }

@@ -138,6 +138,14 @@ When running I<COMMAND>, the following environment is set:
 Number of the particular piece of data (ie. line number in I<INPUTFILE>)
 which is need to be processed by the current process.
 
+=item UNIPROC_DATANUM_1INDEX
+
+Same as B<UNIPROC_DATANUM> but 1-indexed instead of 0-indexed.
+
+=item UNIPROC_TOTALNUM
+
+Total number of items (processed and unprocessed).
+
 =back
 
 =head1 EXAMPLES
@@ -421,6 +429,8 @@ while(not defined $OptShots or $num_shots < $OptShots)
 	printf STDERR "uniproc: %d/%d%s%s\n", $LineNum+1, $TotalDataNum, ($OptShowData ? (": ", $Data) : ("", "")) if $OptShowProgress;
 	
 	$ENV{'UNIPROC_DATANUM'} = $LineNum;
+	$ENV{'UNIPROC_DATANUM_1INDEX'} = $ENV{'UNIPROC_DATANUM'}+1;
+	$ENV{'UNIPROC_TOTALNUM'} = $TotalDataNum;
 	my $placeholder_found = 0;
 	my @command_args = map { my $arg = $_; $arg =~ s/\{(\d*)\}/subst_data($Data, $1)/eg and $placeholder_found = 1; $arg } @CommandArgs;
 	push @command_args, $Data if not $placeholder_found;

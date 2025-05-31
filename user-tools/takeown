@@ -561,18 +561,36 @@ do_cleanup=yes
 besteffort=no
 
 
-while [ -n "$1" ]
+# explode bundled options like "-abc" into separate "-a -b -c" arguments.
+for arg in "$@"
 do
-	case "$1" in
-	-h|--help)
-		echo "Usage: takeown [options] <files>
+	case "$arg" in
+	(-[!-]*)
+		pos=1
+		while [ -n "${arg:$pos:1}" ]
+		do
+			args+=("-${arg:$pos:1}")
+			let pos++
+		done
+		;;
+	(*)
+		args+=("$arg")
+		;;
+	esac
+done
+
+for arg in "${args[@]}"
+do
+	case "$arg" in
+	(-h|--help)
+		echo "Usage: takeown [OPTIONS] <FILES>
 Options:
  -D, --debug               debug
  -v, --verbose             verbose
  -n, --dry-run             dry run
  -R, --recursive           recurse into directories
- -w, --active-write-test   active write test if access(2) reports writable
- -W, --active-write-test-only   active write test regardless of access(2), default is access(2) only
+ -w, --active-write-test   do an active write test if access(2) reports writable
+ -W, --active-write-test-only   active write test regardless what access(2) reports, default is access(2) only
  
  -i, --ignore              ignore failures on files given in command arguments
  -b, -I, --best-effort     ignore any failure while recursing (force -i -T)
@@ -581,6 +599,7 @@ Options:
  -T, --no-strict           attempt but do not requisite file attribute preservation (default)
  -M, --no-strict-chmod     ignore unpreserved permission modes
  -G, --no-strict-chgrp     ignore unpreserved group owner
+ --no-chgrp                do not attempt chgrp at all
  -A, --no-strict-setfacl   ignore unpreserved ACL
  -X, --no-strict-setfattr  ignore unpreserved extended attributes
  
@@ -589,87 +608,86 @@ Options:
  -g, --strict-chgrp        requisite preserved group owner
  -a, --strict-setfacl      requisite preserved ACL
  -x, --strict-setfattr     requisite preserved extended attributes
- --no-chgrp                do not chgrp at all
 
 Exit code:
  0    all operations succeeded
  1+   error happended during progress, even it was ignored"
 		exit 0
 		;;
-	-v|--verbose)
+	(-v|--verbose)
 		verbose=yes
 		;;
-	-D|--debug)
+	(-D|--debug)
 		debug=yes
 		;;
-	-n|--dry-run)
+	(-n|--dry-run)
 		dryrun=yes
 		;;
-	-C|--no-cleanup)
+	(-C|--no-cleanup)
 		do_cleanup=no
 		;;
-	-R|--recursive|--recurse)
+	(-R|--recursive|--recurse)
 		recursive=yes
 		;;
-	--no-group|--no-chgrp)
+	(--no-group|--no-chgrp)
 		do_chgrp=no
 		;;
-	-i|--ignore)
+	(-i|--ignore)
 		ignoreerrors=yes
 		;;
-	-b|-I|--best-effort)
+	(-b|-I|--best-effort)
 		besteffort=yes
 		;;
-	-t|--strict)
+	(-t|--strict)
 		for s in ${!strict[@]}
 		do
 			[ -z "${strict[$s]}" ] && strict[$s]=yes
 		done
 		;;
-	-T|--no-strict)
+	(-T|--no-strict)
 		for s in ${!strict[@]}
 		do
 			[ -z "${strict[$s]}" ] && strict[$s]=no
 		done
 		;;
-	-M|--no-strict-mode|--no-strict-modes|--no-strict-chmod)
+	(-M|--no-strict-mode|--no-strict-modes|--no-strict-chmod)
 		strict[mode]=no
 		;;
-	-G|--no-strict-group|--no-strict-chgrp)
+	(-G|--no-strict-group|--no-strict-chgrp)
 		strict[group]=no
 		;;
-	-A|--no-strict-acl|--no-strict-setfacl)
+	(-A|--no-strict-acl|--no-strict-setfacl)
 		strict[acl]=no
 		;;
-	-X|--no-strict-xattr|--no-strict-setfattr)
+	(-X|--no-strict-xattr|--no-strict-setfattr)
 		strict[xattr]=no
 		;;
-	-M|--strict-mode|--strict-modes|--strict-chmod)
+	(-M|--strict-mode|--strict-modes|--strict-chmod)
 		strict[mode]=yes
 		;;
-	--strict-group|--strict-chgrp)
+	(--strict-group|--strict-chgrp)
 		strict[group]=yes
 		;;
-	-A|--strict-acl|--strict-setfacl)
+	(-A|--strict-acl|--strict-setfacl)
 		strict[acl]=yes
 		;;
-	-X|--strict-xattr|--strict-setfattr)
+	(-X|--strict-xattr|--strict-setfattr)
 		strict[xattr]=yes
 		;;
-	-w|--active-write-test)
+	(-w|--active-write-test)
 		activewritetest=yes
 		;;
-	-w|--active-write-test-only)
+	(-w|--active-write-test-only)
 		activewritetestonly=yes
 		;;
-	-*)
-		errx 1 "Unknown option: $1"
+	(-*)
+		errx 1 "Unknown option: $arg"
 		;;
-	--)
+	(--)
 		shift
 		break
 		;;
-	*)
+	(*)
 		break
 		;;
 	esac

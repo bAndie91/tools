@@ -1,23 +1,31 @@
 #!/usr/bin/env perl
 
 use POSIX;
-use Getopt::Long qw/:config no_ignore_case permute/;
+use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat no_auto_abbrev/;
 use Pod::Usage;
 use IPC::Run qw/start finish/;
+use Data::Dumper;
 
 $0 = "reportcmdstatus";
 
-$report_start = 0;
-$clone_status = 0;
+$opt_report_start = 0;
+$opt_clone_status = 0;
+$opt_wait_end = 0;
 
 GetOptions(
-	's|report-start!' => \$report_start,
-	'c|clone!' => \$clone_status,
+	's|report-start!' => \$opt_report_start,
+	'c|clone|clone-status!' => \$opt_clone_status,
+	'w|wait-end!' => \$opt_wait_end,
 	'help|?' => sub{ pod2usage(-exitval=>0, -verbose=>99); },
 	'<>' => sub{ unshift @ARGV, @_; die '!FINISH'; },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
-if($report_start)
+if($opt_wait_end)
+{
+	eval q{ use Term::ReadKey; 1; } or die $@;
+}
+
+if($opt_report_start)
 {
 	eval q{ use String::ShellQuote; 1; } or die $@;
 	$COMMAND_STRING_QUOTED = join(' ', map {String::ShellQuote::shell_quote($_)} @ARGV);
@@ -25,7 +33,7 @@ if($report_start)
 
 sub child_process_forked
 {
-	if($report_start)
+	if($opt_report_start)
 	{
 		printf STDERR "starting process %d: %s\n", $$, $COMMAND_STRING_QUOTED;
 	}
@@ -38,16 +46,34 @@ $status = $?;
 
 if(WIFSIGNALED($status))
 {
-	printf STDERR "command (pid $COMMAND_PID) terminated by signal: %d\n", WTERMSIG($status);
+	$end_mode = "terminated by signal";
+	$end_code = WTERMSIG($status);
 	$mystatus = 128 + WTERMSIG($status);
 }
 else
 {
-	printf STDERR "command (pid $COMMAND_PID) exited with status: %d\n", WEXITSTATUS($status);
+	$end_mode = "exited with status";
+	$end_code = WEXITSTATUS($status);
 	$mystatus = WEXITSTATUS($status);
 }
 
-exit $mystatus if $clone_status;
+printf STDERR "command (pid %d) %s: %d%s\n", $COMMAND_PID, $end_mode, $end_code, $opt_wait_end ? ", waiting for the user to press Enter." : "";
+
+if($opt_wait_end)
+{
+	$got_sigint = 0;
+	$SIG{'INT'} = sub { $got_sigint = 1; };
+	ReadMode('cbreak');
+	while(not $got_sigint)
+	{
+		my $buf;
+		my $n = POSIX::read(fileno(STDIN), $buf, 1);
+		last if $buf =~ /\n/;
+	}
+	ReadMode('restore');
+}
+
+exit $mystatus if $opt_clone_status;
 exit 0;
 
 
@@ -67,7 +93,7 @@ reportcmdstatus [I<OPTIONS>] [--] I<COMMAND> [I<ARGS>]
 
 =over 4
 
-=item -c, --clone
+=item -c, --clone-status
 
 Take I<COMMAND>'s status and itself exits with it.
 Default is to exit 0.
@@ -78,6 +104,10 @@ exit 128 + I<SIGNAL>, like most shells do.
 =item -s, --report-start
 
 Report what is being started, ie. I<COMMAND> I<ARGS>, to the STDERR.
+
+=item -w, --wait-end
+
+Wait when I<COMMAND> ended for the user to press Enter before quit.
 
 =back
 

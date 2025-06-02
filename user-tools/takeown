@@ -544,6 +544,7 @@ takeown_directory()
 
 shopt -s dotglob
 shopt -s nullglob
+GLOBIGNORE=''
 
 PROGNAME=takeown
 verbose=''

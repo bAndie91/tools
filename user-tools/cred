@@ -339,7 +339,9 @@ case "$subcmd" in
 			fi
 			strings="$strings$val"$'\t'
 		done
-		xdotool key Alt+Tab type --delay 100ms "$strings"
+		xdotool key Alt+Tab
+		sleep 1
+		xdotool type --delay 100ms "$strings"
 	else
 		errx 1 "Enter property names in order to fill the form on the window brought to focus by Alt+Tab."
 	fi

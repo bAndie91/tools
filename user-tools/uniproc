@@ -71,6 +71,11 @@ Default is to process as many items in series as possible.
 
 How many items to process.
 
+=item -e, --errexit
+
+Stop processing items as soon as the first I<COMMAND> exits non-zero,
+and uniproc(1) itself exists which that exit code (or 128+signal if signaled).
+
 =item -sp, --show-progress
 
 Show which item is being started to process.
@@ -82,8 +87,6 @@ Show the raw data what is being started to process.
 =item -ss, --show-summary
 
 Show stats summary when exit.
-
-=item
 
 =back
 
@@ -194,6 +197,7 @@ $OptShowProgress = 0;
 $OptShowData = 0;
 $OptShowSummary = 0;
 $OptDebug = 0;
+$OptErrExit = 0;
 
 GetOptions(
 	'r|retry' => sub { $OptProcessFailed = 1; $OptProcessNew = 1; },
@@ -203,6 +207,7 @@ GetOptions(
 	'sp|show-progress' => \$OptShowProgress,
 	'sd|show-data' => \$OptShowData,
 	'ss|show-summary' => \$OptShowSummary,
+	'e|errexit!' => \$OptErrExit,
 	'debug!' => \$OptDebug,
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 ) or pod2usage(-exitval=>2, -verbose=>99);
@@ -410,6 +415,7 @@ $ResultsFile = "$InputFile.uniproc";
 $Results_fh = undef;
 $num_shots = 0;
 $TotalDataNum = undef;
+$ExitStatus = 0;
 
 while(not defined $OptShots or $num_shots < $OptShots)
 {
@@ -448,6 +454,12 @@ while(not defined $OptShots or $num_shots < $OptShots)
 	unlink $InprogressFile;
 	close $inprogress_fh;
 	
+	if($OptErrExit)
+	{
+		$ExitStatus = WIFSIGNALED($status) ? 128 + WTERMSIG($status) : WEXITSTATUS($status);
+		last;
+	}
+	
 	$num_shots++;
 }
 
@@ -455,3 +467,5 @@ if($OptShowSummary)
 {
 	printf STDERR "uniproc: %d total, %d processed in this session, %d successful, %d failed\n", $TotalDataNum, $CountSuccess+$CountFailed, $CountSuccess, $CountFailed;
 }
+
+exit $ExitStatus;

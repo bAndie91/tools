@@ -1,0 +1,94 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+verscmp - Compare version numbers
+
+=head1 SYNOPSIS
+
+verscmp I<VERSION_A> [B<gt> | B<lt> | B<ge> | B<le> | B<eq> | B<ne>] I<VERSION_B>
+
+verscmp I<VERSION_A> B<between> I<VERSION_START> I<VERSION_END> [I<VERSION_START> I<VERSION_END> [...]]
+
+verscmp I<VERSION_A> B<in> I<VERSION_B1> I<VERSION_B2> [I<VERSION_B3> [...]]
+
+=head1 EXIT CODE
+
+=over 4
+
+=item Z<>0
+
+Comparison is satisfied
+
+=item Z<>1
+
+Runtime error
+
+=item Z<>2
+
+Parameter error
+
+=item Z<>3
+
+Comparison is NOT satisfied
+
+=back
+
+=head1 SEE ALSO
+
+vercmp(1) from B<makepkg> package, Version::Util(3pm)
+
+=cut
+
+
+use Version::Util;
+use Data::Dumper;
+use Errno qw/:POSIX/;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
+use List::MoreUtils qw/all any none/;
+use Pod::Usage;
+use POSIX;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+
+
+sub die_with_usage
+{
+	pod2usage(-exitval=>2, -verbose=>99);
+}
+
+GetOptions(
+	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
+) and scalar @ARGV >= 3 or die_with_usage;
+
+
+($base_version, $operator, @other_versions) = @ARGV;
+if($operator !~ /^([lg][te]|eq|ne|between|in|\+|-)$/)
+{
+	die_with_usage;
+}
+if($operator =~ /^([lg][te]|eq|ne|\+|-)$/ and scalar @other_versions != 1)
+{
+	die_with_usage;
+}
+
+
+my $pass = 1;
+$\ = "\n";
+
+if($operator eq '+')
+{
+	print Version::Util::add_version($base_version, @other_versions);
+}
+elsif($operator eq '-')
+{
+	print Version::Util::subtract_version($base_version, @other_versions);
+}
+else
+{
+	$pass = &{"Version::Util::version_$operator"}($base_version, @other_versions);
+}
+
+exit ($pass ? 0 : 3);

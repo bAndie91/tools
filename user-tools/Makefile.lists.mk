@@ -203,6 +203,7 @@ TOOLS ?= \
   url_encode \
   url_encode_bf \
   url-parts \
+  verscmp \
   vidir-sanitize \
   vifiles \
   visymlinks \

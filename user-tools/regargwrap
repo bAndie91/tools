@@ -1,0 +1,111 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+regargwrap - Replace non-regular file arguments to regular ones
+
+=head1 SYNOPSIS
+
+regargwrap [I<OPTIONS>] I<COMMAND> [I<ARGS>]
+
+=head1 DESCRIPTION
+
+Saves the content of non-regular files found in I<ARGS> into a temporary file,
+then runs I<COMMAND> I<ARGS> with the non-regular file arguments replace to the regular (yet temporary) ones.
+
+This is useful if I<COMMAND> does not support reading from pipes or other non-seekable files.
+
+=head1 OPTIONS
+
+=over 4
+
+=item --pipes
+
+=item --sockets
+
+=item --blocks
+
+=item --chars
+
+Replace only pipe/socket/block/char special files.
+If no option like these specified, by default, replace any of them.
+
+=back
+
+=head1 EXAMPLES
+
+  regargwrap git diff --no-index <(ls -1 dir_a) <(ls -1 dir_b)
+
+=head1 LIMITATIONS
+
+Impractical with huge files,
+because they possibly do not fit on the temporary files' filesystem.
+
+=head1 SEE ALSO
+
+regargwrap(1) is a generalization of seekstdin(1).
+
+=cut
+
+
+use File::Temp qw/tempfile/;
+use Fcntl qw/:flock :seek/;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev pass_through permute/;
+use Pod::Usage;
+use Data::Dumper;
+use List::MoreUtils qw/all any none/;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+
+$OptPipes = 0;
+$OptSockets = 0;
+$OptBlocks = 0;
+$OptChars = 0;
+
+GetOptions(
+	'pipes!' => \$OptPipes,
+	'sockets!' => \$OptSockets,
+	'blocks!' => \$OptBlocks,
+	'chars!' => \$OptChars,
+	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+	'<>' => sub { unshift @ARGV, $_[0]; die '!FINISH'; },
+) or pod2usage(-exitval=>2, -verbose=>99);
+shift @ARGV if $ARGV[0] eq '--';
+
+if(none {$_} $OptPipes, $OptSockets, $OptBlocks, $OptChars)
+{
+	$OptPipes = $OptSockets = $OptBlocks = $OptChars = 1;
+}
+
+$Command = shift @ARGV;
+@Arguments = ();
+
+for my $arg (@ARGV)
+{
+	if(-e $arg and !-f $arg)
+	{
+		if(($OptPipes and -p $arg) or
+		   ($OptSockets and -S $arg) or
+		   ($OptBlocks and -b $arg) or
+		   ($OptChars and -c $arg))
+		{
+			my ($tmpfh, $tmpfilename) = tempfile( "regargwrap-XXXXXX", TMPDIR => 1, UNLINK => 0 );
+			warn "$0: replace '$arg' to '$tmpfilename'\n";
+			open my $fh, '<', $arg or die "$0: $!: $arg\n";
+			while($_ = <$fh>)
+			{
+				print {$tmpfh} $_;
+			}
+			close $fh;
+			close $tmpfh;
+			$arg = $tmpfilename;
+		}
+	}
+	push @Arguments, $arg;
+}
+
+exec {$Command} $Command, @Arguments;
+($errno, $errstr) = (int $!, $!);
+warn "$0: $Command: $errstr\n";
+exit 125+$errno;

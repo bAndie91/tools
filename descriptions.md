@@ -3,11 +3,14 @@
 | [2opml](user-tools/2opml) | Convert list of URLs to OPML.
 | [a8e](user-tools/a8e) | Abbreviate words in the input stream
 | [adr2html](user-tools/adr2html) | Convert Opera Hostlist 2.0 bookmarks to HTML
+| [args2env](user-tools/args2env) | Turns command arguments into environment variables and executes command with the remained arguments
+| [args2stdin](user-tools/args2stdin) | Turns command arguments into input stream on STDIN
 | [asterisk-log-separator](user-tools/asterisk-log-separator) | Split up Asterisk PBX log file into multiple files based on which process wrote each part
 | [awk-cut](user-tools/awk-cut) | Select fields from input stream with awk
 | [base58](user-tools/base58) | Encode to (decode from) Base58
 | [base64url](user-tools/base64url) | Encode to (decode from) Base64-URL encoding
 | [bencode2json](user-tools/bencode2json) | Convert Bencode (BitTorrent's loosely structured data) to JSON
+| [body](user-tools/body) | Skip everything in the input stream up the the first empty line (usual end-of-header marker) and echo the rest
 | [cdexec](user-tools/cdexec) | Run a given command in the given directory
 | [chattr-cow](user-tools/chattr-cow) | try hard to enable Copy-on-Write attribute on files
 | [chattr-nocow](user-tools/chattr-nocow) | try hard to disable Copy-on-Write attribute on files
@@ -17,11 +20,15 @@
 | [cled](user-tools/cled) | Command Line-Editor - Edit text file lines by commands directly from shell
 | [convert_chromium_cookies_to_netscape.sh](user-tools/convert_chromium_cookies_to_netscape.sh) | Convert Chromium and derivative web browser's cookies to Netscape format (used by wget and curl)
 | [corner_time](user-tools/corner_time) | Place a digital clock in the upper right hand corner of the terminal
+| [cpyfattr](user-tools/cpyfattr) | Copy file attributes (xattr)
+| [cred](user-tools/cred) | Credentials and secrets management in command line
 | [cronrun](user-tools/cronrun) | convenience features to run commands in task scheduler environment
 | [cut.awk](user-tools/cut.awk) | Output only the selected fields from the input stream, parameters follow awk(1) syntax
 | [daemonctl](user-tools/daemonctl) | Manage preconfigured libslack daemon(1) daemons more conveniently
 | [dataurl2bin](user-tools/dataurl2bin) | Decode "data:..." URLs from input stream and output the raw binary data
+| [dbus-call](user-tools/dbus-call) | Browse DBus and call its methods
 | [debdiff](user-tools/debdiff) | Display differences between 2 Debian packages (*.deb files)
+| [delfattr](user-tools/delfattr) | Removes given attributes (xattr) from files
 | [descpids](user-tools/descpids) | List all descendant process PIDs of the given process(es)
 | [dfbar](user-tools/dfbar) | Display disk space usage with simple bar chart (as reported by df(1))
 | [digasn](user-tools/digasn) | Query Autonom System Number (ASN) from DNS
@@ -45,16 +52,19 @@
 | [fixRFC822filemtime](user-tools/fixRFC822filemtime) | Set a file's last modification time, which contains an email message in RFC-822 format, to the email's Date
 | [fmtkv](user-tools/fmtkv) | Tranform key=value (each optionally double-quoted) pairs into 1 pair by 1 line on the output
 | [foreach](user-tools/foreach) | Run an OS or shell command on each input line, similar to xargs(1)
+| [getcvt](user-tools/getcvt) | Print the current active Virtual Terminal
 | [g_filename_to_uri](user-tools/g_filename_to_uri) | Mimic g_filename_to_uri() GLib function creating a file:// url from path string
 | [gitconfigexec](user-tools/gitconfigexec) | Change git settings for a given command run only
 | [git_diff](user-tools/git_diff) | View two files' diff by git-diff(1), even not under git version control
 | [git-submodule-auto-add](user-tools/git-submodule-auto-add) | Automatically add submodules to a git repo according to .gitmodules file
+| [glob](user-tools/glob) | Expand shell-wildcard patterns
 | [grandparentexe](compiled-tools/grandparentexe.c) | Display the grandparent process executable path of the current process
-| [header.sed](user-tools/header.sed) | Echo the input stream up to the first empty line (usual end-of-header marker)
+| [header](user-tools/header) | Echo the input stream up to the first empty line (usual end-of-header marker)
 | [Head](user-tools/Head) | output as many lines from the first part of files as many lines on the terminal currently
 | [hlcal](user-tools/hlcal) | Highlight BSD cal(1) output
 | [hlncal](user-tools/hlncal) | Highlight BSD ncal(1) output
 | [htmlentities](user-tools/htmlentities) | Convert plain text into HTML-safe text
+| [indent2graph](user-tools/indent2graph) | Generate graph out of whitespace-indented hierarchical text
 | [indent2tree](user-tools/indent2tree) | Makes TAB-indented text into ascii tree chart
 | [inisort](user-tools/inisort) | Sort keys in an INI file according to the order of keys in an other INI file
 | [is_gzip](user-tools/is_gzip) | Return 0 if the file in argument has gzip signature
@@ -81,6 +91,7 @@
 | [lsata](user-tools/lsata) | List ATA devices on the system
 | [lsenv](user-tools/lsenv) | List environment variables of a process
 | [mail-extract-raw-headers](user-tools/mail-extract-raw-headers) | Get named headers from RFC822-format input.
+| [maskfiles](user-tools/maskfiles) | Lay over several text files on top of each other like transparency sheets for overhead projectors
 | [mime_extract](user-tools/mime_extract) | Extract parts from a MIME multipart file and save them into separate files
 | [mime-header-decode](user-tools/mime-header-decode) | Decode MIME-encoded stream on stdin line-by-line
 | [mkdeb](user-tools/mkdeb) | Create a Debian package (.deb)
@@ -92,20 +103,22 @@
 | [multicmd](user-tools/multicmd) | Run multiple commands in series
 | [multithrottler](user-tools/multithrottler) | Run given command if not reached the defined rate limit
 | [mysql-fix-orphan-privileges.php](user-tools/mysql-fix-orphan-privileges.php) | Suggest SQL commands to clean up unused records in system tables which hold permission data
+| [netrc](user-tools/netrc) | manage ~/.netrc file
 | [noacute](user-tools/noacute) | Strip diacritics (acute, umlaut, ...) from letters on the input stream
 | [nocomment](user-tools/nocomment) | remove comment lines from input stream
-| [nopath](user-tools/nopath) | Run command by disregarding some PATH directories
+| [notashell](user-tools/notashell) | A non-interactive shell lacking of any shell syntax
 | [oded](user-tools/oded) | On-disk editor - edit text files by commands directly from shell
 | [organizebydate](user-tools/organizebydate) | Rename files based on their date-time
 | [palemoon-current-url](user-tools/palemoon-current-url) | Display the webpage's URL which is currently open in Palemoon web browser
+| [pararun](user-tools/pararun) | run commands parallelly
 | [parsel](user-tools/parsel) | Select parts of a HTML document based on CSS selectors
 | [partial](user-tools/partial) | Show an earlier started long-running command's partial output
+| [pathmod](user-tools/pathmod) | Run command with a modified PATH
 | [paths2indent](user-tools/paths2indent) | Transform list of filesystem paths to an indented list of the leaf elements
-| [pdfflop](user-tools/pdfflop) | Flop a PDF file's pages
+| [pcut](user-tools/pcut) | Cut given fields of text input separated by the given Perl regex
 | [perl-repl](user-tools/perl-repl) | Read-Evaluate-Print-Loop wrapper for perl(1)
 | [pfx2pem](user-tools/pfx2pem) | Convert PFX (PKCS#12) certificate file to PEM format
-| [pfxln](user-tools/pfxln) | Prefix lines from STDIN
-| [pipeby](user-tools/pipeby) | Run a command and pipe its output to an other one
+| [pipecmd](user-tools/pipecmd) | Run a command and pipe its output to an other one
 | [pipekill](user-tools/pipekill) | Send signal to a process on the other end of the given pipe filedescriptor
 | [PMbwmon](user-tools/PMbwmon) | Poor man's bandwidth monitor
 | [PMdirindex](user-tools/PMdirindex) | Poor man's directory index generator, output HTML
@@ -114,12 +127,14 @@
 | [PMpwgen](user-tools/PMpwgen) | Poor man's password generator
 | [PMrecdiff](user-tools/PMrecdiff) | Poor man's directory tree difference viewer, comparing file names and sizes recursively
 | [pngmetatext](user-tools/pngmetatext) | Put metadata text into PNG file
+| [prefixlines](user-tools/prefixlines) | Prefix lines from STDIN
 | [pvalve](user-tools/pvalve) | Control how much a given command should run by an other command's exit code
 | [pyzor-files](user-tools/pyzor-files) | Run a pyzor(1) command on the given files
 | [qrwifi](user-tools/qrwifi) | Generate a string, used in WiFi-setup QR codes, containing a hotspot name and password
 | [randstr](user-tools/randstr) | Generate random string from a given set of characters and with a given length.
 | [rcmod](user-tools/rcmod) | Run a given command and modify its Return Code according to the rules given by the user
-| [redirexec](user-tools/redirexec) | Execute a command with some file descriptiors redirected.
+| [redirexec](user-tools/redirexec) | Execute a command with some file descriptors redirected.
+| [regargwrap](user-tools/regargwrap) | Replace non-regular file arguments to regular ones
 | [relpath](compiled-tools/relpath.c) | Calculate the shortest relative path between directories
 | [remove](compiled-tools/remove.c) | Remove file and directoy alike
 | [renamemanual](user-tools/renamemanual) | Interactive file rename tool
@@ -133,14 +148,16 @@
 | [screen-notify](user-tools/screen-notify) | Send status-line message to the current GNU/Screen instance
 | [screenreattach](user-tools/screenreattach) | Reattach to GNU/screen and import environment variables
 | [screens](user-tools/screens) | List all GNU/Screen sessions accessible by the user and all of their inner windows as well
+| [seekstdin](user-tools/seekstdin) | Makes STDIN seekable for a given command
 | [setgroups](compiled-tools/setgroups.c) | Start a process with specified set of GIDs
 | [setpgrp](compiled-tools/setpgrp.c) | CLI frontend for setpgrp(2) - run a program in a new process group
 | [set-sys-path](user-tools/set-sys-path) | Set PATH according to /etc/environment and run the given command
 | [set-xcursor-lock-and-run](user-tools/set-xcursor-lock-and-run) | Set X11 cursor to a padlock and run a command
 | [set-xcursor-lock-and-run](xwin-tools/set-xcursor-lock-and-run) | Set X11 mouse pointer to a lock icon and run the given command
+| [spoolprocess](user-tools/spoolprocess) | process files in a spool directory
 | [ssh-agent-finder](user-tools/ssh-agent-finder) | Find a working ssh agent on the system so you get the same in each of your logon sessions
 | [stdfilt](user-tools/stdfilt) | Run a command but filter its STDOUT and STDERR
-| [stdmux](user-tools/stdmux) | Multiplex the given command's STDOUT and STDERR by prefixing their lines
+| [stdmux](user-tools/stdmux) | Multiplex the given command's STDOUT and STDERR by prefixing lines
 | [strip-ansi-seq](user-tools/strip-ansi-seq) | Dumb script removing more-or-less any ANSI escape sequences from the input stream
 | [substenv](user-tools/substenv) | Substitute environment variables in parameters and run the resulting command
 | [subst_sudo_user](user-tools/subst_sudo_user) | Sudo helper program
@@ -158,15 +175,19 @@
 | [timestamper](user-tools/timestamper) | Prepend a timestamp to each input line
 | [touchx](user-tools/touchx) | set execution bit on files and creates them if neccessary
 | [trackrun](user-tools/trackrun) | Record when the given command was started and ended and expose to it in environment variables
+| [triggerexec](user-tools/triggerexec) | Run a command and do various specified actions depending on what command does
 | [ttinput](user-tools/ttinput) | Inject console input in a terminal as if the user typed
 | [uchmod](user-tools/uchmod) | chmod files according to umask
 | [unicodestyle](user-tools/unicodestyle) | Add font styles to input text using Unicode
+| [uniproc](user-tools/uniproc) | Universal data processing tool
+| [untabularize](user-tools/untabularize) | Revert the formatting done by tabularize(1)
 | [upsidedown](user-tools/upsidedown) | Transliterate input stream to text with upsidedown-looking chars
 | [url_decode](user-tools/url_decode) | Unescape percent-encoded sequences given either in parameters or in stdin
 | [url_encode_bf](user-tools/url_encode_bf) | Make all chars given either in parameters or in stdin to percent-encoded sequence
 | [url_encode](user-tools/url_encode) | Escape URL-unsafe chars in text given either in parameters or in stdin by percent-encoding
 | [url-parts](user-tools/url-parts) | Extract specified parts from URLs given in input stream
 | [utmp](compiled-tools/utmp.c) | Display UTMP database like who(1) but machine-parsable
+| [verscmp](user-tools/verscmp) | Compare version numbers
 | [vidir-sanitize](user-tools/vidir-sanitize) | Helper script to change tricky filenames in a directory
 | [vifiles](user-tools/vifiles) | Edit multiple files as one
 | [visymlinks](user-tools/visymlinks) | Bulk edit target of symlinks

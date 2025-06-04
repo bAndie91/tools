@@ -3,7 +3,7 @@
 echo "|   |   |"
 echo "|---|---|"
 
-for filepath in admin-tools/* compiled-tools/*.pod crawler-bin/* root-tools/* user-tools/* xwin-tools/*
+for filepath in "$@"
 do
 	if [ -f "$filepath" ]
 	then

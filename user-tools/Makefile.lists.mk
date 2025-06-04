@@ -121,7 +121,6 @@ TOOLS ?= \
   nthash.py \
   ocspverify \
   oded \
-  ordinargs \
   organizebydate \
   palemoon-current-url \
   pararun \
@@ -152,6 +151,7 @@ TOOLS ?= \
   rdfindreport \
   recent-files-gtk \
   redirexec \
+  regargwrap \
   renamemanual \
   rename.td \
   repeat \

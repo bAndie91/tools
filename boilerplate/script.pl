@@ -37,7 +37,7 @@ use Errno qw/:POSIX/;
 use Fcntl qw/:flock :seek F_GETFL F_SETFL O_NONBLOCK F_GETFD F_SETFD FD_CLOEXEC/;
 use File::Basename;
 use File::Temp qw/tempfile/;
-use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev pass_through/;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev pass_through permute/;
 use IPC::Run qw/run/;
 use List::MoreUtils qw/all any none/;
 use Pod::Usage;

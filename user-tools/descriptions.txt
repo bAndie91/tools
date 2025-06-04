@@ -98,7 +98,6 @@ noacute - Strip diacritics (acute, umlaut, ...) from letters on the input stream
 nocomment - remove comment lines from input stream
 notashell - A non-interactive shell lacking of any shell syntax
 oded - On-disk editor - edit text files by commands directly from shell
-ordinargs - Replace non-ordinary file arguments to ordinary ones
 organizebydate - Rename files based on their date-time
 palemoon-current-url - Display the webpage's URL which is currently open in Palemoon web browser
 pararun - run commands parallelly
@@ -119,6 +118,7 @@ qrwifi - Generate a string, used in WiFi-setup QR codes, containing a hotspot na
 randstr - Generate random string from a given set of characters and with a given length.
 rcmod - Run a given command and modify its Return Code according to the rules given by the user
 redirexec - Execute a command with some file descriptors redirected.
+regargwrap - Replace non-regular file arguments to regular ones
 rename.td - rename multiple files by a Perl expression
 renamemanual - Interactive file rename tool
 repeat - Run a give command repeatedly
@@ -162,6 +162,7 @@ upsidedown - Transliterate input stream to text with upsidedown-looking chars
 url-parts - Extract specified parts from URLs given in input stream
 url_encode - Escape URL-unsafe chars in text given either in parameters or in stdin by percent-encoding
 url_encode_bf - Make all chars given either in parameters or in stdin to percent-encoded sequence
+verscmp - Compare version numbers
 vidir-sanitize - Helper script to change tricky filenames in a directory
 vifiles - Edit multiple files as one
 visymlinks - Bulk edit target of symlinks

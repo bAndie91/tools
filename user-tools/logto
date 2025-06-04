@@ -7,6 +7,14 @@ true <<EOF
 
 logto - Run a command and append its STDOUT and STDERR to a file
 
+=head1 SYNOPSIS
+
+logto I<FILENAME> I<COMMAND> [I<ARGS>]
+
+=head1 DESCRIPTION
+
+Save command's output (stdout and stderr) to file and keep normal stdout and stderr as well.
+
 =cut
 
 EOF
@@ -14,8 +22,7 @@ EOF
 
 if [ ".$1" = ".--help" ]
 then
-	echo "Usage: $0 <FILENAME> <COMMAND> [<ARGS>]"
-	echo "Save command's output (stdout and stderr) to file and keep normal stdout and stderr as well."
+	pod2text "$0"
 	exit
 fi
 

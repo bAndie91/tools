@@ -37,7 +37,7 @@ use Errno qw/:POSIX/;
 use Fcntl qw/:flock :seek F_GETFL F_SETFL O_NONBLOCK F_GETFD F_SETFD FD_CLOEXEC/;
 use File::Basename;
 use File::Temp qw/tempfile/;
-use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev pass_through/;
 use IPC::Run qw/run/;
 use List::MoreUtils qw/all any none/;
 use Pod::Usage;
@@ -50,7 +50,7 @@ $OptVerbose = 0;
 GetOptions(
 	'v|verbose!' => \$OptVerbose,
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
-	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
+	'<>' => sub { unshift @ARGV, $_[0]; die '!FINISH'; },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
 

@@ -37,13 +37,9 @@ Evaluate perl expression in triggerexec(1)'s own context.
 Useful variables:
 B<$COMMAND_PID> is the I<COMMAND>'s PID.
 B<$PARAM> is a hash ref containing event parameters,
-for example B<$PARAM->{line}> is the text triggered the action - if applicable (B<stdout:>/B<stderr:> events).
+for example B<< $PARAM->{line} >> is the text triggered the action - if applicable (B<stdout:>/B<stderr:> events).
 
 =back
-
-=head1 IMPLEMENTATION STATUS
-
-incomplete
 
 =head1 LIMITATIONS
 
@@ -64,7 +60,7 @@ use Errno qw/:POSIX/;
 use Fcntl qw/:flock :seek F_GETFL F_SETFL O_NONBLOCK F_GETFD F_SETFD FD_CLOEXEC/;
 use File::Basename;
 use File::Temp qw/tempfile/;
-use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev pass_through/;
 use IPC::Run qw/run start finish/;
 use List::MoreUtils qw/all any none/;
 use Pod::Usage;
@@ -74,7 +70,7 @@ no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 GetOptions(
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
-	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
+	'<>' => sub { unshift @ARGV, $_[0]; die '!FINISH'; },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
 

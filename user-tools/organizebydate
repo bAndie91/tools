@@ -82,11 +82,11 @@ Note, this affects only B<--copy> and B<--move>, not B<--handler>.
 =item --handler I<PROG>
 
 Execute I<PROG> to handle files 1-by-1 instead of internal copy or move.
-You may do C<< --handler "rsync -Pvit --mkpath" --template I<HOSTNAME>:I<PATH> >>
-for fast upload (beware, B<< --set-I<*>time >> and conflicting filename checking work only on local paths)
+You may do C<< --handler "rsync -Pvit --inplace --mkpath" --template I<HOSTNAME>:I<PATH> >> to upload via ssh/rsync
+(beware, B<< --set-I<*>time >> and conflicting filename checking work only on local paths)
 or implement any file transfer method here.
 Arguments passed (after those which are given in I<PROG>) are
-the source file path and the target file path.
+first, the source file path, and second, the target file path.
 Conflicting target path is still checked and resolver is run before I<PROG>
 if B<--conflict-resolver-cmd> or B<--conflict-resolver-script> is specified;
 if not, I<PROG> should implement conflicting file name resolution logic.

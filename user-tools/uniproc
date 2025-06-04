@@ -13,8 +13,9 @@ uniproc [I<OPTIONS>] I<INPUTFILE> I<COMMAND> [I<ARGS>]
 =head1 DESCRIPTION
 
 Take each line from I<INPUTFILE> as B<DATA> (chopping end-of-line chars),
-pass each piece of B<DATA> to I<COMMAND> as the last argument (unless placeholder is in I<COMMAND> or I<ARGS>),
-then record the exit status.
+pass each TAB-delimited fields of B<DATA> to I<COMMAND> as arguments after I<ARGS>
+(unless placeholder is in I<COMMAND> or I<ARGS>, see below),
+run I<COMMAND> and then record the exit status.
 
 Can be parallelized well.
 uniproc(1) itself does not run multiple instances of I<COMMAND> in parallel, just in series,
@@ -43,11 +44,16 @@ But you may re-try the failed ones by the B<--retry> option.
 The user is allowed to append new lines of data to I<INPUTFILE> between executions or during runtime - it won't mess up the processing.
 However editing or reordering lines which are already in the file, confuses the results - don't do it.
 
-I<COMMAND> (and I<ARGS>) supports placeholders.
-A courly bracket-pair C<{}> is replaced to B<DATA> anywhere in I<COMMAND> I<ARGS>.
-If there is a number in it, B<{>I<N>B<}>, then the I<N>th TAB-delimited field is gonna be substituted in.
-Indexing starts at 1.
-If there is any placeholder, B<DATA> won't be added to I<ARGS> as the last argument.
+I<ARGS> (and I<COMMAND> too, somewhat usefully) supports placeholders:
+A curly bracket-pair C<{}> is replaced to B<DATA> as one argument, including TAB chars if any, anywhere in I<COMMAND> I<ARGS>.
+If there is a number in it, B<{>I<N>B<}>, then the I<N>th TAB-delimited field (1-indexed) is gonna be substituted in.
+A lone B<{@}> argument expands to as many arguments as TAB-delimited fields there are in B<DATA>.
+Multiple numbers in the placeholder like B<{5,3,4}> expands to all of the data fields specified by the index numbers, into multiple arguments.
+Note that in this case, the multi-index placeholder must stand in its own separate argument, just as the all-fields B<{@}> placeholder.
+Indexing a non-existing field expands to empty string.
+Be aware that your shell (eg. bash(1)) may expand arguments like C<{5,3,4}> before it gets to uniproc(1),
+so escape it if neccessary (eg. C<'{5,3,4}'>).
+If there is any curly bracket placeholder like these, B<DATA> fields won't be added to I<ARGS> as the last argument.
 
 =head1 OPTIONS
 
@@ -174,7 +180,7 @@ Record output of data processing into a file per each data item:
 Same as above, plus keep the output on STDOUT as well as in separate files.
 Note, the C<{}> argument is there to pass B<DATA> to the right command:
 
-  uniproc datafile substenv -e UNIPROC_DATANUM pipecmd some-command {} -- tee -a 'output-$UNIPROC_DATANUM'
+  uniproc datafile pipecmd some-command {} -- substenv -e UNIPROC_DATANUM tee -a 'output-$UNIPROC_DATANUM'
 
 Display data number, processing status, input data, (last line of) output data in a table:
 
@@ -398,12 +404,33 @@ sub subst_data
 {
 	my $data = shift;
 	my $field_num = shift;
-	if($field_num)
+	my $fields = shift;
+	if($field_num =~ /^\d+$/)
 	{
-		my @fields = split /\t/, $data;
-		return $fields[$field_num-1];
+		return $fields->[$field_num-1];
 	}
 	return $data;
+}
+
+sub expand_placeholders
+{
+	my $arg = shift;
+	my $Data = shift;
+	my $DataFields_ref = shift;
+	my $placeholder_found_ref = shift;
+	
+	if($arg =~ s/\{(\d*)\}/subst_data($Data, $1, $DataFields_ref)/eg)
+	{
+		$$placeholder_found_ref = 1;
+		return $arg;
+	}
+	if(my ($indices) = $arg =~ /^\{([\d,]+|\@)\}$/)
+	{
+		$$placeholder_found_ref = 1;
+		return @$DataFields_ref if $indices eq '@';
+		return map {$DataFields_ref->[$_-1] // ''} split /,/, $indices;
+	}
+	return $arg;
 }
 
 
@@ -425,6 +452,7 @@ while(not defined $OptShots or $num_shots < $OptShots)
 	count_input_records if not defined $TotalDataNum;
 	
 	my $Data = input_data($LineNum);
+	my @DataFields = split /\t/, $Data;
 	
 	my $InprogressFile = processing_lockfile_name($LineNum);
 	my $inprogress_fh = fopen $InprogressFile, {rw=>1, lock=>1};
@@ -437,9 +465,14 @@ while(not defined $OptShots or $num_shots < $OptShots)
 	$ENV{'UNIPROC_DATANUM'} = $LineNum;
 	$ENV{'UNIPROC_DATANUM_1INDEX'} = $ENV{'UNIPROC_DATANUM'}+1;
 	$ENV{'UNIPROC_TOTALNUM'} = $TotalDataNum;
+	
 	my $placeholder_found = 0;
-	my @command_args = map { my $arg = $_; $arg =~ s/\{(\d*)\}/subst_data($Data, $1)/eg and $placeholder_found = 1; $arg } @CommandArgs;
-	push @command_args, $Data if not $placeholder_found;
+	my @command_args = map {expand_placeholders($_, $Data, \@DataFields, \$placeholder_found)} @CommandArgs;
+	if(not $placeholder_found)
+	{
+		push @command_args, @DataFields;
+	}
+	
 	my $stdin = '';
 	run [@command_args], \$stdin;
 	my $status = $?;

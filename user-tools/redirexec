@@ -50,6 +50,8 @@ append
 
 =item --I<STD_FD_NAME>-B<file>=I<PATH>
 
+=item --B<std>[B<out> | B<err>]-B<append>=I<PATH>
+
 =item --I<STD_FD_NAME>-B<fd>=I<FILENO>
 
 =item --I<STD_FD_NAME>-B<close>

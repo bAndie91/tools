@@ -20,6 +20,9 @@ $EOT = chr  4;
 $LF  = "\n";
 $CAN = chr 24;
 
+$ANSI_BOLD = "\x1B[1m";
+$ANSI_NOBOLD = "\x1B[22m";
+
 $max_msg_len = 4096;
 $relay_mark = " \x1B[1m→\x1B[0m ";
 $talk_mark = " \x1B[1m>>>\x1B[0m ";
@@ -310,6 +313,12 @@ sub system_message
 {
 	erase_prompt;
 	print "\x1B[1;30m" . $_[0] . "\x1B[0m\n";
+}
+
+sub system_hint
+{
+	erase_prompt;
+	print STDERR "\x1B[36m" . $_[0] . "\x1B[0m\n";
 }
 
 sub system_warning
@@ -635,6 +644,7 @@ while(1)
 					# discard input by Ctrl-X [Return]
 					undef $line;
 					$multiline_input_mode = 0;
+					system_hint "Multiline message cancelled.";
 					next;
 				}
 				if($line =~ s/\Q$command_prefix\Eend.*//)
@@ -698,6 +708,7 @@ while(1)
 				{
 					$multiline_input_mode = 1;
 					$multiline_input = '';
+					system_hint "Begining multiline message. End by ${ANSI_BOLD}^/end${ANSI_NOBOLD}, or cancel by ${ANSI_BOLD}^X${ANSI_NOBOLD}.";
 				}
 				elsif($cmd eq "scan")
 				{

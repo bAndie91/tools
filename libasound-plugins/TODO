@@ -1,0 +1,24 @@
+ALSA per-program softvol softvolume control channel
+
+- softvol control-name by getprogname() ✓
+- avoid name duplication on the same device (buf different subdev) ✓ 
+	- done by using the same dev+subdev for all pcm.softvol(N)
+- when a new control channel is created, the client program must re-bind to the alsa device (stop+play or program restart) in order to able to change volume level. (alsa bug?)
+- different process, same program (getprogname)
+	- currently there is a single control for both
+	- make it one for each process?
+- deregister unused control channels [in-progress]
+
+- trick programs to use their right mixer control (not the 'Master')
+	- or create a many shm:<N> ctl devices as many alsa clients and let softvol control.name be 'Master' on each
+
+- default PCM device should find a free loopback card/device
+	- lets have one pcm.pback block which find a free Loopback dev/subdev every time
+	- dmix (or softvol or softvol+dmix combo) already accomplish this UPTO the 7th device of the 0th Loopback device
+	- it should consider hw:Loopback(N) where (N) > 0
+- have as many pcm.pmon(N) dsnoop device 
+	- as many active loopback subdevice there are
+	- give proper hint names to them
+
+ISSUE:
+	- snd_aloop modul grabs all the soundcard slots, so new soundcards can not be registered

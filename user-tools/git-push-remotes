@@ -64,19 +64,23 @@ echo "remotes: ${!nonBareRemotePushURL[*]}" >&2
 
 for remote in "${!nonBareRemotePushURL[@]}"
 do
-	pushurl=${nonBareRemotePushURL[$remote]}
-	echo "remote: $remote, push-url: $pushurl" >&2
-	if [[ $pushurl =~ ^([^:/]+):(.+?)/\.git$ ]]
-	then
-		remoteHost=${BASH_REMATCH[1]}
-		remotePath=${BASH_REMATCH[2]}
-		ssh "$remoteHost" multicmd --delimiter=+ --errexit mkdir -p "$remotePath" + git init -q "$remotePath"
-	fi
-	
-	refspecs=()
-	for branch in `git for-each-ref 'refs/heads/**' --format='%(refname:lstrip=2)'`
-	do
-		refspecs+=("refs/heads/$branch:refs/remotes/$thisremotename/$branch")
-	done
-	git push "$remote" "${refspecs[@]}"
+	set +e
+	(
+		set -e
+		pushurl=${nonBareRemotePushURL[$remote]}
+		echo "remote: $remote, push-url: $pushurl" >&2
+		if [[ $pushurl =~ ^([^:/]+):(.+?)/\.git$ ]]
+		then
+			remoteHost=${BASH_REMATCH[1]}
+			remotePath=${BASH_REMATCH[2]}
+			ssh "$remoteHost" multicmd --delimiter=+ --errexit mkdir -p "$remotePath" + git init -q "$remotePath"
+		fi
+		
+		refspecs=()
+		for branch in `git for-each-ref 'refs/heads/**' --format='%(refname:lstrip=2)'`
+		do
+			refspecs+=("refs/heads/$branch:refs/remotes/$thisremotename/$branch")
+		done
+		git push "$remote" "${refspecs[@]}"
+	)
 done

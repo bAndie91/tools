@@ -158,6 +158,7 @@ TOOLS ?= \
   replcmd \
   reportcmdstatus \
   rn \
+  rr \
   rsacrypt \
   rsync-semichroot \
   rsysrq \

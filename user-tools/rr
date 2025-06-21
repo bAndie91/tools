@@ -1,0 +1,57 @@
+#!/bin/bash
+
+# Remote-Run !
+#
+# if you mount remote directories by sshfs,
+# while also using ssh ControlMaster option,
+# you should use this shortcut to run commands on the remote machine in the same directory where you are at currently
+# in the mounted filesystem on your local machine.
+#
+# the formal requirement is to mount your sshfs directories somewhere to
+# .../ssh/USER@HOST(...)
+# or
+# .../rhome/USER@HOST(...)
+# usually under your home, eg. ~/ssh/joe@node(node.lan:22)
+# the parentheses are literal parentheses in the directory name and 
+# useful to distinguish mountpoints when you connect to the same machine with different hostname/port/etc settings.
+#
+# try out git://git.bitinfo.hu/sysop/tools/user-tools/autosshfs-mount which automates this sshfs management.
+
+abs_cwd=`readlink -f "$PWD"`
+if [[ $abs_cwd =~ (.+?/(ssh|rhome)/([^/]+))/?(.*) ]]
+then
+    mountpoint=${BASH_REMATCH[1]}
+    rhost=${BASH_REMATCH[3]}
+    rpath=${BASH_REMATCH[4]}
+    rhostname=''
+    rport=''
+    if [[ $rhost =~ (.+?)\(([^,]+),([0-9]+)\)$ ]]
+    then
+        rhost=${BASH_REMATCH[1]}
+        rhostname=${BASH_REMATCH[2]}
+        rport=${BASH_REMATCH[3]}
+    fi
+    mounted=`mount | td-trans-mount | td-filter MOUNTPOINT = "$mountpoint" | td-select -H DEVICE`
+    if [[ $mounted =~ :(.*) ]]
+    then
+        rbase=${BASH_REMATCH[1]:-.}
+        if [ "${rbase: -1}" = / ]
+        then
+            rpath=$rbase$rpath
+        else
+            rpath=$rbase/$rpath
+        fi
+    fi
+    printf -v rpath_esc %q "$rpath"
+    echo "rr: running as '$rhost', ${rhostname:+HostName: $rhostname, }${rport:+Port: $rport, }workdir: $rpath_esc" 1>&2
+    declare -a cmdargs_esc=()
+    for arg in "$@"
+    do
+        printf -v arg %q "$arg"
+        cmdargs_esc+=("$arg")
+    done
+    exec ssh "$rhost" ${rhostname:+-o HostName=$rhostname} ${rport:+-o Port=$rport} -t "cdexec $rpath_esc ${cmdargs_esc[*]}"
+else
+    echo "rr: current path is not detected as being remote mounted" 1>&2;
+    exit 1
+fi

@@ -3,7 +3,7 @@ default:
 	@echo may be interested in: install-all-for-user
 	false
 
-PLUGINS = inbandfiletransfer-osc linefeed queryinfo-osc wheelzoom selection-popup
+PLUGINS = inbandfiletransfer-osc linefeed printscrollback queryinfo-osc selection-popup urgency-on-bell wheelzoom
 TARGET_PREFIX = $(HOME)/.urxvt/ext
 TARGET_FILES = $(foreach name,$(PLUGINS),$(TARGET_PREFIX)/$(name))
 

@@ -37,20 +37,30 @@ then
 	exit 0
 fi
 
+status=0
+
 for file in "$@"
 do
-	while true
-	do
-		read -e -i "$file" -p "old: $file"$'\n'"new: " newname
-		if [ "$newname" != "$file" -a -n "$newname" ]
-		then
-			if mv -i -v "$file" "$newname"
+	if [ ! -e "$file" -a ! -L "$file" ]
+	then
+		echo "$0: $file: file not found" >&2
+		status=1
+	else
+		while true
+		do
+			read -e -i "$file" -p "old: $file"$'\n'"new: " newname
+			if [ "$newname" != "$file" -a -n "$newname" ]
 			then
+				if mv -i -v "$file" "$newname"
+				then
+					break
+				fi
+			else
 				break
 			fi
-		else
-			break
-		fi
-		echo
-	done
+			echo
+		done
+	fi
 done
+
+exit $status

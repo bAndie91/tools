@@ -81,6 +81,6 @@ do
 		do
 			refspecs+=("refs/heads/$branch:refs/remotes/$thisremotename/$branch")
 		done
-		git push "$remote" "${refspecs[@]}"
+		git push --force "$remote" "${refspecs[@]}"
 	)
 done

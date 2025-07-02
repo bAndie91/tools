@@ -4,18 +4,19 @@
 
 =head1 NAME
 
-visymlinks - Bulk edit target of symlinks
+visymlinks - Bulk edit symlinks names and targets
 
 =head1 SYNOPSIS
 
-visymlinks [<PATH> [<PATH> [...]]]
+visymlinks [I<PATH> [I<PATH> [...]]]
 
 =head1 DESCRIPTION
 
 Open up your default editor (see sensible-editor(1)) to edit the targets of I<PATH> symlinks
-given in command arguments.
+given in command arguments as well as their own filenames.
 If no I<PATH> given, all symlinks in the current working directory will be loaded into the editor.
 Once finished editing, visymlinks(1) changes the target of those symlinks which were edited.
+
 Contrary to visymlinks(1)'s relative, vidir(1),
 if a I<PATH> symlink is removed in the editor, it won't be removed from the filesystem.
 
@@ -26,6 +27,11 @@ Returns B<zero> if everything went well.
 Returns the exit status of the editor if it was B<not zero> (also won't change symlinks).
 
 Returns the error code of symlink(2) if any of such calls failed.
+
+=head1 LIMITATIONS
+
+Special characters disallowed in I<PATH> filenames and symlinks targets:
+B<TAB> and B<LF> linefeed (newline).
 
 =head1 SEE ALSO
 
@@ -46,7 +52,12 @@ for my $path (@ARGV)
 {
 	if(-l $path)
 	{
-		printf {$fh} ("%s\t%s\n", $path, readlink $path) or croak "$0: $filename: write: $!";
+		if(not $header_is_written)
+		{
+			printf {$fh} ("%s\t%s\t%s\n", "OLD_NAME", "NEW_NAME", "NEW_TARGET") or croak "$0: $filename: write: $!";
+			$header_is_written = 1;
+		}
+		printf {$fh} ("%s\t%s\t%s\n", $path, $path, readlink $path) or croak "$0: $filename: write: $!";
 	}
 }
 
@@ -58,28 +69,87 @@ $editor_err = $?;
 if($editor_err == 0)
 {
 	open my $fh, '<', $filename or "$0: $filename: open: $!";
+	
+	# skip header
+	<$fh>;
+	
 	while(<$fh>)
 	{
 		chomp;
-		my ($path, $new_target) = split /\t/;
-		if(!-e $path and !-l $path)
+		my ($old_path, $new_path, $new_target) = split /\t/;
+		if(!-e $old_path and !-l $old_path)
 		{
-			warn "$0: $path: does not exist\n";
+			warn "$0: $old_path: does not exist\n";
 			next;
 		}
-		if(!-l $path)
+		if(!-l $old_path)
 		{
-			warn "$0: $path: is not a symlink\n";
+			warn "$0: $old_path: is not a symlink\n";
 			next;
 		}
 		
-		my $old_target = readlink $path;
-		if($old_target ne $new_target)
+		
+		my $old_target = readlink $old_path;
+		
+		if($old_target eq $new_target)
 		{
-			warn "$0: $path: old target: $old_target\n";
-			warn "$0: $path: new target: $new_target\n";
-			unlink $path;
-			symlink $new_target, $path or croak "$0: $path: symlink: $!";
+			if($old_path ne $new_path)
+			{
+				# just a rename. why not vidir?
+				warn "$0: $old_path: new name: $new_path\n";
+				my $ok = rename $old_path, $new_path;
+				if(not $ok)
+				{
+					croak "$0: $old_path: rename: $new_path: $!";
+				}
+			}
+		}
+		else
+		{
+			if($old_path ne $new_path)
+			{
+				# create the new symlink first, then remove the old one.
+				warn "$0: $old_path: new name: $new_path\n";
+				warn "$0: $old_path: new target: $new_target\n";
+			}
+			else
+			{
+				# remove the old symlink first to make room for the new one with the new target.
+				warn "$0: $old_path: old target: $old_target\n";
+				warn "$0: $old_path: new target: $new_target\n";
+				
+				unlink $old_path;
+				# don't handle errors here. it will be bubble up at the symlink call below.
+			}
+			
+			my $ok = symlink $new_target, $new_path;
+			if($ok)
+			{
+				if($old_path ne $new_path)
+				{
+					unlink $old_path or croak "$0: $old_path: unlink: $!";
+				}
+			}
+			else
+			{
+				my $err = int $!;
+				warn "$0: $new_path: symlink: $!\n";
+				
+				if($old_path eq $new_path)
+				{
+					# try to restore the just unlinked symlink
+					my $restore_ok = symlink $old_target, $old_path;
+					if($restore_ok)
+					{
+						warn "$0: $old_path: kept old target: $old_target\n";
+					}
+					else
+					{
+						warn "$0: $old_path: could not restore old target: symlink: $!\n";
+					}
+				}
+				exit $err;
+			}
 		}
 	}
 }

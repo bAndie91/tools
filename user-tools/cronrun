@@ -29,11 +29,21 @@ Run I<COMMAND> in a way most scheduled jobs are intended to run, ie:
 
 =over 4
 
-=item --random-delay, -d I<SEC>
+=item --random-delay, -d I<TIME>
 
-Delay program execution at most I<SEC> seconds.
+Delay program execution at most I<TIME> amount of time.
 Default is to wait nothing.
 Also can be set by B<CRONRUN_DELAY> environment.
+
+I<TIME> is a series of I<AMOUNT> and I<UNIT> pairs after each other without space, ie:
+
+ I<AMOUNT> I<UNIT> [ I<AMOUNT> I<UNIT> [ I<AMOUNT> I<UNIT> [...] ] ]
+
+Where I<UNIT> is B<s>, B<m>, B<h>, B<d> for seconds, minutes, hours, days respectively.
+
+Example: C<1h30m>
+
+A single number without I<UNIT> is seconds.
 
 =item --wait-lock, -W
 
@@ -85,7 +95,7 @@ EOF
 
 
 scriptname=${0##*/}
-random_delay_sec=${CRONRUN_DELAY:-0}
+random_delay=${CRONRUN_DELAY:-0}
 wait_lock=''
 
 while [ $# != 0 ]
@@ -97,7 +107,7 @@ do
 		;;
 	-d|--random-delay)
 		shift
-		random_delay_sec=$1
+		random_delay=$1
 		;;
 	-W|--wait-lock)
 		wait_lock=1
@@ -110,6 +120,35 @@ do
 	shift
 done
 
+
+# calculate the random delay seconds:
+
+if [[ $random_delay =~ ^[0-9]+$ ]]
+then
+	random_delay_sec=$random_delay
+else
+	random_delay_sec=0
+	
+	while [[ $random_delay =~ ^([0-9]+)([smhd])(.*) ]]
+	do
+		case ${BASH_REMATCH[2]} in
+		(s)	sec=1;;
+		(m)	sec=60;;
+		(h)	sec=3600;;
+		(d)	sec=86400;;
+		esac
+		let random_delay_sec+=$[ ${BASH_REMATCH[1]} * $sec ]
+		random_delay=${BASH_REMATCH[3]}
+	done
+	if [ -n "$random_delay" ]
+	then
+		echo "cronrun: invalid timespec: $random_delay" >&2
+		exit -1
+	fi
+fi
+
+# locking:
+
 if [ `id -u` = 0 ]
 then
 	lockdir=/var/run/lock/cronrun
@@ -119,11 +158,11 @@ fi
 cmd_hash=`echo -n "${CRONJOBID:-$1}" | md5sum | cut -c1-32`
 
 
-# delay random amount of seconds
+# delay random amount of seconds:
 sleep $[RANDOM % ($random_delay_sec + 1)]
 
 
-# set up logging
+# set up logging:
 if [ -n "$CRONJOBID" ]
 then
 	syslog_ident=$LOGNAME.${CRONJOBID//\//.}
@@ -131,12 +170,12 @@ then
 fi
 
 
-# scheduled jobs are likely good to run at low priority
+# scheduled jobs are likely good to run at low priority:
 renice -n 19 -p $$ >/dev/null
 ionice -c 3 -p $$
 
 
-# check the lock
+# check the lock:
 mkdir -p "$lockdir"
 lockfile=$lockdir/$cmd_hash
 exec {lock_fd}>>"$lockfile"
@@ -161,7 +200,7 @@ fi
 
 # ---- lock acquired ----
 
-# run the job
+# run the job:
 exec "$@"
 
 exit $?

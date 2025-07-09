@@ -40,11 +40,25 @@ Output:
 
 =over 4
 
+=item -p, --prefix I<PREFIX>
+
+Prefix environment variable names by I<PREFIX>
+
 =item -e, --errexit
 
 Stop processing records once a command failed.
+td-env(1) exit with the last command's exit code
+(or 128 + signal number if terminated by a signal).
 
 =back
+
+=head1 SECURITY
+
+td-env(1) does not do any measure to protect critical environment variables,
+such as PATH, HOME, etc.
+They (probably) won't affect td-env(1) itself (perhaps the perl interpreter is affected)
+but the called I<COMMAND> does.
+It's the user's responsibility to feed tabular data into it with safe header names.
 
 =head1 SEE ALSO
 
@@ -56,7 +70,11 @@ env(1), environ(7)
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 
+$OptErrexit = 0;
+$OptPrefix = '';
 %OptionDefs = (
+	'e|errexit!' => \$OptErrexit,
+	'p|prefix=s' => \$OptPrefix,
 );
 
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
@@ -68,12 +86,40 @@ RECORD:
 while(not eof STDIN)
 {
 	my @row = read_record(\*STDIN);
-	my %fields = map {( $_ => $row[$Header{$_}] )} keys %Header;
+	my $status = 0;
 	
 	# localize the given keys in %ENV, so they won't affect other parts of the code,
 	# and still inherited by system() call.
 	{
-		local @ENV{keys %fields} = values %fields;
+		# this assigment drop extra columns (if a row has more fields than the header)
+		# and undef a given $ENV{FIELDNAME} if there is not that many fields in a certain row.
+		local @ENV{map {$OptPrefix.$_} @Header} = @row;
 		system {$ARGV[0]} @ARGV;
+		$status = $?;
+	}
+	
+	if($OptErrexit and $status != 0)
+	{
+		if($status == -1)
+		{
+			my ($errno, $errmsg) = (int $!, $!);
+			warn "$0: exec: $ARGV[0]: $errmsg\n";
+			exit $errno;
+		}
+		else
+		{
+			my $signal = $status & 127;
+			if($signal)
+			{
+				warn "$0: $ARGV[0]: killed by signal $signal\n";
+				exit 128+$signal;
+			}
+			else
+			{
+				my $exitcode = $status >> 8;
+				warn "$0: $ARGV[0]: exit $exitcode\n";
+				exit $exitcode;
+			}
+		}
 	}
 }

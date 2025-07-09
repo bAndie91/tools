@@ -82,6 +82,7 @@ use List::MoreUtils qw/all any none zip/;
 use Pod::Usage;
 use Term::Size;
 use open ':std', ':encoding(UTF-8)';
+use utf8;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 

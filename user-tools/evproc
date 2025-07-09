@@ -4,13 +4,16 @@
 
 =head1 NAME
 
-scriptname - short description
+evproc - Process new events in a textfile, events described per lines
 
 =head1 SYNOPSIS
 
-scriptname [I<OPTIONS>] [--] I<COMMAND> [I<ARGS>]
+evproc [I<OPTIONS>] I<EVENT-FILE> I<STATE-FILE> [--] I<HANDLER> [I<ARGS>]
 
 =head1 DESCRIPTION
+
+evproc(1) looks into I<EVENT-FILE> and run I<HANDLER> command on each new lines.
+What is considered new is decided using the I<STATE-FILE>.
 
 =head1 OPTIONS
 
@@ -25,6 +28,8 @@ scriptname [I<OPTIONS>] [--] I<COMMAND> [I<ARGS>]
 =head1 LIMITATIONS
 
 =head1 SEE ALSO
+
+uniproc(1)
 
 =cut
 

@@ -30,6 +30,12 @@ By default, run I<HANDLER> for all events.
 
 Record and check the event's checksum in I<STATE-FILE> instead of the verbatim event string itself.
 
+=item --shrink-state
+
+Remove those entries from the state file which are not encountered in the event file.
+Shrinks only when the while event file could be read up,
+so not when interrupted by B<--errexit> or by other error preventing to learn all events in the event file.
+
 =back
 
 =head1 ENVIRONMENT
@@ -116,10 +122,15 @@ no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 $OptErrexit = 0;
 $OptChecksumState = 0;
+$OptShrinkState = 0;
+
+# bitfield:
+use constant { EVENT_HANDLED => 1, EVENT_ENCOUNTERED => 2, };
 
 GetOptions(
 	'e|errexit!' => \$OptErrexit,
 	'C|checksum-state' => \$OptChecksumState,
+	'shrink-state' => \$OptShrinkState,
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 	'<>' => sub { unshift @ARGV, $_[0]; die '!FINISH'; },
 ) or pod2usage(-exitval=>2, -verbose=>99);
@@ -135,7 +146,7 @@ sub fopen
 {
 	my $path = shift;
 	my $opts = shift;  # supported opts: rw, no_create, lock, autoflush
-	my $mode = '<';  # default mode is read-only, no-create
+	my $mode = '<';  # default mode is read-only, no_create
 	if($opts->{'rw'})
 	{
 		if(not $opts->{'no_create'})
@@ -163,6 +174,26 @@ sub fopen
 	return $fh;
 }
 
+sub bit_set(\$$)
+{
+	my $var_ref = shift;
+	my $bit = shift;
+	$$var_ref |= $bit;
+}
+
+sub bit_unset(\$$)
+{
+	my $var_ref = shift;
+	my $bit = shift;
+	$$var_ref &= ~$bit;
+}
+
+sub bit_check
+{
+	my $var = shift;
+	my $bit = shift;
+	return (($var & $bit) != 0);
+}
 
 
 die "$0: no event file specified\n" unless @ARGV;
@@ -186,7 +217,7 @@ $FailuresInThisSession = 0;
 while(my $handled_event_data = <$StateFH>)
 {
 	chomp $handled_event_data;
-	$HandledEvents{$handled_event_data} = 1;
+	bit_set $HandledEvents{$handled_event_data}, EVENT_HANDLED;
 }
 
 warn sprintf "%s: %d events handled previously.\n", $0, scalar keys %HandledEvents;
@@ -204,7 +235,9 @@ while(my $EventLine = <$EventFH>)
 		$handled_event_data = $EventLine;
 	}
 	
-	if(exists $HandledEvents{$handled_event_data})
+	bit_set $HandledEvents{$handled_event_data}, EVENT_ENCOUNTERED;
+	
+	if(bit_check $HandledEvents{$handled_event_data}, EVENT_HANDLED)
 	{
 		# already handled
 		next;
@@ -230,12 +263,44 @@ while(my $EventLine = <$EventFH>)
 	{
 		# handler ran successfully.
 		print {$StateFH} "$handled_event_data\n";
-		$HandledEvents{$handled_event_data} = 1;
+		bit_set $HandledEvents{$handled_event_data}, EVENT_HANDLED;
 		$HandledEventsThisSession++;
 	}
 }
-close $StateFH;
 close $EventFH;
+
+if($OptShrinkState and not $FailuresInThisSession)
+{
+	# write back only those events in the state file which are encountered in the event file this time.
+	
+	my $num_old_entries = 0;
+	for my $handled_event_data (keys %HandledEvents)
+	{
+		if(not bit_check $HandledEvents{$handled_event_data}, EVENT_ENCOUNTERED)
+		{
+			$num_old_entries++;
+		}
+	}
+	
+	if($num_old_entries)
+	{
+		seek $StateFH, 0, SEEK_SET or die "$0: seek: $path: $!\n";
+		#select $StateFH; $| = 0; select STDOUT;
+		truncate $StateFH, 0;
+		my $written_back = 0;
+		for my $handled_event_data (keys %HandledEvents)
+		{
+			if(bit_check $HandledEvents{$handled_event_data}, EVENT_ENCOUNTERED)
+			{
+				print {$StateFH} "$handled_event_data\n";
+				$written_back++;
+			}
+		}
+		warn sprintf "%s: %d entries kept in, %d dropped from the state file.\n", $0, $written_back, (scalar keys %HandledEvents) - $written_back;
+	}
+}
+
+close $StateFH;
 
 warn sprintf "%s: %d events handled in this session.\n", $0, $HandledEventsThisSession;
 warn sprintf "%s: %d events failed to be handled in this session.\n", $0, $FailuresInThisSession if $FailuresInThisSession;

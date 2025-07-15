@@ -8,24 +8,84 @@ evproc - Process new events in a textfile, events described per lines
 
 =head1 SYNOPSIS
 
-evproc [I<OPTIONS>] I<EVENT-FILE> I<STATE-FILE> [--] I<HANDLER> [I<ARGS>]
+evproc [I<OPTIONS>] I<EVENT-FILE> I<STATE-FILE> I<HANDLER> [I<ARGS>]
 
 =head1 DESCRIPTION
 
 evproc(1) looks into I<EVENT-FILE> and run I<HANDLER> command on each new lines.
 What is considered new is decided using the I<STATE-FILE>.
 
+If I<HANDLER> command fails, the event is not considered to have been handled.
+
 =head1 OPTIONS
 
 =over 4
 
-=item -v, --verbose
+=item -e, --errexit
+
+Exit at the first failed I<HANDLER> command.
+By default, run I<HANDLER> for all events.
+
+=item -C, --checksum-state
+
+Record and check the event's checksum in I<STATE-FILE> instead of the verbatim event string itself.
 
 =back
 
 =head1 ENVIRONMENT
 
+=over 4
+
+=item B<EVENT>
+
+The string representing the event to be handled.
+This is passed by evproc(1) to the I<HANDLER> programm.
+
+=back
+
 =head1 LIMITATIONS
+
+B<EVENT> should not contain NUL byte as it can not be put in the environment.
+
+stdin(3) is closed for the I<HANDLER> process.
+
+I<STATE-FILE> is locked during the event handling process,
+so only 1 process can handle events per each I<STATE-FILE>.
+
+=head1 NON-FEATURES
+
+Out-of-scope features for evproc(1) and substitute suggestions:
+
+=over 4
+
+=item record any output from the event hander
+
+See eg. logto(1), redirexec(1), ...
+
+=item record the date/time when the event is handled
+
+See eg. ts(1), timestamper(1), ...
+
+=item automatic retry
+
+Just re-run evproc(1).
+
+Or wrap it by repeat(1) like:
+
+ env REPEAT_UNTIL=0 repeat evproc -e ...
+
+It restarts evproc until its exist status is zero.
+Assumed that the failure is temporary.
+
+=item watch the event file for new events
+
+Use an inotify(7) frontend, like iwatch(1) to trigger evproc(1).
+
+=item parallel event processing
+
+Sort events into multiple separate event files and run other evproc sessions on them.
+
+=back
 
 =head1 SEE ALSO
 
@@ -54,12 +114,130 @@ use POSIX;
 use Socket qw/AF_UNIX AF_INET SOCK_STREAM pack_sockaddr_in inet_aton sockaddr_un/;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
-$OptVerbose = 0;
+$OptErrexit = 0;
+$OptChecksumState = 0;
 
 GetOptions(
-	'v|verbose!' => \$OptVerbose,
+	'e|errexit!' => \$OptErrexit,
+	'C|checksum-state' => \$OptChecksumState,
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 	'<>' => sub { unshift @ARGV, $_[0]; die '!FINISH'; },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
 
+if($OptChecksumState)
+{
+	eval q{ use Digest::SHA 'sha256_base64'; 1; } or die $@;
+}
+
+
+sub fopen
+{
+	my $path = shift;
+	my $opts = shift;  # supported opts: rw, no_create, lock, autoflush
+	my $mode = '<';  # default mode is read-only, no-create
+	if($opts->{'rw'})
+	{
+		if(not $opts->{'no_create'})
+		{
+			open my $fh, '>>', $path or die "$0: $path: $!\n";
+			close $fh;
+		}
+		$mode = '+<';
+	}
+	
+	open my $fh, $mode, $path or die "$0: $path: $!\n";
+	
+	if($opts->{'autoflush'})
+	{
+		my $prev_ofh = select $fh;
+		$|++;
+		select $prev_ofh;
+	}
+	
+	seek $fh, 0, SEEK_SET or die "$0: seek: $path: $!\n";
+	if($opts->{'lock'})
+	{
+		flock $fh, LOCK_EX|LOCK_NB or die "$0: flock: $path: $!\n";
+	}
+	return $fh;
+}
+
+
+
+die "$0: no event file specified\n" unless @ARGV;
+$EventFile = shift @ARGV;
+
+die "$0: no state file specified\n" unless @ARGV;
+$StateFile = shift @ARGV;
+
+die "$0: no handler command specified\n" unless @ARGV;
+@HandlerCommand = @ARGV;
+
+$ExitStatus = 0;
+
+
+$EventFH = fopen $EventFile, {no_create=>1,};
+$StateFH = fopen $StateFile, {rw=>1, lock=>1, autoflush=>1};
+%HandledEvents = ();
+$HandledEventsThisSession = 0;
+$FailuresInThisSession = 0;
+
+while(my $handled_event_data = <$StateFH>)
+{
+	chomp $handled_event_data;
+	$HandledEvents{$handled_event_data} = 1;
+}
+
+warn sprintf "%s: %d events handled previously.\n", $0, scalar keys %HandledEvents;
+
+while(my $EventLine = <$EventFH>)
+{
+	chomp $EventLine;
+	my $handled_event_data;
+	if($OptChecksumState)
+	{
+		$handled_event_data = sha256_base64($EventLine);
+	}
+	else
+	{
+		$handled_event_data = $EventLine;
+	}
+	
+	if(exists $HandledEvents{$handled_event_data})
+	{
+		# already handled
+		next;
+	}
+	
+	my $stdin = '';
+	run [@HandlerCommand], \$stdin, init => sub
+		{
+			$ENV{'EVENT'} = encode_utf8($EventLine);
+		};
+	my $status = $?;
+	
+	if(WIFSIGNALED($status) or WEXITSTATUS($status))
+	{
+		$FailuresInThisSession++;
+		if($OptErrexit)
+		{
+			$ExitStatus = WIFSIGNALED($status) ? 128 + WTERMSIG($status) : WEXITSTATUS($status);
+			last;
+		}
+	}
+	else
+	{
+		# handler ran successfully.
+		print {$StateFH} "$handled_event_data\n";
+		$HandledEvents{$handled_event_data} = 1;
+		$HandledEventsThisSession++;
+	}
+}
+close $StateFH;
+close $EventFH;
+
+warn sprintf "%s: %d events handled in this session.\n", $0, $HandledEventsThisSession;
+warn sprintf "%s: %d events failed to be handled in this session.\n", $0, $FailuresInThisSession if $FailuresInThisSession;
+
+exit $ExitStatus;

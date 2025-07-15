@@ -4,15 +4,15 @@
 
 =head1 NAME
 
-evproc - Process new events in a textfile, events described per lines
+evhand - Process new events in a textfile, events described per lines
 
 =head1 SYNOPSIS
 
-evproc [I<OPTIONS>] I<EVENT-FILE> I<STATE-FILE> I<HANDLER> [I<ARGS>]
+evhand [I<OPTIONS>] I<EVENT-FILE> I<STATE-FILE> I<HANDLER> [I<ARGS>]
 
 =head1 DESCRIPTION
 
-evproc(1) looks into I<EVENT-FILE> and run I<HANDLER> command on each new lines.
+evhand(1) looks into I<EVENT-FILE> and run I<HANDLER> command on each new lines.
 What is considered new is decided using the I<STATE-FILE>.
 
 If I<HANDLER> command fails, the event is not considered to have been handled.
@@ -39,7 +39,7 @@ Record and check the event's checksum in I<STATE-FILE> instead of the verbatim e
 =item B<EVENT>
 
 The string representing the event to be handled.
-This is passed by evproc(1) to the I<HANDLER> programm.
+This is passed by evhand(1) to the I<HANDLER> programm.
 
 =back
 
@@ -54,7 +54,7 @@ so only 1 process can handle events per each I<STATE-FILE>.
 
 =head1 NON-FEATURES
 
-Out-of-scope features for evproc(1) and substitute suggestions:
+Out-of-scope features for evhand(1) and substitute suggestions:
 
 =over 4
 
@@ -68,22 +68,22 @@ See eg. ts(1), timestamper(1), ...
 
 =item automatic retry
 
-Just re-run evproc(1).
+Just re-run evhand(1).
 
 Or wrap it by repeat(1) like:
 
- env REPEAT_UNTIL=0 repeat evproc -e ...
+ env REPEAT_UNTIL=0 repeat evhand -e ...
 
-It restarts evproc until its exist status is zero.
+It restarts evhand until its exist status is zero.
 Assumed that the failure is temporary.
 
 =item watch the event file for new events
 
-Use an inotify(7) frontend, like iwatch(1) to trigger evproc(1).
+Use an inotify(7) frontend, like iwatch(1) to trigger evhand(1).
 
 =item parallel event processing
 
-Sort events into multiple separate event files and run other evproc sessions on them.
+Sort events into multiple separate event files and run other evhand(1) sessions on them.
 
 =back
 

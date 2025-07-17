@@ -39,6 +39,7 @@ TOOLS ?= \
   eat \
   errorlevel \
   error_reporting.php \
+  evhand \
   fcomplete \
   fc-search-codepoint \
   fdupes-hardlink \

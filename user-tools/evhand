@@ -197,7 +197,7 @@ sub bit_unset(\$$)
 	$$var_ref &= ~$bit;
 }
 
-sub bit_check
+sub bit_isset
 {
 	my $var = shift;
 	my $bit = shift;
@@ -246,7 +246,7 @@ while(my $EventLine = <$EventFH>)
 	
 	bit_set $HandledEvents{$handled_event_data}, EVENT_ENCOUNTERED;
 	
-	if(bit_check $HandledEvents{$handled_event_data}, EVENT_HANDLED)
+	if(bit_isset $HandledEvents{$handled_event_data}, EVENT_HANDLED)
 	{
 		# already handled
 		next;
@@ -282,16 +282,7 @@ if($OptShrinkState and not $FailuresInThisSession)
 {
 	# write back only those events in the state file which are encountered in the event file this time.
 	
-	my $num_old_entries = 0;
-	for my $handled_event_data (keys %HandledEvents)
-	{
-		if(not bit_check $HandledEvents{$handled_event_data}, EVENT_ENCOUNTERED)
-		{
-			$num_old_entries++;
-		}
-	}
-	
-	if($num_old_entries)
+	if(any { not bit_isset $_, EVENT_ENCOUNTERED } values %HandledEvents)
 	{
 		seek $StateFH, 0, SEEK_SET or die "$0: seek: $path: $!\n";
 		#select $StateFH; $| = 0; select STDOUT;
@@ -299,7 +290,7 @@ if($OptShrinkState and not $FailuresInThisSession)
 		my $written_back = 0;
 		for my $handled_event_data (keys %HandledEvents)
 		{
-			if(bit_check $HandledEvents{$handled_event_data}, EVENT_ENCOUNTERED)
+			if(bit_isset $HandledEvents{$handled_event_data}, EVENT_ENCOUNTERED)
 			{
 				print {$StateFH} "$handled_event_data\n";
 				$written_back++;

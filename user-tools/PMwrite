@@ -1,0 +1,69 @@
+#!/bin/bash
+
+true <<'EOF'
+=pod
+
+=head1 NAME
+
+PMwrite - poor man's write - BSD write program alternative
+
+=head1 SYNOPSIS
+
+PMwrite I<USER>
+
+=head1 DESCRIPTION
+
+Write a message on I<USER>'s terminals who is currently logged in on the local host
+and has messaging enabled (by eg. C<mesg y>).
+
+PMwrite writes the message on all the terminals I<USER> enabled messaging.
+
+=head1 SEE ALSO
+
+write(1)
+
+=cut
+
+EOF
+
+
+
+set -u
+
+to_user=$1
+shift
+
+declare -a ttyfile_to_write=()
+
+for tty in `utmp | td-add-headers pid tty user from | td-filter user = hband | td-select -H tty | sort -u`
+do
+	ttyfile=/dev/$tty
+	if [ -e "$ttyfile" ]
+	then
+		perms=`stat -c %A "$ttyfile"`
+		group_write_bit=${perms:5:1}
+		if [ "$group_write_bit" != - ]
+		then
+			ttyfile_to_write+=("$ttyfile")
+		fi
+	fi
+done
+
+set +u
+
+if [ ${#ttyfile_to_write[@]} = 0 ]
+then
+	echo "$0: user is not logged in on any tty" >&2
+	exit 2
+fi
+
+message=`cat`
+
+printf "====
+Message from %s %s:
+----
+%s
+\a----
+" "$USER" "$(date +'at %T (%z) on %F, %A')" "$message" |\
+sed -e 's/$/\r/' |\
+tee "${ttyfile_to_write[@]}" >/dev/null

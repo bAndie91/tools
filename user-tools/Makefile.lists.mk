@@ -141,6 +141,7 @@ TOOLS ?= \
   PMnslist \
   PMpwgen \
   PMrecdiff \
+  PMwrite \
   pngmetatext \
   prefixlines \
   pvalve \

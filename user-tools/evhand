@@ -12,8 +12,10 @@ evhand [I<OPTIONS>] I<EVENT-FILE> I<STATE-FILE> I<HANDLER> [I<ARGS>]
 
 =head1 DESCRIPTION
 
-evhand(1) looks into I<EVENT-FILE> and run I<HANDLER> command on each new lines.
-What is considered new is decided using the I<STATE-FILE>.
+evhand(1) iterates through I<EVENT-FILE> and run I<HANDLER> command on each new lines.
+What is considered new is decided by I<STATE-FILE>.
+Handled events are recorded in I<STATE-FILE> (either by verbatim or by checksum),
+so new events are those not in the state file.
 
 If I<HANDLER> command fails, the event is not considered to have been handled.
 
@@ -24,7 +26,10 @@ If I<HANDLER> command fails, the event is not considered to have been handled.
 =item -e, --errexit
 
 Exit at the first failed I<HANDLER> command.
-By default, run I<HANDLER> for all events.
+Exit status will be the failed handler command's exit status if terminated normally,
+and B<128 + signal number> if killed by a signal.
+By default, run I<HANDLER> for all events,
+and exit with zero regardless of handler commands exit status.
 
 =item -C, --checksum-state
 
@@ -33,8 +38,12 @@ Record and check the event's checksum in I<STATE-FILE> instead of the verbatim e
 =item --shrink-state
 
 Remove those entries from the state file which are not encountered in the event file.
-Shrinks only when the while event file could be read up,
-so not when interrupted by B<--errexit> or by other error preventing to learn all events in the event file.
+Shrinks only when the whole event file could be read up,
+so not if interrupted by a failed handler command (in B<--errexit> mode)
+nor if any other error prevented to learn all the events in the event file.
+
+This is useful if you regularly purge old events from the event file
+and don't want the state file to grow indefinitely.
 
 =back
 
@@ -60,7 +69,7 @@ so only 1 process can handle events per each I<STATE-FILE>.
 
 =head1 NON-FEATURES
 
-Out-of-scope features for evhand(1) and substitute suggestions:
+Out-of-scope features for evhand(1) and suggestions what to do instead:
 
 =over 4
 
@@ -80,7 +89,7 @@ Or wrap it by repeat(1) like:
 
  env REPEAT_UNTIL=0 repeat evhand -e ...
 
-It restarts evhand until its exist status is zero.
+It restarts evhand until its exit status is zero.
 Assumed that the failure is temporary.
 
 =item watch the event file for new events
@@ -188,7 +197,7 @@ sub bit_unset(\$$)
 	$$var_ref &= ~$bit;
 }
 
-sub bit_check
+sub bit_isset
 {
 	my $var = shift;
 	my $bit = shift;
@@ -237,7 +246,7 @@ while(my $EventLine = <$EventFH>)
 	
 	bit_set $HandledEvents{$handled_event_data}, EVENT_ENCOUNTERED;
 	
-	if(bit_check $HandledEvents{$handled_event_data}, EVENT_HANDLED)
+	if(bit_isset $HandledEvents{$handled_event_data}, EVENT_HANDLED)
 	{
 		# already handled
 		next;
@@ -273,16 +282,7 @@ if($OptShrinkState and not $FailuresInThisSession)
 {
 	# write back only those events in the state file which are encountered in the event file this time.
 	
-	my $num_old_entries = 0;
-	for my $handled_event_data (keys %HandledEvents)
-	{
-		if(not bit_check $HandledEvents{$handled_event_data}, EVENT_ENCOUNTERED)
-		{
-			$num_old_entries++;
-		}
-	}
-	
-	if($num_old_entries)
+	if(any { not bit_isset $_, EVENT_ENCOUNTERED } values %HandledEvents)
 	{
 		seek $StateFH, 0, SEEK_SET or die "$0: seek: $path: $!\n";
 		#select $StateFH; $| = 0; select STDOUT;
@@ -290,7 +290,7 @@ if($OptShrinkState and not $FailuresInThisSession)
 		my $written_back = 0;
 		for my $handled_event_data (keys %HandledEvents)
 		{
-			if(bit_check $HandledEvents{$handled_event_data}, EVENT_ENCOUNTERED)
+			if(bit_isset $HandledEvents{$handled_event_data}, EVENT_ENCOUNTERED)
 			{
 				print {$StateFH} "$handled_event_data\n";
 				$written_back++;

@@ -143,20 +143,21 @@ Conflict resolutions:
 
 Don't copy (move) source file.
 
-=item B<proceed> [B<new-target>]
+=item B<proceed> [I<NEW-TARGET>]
 
 Copy (move) source to target.
 Optionally with a new target path.
-This overwrites the target even if B<--overwrite> is not given,
-and both when and when you don't give a B<new-target>.
+This always (attempts to) overwrites the target
+even if B<--overwrite> is not given,
+and in either cases: with and without I<NEW-TARGET> being given.
 
-=item other words are considered failure for now
+=item other words are considered failure for now.
 
 =back
 
 You may do extra steps in the conflict resolver's logic:
-eg. rename old target or move to an other directory and signal B<proceed>,
-remove source file and signal B<skip> - this is useful in B<move> mode.
+eg. rename old target or move to an other directory and signal B<proceed> at the end,
+or eg. remove source file and signal B<skip> - this is useful in B<move> mode.
 
 If you want to ask the user interactively, don't read from stdin(3),
 rather re-open the tty(4).

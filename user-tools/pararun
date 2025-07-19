@@ -57,6 +57,12 @@ Each line is taken as 1 argument unless B<-d> is given.
 When reading I<PARTICULAR_ARGS> from STDIN, split up lines into arguments by I<PATTERN> regex pattern.
 Useful delimiter is C<\t> TAB which you may need to quote in your shell, like C<'\t'> in bash(1).
 
+=item -a, --success-any
+
+Exit the lowest status code of the childer processes.
+Ie. exit with zero status code if at least one of the parallel commands succeeded.
+Although still waits for all to complete.
+
 =item -p, --prefix-first-particular-arg
 
 Prefix each output line with the given command's first particular argument.
@@ -90,7 +96,7 @@ Exit with the highest exit status of the children processes.
 
 If a command terminates due to a signal, and prefixing and/or prefix coloring is turned on,
 then the signaled state is not preserved because pararun(1) pipes commands through
-stdfilt(1) for get them prefixed and/or colored.
+stdfilt(1) to get them prefixed and/or colored.
 
 =head1 SEE ALSO
 
@@ -119,12 +125,14 @@ $OptColorizePrefix = 0;
 $OptPrefixTrailer = ' ';
 $OptEndSummary = 0;
 $OptBoldColors = 1;
+$OptSuccessAny = 0;
 
 GetOptions(
 	's|common-sep=s' => \$OptCommonSep,
 	'S|particular-sep=s' => \$OptParticularSep,
 	'i|particular-args-stdin!' => \$OptParticularArgsStdin,
 	'd|stdin-delimiter=s' => \$OptStdinDelimiter,
+	'a|success-any!' => \$OptSuccessAny,
 	'p|prefix-first-particular-arg!' => \$OptPrefixFirstParticularArg,
 	'C|colorize-prefix!' => \$OptColorizePrefix,
 	'T|prefix-trailer=s' => \$OptPrefixTrailer,
@@ -258,6 +266,7 @@ $h = harness @ipc_run_args;
 $h->run;
 
 $highest_exit_code = 0;
+$lowest_exit_code = undef;
 @full_results = $h->full_results;
 for my $cmd_idx (0 .. $#Commands)
 {
@@ -267,6 +276,7 @@ for my $cmd_idx (0 .. $#Commands)
 	my $termsig = WTERMSIG($result);
 	$exit_code = 128 + $termsig if $signaled;
 	$highest_exit_code = $exit_code if $highest_exit_code < $exit_code;
+	$lowest_exit_code = $exit_code if not defined $exit_code or $lowest_exit_code > $exit_code;
 	
 	if($OptEndSummary)
 	{
@@ -277,4 +287,12 @@ for my $cmd_idx (0 .. $#Commands)
 			$OptColorizePrefix ? AnsiColorReset : '';
 	}
 }
-exit $highest_exit_code;
+
+if($OptSuccessAny)
+{
+	exit $lowest_exit_code;
+}
+else
+{
+	exit $highest_exit_code;
+}

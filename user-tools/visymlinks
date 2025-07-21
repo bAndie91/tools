@@ -45,6 +45,8 @@ use Carp qw/croak/;
 
 $0 =~ s/.*\/([^\/]+)$/$1/;
 
+@Headers = ("OLD_NAME", "NEW_NAME", "TARGET_TYPE", "NEW_TARGET");
+
 ($fh, $filename) = tempfile( "visymlinks-XXXXXX", TMPDIR => 1 );
 
 push @ARGV, glob '*' unless @ARGV;
@@ -54,10 +56,11 @@ for my $path (@ARGV)
 	{
 		if(not $header_is_written)
 		{
-			printf {$fh} ("%s\t%s\t%s\n", "OLD_NAME", "NEW_NAME", "NEW_TARGET") or croak "$0: $filename: write: $!";
+			printf {$fh} join("\t", @Headers)."\n" or croak "$0: $filename: write: $!";
 			$header_is_written = 1;
 		}
-		printf {$fh} ("%s\t%s\t%s\n", $path, $path, readlink $path) or croak "$0: $filename: write: $!";
+		my $type = (-e $path) ? (-d $path ? 'D' : 'F') : 'B';
+		printf {$fh} ("%s\t%s\t%s\t%s\n", $path, $path, $type, readlink $path) or croak "$0: $filename: write: $!";
 	}
 }
 
@@ -76,7 +79,7 @@ if($editor_err == 0)
 	while(<$fh>)
 	{
 		chomp;
-		my ($old_path, $new_path, $new_target) = split /\t/;
+		my ($old_path, $new_path, $type, $new_target) = split /\t/;
 		if(!-e $old_path and !-l $old_path)
 		{
 			warn "$0: $old_path: does not exist\n";

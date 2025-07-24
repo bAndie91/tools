@@ -12,6 +12,16 @@ rextr I<REGEXP> [I<REGEXP> [...]]
 
 =head1 DESCRIPTION
 
+Takes line-based input on stdin(3) and
+matches all the given I<REGEXP> regular expression patterns to the input lines.
+Outputs tabular data with fields being the named and unnamed capture groups in the given I<REGEXP>es.
+
+Fields coming from unnamed capture groups are named as B<< FI<n> >> where I<n> is a 1-based counter,
+like: B<F1>, B<F2>, B<F3>, ...
+Note, it is not always equivalent to the regexp capture group number (C<$1>, C<$2>, ...),
+because rextr(1) takes multiple I<REGEXP>es, each with their own first capture group,
+but the counter in field names is ever-increasing.
+
 =head1 LIMITATIONS
 
 =head1 SEE ALSO

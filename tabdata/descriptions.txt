@@ -1,6 +1,7 @@
 csv2td - Transform CSV to tabular data format.
 kvpairs2td - Transform lines of key-value pairs to tabular data stream
 mrkv2td - Transform multi-record key-value (MRKV) stream to tabular data format.
+rextr - Extract string groups from text file matching by Regular Expressions
 td-add-headers - Add headers to the tabular data stream and pass through the rows.
 td-alter - Add new columns and fields to tabular data stream, and modify value of existing fields.
 td-collapse - Collapse multiple tabular data records with equivalent keys into one.
@@ -18,7 +19,7 @@ td-pivot - Switch columns for rows in tabular data
 td-rename - Rename tabular data columns
 td-select - Show only the specified columns from the input tabular data stream.
 td-sort - Sort tabular data by the columns given by name
-td-trans - Transform whitespace-delimited into TAB-delimited lines ignoring sorrounding whitespace.
+td-trans - Transform whitespace-delimited into TAB-delimited lines ignoring sorrounding spaces.
 td-trans-fixcol - Transform a table-looking text, aligned to fixed columns by spaces, into tabular data.
 td-trans-ls - Transform ls(1) output into fix number of TAB-delimited columns.
 td-trans-mount - Transform mount(1) output to tabular data stream.

@@ -4,6 +4,7 @@
 - [ics2td](#ics2td)
 - [kvpairs2td](#kvpairs2td)
 - [mrkv2td](#mrkv2td)
+- [rextr](#rextr)
 - [td2html](#td2html)
 - [td2kvpairs](#td2kvpairs)
 - [td2mrkv](#td2mrkv)
@@ -136,6 +137,34 @@ and it's usual for all records to have all fields anyways.
 ## SEE ALSO
 
 [td2mrkv](#td2mrkv)(1)
+
+# rextr
+
+## NAME
+
+rextr - Extract string groups from text file matching by Regular Expressions
+
+## SYNOPSIS
+
+rextr _REGEXP_ \[_REGEXP_ \[...\]\]
+
+## DESCRIPTION
+
+Takes line-based input on [stdin](#stdin)(3) and
+matches all the given _REGEXP_ regular expression patterns to the input lines.
+Outputs tabular data with fields being the named and unnamed capture groups in the given _REGEXP_es.
+
+Fields coming from unnamed capture groups are named as **F_n_** where _n_ is a 1-based counter,
+like: **F1**, **F2**, **F3**, ...
+Note, it is not always equivalent to the regexp capture group number (`$1`, `$2`, ...),
+because [rextr](#rextr)(1) takes multiple _REGEXP_es, each with their own first capture group,
+but the counter in field names is ever-increasing.
+
+## LIMITATIONS
+
+## SEE ALSO
+
+[pcut](#pcut)(1)
 
 # td2html
 
@@ -463,9 +492,23 @@ Output:
 
 ## OPTIONS
 
+- -p, --prefix _PREFIX_
+
+    Prefix environment variable names by _PREFIX_
+
 - -e, --errexit
 
     Stop processing records once a command failed.
+    [td-env](#td-env)(1) exit with the last command's exit code
+    (or 128 + signal number if terminated by a signal).
+
+## SECURITY
+
+[td-env](#td-env)(1) does not do any measure to protect critical environment variables,
+such as PATH, HOME, etc.
+They (probably) won't affect [td-env](#td-env)(1) itself (perhaps the perl interpreter is affected)
+but the called _COMMAND_ does.
+It's the user's responsibility to feed tabular data into it with safe header names.
 
 ## SEE ALSO
 
@@ -911,6 +954,11 @@ td-nup - Transform lines of text into tabluar data by unroll N lines into a row
 ## OPTIONS
 
 - -n _NUM_
+- -E, --no-escape
+
+    Don't escape text.
+    By default, [td-nup](#td-nup)(1) assumes input lines are raw text data,
+    thus need to escape tabular data special chars in them.
 
 # td-pivot
 
@@ -1056,11 +1104,16 @@ but by name.
 
 ## NAME
 
-td-trans - Transform whitespace-delimited into TAB-delimited lines ignoring sorrounding whitespace.
+td-trans - Transform whitespace-delimited into TAB-delimited lines ignoring sorrounding spaces.
 
 ## OPTIONS
 
-- -m, --max-columns _NUM_
+- -n, --min-columns _NUM_
+
+    Register at least this many columns
+    even if the first records has less than this many.
+
+- -x, --max-columns _NUM_
 
     Maximum number of columns.
     The _NUM_th column may have any whitespace.

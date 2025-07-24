@@ -7,6 +7,7 @@ TOOLS = \
   ics2td \
   kvpairs2td \
   mrkv2td \
+  rextr \
   td2html \
   td2kvpairs \
   td2mrkv \
@@ -71,10 +72,11 @@ depcheck:
 	perl -MEncode -e 1
 	perl -MText::CSV -e 1
 	perl -MMath::Cartesian::Product -e 1
+	perl -MPPIx::Regexp -e 1
 
 .PHONY: try-satisfy-dependencies
 try-satisfy-dependencies:
-	apt install libswitch-perl liblist-moreutils-perl libtext-csv-perl libmath-cartesian-product-perl
+	apt install libswitch-perl liblist-moreutils-perl libtext-csv-perl libmath-cartesian-product-perl libppix-regexp-perl
 
 
 REPO_ROOT = ..

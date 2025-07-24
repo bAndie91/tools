@@ -36,7 +36,8 @@ use Date::Parse;
 use DateTime::Format::Strptime;
 use Encode qw/decode encode decode_utf8 encode_utf8/;
 use utf8;
-use open ':std', ':encoding(UTF-8)';
+use open ':std', ':utf8';  # mark stdio as utf8 but not verify
+use open ':utf8';
 use Errno qw/:POSIX/;
 use Fcntl qw/:flock :seek F_GETFL F_SETFL O_NONBLOCK F_GETFD F_SETFD FD_CLOEXEC/;
 use File::Basename;

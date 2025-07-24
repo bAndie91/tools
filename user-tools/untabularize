@@ -43,7 +43,7 @@ use Pod::Usage;
 use POSIX;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 use utf8;
-use open ':std', ':encoding(UTF-8)';
+use open ':std', ':utf8';
 
 $OptNoPipeInHeader = 0;
 $OptAllowWhitespace = 0;

@@ -7,6 +7,7 @@ TOOLS = \
   ics2td \
   kvpairs2td \
   mrkv2td \
+  rextr \
   td2html \
   td2kvpairs \
   td2mrkv \

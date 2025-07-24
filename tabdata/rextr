@@ -1,0 +1,128 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+rextr - Extract string groups from text file matching by Regular Expressions
+
+=head1 SYNOPSIS
+
+rextr I<REGEXP> [I<REGEXP> [...]]
+
+=head1 DESCRIPTION
+
+=head1 LIMITATIONS
+
+=head1 SEE ALSO
+
+pcut(1)
+
+=cut
+
+
+use constant { STAT_DEV=>0, STAT_INODE=>1, STAT_PERM=>2, STAT_NLINKS=>3, STAT_UID=>4, STAT_GID=>5, STAT_RDEV=>6, STAT_SIZE=>7, STAT_ATIME=>8, STAT_MTIME=>9, STAT_CTIME=>10, STAT_BLOCKSIZE=>11, STAT_BLOCKS=>12, };
+use Cwd qw/getcwd realpath/;
+use Data::Dumper;
+use Date::Parse;
+use DateTime::Format::Strptime;
+use Encode qw/decode encode decode_utf8 encode_utf8/;
+use utf8;
+use open ':std', ':encoding(UTF-8)';
+use Errno qw/:POSIX/;
+use Fcntl qw/:flock :seek F_GETFL F_SETFL O_NONBLOCK F_GETFD F_SETFD FD_CLOEXEC/;
+use File::Basename;
+use File::Temp qw/tempfile/;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev pass_through permute/;
+use IPC::Run qw/run/;
+use List::MoreUtils qw/all any none/;
+use Pod::Usage;
+use POSIX;
+use Socket qw/AF_UNIX AF_INET SOCK_STREAM pack_sockaddr_in inet_aton sockaddr_un/;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
+
+GetOptions(
+	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+	'<>' => sub { unshift @ARGV, $_[0]; die '!FINISH'; },
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+
+use PPIx::Regexp;
+use PPIx::Regexp::Dumper;
+
+my $re_boundary = '/';
+my @matcher;
+my $numbered_fields = 0;
+
+for my $arg (@ARGV)
+{
+	my $arg_esc = $arg =~ s{[$re_boundary\\]}{\$&}gr;
+	my $re = PPIx::Regexp->new($re_boundary . $arg_esc . $re_boundary);
+	if($re->failures)
+	{
+		die PPIx::Regexp::Dumper->new($re)->string;
+	}
+	
+	my @groups = ();
+	
+	for my $group (@{$re->find('PPIx::Regexp::Structure::Capture')})
+	{
+		if(ref $group eq 'PPIx::Regexp::Structure::NamedCapture')
+		{
+			push @groups, {
+				name => $group->name,
+				field => $group->name,
+			};
+		}
+		else
+		{
+			$numbered_fields++;
+			push @groups, {
+				num => $numbered_fields,
+				field => "F".$numbered_fields,
+			};
+		}
+	}
+	
+	push @matcher, {
+		pattern => $arg,
+		groups => \@groups,
+	};
+}
+
+output_record(map { $_->{field} } map { @{$_->{groups}} } @matcher);
+
+while(<STDIN>)
+{
+	chomp;
+	my @fields = ();
+	my $any_match = 0;
+	
+	for my $matcher (@matcher)
+	{
+		if($_ =~ m{$matcher->{pattern}})
+		{
+			$any_match = 1;
+		}
+		for my $group (@{$matcher->{groups}})
+		{
+			my $value;
+			if(exists $group->{name})
+			{
+				$value = $+{$group->{name}};
+			}
+			else
+			{
+				$value = eval '$'.$group->{num};
+			}
+			push @fields, $value;
+		}
+	}
+	
+	if($any_match)
+	{
+		output_record(@fields);
+	}
+}

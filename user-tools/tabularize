@@ -81,8 +81,8 @@ use IPC::Run qw/run/;
 use List::MoreUtils qw/all any none zip/;
 use Pod::Usage;
 use Term::Size;
-use open ':std', ':encoding(UTF-8)';
 use utf8;
+use open ':std', ':utf8';
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 
@@ -283,9 +283,11 @@ sub print_table
 
 # display the rendered table
 
+
 if(-t 1 and $ENV{PAGER})
 {
-	my ($terminal_cols, $terminal_rows) = Term::Size::chars(*STDOUT);
+	open my $stdout_copy, '>&', \*STDOUT or die "$0: dup: $!\n";
+	my ($terminal_cols, $terminal_rows) = Term::Size::chars($stdout_copy);
 	if($terminal_cols <= $full_table_width)
 	{
 		my ($p_read, $p_write);

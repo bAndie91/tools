@@ -8,7 +8,7 @@ rextr - Extract string groups from text file matching by Regular Expressions
 
 =head1 SYNOPSIS
 
-rextr I<REGEXP> [I<REGEXP> [...]]
+rextr [I<MATCH-OPTS>] I<REGEXP> [[I<MATCH-OPTS>] I<REGEXP> [...]]
 
 =head1 DESCRIPTION
 
@@ -22,11 +22,24 @@ Note, it is not always equivalent to the regexp capture group number (C<$1>, C<$
 because rextr(1) takes multiple I<REGEXP>es, each with their own first capture group,
 but the counter in field names is ever-increasing.
 
+Outputs only those records which matched at least to one I<REGEXP>.
+
+Each I<REGEXP> may be preceeded by zero or more I<MATCH-OPTS> options.
+These are:
+
+=over 4
+
+=item --must
+
+The following I<REGEXP> must match, otherwise the whole line is ignored.
+
+=back
+
 =head1 LIMITATIONS
 
 =head1 SEE ALSO
 
-pcut(1)
+pcut(1), L<tuc|https://github.com/riquito/tuc>
 
 =cut
 
@@ -65,9 +78,16 @@ use PPIx::Regexp::Dumper;
 my $re_boundary = '/';
 my @matcher;
 my $numbered_fields = 0;
+my %match_opts = ();
 
 for my $arg (@ARGV)
 {
+	if($arg =~ /^--(must)$/)
+	{
+		$match_opts{$1} = 1;
+		next;
+	}
+	
 	my $arg_esc = $arg =~ s{[$re_boundary\\]}{\$&}gr;
 	my $re = PPIx::Regexp->new($re_boundary . $arg_esc . $re_boundary);
 	if($re->failures)
@@ -98,8 +118,12 @@ for my $arg (@ARGV)
 	
 	push @matcher, {
 		pattern => $arg,
+		must_match => $match_opts{'must'},
 		groups => \@groups,
 	};
+	
+	# a REGEXP is processed, reset the MATCH-OPTS:
+	%match_opts = ();
 }
 
 output_record(map { $_->{field} } map { @{$_->{groups}} } @matcher);
@@ -116,6 +140,18 @@ while(<STDIN>)
 		{
 			$any_match = 1;
 		}
+		else
+		{
+			if($matcher->{must_match})
+			{
+				# this REGEXP must have been matched.
+				# pretend none matched at all.
+				$any_match = 0;
+				# ignore the rest of REGEXPes.
+				last;
+			}
+		}
+		
 		for my $group (@{$matcher->{groups}})
 		{
 			my $value;

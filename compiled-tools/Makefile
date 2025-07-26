@@ -24,7 +24,7 @@ default:
 .PHONY: all
 all: $(TOOLS) netbulk lastbcsv
 .PHONY: install-all
-install-all: $(NORMAL_TARGET_FILES) $(SPECIAL_TARGET_FILES) install-manpages /sbin/suid-reboot
+install-all: $(NORMAL_TARGET_FILES) $(SPECIAL_TARGET_FILES) install-manpages /sbin/suid-reboot /sbin/suid-pm-suspend
 
 
 define install-tool-recipe
@@ -135,3 +135,7 @@ install-manpages: $(MANPAGE_FILES) $(SYSTEM_MANPAGES_PATH)/lastbcsv$(MANPAGE_FIL
 /sbin/suid-reboot: suid-reboot
 	install -o root -g root -m 4444 $< $@
 	setfacl -m u:reboot:r-x $@
+
+/sbin/suid-pm-suspend: suid-pm-suspend
+	install -o root -g root -m 4444 $< $@
+	setfacl -m u:suspend:r-x $@

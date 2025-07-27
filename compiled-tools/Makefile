@@ -24,7 +24,7 @@ default:
 .PHONY: all
 all: $(TOOLS) netbulk lastbcsv
 .PHONY: install-all
-install-all: $(NORMAL_TARGET_FILES) $(SPECIAL_TARGET_FILES) install-manpages /sbin/suid-reboot /sbin/suid-pm-suspend
+install-all: $(NORMAL_TARGET_FILES) $(SPECIAL_TARGET_FILES) install-manpages /sbin/suid-reboot
 
 
 define install-tool-recipe
@@ -67,7 +67,7 @@ $(TARGET_DIR)/kill-rogue: /usr/share/man/man1/kill-rogue.1.gz
 netbulk: setgroups.c
 	$(CC) $< $(CFLAGS) -DONLY_ALLOWED_GID=$(shell getent group netbulk | cut -d: -f3) -o $@
 
-suid-reboot suid-pm-suspend: suid-command.c
+suid-reboot: suid-command.c
 	gcc $< $(CFLAGS) -o $@
 
 lastbcsv: lastcsv
@@ -135,7 +135,3 @@ install-manpages: $(MANPAGE_FILES) $(SYSTEM_MANPAGES_PATH)/lastbcsv$(MANPAGE_FIL
 /sbin/suid-reboot: suid-reboot
 	install -o root -g root -m 4444 $< $@
 	setfacl -m u:reboot:r-x $@
-
-/sbin/suid-pm-suspend: suid-pm-suspend
-	install -o root -g root -m 4444 $< $@
-	setfacl -m u:suspend:r-x $@

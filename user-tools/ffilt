@@ -5,7 +5,7 @@ true <<'EOF'
 
 =head1 NAME
 
-ffilt - Filter a file via a command's STDIO and write back to it
+ffilt - Filter a file via a command's STDIO and write back to the file
 
 =head1 SYNOPSIS
 
@@ -16,10 +16,10 @@ ffilt I<FILE> I<COMMAND> [I<ARGS>]
 Feed I<FILE> into I<COMMAND>'s stdin, then save its stdout back to I<FILE>
 if I<COMMAND> ran successfully.
 
-Similar to this shell script:
+ffilt(1) is a quasi shorthand for this shell construct:
 
- output=`cat I<FILE> | I<COMMAND>`
- [ $? = 0 ] && echo "$output" > I<FILE>
+ output=`cat FILE | COMMAND`
+ [ $? = 0 ] && echo "$output" > FILE
 
 =head1 LIMITATIONS
 

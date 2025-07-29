@@ -59,6 +59,14 @@ See short description of each commands of this toolkit in [descriptions.txt](des
 For detailed documentation of them, run `make manpages` or read the POD in the files themselves.
 See [index.md](index.md) for all man pages in markdown format in a single file.
 
+# Install
+
+See `make` targets:
+
+- `make install-all`
+  - `make BIN_DIR=/usr/local/bin install-all` to put command files to a non-default directory.
+  - if some dependencies are missing: `make try-satisfy-dependencies` (currently only for systems with `apt` package management)
+
 # Compare to CSV
 
 Tabdata is very similar to CSV, except it has well-defined field- and record separators

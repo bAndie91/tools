@@ -478,7 +478,7 @@ This can be abused to execute any perl code (with the "e" modifier).
 =item B<set_tags>
 
 The syntax is the same as for B<match_tags>.
-But is the square-bracketed tags are at the right of the B<pattern>,
+But is the square-bracketed tags are at the right side of the B<pattern>,
 then the tags are applied to the stream.
 
 Remove tags by a leading slash, like C<[/blue]>.
@@ -505,9 +505,9 @@ Prefix each output (and stderr) lines with the I<COMMAND> process'es PID:
 
  stdfilt -f 's/^/$CHILD_PID: /' some_command...
 
-Prefix each line with STDOUT/STDERR:
+Prefix each line with literal STDOUT/STDERR string:
 
- stdfile -f '[STDOUT]' -f 's/^/STDOUT: /' -f '[/STDOUT]' -f '[STDERR]' -f 's/^/STDERR: /' -f '[/STDERR]' some_command...
+ stdfilt -f '[STDOUT]' -f 's/^/STDOUT: /' -f '[/STDOUT]' -f '[STDERR]' -f 's/^/STDERR: /' -f '[/STDERR]' some_command...
 
 =head1 SEE ALSO
 

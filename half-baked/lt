@@ -1,0 +1,89 @@
+#!/bin/bash
+
+alternatives=4
+source=''
+target=''
+format=text
+domain=''
+
+while [[ $1 =~ (.+)=(.+) ]]
+do
+	varname=${BASH_REMATCH[1]}
+	value=${BASH_REMATCH[2]}
+	eval "$varname=\$value"
+	shift
+done
+
+
+query_srv()
+{
+	local domain=$1
+	declare -a service=(`dig +short -t SRV _http._tcp.$domain`)
+	declare -g host=${service[3]}
+	declare -g port=${service[2]}
+}
+
+if [ -z "$domain" ]
+then
+	domain_ok=''
+	search_domains=(`cat /etc/resolv.conf | grep -E '^\s*search\s*' | rextr '^\s*search\s*(?<search_domains>.+)' | td-select -H search_domains`)
+	for search_domain in "${search_domains[@]}"
+	do
+		host=''
+		port=''
+		domain=translate.$search_domain
+		echo "searching translate service on $domain" >&2
+		query_srv "$domain"
+		if [ -n "$host" ]
+		then
+			domain_ok=1
+			break
+		fi
+	done
+	if [ -z "$domain_ok" ]
+	then
+		echo "no translate service found on any domain" >&2
+	fi
+else
+	query_srv "$domain"
+fi
+
+echo "service domain	$domain"
+echo "service host	$host"
+echo "service port	$port"
+
+
+if [ -z "$source" ]
+then
+	source=auto
+	echo "source language	$source" >&2
+fi
+
+if [ -z "$target" ]
+then
+	LANG=`locale | grep -E -m1 ^LANG= | cut -f2- -d=`
+	target=${LANG:0:2}
+	echo "target language	$target" >&2
+fi
+
+resp=`http --pretty none --body --check-status --ignore-stdin \
+	http://$host:$port/translate \
+	alternatives="$alternatives" format=text source="$source" target="$target" q="$*"`
+
+jget()
+{
+	local json=$1
+	shift
+	jq -r " $* // \"\" " <<< "$json"
+}
+
+detectedLanguage=`jget "$resp" .detectedLanguage.language`
+if [ -n "$detectedLanguage" ]
+then
+	confidence=`jget "$resp" .detectedLanguage.confidence`
+	echo "detected language	$detectedLanguage"
+	echo "detection confidence	$confidence%"
+fi
+
+jget "$resp" .alternatives[] | prefixlines "alternative	"
+jget "$resp" .translatedText | prefixlines "translation	"

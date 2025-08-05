@@ -97,6 +97,7 @@ try-satisfy-dependencies:
 	-apt install liblog-log4perl-perl || cpan Log::Log4perl
 	-apt install libyaml-perl || cpan YAML
 	-apt install libversion-util-perl || cpan Version::Util
+	-apt install libdatetime-format-strptime-perl || cpan DateTime::Format::Strptime
 
 
 install-all: \

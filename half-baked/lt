@@ -5,6 +5,8 @@ source=''
 target=''
 format=text
 domain=''
+host=''
+port=''
 
 while [[ $1 =~ (.+)=(.+) ]]
 do
@@ -13,6 +15,20 @@ do
 	eval "$varname=\$value"
 	shift
 done
+
+if [ -z "$*" ]
+then
+	{
+		echo "Usage: $0 [<OPTIONS>] <TEXT>"
+		echo "  OPTIONS:"
+		echo "    domain=<DOMAIN>"
+		echo "    host=<HOST> port=<PORT>"
+		echo "    source=[<SOURCE_LANG> | auto]"
+		echo "    target=<TARGET_LANG>"
+		echo "    alternatives=<NUM>"
+	} >&2
+	exit 1
+fi
 
 
 query_srv()
@@ -23,48 +39,62 @@ query_srv()
 	declare -g port=${service[2]}
 }
 
-if [ -z "$domain" ]
+if [ -z "$host" -a -z "$port" ]
 then
-	domain_ok=''
-	search_domains=(`cat /etc/resolv.conf | grep -E '^\s*search\s*' | rextr '^\s*search\s*(?<search_domains>.+)' | td-select -H search_domains`)
-	for search_domain in "${search_domains[@]}"
-	do
-		host=''
-		port=''
-		domain=translate.$search_domain
-		echo "searching translate service on $domain" >&2
-		query_srv "$domain"
-		if [ -n "$host" ]
-		then
-			domain_ok=1
-			break
-		fi
-	done
-	if [ -z "$domain_ok" ]
+	if [ -z "$domain" ]
 	then
-		echo "no translate service found on any domain" >&2
+		domain_ok=''
+		search_domains=(`cat /etc/resolv.conf | grep -E '^\s*search\s*' | rextr '^\s*search\s*(?<search_domains>.+)' | td-select -H search_domains`)
+		for search_domain in "${search_domains[@]}"
+		do
+			host=''
+			port=''
+			domain=translate.$search_domain
+			echo "searching translate service on $domain" >&2
+			query_srv "$domain"
+			if [ -n "$host" ]
+			then
+				domain_ok=1
+				break
+			fi
+			domain=''
+		done
+		if [ -z "$domain_ok" ]
+		then
+			echo "no translate service found on any domain" >&2
+		fi
+	else
+		query_srv "$domain"
 	fi
-else
-	query_srv "$domain"
+	
+	echo "service domain	$domain"
 fi
 
-echo "service domain	$domain"
 echo "service host	$host"
 echo "service port	$port"
 
+if [ -z "$source" -o -z "$target" ]
+then
+	locale_lang=`locale | grep -E -m1 ^LANG= | cut -f2- -d= | cut -c1-2`
+fi
 
 if [ -z "$source" ]
 then
-	source=auto
-	echo "source language	$source" >&2
+	if [ -n "$target" -a "$target" != "$locale_lang" ]
+	then
+		source=$locale_lang
+	else
+		source=auto
+	fi
 fi
 
 if [ -z "$target" ]
 then
-	LANG=`locale | grep -E -m1 ^LANG= | cut -f2- -d=`
-	target=${LANG:0:2}
-	echo "target language	$target" >&2
+	target=$locale_lang
 fi
+
+echo "source language	$source" >&2
+echo "target language	$target" >&2
 
 resp=`http --pretty none --body --check-status --ignore-stdin \
 	http://$host:$port/translate \
@@ -76,6 +106,14 @@ jget()
 	shift
 	jq -r " $* // \"\" " <<< "$json"
 }
+
+error=`jget "$resp" .error`
+
+if [ -n "$error" ]
+then
+	echo "$error" | prefixlines "error	"
+	exit 2
+fi
 
 detectedLanguage=`jget "$resp" .detectedLanguage.language`
 if [ -n "$detectedLanguage" ]

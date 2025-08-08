@@ -209,12 +209,12 @@ It's knowningly error-prone for machine-parsing.
 
 Output documentation in plain text, POD, or troff (for man(1)) formats.
 
-=item -i, --min
+=item -i, --min-depth
 
 Minimum directory level to traverse.
 Equivalent to find(1)'s -mindepth option.
 
-=item -x, --max
+=item -x, --max-depth
 
 Maximum directory level to traverse.
 Equivalent to find(1)'s -maxdepth option.
@@ -330,11 +330,11 @@ do
 	(-n|--dry-run)
 		dryrun=1
 		;;
-	(-i|--min)
+	(-i|--min-depth)
 		shift
 		minlevel=$1
 		;;
-	(-x|--max)
+	(-x|--max-depth)
 		shift
 		maxlevel=$1
 		;;

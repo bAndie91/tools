@@ -254,7 +254,12 @@ render_path_template()
 	local filetimestamp=$2
 	local basedir=$3
 	local basename=$4
-	date +"$target_template" -d "@$filetimestamp" | sd -F '%@' "$basedir" | sd -F '%.' "$basename"
+	local target=`date +"$target_template" -d "@$filetimestamp" | sd -F '%@' "$basedir" | sd -F '%.' "$basename"`
+	if [ "${target: -1}" = / ]
+	then
+		target=$target$basename
+	fi
+	echo "$target"
 }
 
 failed()
@@ -504,6 +509,7 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 		fi
 		
 		target=`render_path_template "$target_template" "$filetimestamp" "$basedir" "$basename"`
+		target_dir=`dirname "$target"`
 		
 		if [ "$dryrun" = 1 ]
 		then
@@ -511,14 +517,6 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 			[ "$ORGANIZEBYDATE_MODE" = copy ] && sgn='='
 			echo "$file $sgn> $target"
 		else
-			if [ "${target: -1}" = / ]
-			then
-				target_dir=$target
-				target="$target$basename"
-			else
-				target_dir=`dirname "$target"`
-			fi
-			
 			local_overwrite_opt=$overwrite_opt
 			
 			if [ -e "$target" -a \( -n "$conflict_resolver_cmd" -o -n "$conflict_resolver_script" \) ]
@@ -529,7 +527,7 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 				set +e
 				if [ -n "$conflict_resolver_cmd" ]
 				then
-					resolver_stdout=`command $conflict_resolver_cmd "$file" "$target" </dev/null`
+					resolver_stdout=`command ${conflict_resolver_cmd:-false} "$file" "$target" </dev/null`
 					resolver_err=$?
 				else
 					resolver_stdout=`bash -c "$conflict_resolver_script" -- "$file" "$target" </dev/null`
@@ -553,6 +551,7 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 						if [ -n "$newtarget" ]
 						then
 							target=$newtarget
+							target_dir=`dirname "$target"`
 						fi
 						local_overwrite_opt=''  # let cp (mv) overwrite the target
 					else
@@ -580,6 +579,9 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 					if [ -n "$move_success_template" ]
 					then
 						move_success_target=`render_path_template "$move_success_template" "$filetimestamp" "$basedir" "$basename"`
+						move_success_target_dir=`dirname "$move_success_target"`
+						[ -d "$move_success_target_dir" ] || mkdir -p "$move_success_target_dir"
+						
 						if ! mv $verbose --no-clobber "$file" "$move_success_target"
 						then
 							failed "move successfully copied file" "$file"

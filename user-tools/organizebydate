@@ -20,6 +20,7 @@ conflict_resolver_cmd=''
 conflict_resolver_script=''
 faillog=''
 failed_count=0
+move_success_template=''
 
 
 print_usage()
@@ -72,6 +73,13 @@ File's name itself (basename)
 
 Move or copy files.
 Default is copy.
+
+=item --move-success-template I<TMPL>
+
+Move successfully copied files according to I<TMPL> template.
+This is useful only with B<--copy>.
+Default is not to move away successfully copied filed.
+This is useful if you want to keep backed up files on the source too but in another directory so they won't be processed again.
 
 =item --overwrite
 
@@ -223,7 +231,7 @@ Equivalent to find(1)'s -maxdepth option.
 
 =head1 EXIT STATUS
 
-Exit 0 if all files processed successfuly.
+Exit 0 if all files processed successfully.
 
 Exit 1 on parameter error.
 
@@ -240,12 +248,22 @@ set -e
 set +e
 
 
+render_path_template()
+{
+	local target_template=$1
+	local filetimestamp=$2
+	local basedir=$3
+	local basename=$4
+	date +"$target_template" -d "@$filetimestamp" | sd -F '%@' "$basedir" | sd -F '%.' "$basename"
+}
+
 failed()
 {
 	local reason=$1
 	local file=$2
 	
 	failed_count=$[failed_count + 1]
+	
 	warnx "$reason failed: $file"
 	if [ -n "$faillog" ]
 	then
@@ -343,6 +361,14 @@ do
 		;;
 	(--move)
 		ORGANIZEBYDATE_MODE=move
+		;;
+	(--move-success-template)
+		if [ "$ORGANIZEBYDATE_MODE" != copy ]
+		then
+			errx 1 "move-success-template works only in --copy mode"
+		fi
+		shift
+		move_success_template=$1
 		;;
 	(--handler)
 		shift
@@ -477,7 +503,7 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 			continue
 		fi
 		
-		target=`date +"$target_template" -d "@$filetimestamp" | sd -F '%@' "$basedir" | sd -F '%.' "$basename"`
+		target=`render_path_template "$target_template" "$filetimestamp" "$basedir" "$basename"`
 		
 		if [ "$dryrun" = 1 ]
 		then
@@ -542,27 +568,54 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 				fi
 			fi
 			
+			current_item_failed=''
+			
 			case "$ORGANIZEBYDATE_MODE" in
 			(copy|move)
 				[ -d "$target_dir" ] || mkdir -p "$target_dir"
 				;;&
 			(copy)
-				cp $verbose $local_overwrite_opt --preserve=timestamps "$file" "$target" || failed copy "$file"
+				if cp $verbose $local_overwrite_opt --preserve=timestamps "$file" "$target"
+				then
+					if [ -n "$move_success_template" ]
+					then
+						move_success_target=`render_path_template "$move_success_template" "$filetimestamp" "$basedir" "$basename"`
+						if ! mv $verbose --no-clobber "$file" "$move_success_target"
+						then
+							failed "move successfully copied file" "$file"
+							current_item_failed=1
+						fi
+					fi
+				else
+					failed copy "$file"
+					current_item_failed=1
+				fi
 				;;
 			(move)
-				mv $verbose $local_overwrite_opt "$file" "$target" || failed move "$file"
+				if ! mv $verbose $local_overwrite_opt "$file" "$target"
+				then
+					failed move "$file"
+					current_item_failed=1
+				fi
 				;;
 			(custom)
-				command $custom_handler "$file" "$target" || failed handle "$file"
+				if ! command ${custom_handler:-false} "$file" "$target"
+				then
+					failed handle "$file"
+					current_item_failed=1
+				fi
 				;;
 			esac
 			
-			if [ "$set_atime" = 1 -o "$set_mtime" = 1 ]
+			if [ ! $current_item_failed ]
 			then
-				touch_opts=()
-				if [ "$set_atime" = 1 ]; then touch_opts+=(-a); fi
-				if [ "$set_mtime" = 1 ]; then touch_opts+=(-m); fi
-				touch -t `date +%Y%m%d%H%M.%S -d "@$filetimestamp"` "${touch_opts[@]}" "$target"
+				if [ "$set_atime" = 1 -o "$set_mtime" = 1 ]
+				then
+					touch_opts=()
+					if [ "$set_atime" = 1 ]; then touch_opts+=(-a); fi
+					if [ "$set_mtime" = 1 ]; then touch_opts+=(-m); fi
+					touch -t `date +%Y%m%d%H%M.%S -d "@$filetimestamp"` "${touch_opts[@]}" "$target"
+				fi
 			fi
 		fi
 	done

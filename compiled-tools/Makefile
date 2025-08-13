@@ -5,7 +5,7 @@ OLDINCLUDEDIR = /usr/include/tool
 
 TOOLS = grandparentexe relpath mksock remove syncfs utmp usbreset \
   chmod-cheap setgroups kill-rogue xidle logbtmp lastcsv wall \
-  loadenv setpgrp xdpys cdstatus getready
+  loadenv setpgrp xdpys cdstatus getready runas
 
 SPECIAL_COMPILE_TOOLS = logbtmp lastcsv chmod-cheap wall
 SPECIAL_INSTALL_TOOLS = grandparentexe netbulk lastbcsv

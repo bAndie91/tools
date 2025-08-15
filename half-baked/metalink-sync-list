@@ -51,6 +51,7 @@ for my $file (@{ $metalink->{file} })
 	my $url = $file->{url}->[0];
 	my $complete_url;
 	
+	# assuming no percent-encoding nor query parameters in URLs when defining $local_path:
 	if($url =~ m{^[a-zA-Z-]+://[^/]+/+(.+)$})
 	{
 		$local_path = $1;
@@ -65,6 +66,11 @@ for my $file (@{ $metalink->{file} })
 	{
 		$local_path = $url;
 		$complete_url = $source_origin . $source_base_path . $local_path;
+	}
+	
+	if($local_path =~ /[\?\%]/)
+	{
+		die "Not supporting percent-encoding nor GET parameters yet: $url\n";
 	}
 	
 	if(!-e $local_path)
@@ -108,8 +114,7 @@ for my $file (@{ $metalink->{file} })
 	
 	if(@pass_reasons)
 	{
-		printf STDERR "%s\t%s\n", join("+", @pass_reasons), $url;
-		print "$complete_url\n";
+		printf "%s\t%s\t%s\n", join("+", @pass_reasons), $complete_url, $local_path;
 	}
 }
 

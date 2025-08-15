@@ -1,0 +1,7 @@
+#!/bin/bash
+
+set -e
+set -o pipefail
+
+echo "URL	SIZE	MTIME	HASH	NAME"
+xml2json | jq -r '.metalink.file[] | [ .url, .size, .mtime, .hash["#text"], .["@name"] ] | join("\t")'

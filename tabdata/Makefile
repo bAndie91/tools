@@ -6,6 +6,7 @@ TOOLS = \
   csv2td \
   ics2td \
   kvpairs2td \
+  metalink2td \
   mrkv2td \
   rextr \
   td2html \

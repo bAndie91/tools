@@ -54,6 +54,10 @@ No newline.
 
 =back
 
+=head1 EXAMPLE
+
+ getent passwd | td-trans-passwd | td-format "{LOGIN}'s home is {HOME}"
+
 =head1 SEE ALSO
 
 =cut

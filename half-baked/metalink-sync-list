@@ -1,0 +1,121 @@
+#!/usr/bin/env perl
+
+use File::stat;
+use IPC::Run qw/run/;
+use POSIX qw/strftime WEXITSTATUS WTERMSIG WIFSIGNALED/;
+use Data::Dumper;
+use Date::Parse;
+use utf8;
+use open ':std', ':utf8';  # mark stdio as utf8 but not verify
+use open ':utf8';
+use File::Slurp;
+use Digest::SHA;
+
+
+$incomplete_job = 0;
+$metalink_url = $ARGV[0];
+
+if($metalink_url =~ m{^([a-zA-Z-]+://[^/]+)(/?.*)$})
+{
+	$source_origin = $1;
+	$source_path = $2 || "/";
+	$source_path =~ m{^(.*/)[^/]+$};
+	$source_base_path = $1;
+	
+	run ['curl', '-sSf', $metalink_url], \undef, \$metalink_xml;
+	$run_error = $?;
+	if($run_error)
+	{
+		$exit_error = WEXITSTATUS($run_error);
+		$exit_error = 128 + WTERMSIG($run_error) if WIFSIGNALED($run_error);
+		exit $exit_error;
+	}
+}
+else
+{
+	$metalink_xml = read_file $metalink_url;
+}
+
+
+use XML::Simple;
+$metalink = XMLin $metalink_xml, KeyAttr=>[], ForceArray=>[qw/file hash url/], ForceContent=>0;
+#print Dumper $metalink; exit;
+
+for my $file (@{ $metalink->{file} })
+{
+	# pass only those files which are missing OR [old AND have different checksum].
+	my @pass_reasons;
+	my $local_path;
+	
+	# support single URL currently:
+	my $url = $file->{url}->[0];
+	my $complete_url;
+	
+	if($url =~ m{^[a-zA-Z-]+://[^/]+/+(.+)$})
+	{
+		$local_path = $1;
+		$complete_url = $url;
+	}
+	elsif($url =~ m{^/(.+)$})
+	{
+		$local_path = $1;
+		$complete_url = $source_origin . '/' . $local_path;
+	}
+	else
+	{
+		$local_path = $url;
+		$complete_url = $source_origin . $source_base_path . $local_path;
+	}
+	
+	if(!-e $local_path)
+	{
+		push @pass_reasons, 'MISSING';
+	}
+	else
+	{
+		my $local_is_older;
+		
+		if($file->{mtime})
+		{
+			my $local_mtime_ts = stat($local_path)->mtime;
+			my $remote_mtime_ts = str2time($file->{mtime});
+			$local_is_older = ( $local_mtime_ts < $remote_mtime_ts );
+		}
+		
+		if($local_is_older or not defined $local_is_older)
+		{
+			my $local_checksum;
+			my $remote_hash = (grep { $_->{type} =~ /^sha-(\d+)$/ and Digest::SHA->can("sha$1") } @{ $file->{hash} })[0];
+			if(not defined $remote_hash)
+			{
+				warn sprintf "File '%s' does not have a supported type of hash", ($file->{name} || $url);
+			}
+			else
+			{
+				my ($alg) = $remote_hash->{type} =~ /^sha-(\d+)$/;
+				my $digest = Digest::SHA->new($alg);
+				$digest->addfile($local_path);
+				$local_checksum = $digest->hexdigest;
+			}
+			
+			if(not defined $local_checksum or $local_checksum != $remote_hash->{content})
+			{
+				push @pass_reasons, 'OLDER' if $local_is_older;
+				push @pass_reasons, 'DIFF';
+			}
+		}
+	}
+	
+	if(@pass_reasons)
+	{
+		printf STDERR "%s\t%s\n", join("+", @pass_reasons), $url;
+		print "$complete_url\n";
+	}
+}
+
+if($incomplete_job)
+{
+	exit 1;
+}
+
+exit 0;

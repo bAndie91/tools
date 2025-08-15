@@ -29,7 +29,7 @@ scriptname [I<OPTIONS>] [--] I<COMMAND> [I<ARGS>]
 =cut
 
 
-use constant { STAT_DEV=>0, STAT_INODE=>1, STAT_PERM=>2, STAT_NLINKS=>3, STAT_UID=>4, STAT_GID=>5, STAT_RDEV=>6, STAT_SIZE=>7, STAT_ATIME=>8, STAT_MTIME=>9, STAT_CTIME=>10, STAT_BLOCKSIZE=>11, STAT_BLOCKS=>12, };
+use File::stat;
 use Cwd qw/getcwd realpath/;
 use Data::Dumper;
 use Date::Parse;
@@ -46,7 +46,7 @@ use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_
 use IPC::Run qw/run/;
 use List::MoreUtils qw/all any none/;
 use Pod::Usage;
-use POSIX;
+use POSIX qw/WEXITSTATUS WTERMSIG WIFSIGNALED/;
 use Socket qw/AF_UNIX AF_INET SOCK_STREAM pack_sockaddr_in inet_aton sockaddr_un/;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 

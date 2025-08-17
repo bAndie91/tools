@@ -14,7 +14,7 @@ Switches UID to I<USER>, GID to his primary GID,
 and additional groups according to system group database,
 then executes into I<COMMAND> (does not fork(2)).
 
-It keeps only these environment variables:
+It keeps these environment variables automatically:
 
 =over 4
 
@@ -37,6 +37,16 @@ and sets these environment variables to their correct values respecting the I<US
 =item USER
 
 =item LOGNAME
+
+=back
+
+and keeps those environment variables which are listed in the comma-delimited list of B<RUNAS_KEEP_ENVS> environment variable.
+
+=head1 ENVIRONMENT
+
+=over 4
+
+=item RUNAS_KEEP_ENVS
 
 =back
 

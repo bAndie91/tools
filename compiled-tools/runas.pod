@@ -1,0 +1,53 @@
+=pod
+
+=head1 NAME
+
+runas - Run command as an other user
+
+=head1 SYNOPSIS
+
+runas I<USER> I<COMMAND> [I<ARGS> ...]
+
+=head1 DESCRIPTION
+
+Switches UID to I<USER>, GID to his primary GID,
+and additional groups according to system group database,
+then executes into I<COMMAND> (does not fork(2)).
+
+It keeps only these environment variables:
+
+=over 4
+
+=item PATH
+
+=item TERM
+
+=item TERMCAP
+
+=back
+
+and sets these environment variables to their correct values respecting the I<USER>'s properties:
+
+=over 4
+
+=item HOME
+
+=item SHELL
+
+=item USER
+
+=item LOGNAME
+
+=back
+
+=head1 EXIT CODE
+
+If I<COMMAND> can be executed, it sets the exit code,
+otherwise exits B<125 + errno>, eg. 127 when command not found.
+
+=head1 SEE ALSO
+
+su(1), sg(1), sudo(8), initgroups(3), execve(2), getpwnam(3)
+
+=cut
+

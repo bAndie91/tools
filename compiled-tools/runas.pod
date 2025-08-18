@@ -57,7 +57,7 @@ otherwise exits B<125 + errno>, eg. 127 when command not found.
 
 =head1 SEE ALSO
 
-su(1), sg(1), sudo(8), initgroups(3), execve(2), getpwnam(3)
+su(1), sg(1), sudo(8), setpriv(1), initgroups(3), execve(2), getpwnam(3)
 
 =cut
 

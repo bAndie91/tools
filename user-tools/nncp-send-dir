@@ -1,0 +1,18 @@
+#!/bin/bash
+
+set -u
+
+target=$1
+dir=${2:-.}
+basename=`basename "$dir"`
+
+if [ "$basename" = . ]
+then
+	basename=`basename "$(readlink -f "$dir")"`
+fi
+if [ "$basename" = / ]
+then
+	basename=root
+fi
+
+tar cvf - "$dir" | nncp-file - "$target:$basename.tar"

@@ -104,6 +104,7 @@ TOOLS ?= \
   mail-extract-raw-headers \
   maskfiles \
   mdstat \
+  metalink-sync-list \
   mime_extract \
   mime-header-decode \
   mkdeb \
@@ -116,6 +117,7 @@ TOOLS ?= \
   multithrottler \
   mysql-fix-orphan-privileges.php \
   netrc \
+  nncp-send-dir \
   noacute \
   nocomment \
   notashell \

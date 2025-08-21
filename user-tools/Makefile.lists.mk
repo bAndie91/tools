@@ -35,6 +35,7 @@ TOOLS ?= \
   diu \
   dlnew \
   dnsmasq-dbus-nameservers \
+  docker-credential-cred \
   dump_php_session.php \
   eat \
   errorlevel \

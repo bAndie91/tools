@@ -16,7 +16,7 @@ for item in items:
 	isdir = os.path.isdir(filepath)
 	
 	if item.is_local() and not item.get_private_hint():
-		print "%s\t%s%s" % (item.get_mime_type(), filepath, os.path.sep if isdir and not filepath.endswith(os.path.sep) else '')
+		print "%s\t%s%s\t%s" % (item.get_mime_type(), filepath, os.path.sep if isdir and not filepath.endswith(os.path.sep) else '', item.get_display_name())
 		
 		if not isdir:
 			dirpath = os.path.dirname(filepath)

@@ -16,6 +16,8 @@ def iconpath_for_mime(mime):
 		path = os.path.join(BASE, main+'-x-generic.png')
 	return path
 
+def laxsplit(input, delimiter, output_count):
+	return (input.split(delimiter, output_count-1) + [None]*output_count)[:output_count]
 
 opt_fullpath = any(flag in sys.argv for flag in ['-f', '--fullpath-label'])
 
@@ -26,14 +28,17 @@ while True:
 	if item == '': break
 	
 	item = item.rstrip('\n')
-	mime_type, filepath = item.split('\t', 1)
+	mime_type, filepath, display_name = laxsplit(item, '\t', 3)
 	filepath = filepath.rstrip(os.path.sep)
 	
 	if os.path.exists(filepath):
 		if opt_fullpath:
 			label = filepath
 		else:
-			label = os.path.basename(filepath)
+			if display_name is not None:
+				label = display_name
+			else:
+				label = os.path.basename(filepath)
 		
 		iconpath = iconpath_for_mime(mime_type)
 		

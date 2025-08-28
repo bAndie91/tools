@@ -1,4 +1,4 @@
 #!/bin/sh
 
 ps -eww o user=USER,pid=PID,ppid=PPID,pgrp=PGRP,tpgid=TPGID,sid=SID,ruid=RUID,rgid=RGID,euid=EUID,egid=EGID,suid=SUID,sgid=SGID,fuid=FUID,fgid=FGID,start_time=START_TIME,tty=TTY,rss=RSS,stat=STAT,pcpu=PCPU,pri=PRI,nice=NICE,cmd=CMD "$@" |\
-td-trans
+td-trans -c 22

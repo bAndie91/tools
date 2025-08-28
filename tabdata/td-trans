@@ -30,6 +30,7 @@ $OptMaxColumns = undef;
 %OptionDefs = (
 	'n|min-columns=i' => \$OptMinColumns,
 	'x|max-columns=i' => \$OptMaxColumns,
+	'c|columns|cols=i' => sub { $OptMinColumns = $OptMaxColumns = $_[1]; },
 );
 
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';

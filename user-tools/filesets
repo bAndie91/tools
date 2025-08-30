@@ -8,7 +8,7 @@ filesets - Set operations on text files, lines being set elements
 
 =head1 SYNOPSIS
 
-filesets [I<OPTIONS>] I<EXPRESSION> I<FILE-1> I<FILE-2>
+filesets [I<OPTIONS>] I<EXPRESSION> I<FILE-1> I<FILE-2> [...]
 
 =head1 EXPRESSION
 

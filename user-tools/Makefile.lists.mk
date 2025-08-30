@@ -47,6 +47,7 @@ TOOLS ?= \
   ff \
   ffilt \
   fgat \
+  filesets \
   filterexec \
   find-by-date \
   findnewestfile \

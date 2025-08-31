@@ -167,7 +167,8 @@ and in either cases: with or without I<NEW-TARGET> being given.
 Indicate that the source file is already there on the target path,
 and no need to copy/move,
 but organizebydate(1) may still set the target's mtime (atime)
-when B<--set-mtime> (B<--set-atime>) option is given.
+when B<--set-mtime> (B<--set-atime>) option is given;
+and still moves the source file when B<--move-success-template> is given.
 Emit B<done> signal if the B<same> file is already present,
 with equal binary content to the source file, on the target location.
 
@@ -606,21 +607,8 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 					[ -d "$target_dir" ] || mkdir -p "$target_dir"
 					;;&
 				(copy)
-					if cp $verbose $local_overwrite_opt --preserve=timestamps "$file" "$target"
+					if ! cp $verbose $local_overwrite_opt --preserve=timestamps "$file" "$target"
 					then
-						if [ -n "$move_success_template" ]
-						then
-							move_success_target=`render_path_template "$move_success_template" "$filetimestamp" "$basedir" "$basename"`
-							move_success_target_dir=`dirname "$move_success_target"`
-							[ -d "$move_success_target_dir" ] || mkdir -p "$move_success_target_dir"
-							
-							if ! mv $verbose --no-clobber "$file" "$move_success_target"
-							then
-								failed "move successfully copied file" "$file"
-								current_item_failed=1
-							fi
-						fi
-					else
 						failed copy "$file"
 						current_item_failed=1
 					fi
@@ -642,7 +630,24 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 				esac
 			fi
 			
+			if [ "$ORGANIZEBYDATE_MODE" = copy -a ! "$current_item_failed" ]
+			then
+				if [ -n "$move_success_template" ]
+				then
+					move_success_target=`render_path_template "$move_success_template" "$filetimestamp" "$basedir" "$basename"`
+					move_success_target_dir=`dirname "$move_success_target"`
+					[ -d "$move_success_target_dir" ] || mkdir -p "$move_success_target_dir"
+					
+					if ! mv $verbose --no-clobber "$file" "$move_success_target"
+					then
+						failed "move successfully copied file" "$file"
+						current_item_failed=1
+					fi
+				fi
+			fi
+			
 			if [ ! $current_item_failed ]
+			# TODO FIXME maybe we still should set the target mtime if only the move_success_template failed?
 			then
 				if [ "$set_atime" = 1 -o "$set_mtime" = 1 ]
 				then

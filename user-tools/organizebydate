@@ -102,15 +102,18 @@ if not, I<PROG> should implement conflicting file name resolution logic.
 =item --conflict-resolver-cmd I<CMD>, --conflict-resolver-script I<SCRIPT>
 
 Run a custom conflict resolver logic on already existing target files.
-Default is not ignore conflicts silently (or B<--overwrite>).
-It can be either a single word command or a command and its arguments if I<CMD> contains space
+Unless conflict resolver is given, organizebydate(1) ignores conflicts silently
+or overwrites target unconditionally if B<--overwrite> is specified.
+
+The conflict resolver can either be a single word command
+or a command and its arguments when I<CMD> contains space
 (in this case you can not pass argument itself with spaces to the command
 because each space-delimited words go to separate arguments),
 or a whole bash(1) script if B<--conflict-resolver-script> is given.
 I<SCRIPT> is run as a separate command too, not in organizebydate(1)'s own context.
 
-Arguments passed to this command are the source file's path first
-and the target path secondly.
+Arguments passed to this command (after the arguments included in I<CMD>, if any)
+are the source file's path first and the target path secondly.
 Environment variables passed:
 
 =over 8
@@ -157,7 +160,21 @@ Copy (move) source to target.
 Optionally with a new target path.
 This always (attempts to) overwrites the target
 even if B<--overwrite> is not given,
-and in either cases: with and without I<NEW-TARGET> being given.
+and in either cases: with or without I<NEW-TARGET> being given.
+
+=item B<done>
+
+Indicate that the source file is already there on the target path,
+and no need to copy/move,
+but organizebydate(1) may still set the target's mtime (atime)
+when B<--set-mtime> (B<--set-atime>) option is given.
+Emit B<done> signal if the B<same> file is already present,
+with equal binary content to the source file, on the target location.
+
+=item B<fail>
+
+Similar to B<done> but explicitely fail the current item copy/move.
+This is recorded in fail log if B<--faillog> option is given.
 
 =item other words are considered failure for now.
 
@@ -390,6 +407,9 @@ do
 		fi
 		shift
 		conflict_resolver_cmd=$1
+		set -f
+		declare -a conflict_resolver_cmd_args=($conflict_resolver_cmd)
+		set +f
 		;;
 	(--conflict-resolver-script)
 		if [ -n "$conflict_resolver_cmd" ]
@@ -518,6 +538,7 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 			echo "$file $sgn> $target"
 		else
 			local_overwrite_opt=$overwrite_opt
+			current_item_already_handled=''
 			
 			if [ -e "$target" -a \( -n "$conflict_resolver_cmd" -o -n "$conflict_resolver_script" \) ]
 			then
@@ -527,7 +548,7 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 				set +e
 				if [ -n "$conflict_resolver_cmd" ]
 				then
-					resolver_stdout=`command ${conflict_resolver_cmd:-false} "$file" "$target" </dev/null`
+					resolver_stdout=`command "${conflict_resolver_cmd_args[@]}" "$file" "$target" </dev/null`
 					resolver_err=$?
 				else
 					resolver_stdout=`bash -c "$conflict_resolver_script" -- "$file" "$target" </dev/null`
@@ -536,16 +557,25 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 				set -e
 				if [ $resolver_err = 0 ]
 				then
-					resolver_stdout=${resolver_stdout%$'\n'}  # strip 1 trailing newline
-					solution=${resolver_stdout##*$'\n'}  # take the last line only
-					resolver_stdout=${resolver_stdout:0:-${#solution}}  # keep everything except the last line
+					resolver_stdout=${resolver_stdout%$'\n'}  # strip 1 trailing newline, if any
+					resolution=${resolver_stdout##*$'\n'}  # take the last line only
+					resolver_stdout=${resolver_stdout:0:-${#resolution}}  # keep everything except the last line
 					resolver_stdout=${resolver_stdout%$'\n'}  # strip 1 trailing newline again
 					echone "$resolver_stdout"
 					
-					if [ "$solution" = skip ]
+					if [ "$resolution" = skip ]
 					then
 						continue
-					elif [[ $solution =~ ^proceed(| (.+))$ ]]
+					elif [ "$resolution" = done ]
+					then
+						current_item_already_handled=1
+						current_item_failed=''
+					elif [ "$resolution" = fail ]
+					then
+						current_item_already_handled=1
+						failed "conflict resolution explicitely" "$file"
+						current_item_failed=1
+					elif [[ $resolution =~ ^proceed(| (.+))$ ]]
 					then
 						newtarget=${BASH_REMATCH[2]}
 						if [ -n "$newtarget" ]
@@ -555,7 +585,7 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 						fi
 						local_overwrite_opt=''  # let cp (mv) overwrite the target
 					else
-						warnx "unknown conflict resolution: $solution"
+						warnx "unknown conflict resolution: $resolution"
 						failed "conflict resolve" "$file"
 						continue
 					fi
@@ -567,47 +597,50 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 				fi
 			fi
 			
-			current_item_failed=''
-			
-			case "$ORGANIZEBYDATE_MODE" in
-			(copy|move)
-				[ -d "$target_dir" ] || mkdir -p "$target_dir"
-				;;&
-			(copy)
-				if cp $verbose $local_overwrite_opt --preserve=timestamps "$file" "$target"
-				then
-					if [ -n "$move_success_template" ]
+			if [ ! $current_item_already_handled ]
+			then
+				current_item_failed=''
+				
+				case "$ORGANIZEBYDATE_MODE" in
+				(copy|move)
+					[ -d "$target_dir" ] || mkdir -p "$target_dir"
+					;;&
+				(copy)
+					if cp $verbose $local_overwrite_opt --preserve=timestamps "$file" "$target"
 					then
-						move_success_target=`render_path_template "$move_success_template" "$filetimestamp" "$basedir" "$basename"`
-						move_success_target_dir=`dirname "$move_success_target"`
-						[ -d "$move_success_target_dir" ] || mkdir -p "$move_success_target_dir"
-						
-						if ! mv $verbose --no-clobber "$file" "$move_success_target"
+						if [ -n "$move_success_template" ]
 						then
-							failed "move successfully copied file" "$file"
-							current_item_failed=1
+							move_success_target=`render_path_template "$move_success_template" "$filetimestamp" "$basedir" "$basename"`
+							move_success_target_dir=`dirname "$move_success_target"`
+							[ -d "$move_success_target_dir" ] || mkdir -p "$move_success_target_dir"
+							
+							if ! mv $verbose --no-clobber "$file" "$move_success_target"
+							then
+								failed "move successfully copied file" "$file"
+								current_item_failed=1
+							fi
 						fi
+					else
+						failed copy "$file"
+						current_item_failed=1
 					fi
-				else
-					failed copy "$file"
-					current_item_failed=1
-				fi
-				;;
-			(move)
-				if ! mv $verbose $local_overwrite_opt "$file" "$target"
-				then
-					failed move "$file"
-					current_item_failed=1
-				fi
-				;;
-			(custom)
-				if ! command ${custom_handler:-false} "$file" "$target"
-				then
-					failed handle "$file"
-					current_item_failed=1
-				fi
-				;;
-			esac
+					;;
+				(move)
+					if ! mv $verbose $local_overwrite_opt "$file" "$target"
+					then
+						failed move "$file"
+						current_item_failed=1
+					fi
+					;;
+				(custom)
+					if ! command ${custom_handler:-false} "$file" "$target"
+					then
+						failed handle "$file"
+						current_item_failed=1
+					fi
+					;;
+				esac
+			fi
 			
 			if [ ! $current_item_failed ]
 			then

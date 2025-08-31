@@ -17,10 +17,18 @@ The first column is the X axis, the rest of the columns are data lines.
 
 Default is to output an ascii-art chart to the terminal ("dumb" output in gnuplot).
 
-td-gnuplot guesses the data format from the column names.
+td-gnuplot(1) guesses the data format from the column names.
 If the 0th column matches to "date" or "time" (case insensitively) then the X axis will be a time axis.
-If the 0th column matches to "time", then unix epoch timetamp is assumed.
+If the 0th column matches to "time", then unix epoch timestamp is assumed.
 Otherwise specify what date/time format is used by eg. B<--timefmt=%Y-%m-%d> option.
+
+Data series plotting options may be included in the column names simply by appending them to the column name,
+like: B<income with impulse> - in this case the series is called B<income>
+and the plot options are B<with impulse>.
+
+It also guesses which column contains the xtics labels for an other column.
+In general a series called I<S> takes its xtics labels from "I<S> B<label>" column (space in column name).
+In the above example: B<income label>.
 
 Plot data read from STDIN is buffered in a temp file
 (provided by C<< File::Temp->new(TMPDIR=>1) >> and immediately unlinked so no waste product left around),
@@ -100,6 +108,7 @@ $plot_script_rfileno = fileno $plot_script_rfh;
 
 process_header(sys_read_line());
 
+# TODO: consider using 'datafile volatile' in gnuplot instead of temporary file
 $data_tmp_fh = File::Temp->new( SUFFIX => '.dat', TMPDIR => 1, );
 # shovel all of STDIN to a temp file to let gnuplot seek in it
 print {$data_tmp_fh} <STDIN>;
@@ -183,14 +192,34 @@ while(my $arg = shift @ARGV)
 close $conf_script_wfh;
 select $plot_script_wfh;
 
+@series = ();
+for my $colnum (2..$#Header+1)
+{
+	my $colname = $Header[$colnum-1];
+	my ($series_name, $series_options) = split / /, $colname, 2;
+	next if $series_options eq 'label';
+	
+	my $ser = {
+		using => $colnum,
+		title => $series_name,
+		options => $series_options,
+	};
+	if(exists $Header{"$series_name label"})
+	{
+		my $label_colnum = $Header{"$series_name label"}+1;
+		$ser->{using} .= ":xticlabel($label_colnum)";
+	}
+	push @series, $ser;
+}
+
+
 print "plot ";
 
 $sep = '';
 $input = $data_tmp_path;
-for my $colnum (2..$#Header+1)
+for my $ser (@series)
 {
-	my $col = $Header[$colnum-1];
-	print "$sep'$input' using 1:$colnum title \"$col\" axes x1y1";
+	print "$sep'$input' using 1:$ser->{using} title \"$ser->{title}\" axes x1y1 $ser->{options}";
 	$sep = ', ';
 	$input = '';
 }

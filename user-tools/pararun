@@ -102,6 +102,10 @@ stdfilt(1) to get them prefixed and/or colored.
 
 parallel(1)
 
+=head1 INSPIRED BY
+
+polysh L<https://github.com/innogames/polysh/>
+
 =cut
 
 

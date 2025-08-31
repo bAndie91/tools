@@ -1,0 +1,118 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+filesets - Set operations on text files, lines being set elements
+
+=head1 SYNOPSIS
+
+filesets [I<OPTIONS>] I<EXPRESSION> I<FILE-1> I<FILE-2> [...]
+
+=head1 EXPRESSION
+
+Sets are identified by the number of file, 1-indexed.
+
+These are the supported operators, may be given by word or by symbol:
+
+=over 4
+
+=item B<union>, B<+>
+
+=item B<intersect>, B<^>
+
+=item B<difference>, B<->
+
+=item B<complement>, B<!>
+
+=back
+
+Nested parentheses are supported.
+
+=head1 DESCRIPTION
+
+Output the resulting set.
+
+=head1 OPTIONS
+
+=head1 ENVIRONMENT
+
+=head1 LIMITATIONS
+
+=head1 SEE ALSO
+
+comm(1), uniq(1), setop(1)
+
+=cut
+
+
+use File::stat;
+use Data::Dumper;
+use utf8;
+use open ':std', ':utf8';  # mark stdio as utf8 but not verify
+use open ':utf8';
+use Errno qw/:POSIX/;
+use File::Temp qw/tempfile/;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev pass_through permute/;
+use IPC::Run qw/run/;
+use List::MoreUtils qw/all any none/;
+use Pod::Usage;
+use POSIX qw/WEXITSTATUS WTERMSIG WIFSIGNALED/;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+
+$ItemInSet = {};
+
+GetOptions(
+	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+	'<>' => sub { unshift @ARGV, $_[0]; die '!FINISH'; },
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+
+my $Selection = shift @ARGV;
+$Selection =~ /^([\s\d\(\)!\+\^!-]+|complement|intersect|union|difference)+$/i or die "$0: invalid expression: $Selection\n";
+$selection_expr = $Selection;
+$selection_expr =~ s/\s*-\s*/ intersect complement /gi;
+$selection_expr =~ s/complement/not/gi;
+$selection_expr =~ s/intersect/and/gi;
+$selection_expr =~ s/union/or/gi;
+$selection_expr =~ s/\s*([\d\+\^]+)\s*/ ($1) /g;
+$selection_expr =~ s/(\d+)/(exists \$ItemInSet->{\$item}->{$1})/g;
+$selection_expr =~ s/\s*\+\s*/ or /g;
+$selection_expr =~ s/\s*\^\s*/ and /g;
+
+if($ENV{DEBUG})
+{
+	warn "$0: selector expression in perl: '$selection_expr'\n";
+}
+# verify perl expression:
+{
+	my $item = '';
+	eval "($selection_expr); 1" or die "$0: $@\n";
+}
+
+
+$set_num = 1;
+
+for my $filepath (@ARGV)
+{
+	open my $fh, '<', $filepath or die "$0: $!\n";
+	while(<$fh>)
+	{
+		chomp;
+		$ItemInSet->{$_}->{$set_num}++;
+	}
+	close $fh;
+	$set_num++;
+}
+
+
+for my $item (sort keys %{$ItemInSet})
+{
+	my $selected;
+	eval "\$selected = ($selection_expr); 1" or die "$0: $@\n";
+	if($selected)
+	{
+		print "$item\n";
+	}
+}

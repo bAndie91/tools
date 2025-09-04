@@ -177,11 +177,12 @@ set_site_func()
 	else
 		site=$1
 	fi
+	basesite=${site%%/*}
 }
 
 is_secret()
 {
-	[[ $1 =~ pass|key|cvc|secret|pin|code|token ]]
+	[[ $1 =~ pass|key|cvc|secret|pin|code|token|otp ]]
 }
 
 do_clip()
@@ -204,12 +205,44 @@ do_clip()
 	fi
 }
 
+get_totp_codes_for_site()
+{
+	local EMAIL=`prop EMAIL show 2>/dev/null || true`
+	local USER=`prop USER show 2>/dev/null || true`
+	
+	COTP_PASSWORD='' cotp |\
+	jq -r '.[] | [.index, .issuer, .label, .otp_code] | join("\t")' |\
+	td-add-headers INDEX ISSUER LABEL CODE |\
+	td-filter ISSUER = "$basesite" | td-filter LABEL = "$EMAIL" or LABEL = "$USER"
+}
+
 prop()
 {
 	local prop=${1:?'enter property name!'}
 	shift
 	local instruct=${1:?enter an instruction: set, edit, read, del, show, reveal, clip}
 	shift
+	
+	if [ "$prop" = TOTP ]
+	then
+		case "$instruct" in
+		(set|edit|read|del)
+			errx 1 "Manage TOTP codes not by cred(1) but cotp(1)." >&2
+			;;
+		(show|reveal)
+			get_totp_codes_for_site |\
+			td-select -H CODE | head -n1
+			;;
+		(clip)
+			prop "$prop" reveal | do_clip "$prop"
+			;;
+		(*)
+			false  # invalid instruction given
+			;;
+		esac
+		return
+	fi
+	
 	case "$instruct" in
 	(set)
 		[ $# -gt 0 ]  # 'prop ... set' needs at least 1 argument
@@ -239,14 +272,14 @@ prop()
 		then
 			false  # this property is deemed to be a secret
 		else
-			cat "$basedir/$site/$prop"
+			prop "$prop" reveal "$@"
 		fi
 		;;
 	(reveal)
 		cat "$basedir/$site/$prop"
 		;;
 	(clip)
-		cat "$basedir/$site/$prop" | do_clip "$prop"
+		prop "$prop" reveal "$@" | do_clip "$prop"
 		;;
 	(*)
 		false  # invalid instruction given
@@ -257,6 +290,7 @@ prop()
 
 basedir=~/cred
 site=''
+basesite=''
 
 
 if [ "${1:-}" = site ]
@@ -303,6 +337,14 @@ case "$subcmd" in
 			grep . "$file" | prefixlines "$file"$'\t' || true
 		done
 		
+		get_totp_codes_for_site |\
+		if in_list reveal-secrets "${options[@]}"
+		then
+			td-format 'TOTP/{LABEL}'$'\t''{CODE}'
+		else
+			td-format 'TOTP/{LABEL}'
+		fi
+		
 		site=${site%/}
 		if [[ $site =~ / ]]
 		then
@@ -335,11 +377,12 @@ case "$subcmd" in
 			then
 				val=''
 			else
-				val=`cat "$basedir/$site/$prop"`
+				val=`prop "$prop" reveal`
 			fi
 			strings="$strings$val"$'\t'
 		done
 		xdotool key Alt+Tab
+		# TODO verify if the new window is something we are supposed to type secrets
 		sleep 1
 		xdotool type --delay 100ms "$strings"
 	else
@@ -351,6 +394,10 @@ case "$subcmd" in
 	if [ -e "$basedir/$site" ]
 	then
 		find "$basedir/$site" -type f -printf "%P\n"
+		if [ -n "$(get_totp_codes_for_site | td-select -H +ALL)" ]
+		then
+			echo TOTP
+		fi
 	fi
 	;;
 (generate-password)

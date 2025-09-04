@@ -22,7 +22,8 @@ well, enclosed in paretheses like C<(COLUMN)> to avoid parsing unambiguity in Pe
 It's possible because these column names are set up as subroutines internally.
 
 Topic variable (C<$_>) initially is set to the current value of I<COLUMN> in I<EXPR>.
-So for example C<N='-$_'> makes the field N the negative of itself.
+So for example C<N='-$_'> makes the field N the negative of itself;
+C<N='s/\s//gr'> removes all whitespace from the field (note the B<r> modifier).
 
 You can create new columns simply by referring to a I<COLUMN> name that does not exist yet.
 You can refer to an earlier defined I<COLUMN> in subsequent I<EXPR> expressions.

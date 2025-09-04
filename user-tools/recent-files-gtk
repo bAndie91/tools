@@ -4,8 +4,46 @@ import os
 import sys
 import re
 import gtk
+import glib
+import argparse
+import signal
+
+argparser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+arggroup_action = argparser.add_mutually_exclusive_group()
+arggroup_action.add_argument('--list', action='store_true', default=True, help="List Recently Used files; this is the default action")
+arggroup_action.add_argument('--add', metavar='FILEPATH', help="Add FILEPATH file to the Recently Used list")
+argparser.add_argument('--no-verify', action='store_true', help="Do not check if FILEPATH exists")
+argparser.add_argument('--mime', metavar='TYPE', default='application/octet-stream', help="Register FILEPATH with this MIME type")
+argparser.add_argument('--label', metavar='LABEL', help="Store FILEPATH with a label as it should be displayed")
+argparser.add_argument('--app', metavar='NAME', default='xdg-open', help="Register FILEPATH to this named application")
+cliArgs = vars(argparser.parse_args())
 
 rmag = gtk.recent_manager_get_default()
+
+if cliArgs.get('add'):
+	def g_filename_to_uri(filepath):
+		import urllib2
+		return 'file://' + urllib2.quote(os.path.abspath(filepath))
+	
+	if not cliArgs.get('no_verify'):
+		# assert file's existence
+		os.stat(cliArgs['add'])
+	
+	metadata = {
+		'mime_type': cliArgs['mime'],
+	}
+	if cliArgs.get('app') is not None:
+		metadata['app_name'] = cliArgs['app']
+		metadata['app_exec'] = "%s '%%f'" % (cliArgs['app'],)
+	if cliArgs.get('label') is not None:
+		metadata['display_name'] = cliArgs['label']
+	
+	rmag.add_full(g_filename_to_uri(cliArgs['add']), metadata)
+	glib.idle_add(gtk.main_quit)
+	gtk.main()
+	sys.exit(0)
+
+
 items = rmag.get_items()
 items.sort(cmp=lambda a, b: cmp(a.get_visited(), b.get_visited()))
 dirs = {}

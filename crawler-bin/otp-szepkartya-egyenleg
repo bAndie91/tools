@@ -2,8 +2,8 @@
 
 if [ -z "$2" ]
 then
-	echo "Usage: $0 <Card8> <TeleCode>
- Card8    Bankkartya szam utolso 8 szamjegye
+	echo "Usage: $0 <Card> <TeleCode>
+ Card      Bankkartya szama
  TeleCode  Telekod, ami kezdetben a kartyaszam utolso 3 szamjegye" >&2
 	exit 1
 fi
@@ -11,12 +11,12 @@ fi
 set -e
 set -u
 
-cardnum8=$1
+cardnum=$1
 telecode=$2
 
-if [ ${#cardnum8} != 8 ]
+if [ ${#cardnum} != 16 ]
 then
-	echo "A 8-jegyű bankkátya szám kell." >&2
+	echo "A 16-jegyű bankkátya szám kell." >&2
 	exit 1
 fi
 if [ ${#telecode} != 3 ]
@@ -33,11 +33,11 @@ cookies="$cookies; cookie_prod=3"
 ajaxtoken=`curl -sS "$url" -b /dev/fd/3 3<<<"$cookies" |\
 	grep -Eo 'var\s+ajax_token\s*=\s*.[a-fA-Z0-9]+' | cut -f2 -d"'"`
 
-curl -sS https://magan.szepkartya.otpportalok.hu/ajax/egyenleglekerdezes/ \
+curl -sS https://magan.szepkartya.otpportalok.hu/ajax/gyorsegyenleg/ \
 	-b /dev/fd/3 3<<<"$cookies" \
 	-H 'Origin: https://magan.szepkartya.otpportalok.hu' \
 	-H 'X-Requested-With: XMLHttpRequest' \
-	-d "s_azonosito_k=$cardnum8" \
+	-d "s_azonosito_k=$cardnum" \
 	-d "s_telekod_k=$telecode" \
 	-d "ajax_token=$ajaxtoken" \
 	-d "s_captcha=" |\

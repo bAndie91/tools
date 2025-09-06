@@ -44,7 +44,7 @@ then
 		if ! mountpoint "$mountpoint"
 		then
 			if [ -e ~/.ssh/autosshfs-extra-options ]; then extra_options=,`cat ~/.ssh/autosshfs-extra-options`; else extra_options=''; fi
-			sshfs -o allow_root,auto_unmount,Port=$port,ControlMaster=no,transform_symlinks,reconnect,Hostname="$hostname"$extra_options "$user@$host:$remote_root" "$mountpoint" {lockfd}>&-
+			sshfs -o allow_root,auto_unmount,Port=$port,ControlMaster=no,transform_symlinks,Hostname="$hostname"$extra_options "$user@$host:$remote_root" "$mountpoint" {lockfd}>&-
 			err=$?
 			if [ $err != 0 ]
 			then

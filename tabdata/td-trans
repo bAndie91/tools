@@ -21,6 +21,11 @@ Maximum number of columns.
 The I<NUM>th column may have any whitespace.
 By default it's the number of fields in the header (first line).
 
+=item -c, --columns I<NUM>
+
+There will be exactly this many columns.
+Equivalent to B<< -n I<NUM> -x I<NUM> >>.
+
 =back
 
 =cut

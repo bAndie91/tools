@@ -17,7 +17,7 @@ do
 		chmod_opt+=("$1")
 		;;
 	-R|--recursive)
-		maxdepth=
+		maxdepth=''
 		;;
 	-h|--help)
 		help 0
@@ -41,7 +41,8 @@ fi
 
 fmod=`umask -S | tr -d x`
 dmod=`umask -S`
-find "$@" $maxdepth \( -type f -exec chmod "${chmod_opt[@]}" "$fmod" {} \; \) -o \( -type d -exec chmod "${chmod_opt[@]}" "$dmod" {} \; \)
+find "$@" $maxdepth -type d -print0 | xargs --null chmod "${chmod_opt[@]}" "$dmod" --
+find "$@" $maxdepth -type f -print0 | xargs --null chmod "${chmod_opt[@]}" "$fmod" --
 
 
 true <<EOF

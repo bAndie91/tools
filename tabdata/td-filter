@@ -60,6 +60,11 @@ do not fail when a non-numeric r-value is given to a numeric operator
 
 do not show warning when a non-numeric r-value is given to a numeric operator
 
+=item -d, --collection-delimiter I<PATTERN>
+
+Take I<PATTERN> as item separator in the B<one of> (B<any of>) operator's r-value.
+Default is C<,> comma.
+
 =back
 
 =head1 OPERATORS
@@ -173,12 +178,14 @@ td-filter(1) is analogous to SQL WHERE.
 =cut
 
 
+$OptDelimiter = ',';
 $OptShowHeader = 1;
 $OptWarnBadColumnNames = 1;
 $OptFailBadColumnNames = 1;
 $OptWarnNonNumericRValue = 1;
 $OptFailNonNumericRValue = 1;
 %OptionDefs = (
+	'd|collection-delimiter=s' => \$OptDelimiter,
 	'H|no-header' => sub { $OptShowHeader = 0; },
 	'h|header' => sub { $OptShowHeader = 1; },
 	'i|ignore-non-existing-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 0; },
@@ -401,7 +408,7 @@ while(not eof STDIN)
 				
 				if($operator eq 'contains-one-of')
 				{
-					$right_data = '\b(' . (join '|', map { quotemeta($_) } split /,/, $right_data) . ')\b';
+					$right_data = '\b(' . (join '|', map { quotemeta($_) } split /$OptDelimiter/, $right_data) . ')\b';
 				}
 				elsif($operator eq 'contains')
 				{
@@ -419,11 +426,11 @@ while(not eof STDIN)
 				}
 				case 'is-one-of'
 				{
-					$result = any { $left_data eq $_ } split /,/, $right_data;
+					$result = any { $left_data eq $_ } split /$OptDelimiter/, $right_data;
 				}
 				case 'contains-one-of'
 				{
-					$result = any { 1 + index $left_data, $_ } split /,/, $right_data;
+					$result = any { 1 + index $left_data, $_ } split /$OptDelimiter/, $right_data;
 				}
 				case 'starts-with'
 				{

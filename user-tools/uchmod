@@ -3,10 +3,12 @@
 declare -a chmod_opt
 chmod_opt=()
 maxdepth="-maxdepth 0"
+do_dirs=''
+do_files=''
 
 help()
 {
-	echo "Usage: $0 [--verbose | --changes | --recursive] <files and folders>" >&2
+	echo "Usage: $0 [--verbose | --changes | --recursive | --dirs | --files] <files and folders>" >&2
 	exit ${1:-1}
 }
 
@@ -18,6 +20,12 @@ do
 		;;
 	-R|--recursive)
 		maxdepth=''
+		;;
+	-d|--dirs)
+		do_dirs=1
+		;;
+	-f|--files)
+		do_files=1
 		;;
 	-h|--help)
 		help 0
@@ -39,10 +47,24 @@ then
 	help 1
 fi
 
-fmod=`umask -S | tr -d x`
-dmod=`umask -S`
-find "$@" $maxdepth -type d -print0 | xargs --null chmod "${chmod_opt[@]}" "$dmod" --
-find "$@" $maxdepth -type f -print0 | xargs --null chmod "${chmod_opt[@]}" "$fmod" --
+if [ -z "$do_dirs" -a -z "$do_files" ]
+then
+	do_dirs=1
+	do_files=1
+fi
+
+umask=`umask -S`
+dmod=$umask
+fmod=${umask//x/}
+
+if [ $do_dirs ]
+then
+	find "$@" $maxdepth -type d -print0 | xargs --null chmod "${chmod_opt[@]}" "$dmod" --
+fi
+if [ $do_files ]
+then
+	find "$@" $maxdepth -type f -print0 | xargs --null chmod "${chmod_opt[@]}" "$fmod" --
+fi
 
 
 true <<EOF

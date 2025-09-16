@@ -82,6 +82,38 @@ How many items to process.
 Stop processing items as soon as the first I<COMMAND> exits non-zero,
 and uniproc(1) itself exists which that exit code (or 128+signal if signaled).
 
+=item -Q, --quasilock
+
+Create and check locks using lock files instead of flock(2).
+Useful for network filesystems which does not support shared locks (eg. sshfs).
+It is assumed that either all instances of uniproc(1),
+across all hosts that are working on a given I<INPUTFILE>,
+are run in quasi-lock mode, or all in flock(2)-lock mode - do not mix.
+These quasi lock files are:
+
+=over 4
+
+=item I<INPUTFILE>.uniproc.lock
+
+locking the I<INPUTFILE>.uniproc state file, and
+
+=item I<INPUTFILE>.uniproc.I<NUM>
+
+locking the command processing the I<NUM>th item.
+Note, this is the same file which is locked by flock(2) in real-lock mode.
+
+=back
+
+Beware, when using quasi-locks: the user may manually clean up lock files
+which are left there after an interrupted process.
+While atomic lock acquisition is approximated using general filesystem primitives,
+there is no simple race-free to automatically release the lock when a process terminates.
+Therefore uniproc(1) does not even try to emulate such lock-release mechanism,
+so it neither detects nor reclaims stale lock files.
+However to help the user identify possibly alive processes which expect resources being exclusively allocated to them,
+uniproc(1) writes some useful info about the current process in the lock files:
+B<PID> B<START_TIMESTAMP> B<HOSTNAME>.
+
 =item -sp, --show-progress
 
 Show which item is being started to process.
@@ -93,6 +125,10 @@ Show the raw data what is being started to process.
 =item -ss, --show-summary
 
 Show stats summary when exit.
+
+=item --debug
+
+Output debug messages.
 
 =back
 
@@ -134,7 +170,8 @@ to detect if the processing is still going or the process crashed.
 
 =head1 LIMITATION
 
-Due to currently used locking mechanism (Fcntl(3perl)), running on multiple hosts may disrespect locking.
+Due to currently used locking mechanism (Fcntl(3perl)), running on multiple hosts may disrespect locking,
+depending on the network filesystem. See B<--quasilock> option.
 
 =head1 ENVIRONMENT
 
@@ -144,7 +181,7 @@ When running I<COMMAND>, the following environment is set:
 
 =item UNIPROC_DATANUM
 
-Number of the particular piece of data (ie. line number in I<INPUTFILE>)
+Number of the particular piece of data (ie. line number in I<INPUTFILE>, 0-indexed)
 which is need to be processed by the current process.
 
 =item UNIPROC_DATANUM_1INDEX
@@ -154,6 +191,8 @@ Same as B<UNIPROC_DATANUM> but 1-indexed instead of 0-indexed.
 =item UNIPROC_TOTALNUM
 
 Total number of items (processed and unprocessed).
+Note this figure may be outdated
+because I<INPUTFILE> is not always measured before each I<COMMAND> start.
 
 =back
 
@@ -189,12 +228,15 @@ Display data number, processing status, input data, (last line of) output data i
 =cut
 
 
-use Fcntl qw/:flock :seek/;
+use Fcntl qw/:flock :seek O_EXCL O_RDWR O_CREAT/;
 use Data::Dumper;
 use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
 use IPC::Run qw/run/;
-use POSIX;
+use POSIX qw/:sys_wait_h pause raise/;
 use Pod::Usage;
+use Time::HiRes qw/sleep/;
+use Sys::Hostname qw/hostname/;
+use File::stat;
 
 $OptProcessNew = 1;
 $OptProcessFailed = 0;
@@ -204,6 +246,7 @@ $OptShowData = 0;
 $OptShowSummary = 0;
 $OptDebug = 0;
 $OptErrExit = 0;
+$OptQuasiLock = 0;
 
 GetOptions(
 	'r|retry' => sub { $OptProcessFailed = 1; $OptProcessNew = 1; },
@@ -213,12 +256,17 @@ GetOptions(
 	'sp|show-progress' => \$OptShowProgress,
 	'sd|show-data' => \$OptShowData,
 	'ss|show-summary' => \$OptShowSummary,
+	'Q|quasilock!' => \$OptQuasiLock,
 	'e|errexit!' => \$OptErrExit,
 	'debug!' => \$OptDebug,
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
 die "$0: missing command\n" unless scalar @ARGV >= 2;
+
+
+$PROCESS_START_TIMESTAMP = stat("/proc/$$")->ctime;
+$SYSTEM_NAME = hostname();
 
 
 sub debug_msg
@@ -237,12 +285,45 @@ sub deriv_processing_status
 sub fopen
 {
 	my $path = shift;
-	my $opts = shift;  # supported opts: rw, no_create, lock
+	my $opts = shift;  # supported opts: rw, no_create, lock, quasilockfile
+	$opts->{'quasilockfile'} ||= "$path.lock";
+	my $lock_acquired;
+	
+	# in quasi-lock mode the lock file needs to be checked/opened first.
+	if($opts->{'lock'} and $OptQuasiLock)
+	{
+		if($path eq $opts->{'quasilockfile'} and $opts->{'no_create'})
+		{
+			die "$0: fopen() 'no_create' option is not supported in quasi-lock mode when the lock file is the same as the file to be opened ($path).\n";
+		}
+		
+		my $lock_fh;
+		while(1)
+		{
+			my $open_ok = sysopen($lock_fh, $opts->{'quasilockfile'}, O_RDWR|O_CREAT|O_EXCL);
+			if($open_ok)
+			{
+				print {$lock_fh} "$$ $PROCESS_START_TIMESTAMP $SYSTEM_NAME";
+				$lock_acquired = 1;
+				last;
+			}
+			last if not $opts->{'waitlock'};
+			sleep rand;
+		}
+		close $flock_fh if defined $flock_fh;
+		
+		if(not $lock_acquired)
+		{
+			return undef;
+		}
+	}
+	
 	my $mode = '<';  # default mode is read-only, no-create
 	if($opts->{'rw'})
 	{
 		if(not $opts->{'no_create'})
 		{
+			# in quasilock mode, it is likely already created, but nevermind, there are more sub-optimal behavior in that mode than this.
 			open my $fh, '>>', $path or die "$0: $path: $!\n";
 			close $fh;
 		}
@@ -251,9 +332,18 @@ sub fopen
 	
 	open my $fh, $mode, $path or die "$0: $path: $!\n";
 	seek $fh, 0, SEEK_SET or die "$0: seek: $path: $!\n";
-	if($opts->{'lock'})
+	
+	if($opts->{'lock'} and not $OptQuasiLock)
 	{
-		flock $fh, LOCK_EX or die "$0: flock: $path: $!\n";
+		my $lock_mode = LOCK_EX;
+		$lock_mode |= LOCK_NB if not $opts->{'waitlock'};
+		$lock_acquired = flock $fh, $lock_mode or die "$0: flock: $path: $!\n";
+		
+		if(not $lock_acquired)
+		{
+			close $fh;
+			return undef;
+		}
 	}
 	return $fh;
 }
@@ -338,9 +428,18 @@ sub still_in_progress
 	my $processing_number = shift;
 	my $lockfile = processing_lockfile_name($processing_number);
 	open my $fh, '<', $lockfile or return 0;
-	my $lock_ok = flock $fh, LOCK_EX|LOCK_NB;
+	my $lockable;
+	if($OptQuasiLock)
+	{
+		# if the lock file is there, assuming it is alive.
+		$lockable = 0;
+	}
+	else
+	{
+		$lockable = flock $fh, LOCK_EX|LOCK_NB;
+	}
 	close $fh;
-	return not $lock_ok;
+	return not $lockable;
 }
 
 sub get_next_data_number
@@ -443,62 +542,114 @@ $Results_fh = undef;
 $num_shots = 0;
 $TotalDataNum = undef;
 $ExitStatus = 0;
+$TermSignal = undef;
+$InputFileQuasiLockFile = undef;
 
-while(not defined $OptShots or $num_shots < $OptShots)
+
+sub cleanup_quasi_locks
 {
-	$Results_fh = fopen $ResultsFile, {rw=>1, lock=>1};
-	my $LineNum = get_next_data_number();
-	last if not defined $LineNum;
-	count_input_records if not defined $TotalDataNum;
-	
-	my $Data = input_data($LineNum);
-	my @DataFields = split /\t/, $Data;
-	
-	my $InprogressFile = processing_lockfile_name($LineNum);
-	my $inprogress_fh = fopen $InprogressFile, {rw=>1, lock=>1};
-	
-	record_status($LineNum, '...');
-	close $Results_fh;
-	
-	printf STDERR "uniproc: %d/%d%s%s\n", $LineNum+1, $TotalDataNum, ($OptShowData ? (": ", $Data) : ("", "")) if $OptShowProgress;
-	
-	$ENV{'UNIPROC_DATANUM'} = $LineNum;
-	$ENV{'UNIPROC_DATANUM_1INDEX'} = $ENV{'UNIPROC_DATANUM'}+1;
-	$ENV{'UNIPROC_TOTALNUM'} = $TotalDataNum;
-	
-	my $placeholder_found = 0;
-	my @command_args = map {expand_placeholders($_, $Data, \@DataFields, \$placeholder_found)} @CommandArgs;
-	if(not $placeholder_found)
-	{
-		push @command_args, @DataFields;
-	}
-	
-	my $stdin = '';
-	run [@command_args], \$stdin;
-	my $status = $?;
-	
-	$Results_fh = fopen $ResultsFile, {rw=>1, lock=>1};
-	record_status($LineNum, deriv_processing_status($status));
-	close $Results_fh;
-	
-	if(WIFSIGNALED($status) or WEXITSTATUS($status)) { $CountFailed++; }
-	else { $CountSuccess++; }
-	
-	unlink $InprogressFile;
-	close $inprogress_fh;
-	
-	if($OptErrExit)
-	{
-		$ExitStatus = WIFSIGNALED($status) ? 128 + WTERMSIG($status) : WEXITSTATUS($status);
-		last;
-	}
-	
-	$num_shots++;
+	unlink $ResultsFile_QuasiLockFile if defined $ResultsFile_QuasiLockFile;
 }
 
-if($OptShowSummary)
+sub signal_handler
 {
-	printf STDERR "uniproc: %d total, %d processed in this session, %d successful, %d failed\n", $TotalDataNum, $CountSuccess+$CountFailed, $CountSuccess, $CountFailed;
+	my $signame = shift;
+	$SIG{INT} = $SIG{TERM} = $SIG{QUIT} = undef;  # set default signal handler
+	cleanup_quasi_locks();
+	$TermSignal = $signame;
+	die "\n";
 }
 
-exit $ExitStatus;
+$SIG{INT} = \&signal_handler;
+$SIG{TERM} = \&signal_handler;
+$SIG{QUIT} = \&signal_handler;
+END { cleanup_quasi_locks(); }
+
+
+if(not eval {
+	while(not defined $OptShots or $num_shots < $OptShots)
+	{
+		$Results_fh = fopen $ResultsFile, {rw=>1, lock=>1, quasilockfile=>"$ResultsFile.lock", waitlock=>1};
+		$ResultsFile_QuasiLockFile = "$ResultsFile.lock";
+		
+		my $LineNum = get_next_data_number();
+		last if not defined $LineNum;
+		count_input_records if not defined $TotalDataNum;
+		
+		my $Data = input_data($LineNum);
+		my @DataFields = split /\t/, $Data;
+		
+		my $InprogressFile = processing_lockfile_name($LineNum);
+		my $inprogress_fh = fopen $InprogressFile, {rw=>1, lock=>1, quasilockfile=>$InprogressFile, waitlock=>0};
+		
+		if(defined $inprogress_fh)
+		{
+			record_status($LineNum, '...');
+		}
+		
+		close $Results_fh; unlink $ResultsFile_QuasiLockFile; $ResultsFile_QuasiLockFile = undef;
+		
+		if(not defined $inprogress_fh)
+		{
+			debug_msg "could not open/lock '$InprogressFile'\n";
+			next;
+		}
+		
+		printf STDERR "uniproc: %d/%d%s%s\n", $LineNum+1, $TotalDataNum, ($OptShowData ? (": ", $Data) : ("", "")) if $OptShowProgress;
+		
+		$ENV{'UNIPROC_DATANUM'} = $LineNum;
+		$ENV{'UNIPROC_DATANUM_1INDEX'} = $LineNum+1;
+		$ENV{'UNIPROC_TOTALNUM'} = $TotalDataNum;
+		
+		my $placeholder_found = 0;
+		my @command_args = map {expand_placeholders($_, $Data, \@DataFields, \$placeholder_found)} @CommandArgs;
+		if(not $placeholder_found)
+		{
+			push @command_args, @DataFields;
+		}
+		
+		my $stdin = '';
+		run [@command_args], \$stdin, init => sub {
+			print {$inprogress_fh} join(' ', $$, stat("/proc/$$")->ctime, $SYSTEM_NAME) if $OptQuasiLock;
+		};
+		my $status = $?;
+		
+		$Results_fh = fopen $ResultsFile, {rw=>1, lock=>1, quasilockfile=>"$ResultsFile.lock", waitlock=>1};
+		$ResultsFile_QuasiLockFile = "$ResultsFile.lock";
+		record_status($LineNum, deriv_processing_status($status));
+		close $Results_fh; unlink $ResultsFile_QuasiLockFile; $ResultsFile_QuasiLockFile = undef;
+		
+		if(WIFSIGNALED($status) or WEXITSTATUS($status)) { $CountFailed++; }
+		else { $CountSuccess++; }
+		
+		close $inprogress_fh;
+		unlink $InprogressFile;  # it is the lockfile of itself in quasilock mode.
+		
+		if($OptErrExit)
+		{
+			$ExitStatus = WIFSIGNALED($status) ? 128 + WTERMSIG($status) : WEXITSTATUS($status);
+			last;
+		}
+		
+		$num_shots++;
+	}
+	
+	if($OptShowSummary)
+	{
+		printf STDERR "uniproc: %d total, %d processed in this session, %d successful, %d failed\n", $TotalDataNum, $CountSuccess+$CountFailed, $CountSuccess, $CountFailed;
+	}
+	1;
+})
+{
+	warn $@ if $@ ne "\n";
+	$ExitStatus = -1;
+}
+
+if(defined $TermSignal)
+{
+	kill $TermSignal, $$;
+}
+else
+{
+	exit $ExitStatus;
+}

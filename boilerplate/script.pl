@@ -46,7 +46,7 @@ use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_
 use IPC::Run qw/run/;
 use List::MoreUtils qw/all any none/;
 use Pod::Usage;
-use POSIX qw/WEXITSTATUS WTERMSIG WIFSIGNALED/;
+use POSIX qw/:sys_wait_h strftime/;
 use Socket qw/AF_UNIX AF_INET SOCK_STREAM pack_sockaddr_in inet_aton sockaddr_un/;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 

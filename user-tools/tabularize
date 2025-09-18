@@ -268,7 +268,7 @@ sub print_table
 			print {$fh} ($row_num == 1 ? $gridlineTop : $gridlineInner) . "\n";
 		}
 		
-		my @cells = map {$row->[$_] || ''} 0 .. $#columnsWidth;
+		my @cells = map {$row->[$_] // ''} 0 .. $#columnsWidth;
 		my @cells_and_inner_borders = zip @cells, @verticalBars;
 		delete $cells_and_inner_borders[-1];
 		printf {$fh} $line_format."\n", $verticalBorder, @cells_and_inner_borders, $verticalBorder;

@@ -1,5 +1,5 @@
 
-EXEC_PREFIX = /srv/bin
+EXEC_PREFIX = /usr/local/bin
 ETC_PREFIX = /etc
 
 

@@ -13,8 +13,8 @@ echo ---- >&2
 for arg in "$@"
 do
 	case "$arg" in
-	-*)	true;;
-	*)	directory=$arg;;
+	(-*)	true;;
+	(*)		directory=$arg;;
 	esac
 done
 

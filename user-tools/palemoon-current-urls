@@ -1,0 +1,32 @@
+#!/bin/bash
+
+true <<EOF
+=pod
+
+=head1 NAME
+
+palemoon-current-urls - Display Palemoon web browser's currently opened URLs per window and per tab
+
+=cut
+
+EOF
+
+
+set -e -o pipefail -u
+
+echo "WIN_ID	WIN_SELECTED	TAB_ID	TAB_SELECTED	URL"
+
+cat "$HOME/.moonchild productions/pale moon"/*.default/sessionstore.js |\
+jq -r '
+	(.selectedWindow-1) as $selectedWindowIdx |
+	.windows | to_entries | .[] | 
+		.key as $windowIdx | 
+		(.value.selected-1) as $selectedTabIdx |
+		.value.tabs | to_entries | .[] | [
+			$windowIdx, 
+			($windowIdx == $selectedWindowIdx | tostring), 
+			.key, 
+			(.key == $selectedTabIdx | tostring), 
+			.value.entries[0].url
+		] |
+		join("\t")'

@@ -127,7 +127,7 @@ TOOLS ?= \
   ocspverify \
   oded \
   organizebydate \
-  palemoon-current-url \
+  palemoon-current-urls \
   pararun \
   parsel \
   partial \

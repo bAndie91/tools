@@ -51,4 +51,4 @@ while True:
 		
 		cmd = "mimeopen-gui"
 		
-		print "prog \"%s\" \"%s\" %s \"%s\"" % (esc(label).replace('_', '__'), esc(iconpath), cmd, esc(filepath))
+		print "prog \"%s\" \"%s\" %s \"%s\"" % (esc(label).replace('_', '__', 1), esc(iconpath), cmd, esc(filepath))

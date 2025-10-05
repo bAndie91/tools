@@ -6,6 +6,12 @@ set -u
 
 . /usr/lib/tool/bash-utils
 
+git_remote_url()
+{
+	local remote=$1
+	git config --get "remote.$remote.url"
+}
+
 cwd=`pwd`
 git_repos_prefix=$HOME/src/
 
@@ -22,9 +28,16 @@ remotenames=($(git remote))
 
 for host in "${peers[@]}"
 do
-	if ! in_list "$host" "${remotenames[@]}"
+	remote_url="$host":$inhome_repo_path/.git
+	if in_list "$host" "${remotenames[@]}"
 	then
-		git remote add "$host" "$host":$inhome_repo_path/.git
+		curr_url=`git_remote_url "$host"`
+		if [ "$curr_url" != "$remote_url" ]
+		then
+			errx 254 "remote '$host' is already set but with the wrong url."$'\n'"remote url is '$curr_url' instead of '$remote_url'."$'\n'"issue 'git remote set-url $host $remote_url' to correct."
+		fi
+	else
+		git remote add "$host" "$remote_url"
 	fi
 	git push-remotes "$host"
 done
@@ -33,7 +46,7 @@ remote_commands=()
 remotenames=($(git remote))
 for remote in "${remotenames[@]}"
 do
-	remote_url=`git config --get "remote.$remote.url"`
+	remote_url=`git_remote_url "$remote"`
 	remote_commands+=("git remote add $remote $remote_url")
 done
 thishost=`hostname`

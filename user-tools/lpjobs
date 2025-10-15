@@ -14,10 +14,16 @@ EOF
 
 TAB=$'\t'
 
+lpq_short_list_to_td()
+{
+	# lpq prints in "%-7s %-7.7s %-7d %-31.31s %.0f bytes" format,
+	# so we insert tabs in netween the fields.
+	perl -ne 'print join("\t", map {s/\s*$//r} /^(.{7}) (.{7}) (.{7}) (.{31}) (\S+)/), "\n"'
+}
 
 LANG=C lpq -a |\
 sed -e '/^no entries$/ d' |\
-td-trans-fixcol |\
+lpq_short_list_to_td |\
 ifne td-select -H Job Rank 'File(s)' |\
 {
 	declare -a job_rank
@@ -33,7 +39,7 @@ ifne td-select -H Job Rank 'File(s)' |\
 		jobs[$jobid]=1
 	done
 	
-	LANG=C lpstat -o | td-trans -m 4 |\
+	LANG=C lpstat -o | td-trans -c 4 |\
 	td-add-headers -X PRINTERJOBID USER SIZE DATETIME |\
 	td-alter _='($printer, $jobid) = PRINTERJOBID =~ /^(.+?)-(\d+)$/' PRINTER='$printer' JOBID='$jobid' |\
 	ifne td-select -H JOBID PRINTER DATETIME |\

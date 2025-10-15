@@ -1,0 +1,63 @@
+#!/bin/bash
+
+set -e
+set -o pipefail
+set -u
+
+. /usr/lib/tool/bash-utils
+
+git_remote_url()
+{
+	local remote=$1
+	git config --get "remote.$remote.url"
+}
+
+cwd=`pwd`
+git_repos_prefix=$HOME/src/
+
+if [ "${cwd:0:${#git_repos_prefix}}" = "$git_repos_prefix" ]
+then
+	homeslash=$HOME/
+	inhome_repo_path=${cwd:${#homeslash}}
+else
+	errx 255 "not in $git_repos_prefix directory."
+fi
+
+peers=("$@")
+remotenames=($(git remote))
+
+for host in "${peers[@]}"
+do
+	remote_url="$host":$inhome_repo_path/.git
+	if in_list "$host" "${remotenames[@]}"
+	then
+		curr_url=`git_remote_url "$host"`
+		if [ "$curr_url" != "$remote_url" ]
+		then
+			errx 254 "remote '$host' is already set but with the wrong url."$'\n'"remote url is '$curr_url' instead of '$remote_url'."$'\n'"issue 'git remote set-url $host $remote_url' to correct."
+		fi
+	else
+		git remote add "$host" "$remote_url"
+	fi
+	git push-remotes "$host"
+done
+
+remote_commands=()
+remotenames=($(git remote))
+for remote in "${remotenames[@]}"
+do
+	remote_url=`git_remote_url "$remote"`
+	remote_commands+=("git remote add $remote $remote_url")
+done
+thishost=`hostname`
+if ! in_list "$thishost" "${remotenames[@]}"
+then
+	remote_commands+=("git remote add $thishost $thishost:$inhome_repo_path/.git")
+fi
+remote_commands_str=`bash_join " ++ " "${remote_commands[@]}"`
+
+for host in "${peers[@]}"
+do
+	warnx "ssh $host: ${remote_commands_str[*]}"
+	ssh "$host" cdexec "$inhome_repo_path" multicmd -d ++ ${remote_commands_str[*]}
+done

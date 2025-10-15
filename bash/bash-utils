@@ -132,13 +132,27 @@ is_alpha()
 
 warnx()
 {
-	true "warnx - mimic warnx(3) in shell"
-	echo "${0##*/}: $*" >&2
+	# warnx - mimic warnx(3) in shell
+	local msg="$*"
+	local ln
+	local rest_msg
+	while [ -n "$msg" ]
+	do
+		ln=${msg%%$'\n'*}
+		rest_msg=${msg#*$'\n'}
+		if [ "$msg" = "$rest_msg" ]
+		then
+			msg=''
+		else
+			msg=$rest_msg
+		fi
+		echo "${0##*/}: $ln" >&2
+	done
 }
 
 errx()
 {
-	true "errx - mimic errx(3) in shell"
+	# errx - mimic errx(3) in shell
 	errno=$1
 	shift
 	warnx "$@"
@@ -253,9 +267,26 @@ errorlevel()
 
 bash_join()
 {
-	local IFS=$1
-	shift
-	echo "$*"
+	if [ ${#1} = 1 ]
+	then
+		local IFS=$1
+		shift
+		echo "$*"
+	else
+		local d=$1
+		shift
+		local n=0
+		local x
+		for x in "$@"
+		do
+			if [ $n -gt 0 ]
+			then
+				printf %s "$d"
+			fi
+			printf %s "$x"
+			n=$[n+1]
+		done
+	fi
 }
 
 in_list()

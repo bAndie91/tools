@@ -1,0 +1,9 @@
+#!/bin/bash
+
+set -eo pipefail
+set -u
+
+target_pid=$1
+shift
+
+exec nsenter -t "$target_pid" --all --root="/proc/$target_pid/root" --wd="/proc/$target_pid/cwd" "$@"

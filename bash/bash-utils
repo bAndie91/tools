@@ -362,6 +362,37 @@ ECHO()
 	printf %s "$*"
 }
 
+bash_assign_global()
+{
+	declare -a varnames
+	while [ $# != 0 ]
+	do
+		if [ "$1" = -- ]
+		then
+			shift
+			break
+		fi
+		varnames+=("$1")
+		shift
+	done
+	local varname
+	for varname in "${varnames[@]}"
+	do
+		declare -g "$varname=${1:-}"
+		shift
+	done
+	if [ ${BASH_ASSIGN_GLOBAL_GREEDY:-0} = 1 -a $# -gt 0 ]
+	then
+		declare -g "$varname=${!varname}${IFS:0:1}$*"
+	fi
+}
+
+bash_assign_global_greedy()
+{
+	BASH_ASSIGN_GLOBAL_GREEDY=1 bash_assign_global "$@"
+}
+
+
 canonize_semver()
 {
 	# return the canonical form of a version string

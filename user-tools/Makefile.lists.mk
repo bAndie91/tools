@@ -123,6 +123,7 @@ TOOLS ?= \
   noacute \
   nocomment \
   notashell \
+  nsjoin \
   nthash.py \
   ocspverify \
   oded \

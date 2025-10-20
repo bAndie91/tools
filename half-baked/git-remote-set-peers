@@ -12,13 +12,13 @@ git_remote_url()
 	git config --get "remote.$remote.url"
 }
 
-cwd=`pwd`
+git_repo=`git rev-parse --show-toplevel`
 git_repos_prefix=$HOME/src/
 
-if [ "${cwd:0:${#git_repos_prefix}}" = "$git_repos_prefix" ]
+if [ "${git_repo:0:${#git_repos_prefix}}" = "$git_repos_prefix" ]
 then
 	homeslash=$HOME/
-	inhome_repo_path=${cwd:${#homeslash}}
+	inhome_repo_path=${git_repo:${#homeslash}}
 else
 	errx 255 "not in $git_repos_prefix directory."
 fi

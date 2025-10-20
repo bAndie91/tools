@@ -1,0 +1,59 @@
+#!/usr/bin/env perl
+
+use utf8;
+use open ':std', ':utf8';  # mark stdio as utf8 but not verify
+use open ':utf8';
+use File::Basename;
+use File::Find;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev pass_through permute/;
+use IPC::Run qw/run/;
+use List::MoreUtils qw/all any none/;
+use Pod::Usage;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+
+$EraseLine = "\x1B[K";
+
+
+%Parent_by_commit = ();
+
+my $findopts = {
+	no_chdir => 1,
+	preprocess => sub {
+		return sort {$a cmp $b} @_;
+	},
+	wanted => sub {
+		my $path = $File::Find::name;
+		my $empty = '';
+		if($path =~ m{objects/([[:xdigit:]]{2})/([[:xdigit:]]{38})})
+		{
+			my $hash = $1.$2;
+			{
+				my $percent = (hex $1) * 100 / 256;
+				print STDERR sprintf '%s%3d%%', "\r".$EraseLine, $percent;
+			}
+			my $object_type;
+			run ['git', 'cat-file', '-t', $hash], \$empty, \$object_type;
+			chomp $object_type;
+			if($object_type eq 'commit')
+			{
+				my $object;
+				run ['git', 'cat-file', '-p', $hash], \$empty, \$object;
+				my ($parent) = $object =~ /^parent ([[:xdigit:]]+)/m;
+				$Parent_by_commit{$hash} = $parent;
+			}
+		}
+	},
+};
+
+die "No '.git/objects' dir. Run in a git repo.\n" unless -d '.git/objects';
+
+find($findopts, '.git/objects');
+print STDERR "\r".$EraseLine."100%\n";
+
+for my $commit (keys %Parent_by_commit)
+{
+	if(none {$commit eq $_} values %Parent_by_commit)
+	{
+		print "tip $commit\n";
+	}
+}

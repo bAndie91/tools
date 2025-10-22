@@ -24,12 +24,19 @@ Default is TAB (C<\t>).
 
 =item -g, --multiline-glue I<STRING>
 
+If a field occurs multiple times in the MRKV input,
+values will be joined by I<STRING> (B<newline> by default) in a single column in the TD output.
+
 =item -i, --ignore-non-existing-columns
 
 =item -w, --warn-non-existing-columns
 
 =item -c, --column I<NAME>
 
+Signal ahead that there will be a I<NAME> field in the MRKV input.
+By default mrkv2td(1) considers fields which are in the first record only.
+If your input has fields showing up only in later records, not in the first one,
+then specify those by B<--column>.
 Repeatable option.
 
 =back
@@ -114,7 +121,10 @@ while(my $line = <STDIN>)
 		
 		if($record_num == 0)
 		{
-			push @Headers, $field;
+			if(not $field ~~ @Headers)
+			{
+				push @Headers, $field;
+			}
 		}
 		else
 		{

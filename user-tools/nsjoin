@@ -3,7 +3,7 @@
 set -eo pipefail
 set -u
 
-target_pid=$1
+target_pid=${1?Target PID?}
 shift
 
 exec nsenter -t "$target_pid" --all --root="/proc/$target_pid/root" --wd="/proc/$target_pid/cwd" "$@"

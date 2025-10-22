@@ -8,7 +8,7 @@ td-alter - Add new columns and fields to tabular data stream, and modify value o
 
 =head1 USAGE
 
-td-alter I<COLUMN>=I<EXPR> [I<COLUMN>=I<EXPR> [I<COLUMN>=I<EXPR> [...]]]
+td-alter [-B I<PERL>] I<COLUMN>=I<EXPR> [I<COLUMN>=I<EXPR> [I<COLUMN>=I<EXPR> [...]]]
 
 =head1 DESCRIPTION
 
@@ -43,6 +43,13 @@ Strip sub-seconds and timezone from DATETIME field:
 
 =over 4
 
+=item -B, --begin I<PERL>
+
+Execute I<PERL> Perl script before any I<EXPR> Perl expression.
+Useful for subroutine definitions and variable initialization.
+It's running in td-alter(1)'s main address space,
+so don't mess up with its internal state.
+
 =item -H, --no--header
 
 do not show headers
@@ -62,9 +69,11 @@ But contrary to SQL's ALTER TABLE, td-alter(1) can modify the records too, so ak
 =cut
 
 $OptShowHeader = 1;
+$OptBegin = '';
 %OptionDefs = (
 	'H|no-header' => sub { $OptShowHeader = 0; },
 	'h|header' => sub { $OptShowHeader = 1; },
+	'B|begin=s' => \$OptBegin,
 );
 
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
@@ -101,11 +110,12 @@ if($OptShowHeader and @Header)
 	output_record(@Header);
 }
 
-while($line = <STDIN>)
+eval $OptBegin;
+
+while(not eof STDIN)
 {
-	chomp $line;
+	@F = read_record(\*STDIN);
 	
-	@F = split $FS, $line;
 	%F = map {$_=>$F[$Header{$_}]} keys %Header;
 	
 	for my $d (@Derives)

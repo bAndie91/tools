@@ -8,7 +8,7 @@ td-select - Show only the specified columns from the input tabular data stream.
 
 =head1 USAGE
 
-td-select [I<OPTIONS>] [--] [-]I<COLUMN> [[-]I<COLUMN> [...]]
+td-select [I<OPTIONS>] [--] [-][~]I<COLUMN> [[-][~]I<COLUMN> [...]]
 
 =head1 OPTIONS
 
@@ -58,7 +58,7 @@ the rest of columns not given yet in the parameter list
 
 I<COLUMN> is optionally prefixed with minus (C<->),
 in which case the given column will not be shown,
-ie. removed from the shown columns.
+but removed from the shown columns.
 
 So if you want to show all columns except one or two:
 
@@ -67,6 +67,12 @@ So if you want to show all columns except one or two:
 If you want to put a given column (say "KEY") to the first place and left others intact:
 
   td-select KEY +REST
+
+I<COLUMN> is optionally prefixed with tilde (C<~>),
+in which case I<COLUMN> is a regexp pattern
+and all columns are to be shown (hidden) which match to the pattern.
+Probably need to escape the tilde char if it's the leading char of an argument
+to avoid user home directory expansion in your shell.
 
 =head1 EXAMPLE
 
@@ -106,16 +112,24 @@ while(@ARGV)
 	{
 		die "$0: unknown parameter: $arg\n";
 	}
-	elsif($arg =~ /^-(.+)$/)
+	elsif($arg =~ /^-(~|)(.+)$/)
 	{
-		my $except_column = $1;
-		if(not exists $Header{$except_column})
+		my $is_pattern = $1;
+		my $except_column = $2;
+		if($is_pattern)
 		{
-			my $cols = join ", ", @Header;
-			warn "$0: $except_column: no such column. known columns: $cols\n" if $OptWarnBadColumnNames;
-			exit 3 if $OptFailBadNegativeColumnNames;
+			@Columns = grep {$_ !~ $except_column} @Columns;
 		}
-		@Columns = grep {$_ ne $except_column} @Columns;
+		else
+		{
+			if(not exists $Header{$except_column})
+			{
+				my $cols = join ", ", @Header;
+				warn "$0: $except_column: no such column. known columns: $cols\n" if $OptWarnBadColumnNames;
+				exit 3 if $OptFailBadNegativeColumnNames;
+			}
+			@Columns = grep {$_ ne $except_column} @Columns;
+		}
 	}
 	elsif($arg eq '+ALL')
 	{
@@ -125,16 +139,24 @@ while(@ARGV)
 	{
 		push @Columns, grep {not $_ ~~ @Columns} @Header;
 	}
-	elsif($arg =~ /^(.+)$/)
+	elsif($arg =~ /^(~|)(.+)$/)
 	{
-		my $colname = $1;
-		if(not exists $Header{$colname})
+		my $is_pattern = $1;
+		my $colname = $2;
+		if($is_pattern)
 		{
-			my $cols = join ", ", @Header;
-			warn "$0: $colname: no such column. known columns: $cols\n" if $OptWarnBadColumnNames;
-			exit 3 if $OptFailBadColumnNames;
+			push @Columns, grep { $_ =~ $colname } @Header;
 		}
-		push @Columns, $colname;
+		else
+		{
+			if(not exists $Header{$colname})
+			{
+				my $cols = join ", ", @Header;
+				warn "$0: $colname: no such column. known columns: $cols\n" if $OptWarnBadColumnNames;
+				exit 3 if $OptFailBadColumnNames;
+			}
+			push @Columns, $colname;
+		}
 	}
 	else
 	{

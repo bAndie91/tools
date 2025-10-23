@@ -74,7 +74,10 @@ while(not eof STDIN)
 	
 	for my $col (@columns)
 	{
-		printf "%s%s%s%s", $col->{name}, $OptSeparator, $Field[$col->{orig_idx}], $RS;
+		for my $cell_line (split /\n/, $Field[$col->{orig_idx}])
+		{
+			printf "%s%s%s\n", $col->{name}, $OptSeparator, $cell_line;
+		}
 	}
 	
 	print $RS;

@@ -32,8 +32,9 @@ no margins, ie. no right-most and left-most vertical borders
 
 =item -p, --padding I<NUM>
 
-add space padding in cells.
+add padding space to left and right side of cells.
 I<NUM> is how many spaces.
+Default is no padding.
 
 =item -v, --output-vertical-separator I<CHAR>
 

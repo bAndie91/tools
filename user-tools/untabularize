@@ -21,13 +21,29 @@ untabularize [I<OPTIONS>]
 Expect no pipe char (C<|>) in column names,
 so it's less ambiguous to determine vertical gridlines.
 
+=item -p, --padding I<NUM>
+
+Untabularize the input as it was tabularized by B<< -p I<NUM> >> padding.
+
 =item -w, --allow-whitespace
 
 Strip leading whitespace in column names to learn each column's left margin.
 
+=item -F, --no-trim-filler
+
+Don't remove trailing (or leading, in case of right-aligned cells) space,
+which is often just a filler.
+
 =back
 
 =head1 LIMITATIONS
+
+Does not reliably distinguish filler space from semantically significant space,
+so it's either sometimes significant space gets removed
+or filler space left there (with B<-F> option).
+The default mode is to trim space in cell data from the right, if any,
+else trim at the left.
+The padding, if specified by B<-p> option, is always trimmed (even if it's non-space).
 
 =head1 SEE ALSO
 
@@ -46,27 +62,40 @@ use utf8;
 use open ':std', ':utf8';
 
 $OptNoPipeInHeader = 0;
-$OptAllowWhitespace = 0;
+$OptAllowWhitespace = undef;
+$OptPadding = undef;
+$OptTrimFiller = 1;
 
 GetOptions(
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 	'P|no-pipe-in-header!' => \$OptNoPipeInHeader,
 	'w|allow-whitespace!' => \$OptAllowWhitespace,
+	'p|padding=i' => \$OptPadding,
+	'F|no-trim-filler!' => sub { $OptTrimFiller = 0; },
 	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
 ) or pod2usage(-exitval=>2, -verbose=>99);
+
+if(defined $OptAllowWhitespace and defined $OptPadding)
+{
+	die "$0: options --allow-whitespace and --padding are mutually exclusive.\n";
+}
 
 
 while(<STDIN>)
 {
 	chomp;
+	
 	if(/^(┌|├|└|\+)(.)/ and not @cellWidths)
 	{
+		# determine how wide are each columns.
+		
 		my $linechar = $2;
 		s/^[^\Q$linechar\E]//;
 		s/[^\Q$linechar\E]$//;
 		@cellWidths = map {length} split /[^\Q$linechar\E]/;
 		next;
 	}
+	
 	if(/^(\||│)/)
 	{
 		my $gridchar = $1;
@@ -78,7 +107,8 @@ while(<STDIN>)
 			{
 				# pipe char may occur in the cell data as well,
 				# so can not confidentally take it as a cell separator.
-				die "$0: can not determine the columns in --ascii --no-horizontal mode\n" . "$0: consider --no-pipe-in-header option.\n";
+				die "$0: can not determine the columns in --ascii --no-horizontal mode\n".
+				    "$0: consider --no-pipe-in-header option.\n";
 			}
 			@cellWidths = map {length} split /\Q$gridchar\E/;
 		}
@@ -103,11 +133,23 @@ while(<STDIN>)
 			# remove at most leftMargin number of spaces.
 			# so outdented cells won't be truncated,
 			# and indented ones keep the indentation relative to the column header.
-			map { $cells[$_] =~ s/^[ ]{0,$leftMargins[$_]}//; } 0 .. $#cells;
+			$cells[$_] =~ s/^[ ]{0,$leftMargins[$_]}// for 0 .. $#cells;
+		}
+		if($OptPadding)
+		{
+			@cells = map { substr $_, $OptPadding, -$OptPadding } @cells;
 		}
 		
-		# strip trailing (or leading if the cell is right-aligned) whitespace.
-		@cells = map { s/\s+$// or s/^\s+//; $_ } @cells;
+		if($OptTrimFiller)
+		{
+			# strip trailing (or leading if the cell is right-aligned) whitespace.
+			#
+			# note, it wrongly removes leading whitespace in left-aligned columns if the cell data runs all the way to the right border,
+			# but has a significant leading space (for example hierarchy denoted by indentation).
+			# and similarly in right-aligned columns if the cell data starts all the way at the left border
+			# but has space at the end (for example decimal numbers with vertically aligned place values).
+			@cells = map { s/\s+$// or s/^\s+//; $_ } @cells;
+		}
 		
 		print join("\t", @cells) . "\n";
 	}

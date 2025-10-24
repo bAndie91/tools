@@ -1,0 +1,81 @@
+#!/usr/bin/env perl
+
+use IPC::Run qw/run/;
+use List::MoreUtils qw/all any none uniq/;
+use Data::Dumper;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+
+$HOME = $ENV{'HOME'};
+
+sub list_ssh_known_hosts
+{
+	my $input = '';
+	my $output = '';
+	
+	run ['bash', '-c', '
+			. /usr/share/bash-completion/bash_completion;
+			_known_hosts_real "";
+			printf "%s\n" "${COMPREPLY[@]}";
+		'], \$input, \$output;
+	
+	chomp $output;
+	return split /\n/, $output;
+}
+
+sub list_ssh_config_hosts
+{
+	my @hosts;
+	open my $fh, '<', "$HOME/.ssh/config";
+	while(<$fh>)
+	{
+		chomp;
+		if(/^\s*Host\s+(.+)/i)
+		{
+			my $host_patterns = $1;
+			for my $hp (split /\s+/, $host_patterns)
+			{
+				$hp =~ s/^!//;
+				push @hosts, $hp, if $hp !~ /[\*\?]/;
+			}
+		}
+	}
+	close $fh;
+	return @hosts;
+}
+
+sub ssh_control_sockets
+{
+	my $prefix = shift;
+	my @names;
+	open my $fh, '<', '/proc/net/unix';
+	while(<$fh>)
+	{
+		chomp;
+		my ($sockname) = /^(?:\S+\s+){7}(.+)$/;
+		if($prefix eq substr $sockname, 0, length $prefix)
+		{
+			my $suffix = substr $sockname, length $prefix;
+			push @names, $suffix =~ s/\.[[:alnum:]]+$//r;
+		}
+	}
+	close $fh;
+	return @names;
+}
+
+@known_hosts = list_ssh_known_hosts;
+@config_hosts = list_ssh_config_hosts;
+@rhosts = sort {lc $a cmp lc $b} uniq @known_hosts, @config_hosts;
+
+@connected_hosts = map { /\@(.+?)\(/; $1; } ssh_control_sockets("$HOME/.ssh/ctrl/");
+
+for my $rhost (@rhosts)
+{
+	my $icon = "laptopdisconnected";
+	my $ssh_opts = '';
+	if($rhost ~~ @connected_hosts)
+	{
+		$icon = "laptopconnected";
+		$ssh_opts = "-O exit";
+	}
+	print "prog \"$rhost\" $icon x-terminal-emulator -e env REPEAT_UNTIL=0 REPEAT_DELAY=enter repeat ssh \"$rhost\" $ssh_opts\n";
+}

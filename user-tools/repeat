@@ -5,7 +5,7 @@ true <<EOF
 
 =head1 NAME
 
-repeat - Run a give command repeatedly
+repeat - Run the given command repeatedly
 
 =head1 SYNOPSIS
 
@@ -38,6 +38,9 @@ In seconds, by default.
 See sleep(1) for valid parameters, eg. "10m" for 10 minutes.
 Default is no delay.
 
+The exceptional value for B<REPEAT_DELAY> is B<enter>,
+for which repeat(1) waits until the user presses Enter on the terminal, to repeat the given command.
+
 =back
 
 =cut
@@ -47,9 +50,13 @@ EOF
 
 . /usr/lib/tool/bash-utils
 
-if [ "$1" = --help -o $# = 0 ]
+if [ $# = 0 ]
 then
-	echo "Usage: [REPEAT_TIMES=num] [REPEAT_DELAY=interval] [REPEAT_UNTIL=code] repeat <COMMAND> [<ARGS>]"
+	pod2text "$0" >&2
+	exit -1
+elif [ "$1" = --help ]
+then
+	pod2text "$0"
 	exit 0
 fi
 
@@ -57,13 +64,20 @@ REPEAT_TIMES=${REPEAT_TIMES:--1}
 export REPEAT_COUNT
 REPEAT_COUNT=0
 
+command=("$@")
+
 while [ $REPEAT_TIMES = -1 -o $REPEAT_COUNT -lt $REPEAT_TIMES ]
 do
-	"$@"
+	"${command[@]}"
 	if [ $? = "$REPEAT_UNTIL" ]
 	then
 		break
 	fi
 	REPEAT_COUNT=$[REPEAT_COUNT + 1]
-	sleep ${REPEAT_DELAY:-0}
+	if [ ${REPEAT_DELAY:-0} = enter ]
+	then
+		read -p "${0##*/}: press ENTER to run again: ${command[*]@Q}."
+	else
+		sleep ${REPEAT_DELAY:-0}
+	fi
 done

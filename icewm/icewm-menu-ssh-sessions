@@ -68,14 +68,18 @@ sub ssh_control_sockets
 
 @connected_hosts = map { /\@(.+?)\(/; $1; } ssh_control_sockets("$HOME/.ssh/ctrl/");
 
+$executor = "x-terminal-emulator -e env REPEAT_UNTIL=0 REPEAT_DELAY=enter repeat";
+
 for my $rhost (@rhosts)
 {
 	my $icon = "laptopdisconnected";
-	my $ssh_opts = '';
 	if($rhost ~~ @connected_hosts)
 	{
 		$icon = "laptopconnected";
-		$ssh_opts = "-O exit";
 	}
-	print "prog \"$rhost\" $icon x-terminal-emulator -e env REPEAT_UNTIL=0 REPEAT_DELAY=enter repeat ssh \"$rhost\" $ssh_opts\n";
+	print "prog \"$rhost\" $icon $executor ssh \"$rhost\"\n";
+	if($rhost ~~ @connected_hosts)
+	{
+		print "prog \"$rhost DISCONNECT\" gtk-disconnect $executor ssh \"$rhost\" -O exit\n";
+	}
 }

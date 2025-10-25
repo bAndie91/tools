@@ -13,15 +13,8 @@ git_remote_url()
 }
 
 git_repo=`git rev-parse --show-toplevel`
-git_repos_prefix=$HOME/src/
-
-if [ "${git_repo:0:${#git_repos_prefix}}" = "$git_repos_prefix" ]
-then
-	homeslash=$HOME/
-	inhome_repo_path=${git_repo:${#homeslash}}
-else
-	errx 255 "not in $git_repos_prefix directory."
-fi
+homeslash=$HOME/
+inhome_repo_path=${git_repo:${#homeslash}}
 
 peers=("$@")
 remotenames=($(git remote))

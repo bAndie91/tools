@@ -15,11 +15,11 @@ export ORGANIZEBYDATE_MODE=copy
 custom_handler=''
 set_mtime=''
 set_atime=''
-overwrite_opt='--no-clobber'
+allow_overwrite=''
 conflict_resolver_cmd=''
 conflict_resolver_script=''
 faillog=''
-failed_count=0
+declare -g failed_count=0
 move_success_template=''
 
 
@@ -152,7 +152,8 @@ Conflict resolutions:
 
 =item B<skip>
 
-Don't copy (move) source file.
+Don't copy (move) source file,
+and don't do any processing (eg. don't move successfully copied source file).
 
 =item B<proceed> [I<NEW-TARGET>]
 
@@ -165,12 +166,13 @@ and in either cases: with or without I<NEW-TARGET> being given.
 =item B<done>
 
 Indicate that the source file is already there on the target path,
-and no need to copy/move,
-but organizebydate(1) may still set the target's mtime (atime)
+and no need to copy/move.
+organizebydate(1) may still set the target's mtime (atime)
 when B<--set-mtime> (B<--set-atime>) option is given;
 and still moves the source file when B<--move-success-template> is given.
-Emit B<done> signal if the B<same> file is already present,
-with equal binary content to the source file, on the target location.
+Emit B<done> signal if the B<same> file is already present on the target location,
+or the conflict resolver put it there,
+with equal binary content to the source file.
 
 =item B<fail>
 
@@ -265,6 +267,17 @@ set -e
 . /usr/lib/tool/bash-utils
 set +e
 
+
+overwrite_opt()
+{
+	local allow_overwrite=$1
+	if [ "$allow_overwrite" = 1 ]
+	then
+		echo ''
+	else
+		echo --no-clobber
+	fi
+}
 
 render_path_template()
 {
@@ -399,7 +412,7 @@ do
 		ORGANIZEBYDATE_MODE=custom
 		;;
 	(--overwrite)
-		overwrite_opt=''
+		allow_overwrite=1
 		;;
 	(--conflict-resolver-cmd)
 		if [ -n "$conflict_resolver_script" ]
@@ -538,7 +551,9 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 			[ "$ORGANIZEBYDATE_MODE" = copy ] && sgn='='
 			echo "$file $sgn> $target"
 		else
-			local_overwrite_opt=$overwrite_opt
+			local_allow_overwrite=$allow_overwrite
+			current_item_failed=''
+			current_item_silently_ignored=''
 			current_item_already_handled=''
 			
 			if [ -e "$target" -a \( -n "$conflict_resolver_cmd" -o -n "$conflict_resolver_script" \) ]
@@ -584,7 +599,7 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 							target=$newtarget
 							target_dir=`dirname "$target"`
 						fi
-						local_overwrite_opt=''  # let cp (mv) overwrite the target
+						local_allow_overwrite=1  # let cp (mv) overwrite this target item
 					else
 						warnx "unknown conflict resolution: $resolution"
 						failed "conflict resolve" "$file"
@@ -605,16 +620,20 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 				case "$ORGANIZEBYDATE_MODE" in
 				(copy|move)
 					[ -d "$target_dir" ] || mkdir -p "$target_dir"
+					if [ -e "$target" -a ! "$local_allow_overwrite" ]
+					then
+						current_item_silently_ignored=1
+					fi
 					;;&
 				(copy)
-					if ! cp $verbose $local_overwrite_opt --preserve=timestamps "$file" "$target"
+					if ! cp $verbose $(overwrite_opt "$local_allow_overwrite") --preserve=timestamps "$file" "$target"
 					then
 						failed copy "$file"
 						current_item_failed=1
 					fi
 					;;
 				(move)
-					if ! mv $verbose $local_overwrite_opt "$file" "$target"
+					if ! mv $verbose $(overwrite_opt "$local_allow_overwrite") "$file" "$target"
 					then
 						failed move "$file"
 						current_item_failed=1
@@ -630,9 +649,19 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 				esac
 			fi
 			
-			if [ "$ORGANIZEBYDATE_MODE" = copy -a ! "$current_item_failed" ]
+			if [ ! "$current_item_silently_ignored" -a ! "$current_item_failed" ]
 			then
-				if [ -n "$move_success_template" ]
+				# set mtime/atime on the target file just created.
+				if [ "$set_atime" = 1 -o "$set_mtime" = 1 ]
+				then
+					touch_opts=()
+					if [ "$set_atime" = 1 ]; then touch_opts+=(-a); fi
+					if [ "$set_mtime" = 1 ]; then touch_opts+=(-m); fi
+					touch -t `date +%Y%m%d%H%M.%S -d "@$filetimestamp"` "${touch_opts[@]}" "$target"
+				fi
+				
+				# move away source file (only in copy mode).
+				if [ "$ORGANIZEBYDATE_MODE" = copy -a -n "$move_success_template" ]
 				then
 					move_success_target=`render_path_template "$move_success_template" "$filetimestamp" "$basedir" "$basename"`
 					move_success_target_dir=`dirname "$move_success_target"`
@@ -640,21 +669,10 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 					
 					if ! mv $verbose --no-clobber "$file" "$move_success_target"
 					then
+						# TODO what if $move_success_target already exists?
 						failed "move successfully copied file" "$file"
 						current_item_failed=1
 					fi
-				fi
-			fi
-			
-			if [ ! $current_item_failed ]
-			# TODO FIXME maybe we still should set the target mtime if only the move_success_template failed?
-			then
-				if [ "$set_atime" = 1 -o "$set_mtime" = 1 ]
-				then
-					touch_opts=()
-					if [ "$set_atime" = 1 ]; then touch_opts+=(-a); fi
-					if [ "$set_mtime" = 1 ]; then touch_opts+=(-m); fi
-					touch -t `date +%Y%m%d%H%M.%S -d "@$filetimestamp"` "${touch_opts[@]}" "$target"
 				fi
 			fi
 		fi

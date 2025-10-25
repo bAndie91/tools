@@ -2,18 +2,27 @@
 
 $\ = "\n";
 
-#print "menuprogreload \"Aktuális Könyvtárak\" folder 2 icewm-menu-cwds";
+$HOME = $ENV{"HOME"};
 
-open $f, '<', $ENV{"HOME"}."/.gtk-bookmarks";
-while(<$f>)
+for my $path ("$HOME/.gtk-bookmarks", glob "$HOME/.config/gtk-*/bookmarks")
 {
-	if(s{^file://(\S+).*\n}{$1})
+	if(open my $f, '<', $path)
 	{
-		s/%(..)/chr hex $1/ge;  # decode url-encoded chars
-		s/[""\\]/\\$&/g;  # escape for icewm menu parser
-		print "prog \"$_\" folder rox \"$_\"";
+		push @gtk_bookmark_files, $path;
+		
+		while(<$f>)
+		{
+			if(s{^file://(\S+).*\n}{$1})
+			{
+				s/%(..)/chr hex $1/ge;  # decode url-encoded chars
+				s/[""\\]/\\$&/g;  # escape for icewm menu parser
+				my $label = s{^\Q$HOME\E/}{~/}r =~ s/_/__/r;
+				print "prog \"$label\" folder mimeopen \"$_\"";
+			}
+		}
+		close $f;
 	}
 }
 
 print "separator";
-print "prog Szerkesztés /usr/share/icons/gnome/48x48/apps/text-editor substenv mimeopen-gui \$HOME/.gtk-bookmarks";
+print "prog Szerkesztés text-editor mimeopen-gui ".join(' ', map { "'$_'" } @gtk_bookmark_files);

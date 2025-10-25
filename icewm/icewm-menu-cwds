@@ -18,5 +18,5 @@ for my $dir (sort keys %dir)
 	$dir =~ s/[""\\]/\\$&/g;
 	$opendir =~ s/[""\\]/\\$&/g;
 	
-	print "prog \"$dir\" folder mimeopen-gui \"$opendir\"\n"
+	print "prog \"$dir\" folder mimeopen \"$opendir\"\n"
 }

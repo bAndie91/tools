@@ -13,15 +13,23 @@ git_remote_url()
 }
 
 git_repo=`git rev-parse --show-toplevel`
+
 homeslash=$HOME/
-inhome_repo_path=${git_repo:${#homeslash}}
+if [ "${git_repo:0:${#homeslash}}" = "$homeslash" ]
+then
+	# if the repo is under $HOME, go to the home on the remote as well.
+	remote_repo_path=${git_repo:${#homeslash}}
+else
+	# keep the absolute path.
+	remote_repo_path=${git_repo}
+fi
 
 peers=("$@")
 remotenames=($(git remote))
 
 for host in "${peers[@]}"
 do
-	remote_url="$host":$inhome_repo_path/.git
+	remote_url="$host":$remote_repo_path/.git
 	if in_list "$host" "${remotenames[@]}"
 	then
 		curr_url=`git_remote_url "$host"`
@@ -45,12 +53,12 @@ done
 thishost=`hostname`
 if ! in_list "$thishost" "${remotenames[@]}"
 then
-	remote_commands+=("git remote add $thishost $thishost:$inhome_repo_path/.git")
+	remote_commands+=("git remote add $thishost $thishost:$remote_repo_path/.git")
 fi
 remote_commands_str=`bash_join " ++ " "${remote_commands[@]}"`
 
 for host in "${peers[@]}"
 do
 	warnx "ssh $host: ${remote_commands_str[*]}"
-	ssh "$host" cdexec "$inhome_repo_path" multicmd -d ++ ${remote_commands_str[*]}
+	ssh "$host" cdexec "$remote_repo_path" multicmd -d ++ ${remote_commands_str[*]}
 done

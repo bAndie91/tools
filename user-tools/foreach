@@ -285,7 +285,7 @@ do
 				if [[ $arg =~ \{\} ]]
 				then
 					placeholder='{}'
-					arg=${arg//$placeholder/$DATA}
+					arg=${arg//$placeholder/"$DATA"}
 					placeholder_found=yes
 				fi
 				for ((idx = 0; idx < 100; idx++))
@@ -293,7 +293,7 @@ do
 					if [[ $arg =~ \{$idx\} ]]
 					then
 						placeholder="{$idx}"
-						arg=${arg//$placeholder/${FIELD[$idx]}}
+						arg=${arg//$placeholder/"${FIELD[$idx]"}}
 						placeholder_found=yes
 					fi
 				done
@@ -315,7 +315,7 @@ do
 	
 	if [ "$FOREACH_VERBOSE" = yes ]
 	then
-		echo "foreach: ${cmd_and_args[*]}" >&2
+		echo "foreach: ${cmd_and_args[*]@Q}" >&2
 	fi
 	
 	eval "FOREACH_PREFIX=\"$FOREACH_PREFIX_TEMPLATE\""

@@ -230,9 +230,33 @@ Verbose mode
 =item -n, --dry-run
 
 Dry run. Do not copy (move) files.
-Output what would be done in C<< SOURCE -> TARGET >> for move
-or in C<< SOURCE => TARGET >> format for copy.
-It's knowningly error-prone for machine-parsing.
+Output what would be done in C<< I<OPERATION> B<TAB> I<SOURCE> B<TAB> I<TARGET> >> format.
+Where I<OPERATION> is one of:
+
+=over 8
+
+=item copy
+
+=item move
+
+=item custom
+
+for B<--copy>, B<--move>, and B<--handler> operation modes respectively
+and the target does not exist.
+
+=item skip
+
+when the target already exists (and neither B<--overwrite> nor B<--conflict-resolver-*> option is given).
+
+=item overwrite
+
+when B<--overwrite> is allowed.
+
+=item conflict
+
+when a B<--conflict-resolver-*> option is given.
+
+=back
 
 =item --help, --pod, --troff
 

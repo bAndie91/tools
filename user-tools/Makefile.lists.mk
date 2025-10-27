@@ -16,7 +16,6 @@ TOOLS ?= \
   chattr-nocow \
   chromium_cookie_decrypt.py \
   chshebang \
-  cled \
   cred \
   confpatch \
   convert_chromium_cookies_to_netscape.sh \
@@ -126,7 +125,6 @@ TOOLS ?= \
   nsjoin \
   nthash.py \
   ocspverify \
-  oded \
   organizebydate \
   palemoon-current-urls \
   pararun \

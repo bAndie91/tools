@@ -1,6 +1,7 @@
 #!/bin/bash
 
 
+TAB=$'\t'
 target_template="%Y/%m/%d/"
 time_stat_field=Y
 time_field_name=mtime
@@ -53,7 +54,7 @@ or B<-H>, B<-L>, or B<-P> options - see find(1).
 
 Target path name template using strftime(3) macros.
 
-Default: $target_template
+Default: %Y/%m/%d/
 
 Extra macros accepted:
 
@@ -547,9 +548,22 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 		
 		if [ "$dryrun" = 1 ]
 		then
-			sgn='-'
-			[ "$ORGANIZEBYDATE_MODE" = copy ] && sgn='='
-			echo "$file $sgn> $target"
+			operation=$ORGANIZEBYDATE_MODE
+			if [ -e "$target" ]
+			then
+				if [ -n "$conflict_resolver_cmd" -o -n "$conflict_resolver_script" ]
+				then
+					operation=conflict
+				else
+					if [ $allow_overwrite ]
+					then
+						operation=overwrite
+					else
+						operation=skip
+					fi
+				fi
+			fi
+			echo "$operation$TAB$file$TAB$target"
 		else
 			local_allow_overwrite=$allow_overwrite
 			current_item_failed=''

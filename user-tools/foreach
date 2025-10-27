@@ -293,7 +293,7 @@ do
 					if [[ $arg =~ \{$idx\} ]]
 					then
 						placeholder="{$idx}"
-						arg=${arg//$placeholder/"${FIELD[$idx]"}}
+						arg=${arg//$placeholder/"${FIELD[$idx]}"}
 						placeholder_found=yes
 					fi
 				done

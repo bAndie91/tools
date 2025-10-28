@@ -49,7 +49,7 @@ is appended to the hash with a tab, like: <TAB>B<hash-algo=>I<NAME>.
 Finally B<reveal-secrets> displays secret strings in clear text just like ordinary properties.
 
 Those properies are considered to be secret at the moment which contain at least one of these words (case insensitive) :
-B<pass>, B<key>, B<cvc>, B<secret>, B<pin>, B<code>, B<token>.
+B<pass>, B<key>, B<cvc>, B<secret>, B<pin>, B<code>, B<token>, B<totp> (but not B<totp-issuer>).
 
 =item generate-password
 
@@ -95,8 +95,30 @@ Also presses <TAB> after each string, but does not press <RETURN>.
 A single dot (C<.>) is a pseudo I<PROPERTY> name: if it's given, nothing will be typed in its place,
 but <TAB> is still pressed after it.
 Use it if the form has fields which you don't want to fill in.
-Obviously it's useful only with a B<$DESKTOP>.
+Obviously it's useful only with a B<$DISPLAY>.
 Depends on xdotool(1).
+
+=back
+
+=head1 SPECIAL PROPERTIES
+
+=over 4
+
+=item B<TOTP>
+
+TOTP property (Timed One-Time Passcode) can be B<set> (simply by C<cred ... set TOTP>, no value needed), B<del>elted, B<show>n, and B<reveal>ed.
+When accessed, cotp(1) programm is called to search a TOTP code with its ISSUER (combined with LABEL, if taking the ISSUER only would be ambiguous)
+matching to the selected I<SITE>.
+
+How I<SITE> and ISSUER (LABEL) are matched:
+If the site has B<OTP-ISSUER> propery, it is searched.
+Otherwise the site's name itself is takes as ISSUER name.
+If the site is at more than 1 directory levels deep under the credentials base dir, then only the first path component satisfies the search criteria as well.
+For example, TOTP codes for a site like "example.com/my-2nd-account" are searched under both "example.com/my-2nd-account" and "example.com" issuers.
+
+If the above filtering yields more than 1 cotp(1) records, it's further filtered by LABEL.
+The following properties are tried as LABEL in order: EMAIL, USERNAME, LOGIN.
+Once only 1 cotp(1) record is yielded, it is taken as the TOTP code.
 
 =back
 

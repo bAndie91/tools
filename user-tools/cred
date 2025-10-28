@@ -182,7 +182,7 @@ set_site_func()
 
 is_secret()
 {
-	[[ $1 =~ pass|key|cvc|secret|pin|code|token|otp ]]
+	[[ $1 =~ pass|key|cvc|secret|pin|code|token|otp && ! $1 =~ otp-issuer ]]
 }
 
 do_clip()
@@ -205,15 +205,18 @@ do_clip()
 	fi
 }
 
-get_totp_codes_for_site()
+get_totp_all()
 {
-	local EMAIL=`prop EMAIL show 2>/dev/null || true`
-	local USER=`prop USER show 2>/dev/null || true`
-	
 	COTP_PASSWORD='' cotp |\
 	jq -r '.[] | [.index, .issuer, .label, .otp_code] | join("\t")' |\
-	td-add-headers INDEX ISSUER LABEL CODE |\
-	td-filter ISSUER = "$basesite" | td-filter LABEL = "$EMAIL" or LABEL = "$USER"
+	td-add-headers INDEX ISSUER LABEL CODE
+}
+
+has_prop()
+{
+	local prop=$1
+	shift
+	[ -f "$basedir/$site/$prop" ]
 }
 
 prop()
@@ -226,21 +229,51 @@ prop()
 	if [ "$prop" = TOTP ]
 	then
 		case "$instruct" in
-		(set|edit|read|del)
-			errx 1 "Manage TOTP codes not by cred(1) but cotp(1)." >&2
+		(set)
+			touch "$basedir/$site/$prop"
+			return
 			;;
-		(show|reveal)
-			get_totp_codes_for_site |\
-			td-select -H CODE | head -n1
+		(reveal)
+			local td td2 label_prop
+			declare -a otp_codes
+			
+			if has_prop OTP-ISSUER
+			then
+				td=`get_totp_all | td-filter ISSUER = "$(prop OTP-ISSUER show)"`
+			else
+				td=`get_totp_all | td-filter ISSUER = "$site" or ISSUER = "${site%%/*}"`
+			fi
+			
+			otp_codes=($(echo "$td" | td-select -H CODE))
+			if [ ${#otp_codes[@]} -gt 1 ]
+			then
+				for label_prop in EMAIL USERNAME LOGIN
+				do
+					if has_prop "$label_prop"
+					then
+						td2=`echo "$td" | td-filter LABEL = "$(prop "$label_prop" show)"`
+						otp_codes=($(echo "$td2" | td-select -H CODE))
+						if [ ${#otp_codes[@]} = 1 ]
+						then
+							td=$td2
+							break
+						fi
+					fi
+				done
+			fi
+			
+			otp_codes=($(echo "$td" | td-select -H CODE))
+			if [ ${#otp_codes[@]} -ne 1 ]
+			then
+				errx 1 "Found ${#otp_codes[@]} TOTP codes."
+			fi
+			echo "${otp_codes[0]}"
+			return
 			;;
-		(clip)
-			prop "$prop" reveal | do_clip "$prop"
-			;;
-		(*)
-			false  # invalid instruction given
-			;;
+		(del|clip|show)
+			true;;  # handled below by generic propery operations
+		(*)	false;;  # invalid instruction given
 		esac
-		return
 	fi
 	
 	case "$instruct" in
@@ -337,19 +370,11 @@ case "$subcmd" in
 			grep . "$file" | prefixlines "$file"$'\t' || true
 		done
 		
-		get_totp_codes_for_site |\
-		if in_list reveal-secrets "${options[@]}"
-		then
-			td-format 'TOTP/{LABEL}'$'\t''{CODE}'
-		else
-			td-format 'TOTP/{LABEL}'
-		fi
-		
 		site=${site%/}
 		if [[ $site =~ / ]]
 		then
 			parent=${site%/*}
-			cred dump "$parent" "${options[@]}"
+			"$0" dump "$parent" "${options[@]}"
 		fi
 	)
 	;;
@@ -394,10 +419,6 @@ case "$subcmd" in
 	if [ -e "$basedir/$site" ]
 	then
 		find "$basedir/$site" -type f -printf "%P\n"
-		if [ -n "$(get_totp_codes_for_site | td-select -H +ALL)" ]
-		then
-			echo TOTP
-		fi
 	fi
 	;;
 (generate-password)
@@ -464,7 +485,7 @@ _autocomplete_cred() {
 			compreply=`cred list-props "$site"`
 			if [ "$subcmd" = set ]
 			then
-				common_properties="EMAIL USERNAME PASSWORD PIN KEY TOKEN"
+				common_properties="EMAIL USERNAME LOGIN PASSWORD PIN KEY TOKEN TOTP"
 				compreply="$compreply $common_properties"
 			fi
 			;;

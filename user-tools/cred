@@ -440,7 +440,7 @@ case "$subcmd" in
 	set_site
 	if [ -e "$basedir/$site" ]
 	then
-		find "$basedir/$site" -type f -printf "%P\n"
+		find -L "$basedir/$site" -type f -printf "%P\n"
 	fi
 	;;
 (generate-password)

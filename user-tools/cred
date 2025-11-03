@@ -39,13 +39,14 @@ Use it by eg: C<eval "$(cred compscript)">
 
 =item list-sites
 
-=item dump [reveal-secrets | mask-secrets | hash-secrets]
+=item dump [reveal-secrets | mask-secrets | hash-secrets | blank-secrets]
 
 Display all properties (and their values) of a given site.
 Optional parameter is how secrets are displayed:
 B<mask-secrets> is the default and replaces a secret string with 5 asterisks (C<*****>) uniformly (so number of chars are not leaked).
 B<hash-secrets> replaces secrets by a hash and the checksum algorithm' name
 is appended to the hash with a tab, like: <TAB>B<hash-algo=>I<NAME>.
+B<blank-secrets> displays the secret property name but leaves the value field empty.
 Finally B<reveal-secrets> displays secret strings in clear text just like ordinary properties.
 
 Those properies are considered to be secret at the moment which contain at least one of these words (case insensitive) :
@@ -383,6 +384,10 @@ case "$subcmd" in
 					hash=`cat "$file" | md5sum | cut -c 1-32`
 					echo "$file$TAB$hash$TAB""hash-algo=md5"
 					continue
+				elif in_list blank-secrets "${options[@]}"
+				then
+					echo "$file"$'\t'
+					continue
 				else
 					echo "$file"$'\t'"*****"
 					continue
@@ -514,7 +519,7 @@ _autocomplete_cred() {
 		(dump)
 			case $cword_idx in
 			(3)
-				compreply="reveal-secrets mask-secrets hash-secrets"
+				compreply="reveal-secrets mask-secrets hash-secrets blank-secrets"
 				;;
 			esac
 		esac

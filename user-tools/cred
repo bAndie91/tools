@@ -343,6 +343,75 @@ prop()
 	esac
 }
 
+dump()
+{
+	local site=$1
+	shift
+	declare -a options=("$@")
+	declare -a files
+	local path file basename propname hash
+	
+	(
+		shopt -s nullglob
+		shopt -s globstar
+		GLOBIGNORE=${GLOBIGNORE:-}${GLOBIGNORE:+:}".:..:.[!/.]*:*/.*:..[!/]*:-*:*/-*"
+		path="$basedir/$site/"
+		if in_list subdirs "${options[@]}"
+		then
+			files=("$path"**)
+		else
+			files=("$path"*)
+		fi
+		
+		for file in "${files[@]}"
+		do
+			if [ ! -f "$file" ]
+			then
+				continue
+			fi
+			basename=${file##*/}
+			if in_list subdirs "${options[@]}"
+			then
+				propname=${file:${#path}}
+			else
+				propname=$basename
+			fi
+			
+			if is_secret "$basename"
+			then
+				if in_list reveal-secrets "${options[@]}"
+				then
+					true
+				elif in_list hash-secrets "${options[@]}"
+				then
+					hash=`cat "$file" | md5sum | cut -c 1-32`
+					echo "$propname$TAB$hash$TAB""hash-algo=md5"
+					continue
+				elif in_list blank-secrets "${options[@]}"
+				then
+					echo "$propname$TAB"
+					continue
+				else
+					echo "$propname$TAB*****"
+					continue
+				fi
+			fi
+			
+			grep . "$file" | prefixlines "$propname$TAB" || true
+		done
+		
+		if ! in_list subdirs "${options[@]}"
+		then
+			site=${site%/}
+			if [[ $site =~ / ]]
+			then
+				parent=${site%/*}
+				dump "$parent" "${options[@]}"
+			fi
+		fi
+	)
+}
+
 
 basedir=~/cred
 site=''
@@ -368,47 +437,7 @@ case "$subcmd" in
 		errx 2 "no such site"
 	fi
 	
-	options=("$@")
-	
-	(
-		cd "$basedir/$site"
-		GLOBIGNORE=${GLOBIGNORE:-}${GLOBIGNORE:+:}".:..:.[!/.]*:..[!/]*:-*"
-		for file in *
-		do
-			if [ ! -f "$file" ]
-			then
-				continue
-			fi
-			if is_secret "$file"
-			then
-				if in_list reveal-secrets "${options[@]}"
-				then
-					true
-				elif in_list hash-secrets "${options[@]}"
-				then
-					hash=`cat "$file" | md5sum | cut -c 1-32`
-					echo "$file$TAB$hash$TAB""hash-algo=md5"
-					continue
-				elif in_list blank-secrets "${options[@]}"
-				then
-					echo "$file"$'\t'
-					continue
-				else
-					echo "$file"$'\t'"*****"
-					continue
-				fi
-			fi
-			
-			grep . "$file" | prefixlines "$file"$'\t' || true
-		done
-		
-		site=${site%/}
-		if [[ $site =~ / ]]
-		then
-			parent=${site%/*}
-			"$0" dump "$parent" "${options[@]}"
-		fi
-	)
+	dump "$site" "$@"
 	;;
 (list-sites)
 	find -L "$basedir" -path "$basedir/${1:-}*" -type d -printf "%P\n"

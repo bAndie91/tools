@@ -288,7 +288,7 @@ prop()
 			otp_codes=($(echo "$td" | td-select -H CODE))
 			if [ ${#otp_codes[@]} -ne 1 ]
 			then
-				errx 1 "Found ${#otp_codes[@]} TOTP codes."
+				errx 3 "Found ${#otp_codes[@]} TOTP codes."
 			fi
 			echo "${otp_codes[0]}"
 			return
@@ -363,6 +363,11 @@ shift || true
 case "$subcmd" in
 (dump)
 	set_site
+	if [ ! -e "$basedir/$site" ]
+	then
+		errx 2 "no such site"
+	fi
+	
 	options=("$@")
 	
 	(
@@ -443,10 +448,11 @@ case "$subcmd" in
 	;;
 (list-props)
 	set_site
-	if [ -e "$basedir/$site" ]
+	if [ ! -e "$basedir/$site" ]
 	then
-		find -L "$basedir/$site" -type f -printf "%P\n"
+		errx 2 "no such site"
 	fi
+	find -L "$basedir/$site" -type f -printf "%P\n"
 	;;
 (generate-password)
 	set_site

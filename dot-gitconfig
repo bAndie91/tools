@@ -137,11 +137,13 @@
 	choose-side-whole-files = !"bash -c 'fn(){ set -e; local side=$1; shift; declare -a files; if [ $# = 0 ]; then oIFS=$IFS; local IFS=$'\\''\\n'\\''; files=($(git diff --name-only --diff-filter=UXB)); if [ ${#files[@]} = 0 ]; then echo \"git choose: no conflicting files.\" >&2; return; else echo \"${files[*]}\"; IFS=$oIFS; fi; else files=(\"$@\"); fi; git checkout -m \"${files[@]}\"; git checkout --$side \"${files[@]}\"; git add \"${files[@]}\"; }; fn \"$@\"' --"
 	choose-head-branch-whole-files = choose-side-whole-files ours
 	choose-incoming-branch-whole-files = choose-side-whole-files theirs
-	resolve-keep-union = ! "fn(){ sed -e \"/^[<>=|]\\{7\\}\\( \\|$\\)/d\" -i \"$@\"; }; fn"
-	resolve-keep-head-hunks = ! "fn(){ sed -e \"/^<\\{7\\} /d\" -e \"/^>\\{7\\} /,/^=\\{7\\}/d\" -i \"$@\"; }; fn"
-	resolve-keep-incoming-hunks = ! "fn(){ sed -e \"/^<\\{7\\} /,/^=\\{7\\}/d\" -e \"/^>\\{7\\} /d\" -i \"$@\"; }; fn"
 	choose-base-branch-whole-files = choose-side-whole-files ours
 	choose-offshoot-branch-whole-files = choose-side-whole-files theirs
+	
+	sed-on-conflict-files = !"bash -c 'set -x; fn(){ sed_cmd=$1; shift; if [ $# = 0 ]; then IFS=$'\\n'; f=($(git conflicting-files)); else f=(\"$@\"); fi; sed -e \"$sed_cmd\" -i -s \"${f[@]}\"; }; fn \"$@\"' --"
+	resolve-keep-union = sed-on-conflict-files "/^[<>=|]\\\\{7\\\\}\\\\(\\ \\\\|$\\\\)/d"
+	resolve-keep-head-hunks = sed-on-conflict-files '/^<\\\\{7\\\\}\\ /d;/^>\\\\{7\\\\}\\ /,/^=\\\\{7\\\\}/d'
+	resolve-keep-incoming-hunks = sed-on-conflict-files "/^<\\\\{7\\\\}\\ /,/^=\\\\{7\\\\}/d;/^>\\\\{7\\\\}\\ /d"
 	
 	sum = diff --stat --summary --find-copies --find-renames --ignore-all-space
 	sum-log = log --stat --summary --find-copies --find-renames

@@ -73,6 +73,7 @@ TOOLS ?= \
   htmlentities \
   indent2tree \
   indent2graph \
+  cpfx2indent \
   inisort \
   is_gzip \
   jaro-metric \

@@ -4,15 +4,17 @@
 
 =head1 NAME
 
-indent-by-common-prefix - short description
+cpfx2indent - Filter text of lines by replacing common prefixes to indentation
 
 =head1 SYNOPSIS
 
-indent-by-common-prefix [I<OPTIONS>]
+cpfx2indent [I<OPTIONS>]
 
 =head1 DESCRIPTION
 
-Reads lines on STDIN and replaces common prefixes by B<TAB>-indentation.
+Analyzes input lines on STDIN to detect common prefixes
+and replaces each line’s leading segment
+with a number of B<TAB>s proportional to the length of the prefix it shares with other lines.
 
 =head1 OPTIONS
 
@@ -23,7 +25,7 @@ Reads lines on STDIN and replaces common prefixes by B<TAB>-indentation.
 Tokenize input lines by I<PATTERN> regexp pattern.
 Default is any whitespace (C<\s+>).
 
-=item -i, --indent-mark I<STRING>
+=item -i, --indent-by I<STRING>
 
 Indent output by I<STRING>.
 Default is B<TAB>.
@@ -52,12 +54,14 @@ use Pod::Usage;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 
-$OptDelimiter = qr/\s+/;
-$OptIndentMark = "\t";
+sub empty { length($_[0]) == 0 }
+
+$OptDelimiter = '\s+';
+$OptIndentBy = "\t";
 
 GetOptions(
 	'd|delimiter=s' => \$OptDelimiter,
-	'i|indent-mark=s' => \$OptIndentMark,
+	'i|indent-by=s' => \$OptIndentBy,
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 	'<>' => sub { unshift @ARGV, $_[0]; die '!FINISH'; },
 ) or pod2usage(-exitval=>2, -verbose=>99);
@@ -67,12 +71,16 @@ $Graph = {};
 
 while(<STDIN>)
 {
-	chomp;
-	my @tokens = split $OptDelimiter;
-	
 	my $subgraph = $Graph;
-	for my $token (@tokens)
+	
+	chomp;
+	my @tokens = split /($OptDelimiter)/;
+	
+	while(1)
 	{
+		my $token = shift @tokens;
+		last unless defined $token;
+		my $delim_after = shift @tokens;
 		if(not exists $subgraph->{$token})
 		{
 			$subgraph->{$token} = {
@@ -82,8 +90,18 @@ while(<STDIN>)
 				parent => $subgraph,
 			};
 		}
+		if(empty $subgraph->{$token}->{delim_after})
+		{
+			$subgraph->{$token}->{delim_after} = $delim_after;
+		}
 		$subgraph = $subgraph->{$token}->{subgraph};
 	}
+	
+	$subgraph->{''} = {
+		label => '',
+		nth_child => (scalar keys %$subgraph),
+		parent => $subgraph,
+	};
 }
 
 #print Dumper $Graph;
@@ -103,8 +121,7 @@ sub output_subgraph
 	for my $node (sort {$a->{nth_child} <=> $b->{nth_child}} values %$graph)
 	{
 		my $subgraph = $node->{subgraph};
-		#printf "%s%d %s (%d subnodes)\n", $OptIndentMark x $indent_level, $node->{nth_child}, $node->{label}, subnodes $subgraph;
-		printf "%s%s\n", $OptIndentMark x $indent_level, $node->{label};
+		printf "%s%s\n", $OptIndentBy x $indent_level, $node->{label};
 		output_subgraph $indent_level+1, $subgraph;
 	}
 }
@@ -119,12 +136,14 @@ sub reduce_graph
 		my $subnode = $node->{subgraph}->{$subkeys[0]};
 		$node->{subgraph} = $subnode->{subgraph};
 		
-		# TODO preserve literal delimiter substring
-		my $new_label = $node->{label} . $OptDelimiter . $subnode->{label};
+		my $new_label = $node->{label} . $node->{delim_after} . $subnode->{label};
 		# TODO check {$new_label}
-		$node->{parent}->{$new_label} = $node;
-		delete $node->{parent}->{ $node->{label} };
-		$node->{label} = $new_label;
+		if($new_label ne $node->{label})
+		{
+			$node->{parent}->{$new_label} = $node;
+			delete $node->{parent}->{ $node->{label} };
+			$node->{label} = $new_label;
+		}
 		goto REDUCE_CHECK_SUBNODES;
 	}
 	reduce_graph_recursive($node->{subgraph});

@@ -10,10 +10,16 @@ endif
 MANPAGE_SECTION ?= 1
 MANPAGE_SECTION_EXT ?= $(MANPAGE_SECTION)
 
-MANPAGES_DIR = $(REPO_ROOT)/doc/man
-MANPAGE_FILE_SUFFIX = .$(MANPAGE_SECTION_EXT).xz
+MANPAGES_DIR = gen-doc
+MANPAGES_COMPRESSOR = xz
+MANPAGE_FILE_SUFFIX = .$(MANPAGE_SECTION_EXT).$(MANPAGES_COMPRESSOR)
 MANPAGES_SUBDIR = $(MANPAGES_DIR)/man$(MANPAGE_SECTION)
-MANPAGE_FILES = $(foreach toolname,$(TOOLS),$(MANPAGES_SUBDIR)/$(toolname)$(MANPAGE_FILE_SUFFIX))
+MANPAGE_FILENAMES = $(foreach toolname,$(TOOLS),$(toolname)$(MANPAGE_FILE_SUFFIX))
+MANPAGE_FILES = $(foreach basename,$(MANPAGE_FILENAMES),$(MANPAGES_SUBDIR)/$(basename))
+
+INSTALL_MANPAGES_PATH = /usr/share/man/man$(MANPAGE_SECTION)
+INSTALL_MANPAGES_FILES = $(addprefix $(INSTALL_MANPAGES_PATH)/,$(MANPAGE_FILENAMES))
+
 
 manpages: $(MANPAGE_FILES)
 .PHONY: manpages
@@ -22,19 +28,25 @@ $(MANPAGE_FILES): | $(MANPAGES_SUBDIR)
 
 $(MANPAGES_SUBDIR):
 	mkdir -p $@
-	@echo remove $@ >> uninstall.sh
 
 $(MANPAGE_FILES): $(MANPAGES_SUBDIR)/%$(MANPAGE_FILE_SUFFIX): %
 	@if podchecker "$<"; then \
-		pod2man --name="$<" --section $(MANPAGE_SECTION_EXT) --utf8 "$<" | xz > "$@.tmp" &&\
-		mv -f "$@.tmp" "$@" ;\
+		pod2man --name="$<" --section $(MANPAGE_SECTION_EXT) --utf8 "$<" | $(MANPAGES_COMPRESSOR) > "$@~" &&\
+		mv -f "$@~" "$@" ;\
 	else \
 		touch "$@" ;\
 	fi
 
-install-manpages: manpages
-	$(MAKE) -C $(REPO_ROOT)/doc/man install-manpages
+
 .PHONY: install-manpages
+install-manpages: $(INSTALL_MANPAGES_FILES)
+	$(INSTALL_WRAPPER) /etc/cron.daily/man-db
+
+
+$(INSTALL_MANPAGES_FILES): $(INSTALL_MANPAGES_PATH)/%: $(MANPAGES_SUBDIR)/%
+	$(INSTALL_WRAPPER) install "$<" "$@"
+	@echo remove $@ >> uninstall.sh
+
 
 
 descriptions.txt: $(TOOLS)

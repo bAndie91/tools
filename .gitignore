@@ -6,6 +6,5 @@
 !/ssh-groupcommand/t_*.c
 !/ssh-groupcommand/t_*.h
 /tests/*/_test.*
-/doc/man/*
-!/doc/man/Makefile
 uninstall.sh
+gen-doc/

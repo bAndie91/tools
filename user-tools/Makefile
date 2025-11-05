@@ -1,6 +1,9 @@
 
 REPO_ROOT ?= ..
 
+# specify INSTALL_WRAPPER=sudo at the make command if you need
+INSTALL_WRAPPER =
+
 TOOLS_TARGET_DIR = /usr/tool
 
 include $(dir $(lastword $(MAKEFILE_LIST)))/Makefile.lists.mk
@@ -29,23 +32,23 @@ $(TOOLS_TARGET_DIR)/git-push-remotes: /usr/share/bash-completion/completions/git
 COMPLETION_BASH_SCRIPTS = $(foreach path,$(wildcard $(REPO_ROOT)/bash/bash_completion.d/*),$(notdir $(path)))
 
 $(addprefix /usr/share/bash-completion/completions/,$(COMPLETION_BASH_SCRIPTS)): /usr/share/bash-completion/completions/%: $(REPO_ROOT)/bash/bash_completion.d/%
-	install $< $@
+	$(INSTALL_WRAPPER) install $< $@
 	@echo remove $@ >> uninstall.sh
 
 /usr/libexec/perlshell: $(REPO_ROOT)/libexec/perlshell
-	install $< $@
+	$(INSTALL_WRAPPER) install $< $@
 	@echo remove $@ >> uninstall.sh
 
 /usr/share/doc/tool/rsync-semichroot.txt: $(REPO_ROOT)/doc/rsync-semichroot.txt | /usr/share/doc/tool
-	install $< $@
+	$(INSTALL_WRAPPER) install $< $@
 	@echo remove $@ >> uninstall.sh
 
 /usr/lib/tool/bash-utils: $(REPO_ROOT)/bash/bash-utils | /usr/lib/tool
-	install $< $@
+	$(INSTALL_WRAPPER) install $< $@
 	@echo remove $@ >> uninstall.sh
 
 /usr/lib/multithrottler/Throttler.pm: $(REPO_ROOT)/lib/multithrottler/Throttler.pm | /usr/lib/multithrottler
-	install $< $@
+	$(INSTALL_WRAPPER) install $< $@
 	@echo remove $@ >> uninstall.sh
 
 /usr/lib/multithrottler:
@@ -87,17 +90,17 @@ DEPCHECK/dbus-call:
 .PHONY: try-satisfy-dependencies
 try-satisfy-dependencies:
 	-cpan ARGV::readonly
-	-apt install python3-parsel
-	-apt install python3-cssselect
-	-apt install python3-xmltodict
-	-apt install jq
-	-apt install libnet-dbus-perl || cpan Net::DBus
-	-apt install libxml-libxml-perl libxml-hash-lx-perl || cpan XML::Hash::LX
-	-apt install libjson-perl || cpan JSON
-	-apt install liblog-log4perl-perl || cpan Log::Log4perl
-	-apt install libyaml-perl || cpan YAML
-	-apt install libversion-util-perl || cpan Version::Util
-	-apt install libdatetime-format-strptime-perl || cpan DateTime::Format::Strptime
+	-$(INSTALL_WRAPPER) apt install python3-parsel
+	-$(INSTALL_WRAPPER) apt install python3-cssselect
+	-$(INSTALL_WRAPPER) apt install python3-xmltodict
+	-$(INSTALL_WRAPPER) apt install jq
+	-$(INSTALL_WRAPPER) apt install libnet-dbus-perl || cpan Net::DBus
+	-$(INSTALL_WRAPPER) apt install libxml-libxml-perl libxml-hash-lx-perl || cpan XML::Hash::LX
+	-$(INSTALL_WRAPPER) apt install libjson-perl || cpan JSON
+	-$(INSTALL_WRAPPER) apt install liblog-log4perl-perl || cpan Log::Log4perl
+	-$(INSTALL_WRAPPER) apt install libyaml-perl || cpan YAML
+	-$(INSTALL_WRAPPER) apt install libversion-util-perl || cpan Version::Util
+	-$(INSTALL_WRAPPER) apt install libdatetime-format-strptime-perl || cpan DateTime::Format::Strptime
 
 
 install-all: \
@@ -113,14 +116,14 @@ install-tools: depcheck-all $(TOOLS_TARGET_FILES) $(TOOLS_TARGET_SYMLINKS)
 $(TOOLS_TARGET_FILES) $(TOOLS_TARGET_SYMLINKS): | $(TOOLS_TARGET_DIR)
 
 $(TOOLS_TARGET_FILES): $(TOOLS_TARGET_DIR)/%: % DEPCHECK/%
-	install --compare $(notdir $@) $(TOOLS_TARGET_DIR)/
+	$(INSTALL_WRAPPER) install --compare $(notdir $@) $(TOOLS_TARGET_DIR)/
 	@echo remove $@ >> uninstall.sh
 
 install-symlinks: $(TOOLS_TARGET_SYMLINKS)
 .PHONY: install-symlinks
 
 $(TOOLS_TARGET_SYMLINKS): $(TOOLS_TARGET_DIR)/%: %
-	ln -snfv $(shell readlink $<) $@
+	$(INSTALL_WRAPPER) ln -snfv $(shell readlink $<) $@
 	@echo remove $@ >> uninstall.sh
 
 

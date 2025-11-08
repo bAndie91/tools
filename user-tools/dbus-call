@@ -27,6 +27,10 @@ Connect to the system DBus.
 
 Connect to the session DBus.
 
+=item --bus I<ADDRESS>
+
+Connect to I<ADDRESS> DBus.
+
 =back
 
 =cut
@@ -42,6 +46,7 @@ use XML::Hash::LX;
 GetOptions(
 	'system' => sub{ $Bus = Net::DBus->system; },
 	'session' => sub{ $Bus = Net::DBus->session; },
+	'bus=s' => sub{ $Bus = Net::DBus->new($_[1]); },
 	'help' => sub{ pod2usage(-exitval=>0, -verbose=>99); },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 

@@ -5,7 +5,7 @@ default:
 	@echo may be interested in: install-all
 	false
 
-TOOLS = gexifcomment gtail xgcal xstopper perspect
+TOOLS = gexifcomment gtail xgcal xstopper perspect xcred
 
 TARGET_FILES = $(foreach tool,$(TOOLS),$(PREFIX)/$(tool))
 UNINSTALL_TARGETS = $(foreach tool,$(TOOLS),UNINSTALL/$(tool))
@@ -38,10 +38,10 @@ DEPENDENCY/sunclock DEPENDENCY/gcal DEPENDENCY/solartime:
 .PHONY: DEPENDENCY/sunclock DEPENDENCY/gcal DEPENDENCY/solartime
 
 /usr/share/xgcal/timezones.png: timezones.png | /usr/share/xgcal
-	install $< $@
+	$(INSTALL_WRAPPER) install $< $@
 
 /usr/share/xgcal:
-	mkdir -p $@
+	$(INSTALL_WRAPPER) mkdir -p $@
 
 $(TARGET_FILES): $(PREFIX)/%: %
-	install $< $@
+	$(INSTALL_WRAPPER) install $< $@

@@ -1,0 +1,91 @@
+#!/usr/bin/env perl
+
+use IPC::Run qw/run/;
+use List::MoreUtils qw/all any none uniq/;
+use Data::Dumper;
+use X11::Protocol;
+use URI;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+
+
+$Xorg = X11::Protocol->new();
+$RootWindow = $Xorg->root;
+
+
+sub current_xorg_window
+{
+	my ($current_window_id) = $Xorg->GetInputFocus;
+	my ($classes) = $Xorg->GetProperty($current_window_id, $Xorg->atom('WM_CLASS'), 0, 0, 1024);
+	my ($class, $instance) = split chr(0), $classes;
+	my ($title) = $Xorg->GetProperty($current_window_id, $Xorg->atom('_NET_WM_NAME'), $Xorg->atom('UTF8_STRING'), 0, 1024);
+	($title) = $Xorg->GetProperty($current_window_id, $Xorg->atom('WM_NAME'), 0, 0, 1024) unless $title;
+	return {id=>$current_window_id, class=>"$class.$instance", title=>$title};
+}
+
+sub extract_url
+{
+	my $win = current_xorg_window;
+	my $url;
+	if($win->{class} =~ /^navigator\.firefox/i)
+	{
+	}
+	elsif($win->{class} =~ /^navigator\.pale/i)
+	{
+		my $output = '';
+		run ['palemoon-current-urls'], '<', \undef,
+			'|', ['td-filter', 'WIN_SELECTED', '=', 'true'],
+			'|', ['td-filter', 'TAB_SELECTED', '=', 'true'],
+			'|', ['td-select', '-H', 'URL'], 
+			'>', \$url;
+	}
+	# put other web browsers here
+	else
+	{
+		push @menu_items, "unknown foreground application: $win->{class}";
+	}
+	return $url;
+}
+
+
+@menu_items = ();
+$url = extract_url;
+$cred_site = undef;
+
+
+if(defined $url)
+{
+	$a = URI->new($url);
+	warn Dumper $a, $url;
+	my $hostname = URI->new($url)->ihost;
+	while($hostname ne '')
+	{
+		my $output = '';
+		run ['cred', 'site', $hostname, 'dump', 'blank-secrets'], \undef, \$output;
+		if($output ne '')
+		{
+			$cred_site = $hostname;
+			push @menu_items, sprintf "[SITE %s]", $cred_site;
+			for my $prop (map {[split /\t/, $_, 2]} split /\n/, $output)
+			{
+				my $item = $prop->[0];
+				if($prop->[1] ne '') { $item = $prop->[0] . ": " . $prop->[1]; }
+				push @menu_items, $item;
+			}
+			last;
+		}
+		$hostname =~ s/^[^.]+(\.|$)//;
+	}
+}
+
+$input = join "\n", @menu_items;
+$menu_selection = '';
+run ['dmenu', '-fn', '24pt'], \$input, \$menu_selection;
+
+if(defined $cred_site)
+{
+	chomp $menu_selection;
+	($prop_name) = $menu_selection =~ /^([^:]+)/;
+	$prop_value = '';
+	run ['cred', 'site', $cred_site, 'reveal', $prop_name], \undef, \$prop_value;
+	run ['xdotool', 'type', '--delay', '100ms', $prop_value];
+}

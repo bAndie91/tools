@@ -31,6 +31,10 @@ Connect to the session DBus.
 
 Connect to I<ADDRESS> DBus.
 
+=item -r, --raw
+
+output in raw if the output is a single string or number.
+
 =back
 
 =cut
@@ -43,10 +47,13 @@ use Pod::Usage;
 use XML::Hash::LX;
 
 
+$OptRaw = 0;
+
 GetOptions(
 	'system' => sub{ $Bus = Net::DBus->system; },
 	'session' => sub{ $Bus = Net::DBus->session; },
 	'bus=s' => sub{ $Bus = Net::DBus->new($_[1]); },
+	'r|raw' => \$OptRaw,
 	'help' => sub{ pod2usage(-exitval=>0, -verbose=>99); },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
@@ -144,4 +151,11 @@ if(not defined $ObjPath or not defined $Interface or not defined $MethodName)
 }
 
 $reply = dbus_call($ServiceName, $ObjPath, $Interface, $MethodName, @MethodArgs);
-print encode_json($reply);
+if($OptRaw and ref $reply eq '')
+{
+	print $reply;
+}
+else
+{
+	print encode_json($reply);
+}

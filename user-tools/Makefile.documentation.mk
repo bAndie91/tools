@@ -21,8 +21,8 @@ INSTALL_MANPAGES_PATH = /usr/share/man/man$(MANPAGE_SECTION)
 INSTALL_MANPAGES_FILES = $(addprefix $(INSTALL_MANPAGES_PATH)/,$(MANPAGE_FILENAMES))
 
 
-manpages: $(MANPAGE_FILES)
 .PHONY: manpages
+manpages: $(MANPAGE_FILES)
 
 $(MANPAGE_FILES): | $(MANPAGES_SUBDIR)
 
@@ -39,8 +39,10 @@ $(MANPAGE_FILES): $(MANPAGES_SUBDIR)/%$(MANPAGE_FILE_SUFFIX): %
 
 
 .PHONY: install-manpages
-install-manpages: $(INSTALL_MANPAGES_FILES)
-	$(INSTALL_WRAPPER) /etc/cron.daily/man-db
+install-manpages: $(INSTALL_MANPAGES_FILES) .stamp.update-man-db
+
+.stamp.update-man-db: $(INSTALL_MANPAGES_FILES)
+	if [ "$?" ]; then $(INSTALL_WRAPPER) /etc/cron.daily/man-db; touch $@; fi
 
 
 $(INSTALL_MANPAGES_FILES): $(INSTALL_MANPAGES_PATH)/%: $(MANPAGES_SUBDIR)/%

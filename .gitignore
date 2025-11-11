@@ -8,3 +8,4 @@
 /tests/*/_test.*
 uninstall.sh
 gen-doc/
+.stamp.*

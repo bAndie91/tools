@@ -80,7 +80,7 @@ DEPCHECK/parsel:
 	python3 -c 'import parsel; import cssselect'
 DEPCHECK/xml2json:
 	python -c 'import xmltodict'
-DEPCHECK/palemoon-current-url:
+DEPCHECK/palemoon-current-urls:
 	which jq
 DEPCHECK/dbus-call:
 	perl -MNet::DBus -e 1
@@ -103,20 +103,28 @@ try-satisfy-dependencies:
 	-$(INSTALL_WRAPPER) apt install libdatetime-format-strptime-perl || cpan DateTime::Format::Strptime
 
 
+.PHONY: install-all
 install-all: \
+  git-utimes \
   /usr/lib/tool/bash-utils \
   install-tools \
   install-manpages
-.PHONY: install-all
 
 
-install-tools: depcheck-all $(TOOLS_TARGET_FILES) $(TOOLS_TARGET_SYMLINKS)
+# change files mtime back to their last git commit date,
+# so merely switching branches does not make 'make' believe that the requirement files are newer.
+.PHONY: git-utimes
+git-utimes:
+	git utimes || true
+
 .PHONY: install-tools
+install-tools: depcheck-all $(TOOLS_TARGET_FILES) $(TOOLS_TARGET_SYMLINKS)
 
 $(TOOLS_TARGET_FILES) $(TOOLS_TARGET_SYMLINKS): | $(TOOLS_TARGET_DIR)
 
-$(TOOLS_TARGET_FILES): $(TOOLS_TARGET_DIR)/%: % DEPCHECK/%
-	$(INSTALL_WRAPPER) install --compare $(notdir $@) $(TOOLS_TARGET_DIR)/
+$(TOOLS_TARGET_FILES): $(TOOLS_TARGET_DIR)/%: %
+	$(MAKE) DEPCHECK/$<
+	$(INSTALL_WRAPPER) install $< $@
 	@echo remove $@ >> uninstall.sh
 
 install-symlinks: $(TOOLS_TARGET_SYMLINKS)

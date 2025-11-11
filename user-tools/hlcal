@@ -195,7 +195,7 @@ while(@ARGV)
 	
 	if(my ($day, $color) = $arg =~ /^($re_dow)=(.+)$/i)
 	{
-		$Highlight->{'days-of-week'}->{eval $day} = $color;
+		$Highlight->{'days-of-week'}->{eval uc $day} = $color;
 		verify_color $color;
 	}
 	elsif($arg =~ /^(((?'YEAR'\d\d\d\d)-|)(?'MON'$re_mon|\*)-|)(?'DOM'$re_dom)=(?'COLOR'.+)$/i)
@@ -215,7 +215,7 @@ while(@ARGV)
 		push @{$Highlight->{'interval'}}, {
 			'start' => {'y'=>$+{'Y1'}, 'm'=>$Months{lc$+{'M1'}}||$+{'M1'}, 'd'=>$+{'D1'}},
 			'end'   => {'y'=>$+{'Y2'}, 'm'=>$Months{lc$+{'M2'}}||$+{'M2'}, 'd'=>$+{'D2'}},
-			'dow'   => [map {eval} grep {$_} split /,/, $+{'DOW'}],
+			'dow'   => [map {eval} grep {$_} split /,/, uc $+{'DOW'}],
 			'color' => $+{'COLOR'},
 		};
 		verify_color $+{'COLOR'};

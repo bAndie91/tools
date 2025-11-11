@@ -348,19 +348,24 @@ dump()
 	local site=$1
 	shift
 	declare -a options=("$@")
-	declare -a files
-	local path file basename propname hash
+	declare -a files subfiles
+	local path file basename propname hash subpathglob
 	
 	(
 		shopt -s nullglob
-		shopt -s globstar
 		GLOBIGNORE=${GLOBIGNORE:-}${GLOBIGNORE:+:}".:..:.[!/.]*:*/.*:..[!/]*:-*:*/-*"
 		path="$basedir/$site/"
+		files=("$path"*)
 		if in_list subdirs "${options[@]}"
 		then
-			files=("$path"**)
-		else
-			files=("$path"*)
+			subpathglob='*'
+			while true
+			do
+				subfiles=("$path"$subpathglob/*)
+				if [ ${#subfiles[@]} = 0 ]; then break; fi
+				files+=("${subfiles[@]}")
+				subpathglob=$subpathglob/*
+			done
 		fi
 		
 		for file in "${files[@]}"

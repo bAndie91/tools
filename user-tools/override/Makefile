@@ -1,6 +1,4 @@
 
-REPO_ROOT = ../..
-
 TOOLS = chmod write mesg umount mount lsblk
 
 MANPAGE_SECTION = 1

@@ -25,7 +25,7 @@ You may also enter a directory path on the filesystem for I<SITE>.
 You don't need to create a I<SITE>: it's created automatically when you write in it.
 
 For websites and other services you have more than one account or identity for,
-recommended to organize them into subdirectories like: I<SITE>/I<IDENTITY>,
+recommended to organize them into sub-directories like: I<SITE>/I<IDENTITY>,
 eg: C<mail.example.net/joe@example.net> and C<mail.example.net/jane@example.net>.
 
 =head1 SUBCOMMANDS
@@ -39,7 +39,7 @@ Use it by eg: C<eval "$(cred compscript)">
 
 =item list-sites
 
-=item dump [reveal-secrets | mask-secrets | hash-secrets | blank-secrets]
+=item dump [reveal-secrets | mask-secrets | hash-secrets | blank-secrets] [subdirs]
 
 Display all properties (and their values) of a given site.
 Optional parameter is how secrets are displayed:
@@ -48,6 +48,8 @@ B<hash-secrets> replaces secrets by a hash and the checksum algorithm' name
 is appended to the hash with a tab, like: <TAB>B<hash-algo=>I<NAME>.
 B<blank-secrets> displays the secret property name but leaves the value field empty.
 Finally B<reveal-secrets> displays secret strings in clear text just like ordinary properties.
+
+The option B<subdirs> dumps properties from the sub-directories too.
 
 Those properies are considered to be secret at the moment which contain at least one of these words (case insensitive) :
 B<pass>, B<key>, B<cvc>, B<secret>, B<pin>, B<code>, B<token>, B<totp> (but not B<totp-issuer>).
@@ -559,7 +561,7 @@ _autocomplete_cred() {
 		(dump)
 			case $cword_idx in
 			(3)
-				compreply="reveal-secrets mask-secrets hash-secrets blank-secrets"
+				compreply="reveal-secrets mask-secrets hash-secrets blank-secrets subdirs"
 				;;
 			esac
 		esac

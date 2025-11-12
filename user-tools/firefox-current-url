@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+
+import sys
+import pyatspi
+
+
+def find_apps(desktop, app_name):
+	for app in desktop:
+		if app.name == app_name:
+			yield app
+
+def is_shown(obj):
+	return obj.getState().contains(pyatspi.STATE_SHOWING)
+
+def is_active(obj):
+	return obj.getState().contains(pyatspi.STATE_ACTIVE)
+
+def find_child(obj, filterer):
+	for sub in obj:
+		if filterer(sub):
+			yield sub
+
+desktop = pyatspi.Registry.getDesktop(0)
+apps = find_apps(desktop, 'Firefox')
+windows = []
+
+for app in apps:
+	print(f"found Firefox: {app}", file=sys.stderr)
+	windows.extend(list(find_child(app, is_active)))
+
+if len(windows) != 1:
+	print(f"found {len(windows)} active windows.", file=sys.stderr)
+	sys.exit(1)
+else:
+	window = windows[0]
+
+print(f"found active window: {window.path} {window}", file=sys.stderr)
+
+def find_descendant_shown_document_url(obj):
+	if obj.get_role_name() == 'document web' and is_shown(obj):
+		try:
+			document = obj.queryDocument()
+		except NotImplementedError:
+			pass
+		else:
+			url = document.getAttributeValue('DocURL')
+			if url is not None:
+				return url
+	for sub in obj:
+		url = find_descendant_shown_document_url(sub)
+		if url is not None:
+			return url
+
+url = find_descendant_shown_document_url(window)
+print(url)
+

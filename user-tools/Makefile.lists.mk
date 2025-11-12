@@ -51,6 +51,7 @@ TOOLS ?= \
   find-by-date \
   findnewestfile \
   findoldestfile \
+  firefox-current-url \
   fixlogfiledatetime \
   fixRFC822filemtime \
   fmtkv \

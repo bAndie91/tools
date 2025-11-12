@@ -28,6 +28,8 @@ sub extract_url
 	my $url;
 	if($win->{class} =~ /^navigator\.firefox/i)
 	{
+		my $output = '';
+		run ['firefox-current-url'], '<', \undef, '>', \$url;
 	}
 	elsif($win->{class} =~ /^navigator\.pale/i)
 	{
@@ -54,13 +56,11 @@ $cred_site = undef;
 
 if(defined $url)
 {
-	$a = URI->new($url);
-	warn Dumper $a, $url;
 	my $hostname = URI->new($url)->ihost;
 	while($hostname ne '')
 	{
 		my $output = '';
-		run ['cred', 'site', $hostname, 'dump', 'blank-secrets'], \undef, \$output;
+		run ['cred', 'site', $hostname, 'dump', 'blank-secrets', 'subdirs'], \undef, \$output;
 		if($output ne '')
 		{
 			$cred_site = $hostname;
@@ -87,5 +87,5 @@ if(defined $cred_site)
 	($prop_name) = $menu_selection =~ /^([^:]+)/;
 	$prop_value = '';
 	run ['cred', 'site', $cred_site, 'reveal', $prop_name], \undef, \$prop_value;
-	run ['xdotool', 'type', '--delay', '100ms', $prop_value];
+	run ['xdotool', 'type', '--delay', '100ms', $prop_value + "\t"];
 }

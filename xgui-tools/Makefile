@@ -1,47 +1,19 @@
 
-PREFIX = /usr/tool
-
-default:
-	@echo may be interested in: install-all
-	false
-
 TOOLS = gexifcomment gtail xgcal xstopper perspect xcred
 
-TARGET_FILES = $(foreach tool,$(TOOLS),$(PREFIX)/$(tool))
-UNINSTALL_TARGETS = $(foreach tool,$(TOOLS),UNINSTALL/$(tool))
-SHELL = bash -e
+include ../user-tools/Makefile
 
-define rid
-  @[ ! -e $(1) ] || rm -v $(1)
-endef
+$(TOOLS_TARGET_DIR)/xgcal: /usr/share/xgcal/timezones.png
 
-
-install-all: $(TARGET_FILES)
-.PHONY: install-all
-
-uninstall-all: $(UNINSTALL_TARGETS)
-.PHONY: uninstall-all
-
-$(UNINSTALL_TARGETS):
-	$(call rid,$(PREFIX)/$(notdir $@))
-.PHONY: $(UNINSTALL_TOOLS)
-
-UNINSTALL/xgcal:
-	$(call rid,/usr/share/xgcal/timezones.png)
-	$(call rid,/usr/share/xgcal)
-	$(call rid,$(PREFIX)/xgcal)
-
-$(PREFIX)/xgcal: DEPENDENCY/sunclock DEPENDENCY/gcal DEPENDENCY/solartime /usr/share/xgcal/timezones.png
-
-DEPENDENCY/sunclock DEPENDENCY/gcal DEPENDENCY/solartime:
-	type $(notdir $@)
-.PHONY: DEPENDENCY/sunclock DEPENDENCY/gcal DEPENDENCY/solartime
+DEPCHECK/xgcal:
+	type sunclock
+	type gcal
+	type solartime
 
 /usr/share/xgcal/timezones.png: timezones.png | /usr/share/xgcal
 	$(INSTALL_WRAPPER) install $< $@
+	@$(record_uninstall)
 
 /usr/share/xgcal:
 	$(INSTALL_WRAPPER) mkdir -p $@
-
-$(TARGET_FILES): $(PREFIX)/%: %
-	$(INSTALL_WRAPPER) install $< $@
+	@$(record_uninstall)

@@ -49,7 +49,7 @@ sub extract_url
 }
 
 
-@menu_items = ();
+@gmenu_items = ();
 $url = extract_url;
 $cred_site = undef;
 
@@ -64,28 +64,41 @@ if(defined $url)
 		if($output ne '')
 		{
 			$cred_site = $hostname;
-			push @menu_items, sprintf "[SITE %s]", $cred_site;
+			push @gmenu_items, join "\t", "site: $cred_site", "caption";
 			for my $prop (map {[split /\t/, $_, 2]} split /\n/, $output)
 			{
-				my $item = $prop->[0];
-				if($prop->[1] ne '') { $item = $prop->[0] . ": " . $prop->[1]; }
-				push @menu_items, $item;
+				my ($propname, $propvalue) = @$prop;
+				$propvalue =~ s{[\\/]}{\\$&}g;
+				for my $input_method (qw/clip type/)
+				{
+					my $label = "$propname/$input_method";
+					if($propvalue ne '') { $label = "$propname: $propvalue/$input_method" ; }
+					push @gmenu_items, join "\t", $label, "text", "", "$input_method:$propname";
+				}
 			}
+			# found a site which has properties. don't go up to wider site names:
 			last;
 		}
 		$hostname =~ s/^[^.]+(\.|$)//;
 	}
 }
 
-$input = join "\n", @menu_items;
+$input = join "\n", @gmenu_items;
 $menu_selection = '';
-run ['dmenu', '-fn', '24pt'], \$input, \$menu_selection;
+run ['gmenu',], \$input, \$menu_selection;
 
 if(defined $cred_site)
 {
 	chomp $menu_selection;
-	($prop_name) = $menu_selection =~ /^([^:]+)/;
-	$prop_value = '';
-	run ['cred', 'site', $cred_site, 'reveal', $prop_name], \undef, \$prop_value;
-	run ['xdotool', 'type', '--delay', '100ms', $prop_value . "\t"];
+	my ($input_method, $propname) = $menu_selection =~ /^([^:]+):(.+)/;
+	if($input_method eq 'clip')
+	{
+		run ['cred', 'site', $cred_site, 'clip', $propname], \undef;
+	}
+	elsif($input_method eq 'type')
+	{
+		my $propvalue = '';
+		run ['cred', 'site', $cred_site, 'reveal', $propname], \undef, \$propvalue;
+		run ['xdotool', 'type', '--delay', '100ms', $propvalue . "\t"];
+	}
 }

@@ -30,7 +30,7 @@ $(MANPAGE_FILES): $(MANPAGES_SUBDIR)/%$(MANPAGE_FILE_SUFFIX): %
 		pod2man --name="$<" --section $(MANPAGE_SECTION_EXT) --utf8 "$<" | $(MANPAGES_COMPRESSOR) > "$@~" &&\
 		mv -f "$@~" "$@" ;\
 	else \
-		touch "$@" ;\
+		true > "$@" ;\
 	fi
 
 

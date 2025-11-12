@@ -1,5 +1,5 @@
 
-TOOLS = gexifcomment gtail xgcal xstopper perspect xcred
+TOOLS = gexifcomment gtail xgcal xstopper perspect xcred gmenu
 
 include ../user-tools/Makefile
 

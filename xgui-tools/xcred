@@ -87,5 +87,5 @@ if(defined $cred_site)
 	($prop_name) = $menu_selection =~ /^([^:]+)/;
 	$prop_value = '';
 	run ['cred', 'site', $cred_site, 'reveal', $prop_name], \undef, \$prop_value;
-	run ['xdotool', 'type', '--delay', '100ms', $prop_value + "\t"];
+	run ['xdotool', 'type', '--delay', '100ms', $prop_value . "\t"];
 }

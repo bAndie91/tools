@@ -72,6 +72,11 @@ $(TOOLS_TARGET_DIR):
 
 
 
+DEPCHECK_TARGETS = $(addprefix DEPCHECK/,$(NORMAL_TOOLS))
+depcheck-all: $(DEPCHECK_TARGETS)
+.PHONY: $(DEPCHECK_TARGETS)
+
+
 DEPCHECK/lines:
 	perl -MARGV::readonly -e 1
 DEPCHECK/parsel:

@@ -76,12 +76,13 @@ if(defined $url and $url ne '')
 		while($hostname ne '')
 		{
 			my $output = '';
-			run ['cred', 'site', $hostname, 'dump', 'blank-secrets', 'subdirs'], \undef, \$output;
+			my $error = '';
+			run ['cred', 'site', $hostname, 'dump', 'blank-secrets', 'subdirs'], \undef, \$output, \$error;
 			if($output ne '')
 			{
 				$cred_site = $hostname;
-				push @gmenu_items, join "\t", "site: $cred_site", "header";
-				push @gmenu_items, join "\t", "site: $cred_site sep", "sep";
+				push @gmenu_items, "site: $cred_site"."\t"."header";
+				push @gmenu_items, "site: $cred_site sep"."\t"."sep";
 				for my $prop (map {[split /\t/, $_, 2]} split /\n/, $output)
 				{
 					my ($propname, $propvalue) = @$prop;
@@ -95,6 +96,10 @@ if(defined $url and $url ne '')
 				}
 				# found a site which has properties. don't go up to wider site names:
 				last;
+			}
+			elsif($error ne '')
+			{
+				push @gmenu_items, esc($error)."\t"."header";
 			}
 			$hostname =~ s/^[^.]+(\.|$)//;
 		}

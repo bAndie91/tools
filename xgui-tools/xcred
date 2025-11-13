@@ -5,12 +5,18 @@ use List::MoreUtils qw/all any none uniq/;
 use Data::Dumper;
 use X11::Protocol;
 use URI;
+use File::Slurp;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 
 $Xorg = X11::Protocol->new();
 $RootWindow = $Xorg->root;
 
+
+sub esc
+{
+	$_[0] =~ s{[/\\]}{\\$&}gr =~ s{[\t\r\n]}{ }gr;
+}
 
 sub current_xorg_window
 {
@@ -33,17 +39,26 @@ sub extract_url
 	}
 	elsif($win->{class} =~ /^navigator\.pale/i)
 	{
-		my $output = '';
-		run ['palemoon-current-urls'], '<', \undef,
-			'|', ['td-filter', 'WIN_SELECTED', '=', 'true'],
-			'|', ['td-filter', 'TAB_SELECTED', '=', 'true'],
-			'|', ['td-select', '-H', 'URL'], 
-			'>', \$url;
+		# Install git://git.uucp.hu/sysop/xul-extension-current-url XUL extension in Pale Moon
+		# to get this file:
+		my $current_page_url_file = "$ENV{HOME}/.cache/pale moon/current_page_url";
+		if(-s $current_page_url_file)
+		{
+			$url = read_file($current_page_url_file);
+		}
+		else
+		{
+			run ['palemoon-current-urls'], '<', \undef,
+				'|', ['td-filter', 'WIN_SELECTED', '=', 'true'],
+				'|', ['td-filter', 'TAB_SELECTED', '=', 'true'],
+				'|', ['td-select', '-H', 'URL'], 
+				'>', \$url;
+		}
 	}
 	# put other web browsers here
 	else
 	{
-		push @menu_items, "unknown foreground application: $win->{class}";
+		push @gmenu_items, "unknown foreground application: ".esc($win->{class})."\t"."header";
 	}
 	return $url;
 }
@@ -54,33 +69,44 @@ $url = extract_url;
 $cred_site = undef;
 
 
-if(defined $url)
+if(defined $url and $url ne '')
 {
-	my $hostname = URI->new($url)->ihost;
-	while($hostname ne '')
-	{
-		my $output = '';
-		run ['cred', 'site', $hostname, 'dump', 'blank-secrets', 'subdirs'], \undef, \$output;
-		if($output ne '')
+	unless(eval {
+		my $hostname = URI->new($url)->ihost;
+		while($hostname ne '')
 		{
-			$cred_site = $hostname;
-			push @gmenu_items, join "\t", "site: $cred_site", "caption";
-			for my $prop (map {[split /\t/, $_, 2]} split /\n/, $output)
+			my $output = '';
+			run ['cred', 'site', $hostname, 'dump', 'blank-secrets', 'subdirs'], \undef, \$output;
+			if($output ne '')
 			{
-				my ($propname, $propvalue) = @$prop;
-				$propvalue =~ s{[\\/]}{\\$&}g;
-				for my $input_method (qw/clip type/)
+				$cred_site = $hostname;
+				push @gmenu_items, join "\t", "site: $cred_site", "header";
+				push @gmenu_items, join "\t", "site: $cred_site sep", "sep";
+				for my $prop (map {[split /\t/, $_, 2]} split /\n/, $output)
 				{
-					my $label = "$propname/$input_method";
-					if($propvalue ne '') { $label = "$propname: $propvalue/$input_method" ; }
-					push @gmenu_items, join "\t", $label, "text", "", "$input_method:$propname";
+					my ($propname, $propvalue) = @$prop;
+					$propvalue =~ s{[\\/]}{\\$&}g;
+					for my $input_method (qw/clip type/)
+					{
+						my $label = "$propname/$input_method";
+						if($propvalue ne '') { $label = "$propname: $propvalue/$input_method" ; }
+						push @gmenu_items, join "\t", $label, "responsetext", "", "$input_method:$propname";
+					}
 				}
+				# found a site which has properties. don't go up to wider site names:
+				last;
 			}
-			# found a site which has properties. don't go up to wider site names:
-			last;
+			$hostname =~ s/^[^.]+(\.|$)//;
 		}
-		$hostname =~ s/^[^.]+(\.|$)//;
+		1;
+	})
+	{
+		push @gmenu_items, esc($@)."\t"."header";
 	}
+}
+else
+{
+	push @gmenu_items, "no URL found"."\t"."header";
 }
 
 $input = join "\n", @gmenu_items;

@@ -13,11 +13,6 @@ import glib
 def exit():
 	gtk.main_quit()
 
-def on_menuitem_activate(widget):
-	text = widget.get_data('text')
-	print(text)
-	exit()
-
 def popup(menu):
 	# Get current pointer position (root coordinates)
 	display = gtk.gdk.display_get_default()
@@ -25,11 +20,6 @@ def popup(menu):
 	# Show the popup at pointer position
 	menu.popup(None, None, None, 0, gtk.get_current_event_time())
 	menu.show_all()
-
-def keep_sensitive_style(widget, event):
-	for prop in ['fg', 'bg', 'text', 'base']:
-		getattr(widget, 'modify_'+prop)(gtk.STATE_INSENSITIVE, getattr(widget.get_style(), prop)[gtk.STATE_NORMAL])
-	return False
 
 def unescape_path_element(x):
 	return re.sub(r'\\(.)', lambda m: m.group(1), x)
@@ -39,67 +29,146 @@ def pathsplit(path):
 	pairs = ['' if x is None else x for x in re.split(r'(?<!\\)(\\\\)*/', path) + [None]]
 	for i in range(0, len(pairs), 2):
 		elements.append(pairs[i] + pairs[i+1])
-	return ['/'.join(elements[0:-1]), unescape_path_element(elements[-1])]
+	return ['/'.join(elements[0:-1]), elements[-1]]
 
-def create_menu(labelpath):
+
+class Menu(gtk.Menu):
+	def __init__(self):
+		super(Menu, self).__init__()
+		self.children = []
+	def get_submenu(self):
+		return self
+	def register_child(self, mi):
+		self.children.append(mi)
+	def __repr__(self):
+		return "<%s path='%s'>" %(self.__class__.__name__, self.labelpath)
+
+
+class MenuItem(gtk.MenuItem):
+	def __init__(self, labelpath):
+		assert labelpath != ''
+		super(MenuItem, self).__init__()
+		parent_label, label = pathsplit(labelpath)
+		self.labelpath = labelpath
+		self.parent_label = parent_label
+		self.label = unescape_path_element(label)
+		self.children = []
+	def __repr__(self):
+		return "<%s label='%s' path='%s'>" %(self.__class__.__name__, self.label, self.labelpath)
+	def register_child(self, mi):
+		self.children.append(mi)
+
+class SeparatorMenuItem(MenuItem, gtk.SeparatorMenuItem):
+	pass
+
+class IconMenuItem(MenuItem):
+	@property
+	def icon(self):
+		return self._icon
+	@icon.setter
+	def icon(self, icon):
+		self._icon = icon
+		return self
+
+class ParentMenuItem(IconMenuItem):
+	def __init__(self, labelpath):
+		super(ParentMenuItem, self).__init__(labelpath)
+		self.set_label(self.label)
+		self.set_use_underline(False)
+
+class ResponseTextMenuItem(ParentMenuItem):
+	def __init__(self, labelpath):
+		super(ResponseTextMenuItem, self).__init__(labelpath)
+		self._responsetext = ''
+		self.connect('activate', self.on_activate)
+	def on_activate(self, *X):
+		if not self.get_submenu():
+			print(self._responsetext)
+			exit()
+	@property
+	def responsetext(self):
+		return self._responsetext
+	@responsetext.setter
+	def responsetext(self, responsetext):
+		self._responsetext = responsetext
+		return self
+
+class HeaderMenuItem(IconMenuItem):
+	def __init__(self, labelpath):
+		super(HeaderMenuItem, self).__init__(labelpath)
+		self.label_widget = gtk.Label()
+		self.label_widget.set_markup('<b>' + glib.markup_escape_text(self.label) + '</b>')
+		self.label_widget.set_alignment(0, 0)
+		self.label_widget.connect("expose-event", self.on_expose_label)
+		self.add(self.label_widget)
+		self.set_sensitive(False)
+	def on_expose_label(self, *X):
+		# keep the insensitive state the same style as the active (sensitive) state
+		for prop in ['fg', 'bg', 'text', 'base']:
+			getattr(self.label_widget, 'modify_'+prop)(gtk.STATE_INSENSITIVE, getattr(self.label_widget.get_style(), prop)[gtk.STATE_NORMAL])
+		return False
+
+
+def get_menuitem(labelpath, cls=ParentMenuItem):
+	if labelpath in menuitem_by_labelpath:
+		return menuitem_by_labelpath[labelpath]
+	
 	if labelpath == '':
-		return gtk.Menu()
-	parent_label, label = pathsplit(labelpath)
-	if parent_label not in menu_by_label:
-		menu_by_label[parent_label] = create_menu(parent_label)
-	mi = gtk.MenuItem(label=label)
-	menu_by_label[parent_label].append(mi)
-	menu = gtk.Menu()
-	mi.set_submenu(menu)
-	return menu
-
-def create_menuitem(label, text):
-	mi = gtk.MenuItem(label=label)
-	mi.set_data('text', text)
-	mi.set_use_underline(False)
-	mi.connect('activate', on_menuitem_activate)
+		mi = Menu()
+		mi.labelpath = labelpath
+	else:
+		mi = cls(labelpath)
+	menuitem_by_labelpath[labelpath] = mi
+	if labelpath != '':
+		get_menuitem(mi.parent_label).register_child(mi)
 	return mi
 
-menu_by_label = {}
+def add_registered_children_recursively(mi):
+	for child in mi.children:
+		submenu = mi.get_submenu()
+		if submenu is None:
+			submenu = Menu()
+			submenu.labelpath = mi.labelpath
+			mi.set_submenu(submenu)
+		submenu.append(child)
+		add_registered_children_recursively(child)
+
+
+
+menuitem_by_labelpath = {}
 
 if __name__ == "__main__":
 	while True:
 		line = sys.stdin.readline()
 		if line == '': break
 		if line[-1] == '\n': line = line[:-1]  # chomp
+		if line == '': continue
 		
 		words = line.split('\t', 3)
-		labelpath, tipus, icon, text = words + ['']*(4-len(words))
-		if tipus == '': tipus = 'text'
-		if text == '': text = labelpath
-		
-		parent_label, label = pathsplit(labelpath)
-		
-		if parent_label not in menu_by_label:
-			menu_by_label[parent_label] = create_menu(parent_label)
+		labelpath, tipus, icon, responsetext = words + ['']*(4-len(words))
+		if tipus == '': tipus = 'responsetext'
+		if responsetext == '': responsetext = labelpath
 		
 		mi = None
 		if tipus == 'sep':
-			mi = gtk.SeparatorMenuItem()
-		elif tipus == 'caption':
-			mi = gtk.CheckMenuItem()
-			l = gtk.Label()
-			l.set_markup('<b>'+glib.markup_escape_text(text)+'</b>')
-			l.set_alignment(0, 0)
-			l.connect("expose-event", keep_sensitive_style)
-			mi.add(l)
-			mi.set_sensitive(False)
-		elif tipus == 'text':
-			mi = create_menuitem(label, text)
+			mi = get_menuitem(labelpath, SeparatorMenuItem)
+		elif tipus == 'header':
+			mi = get_menuitem(labelpath, HeaderMenuItem)
+		elif tipus == 'responsetext':
+			mi = get_menuitem(labelpath, ResponseTextMenuItem)
 		else:
 			print("unknown menu item type: "+tipus, file=sys.stderr)
 		
-		# TODO support icon
-		
 		if mi is not None:
-			menu_by_label[parent_label].append(mi)
+			mi.responsetext = responsetext
+			mi.icon = icon
 	
-	menu_by_label[''].show_all()
-	menu_by_label[''].connect('deactivate', lambda *x: exit())
-	popup(menu_by_label[''])
+	if '' not in menuitem_by_labelpath:
+		get_menuitem("no menu items", HeaderMenuItem)
+	
+	main_menu = menuitem_by_labelpath['']
+	main_menu.connect('deactivate', lambda *X: exit())
+	add_registered_children_recursively(main_menu)
+	main_menu.show_all()
+	popup(main_menu)
 	gtk.main()

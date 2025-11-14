@@ -8,18 +8,11 @@ import sys
 import re
 import gtk
 import glib
+import glob
 
 
 def exit():
 	gtk.main_quit()
-
-def popup(menu):
-	# Get current pointer position (root coordinates)
-	display = gtk.gdk.display_get_default()
-	screen, x, y, mods = display.get_pointer()
-	# Show the popup at pointer position
-	menu.popup(None, None, None, 0, gtk.get_current_event_time())
-	menu.show_all()
 
 def unescape_path_element(x):
 	return re.sub(r'\\(.)', lambda m: m.group(1), x)
@@ -32,19 +25,53 @@ def pathsplit(path):
 	return ['/'.join(elements[0:-1]), elements[-1]]
 
 
+def icondir2size(path):
+	match = re.findall(r'/([0-9]+)x[0-9]+', path)
+	if not match: return -1
+	return match[0]
+
+def find_icon_file(iconname, preferred_size_px):
+	dirs = []
+	for categ in 'hicolor', 'locolor', 'gnome':
+		directory = os.path.join('/usr/share/icons/', categ)
+		small = []
+		for icondir in sorted(glob.glob(directory+'/*x*/*'), key = icondir2size):
+			if icondir2size(icondir) < preferred_size_px:
+				small.insert(0, icondir)
+			else:
+				dirs.append(icondir)
+		dirs.append(directory+'/scalable/*')
+		dirs.extend(small)
+	dirs.append('/usr/share/pixmaps')
+	
+	for icondir in dirs:
+		iconpath_test = None
+		for ext in 'png', 'xpm', 'svg':
+			if iconname.find(os.path.extsep):
+				iconpath_test = os.path.join(icondir, iconname)
+			else:
+				iconpath_test = os.path.join(icondir, iconname) + os.path.extsep + ext
+			if os.path.exists(iconpath_test):
+				return iconpath_test
+			if iconname.find(os.path.extsep):
+				break
+
+
 class Menu(gtk.Menu):
 	def __init__(self):
 		super(Menu, self).__init__()
-		self.children = []
+		self.submenuitems = []
+	def main_popup(self):
+		self.popup(None, None, None, 0, gtk.get_current_event_time())
 	def get_submenu(self):
 		return self
 	def register_child(self, mi):
-		self.children.append(mi)
+		self.submenuitems.append(mi)
 	def __repr__(self):
 		return "<%s path='%s'>" %(self.__class__.__name__, self.labelpath)
 
 
-class MenuItem(gtk.MenuItem):
+class MenuItem(gtk.ImageMenuItem):
 	def __init__(self, labelpath):
 		assert labelpath != ''
 		super(MenuItem, self).__init__()
@@ -52,14 +79,16 @@ class MenuItem(gtk.MenuItem):
 		self.labelpath = labelpath
 		self.parent_label = parent_label
 		self.label = unescape_path_element(label)
-		self.children = []
+		self.submenuitems = []
 	def __repr__(self):
 		return "<%s label='%s' path='%s'>" %(self.__class__.__name__, self.label, self.labelpath)
 	def register_child(self, mi):
-		self.children.append(mi)
+		self.submenuitems.append(mi)
 
-class SeparatorMenuItem(MenuItem, gtk.SeparatorMenuItem):
-	pass
+class SeparatorMenuItem(gtk.SeparatorMenuItem, MenuItem):
+	def __init__(self, labelpath):
+		super(SeparatorMenuItem, self).__init__()
+		MenuItem.__init__(self, labelpath)
 
 class IconMenuItem(MenuItem):
 	@property
@@ -67,6 +96,18 @@ class IconMenuItem(MenuItem):
 		return self._icon
 	@icon.setter
 	def icon(self, icon):
+		img = self.get_image()
+		if img is None:
+			img = gtk.Image()
+		if icon.startswith(os.path.sep):
+			img.set_from_file(icon)
+		elif icon in gtk.stock_list_ids():
+			img.set_from_stock(icon, gtk.ICON_SIZE_MENU)
+		elif gtk.icon_theme_get_default().lookup_icon(icon, gtk.ICON_SIZE_MENU, 0) is not None:
+			img.set_from_icon_name(icon, gtk.ICON_SIZE_MENU)
+		else:
+			img.set_from_file(find_icon_file(icon, gtk.icon_size_lookup(gtk.ICON_SIZE_MENU)[0]))
+		self.set_image(img)
 		self._icon = icon
 		return self
 
@@ -93,20 +134,13 @@ class ResponseTextMenuItem(ParentMenuItem):
 		self._responsetext = responsetext
 		return self
 
-class HeaderMenuItem(IconMenuItem):
+class HeaderMenuItem(SeparatorMenuItem):
 	def __init__(self, labelpath):
 		super(HeaderMenuItem, self).__init__(labelpath)
 		self.label_widget = gtk.Label()
-		self.label_widget.set_markup('<b>' + glib.markup_escape_text(self.label) + '</b>')
+		self.label_widget.set_markup('<b><span size="large">' + glib.markup_escape_text(self.label) + '</span></b>')
 		self.label_widget.set_alignment(0, 0)
-		self.label_widget.connect("expose-event", self.on_expose_label)
 		self.add(self.label_widget)
-		self.set_sensitive(False)
-	def on_expose_label(self, *X):
-		# keep the insensitive state the same style as the active (sensitive) state
-		for prop in ['fg', 'bg', 'text', 'base']:
-			getattr(self.label_widget, 'modify_'+prop)(gtk.STATE_INSENSITIVE, getattr(self.label_widget.get_style(), prop)[gtk.STATE_NORMAL])
-		return False
 
 
 def get_menuitem(labelpath, cls=ParentMenuItem):
@@ -123,52 +157,51 @@ def get_menuitem(labelpath, cls=ParentMenuItem):
 		get_menuitem(mi.parent_label).register_child(mi)
 	return mi
 
-def add_registered_children_recursively(mi):
-	for child in mi.children:
+def add_registered_submenuitems_recursively(mi):
+	for child in mi.submenuitems:
 		submenu = mi.get_submenu()
 		if submenu is None:
 			submenu = Menu()
 			submenu.labelpath = mi.labelpath
 			mi.set_submenu(submenu)
 		submenu.append(child)
-		add_registered_children_recursively(child)
+		add_registered_submenuitems_recursively(child)
 
 
 
 menuitem_by_labelpath = {}
 
-if __name__ == "__main__":
-	while True:
-		line = sys.stdin.readline()
-		if line == '': break
-		if line[-1] == '\n': line = line[:-1]  # chomp
-		if line == '': continue
-		
-		words = line.split('\t', 3)
-		labelpath, tipus, icon, responsetext = words + ['']*(4-len(words))
-		if tipus == '': tipus = 'responsetext'
-		if responsetext == '': responsetext = labelpath
-		
-		mi = None
-		if tipus == 'sep':
-			mi = get_menuitem(labelpath, SeparatorMenuItem)
-		elif tipus == 'header':
-			mi = get_menuitem(labelpath, HeaderMenuItem)
-		elif tipus == 'responsetext':
-			mi = get_menuitem(labelpath, ResponseTextMenuItem)
-		else:
-			print("unknown menu item type: "+tipus, file=sys.stderr)
-		
-		if mi is not None:
-			mi.responsetext = responsetext
-			mi.icon = icon
+while True:
+	line = sys.stdin.readline()
+	if line == '': break
+	if line[-1] == '\n': line = line[:-1]  # chomp
+	if line == '': continue
 	
-	if '' not in menuitem_by_labelpath:
-		get_menuitem("no menu items", HeaderMenuItem)
+	words = line.split('\t', 3)
+	labelpath, tipus, icon, responsetext = words + ['']*(4-len(words))
+	if tipus == '': tipus = 'responsetext'
+	if responsetext == '': responsetext = labelpath
 	
-	main_menu = menuitem_by_labelpath['']
-	main_menu.connect('deactivate', lambda *X: exit())
-	add_registered_children_recursively(main_menu)
-	main_menu.show_all()
-	popup(main_menu)
-	gtk.main()
+	mi = None
+	if tipus == 'sep':
+		mi = get_menuitem(labelpath, SeparatorMenuItem)
+	elif tipus == 'header':
+		mi = get_menuitem(labelpath, HeaderMenuItem)
+	elif tipus == 'responsetext':
+		mi = get_menuitem(labelpath, ResponseTextMenuItem)
+	else:
+		print("unknown menu item type: "+tipus, file=sys.stderr)
+	
+	if mi is not None:
+		mi.responsetext = responsetext
+		mi.icon = icon
+
+if '' not in menuitem_by_labelpath:
+	get_menuitem("no menu items", HeaderMenuItem)
+
+main_menu = menuitem_by_labelpath['']
+main_menu.connect('deactivate', lambda *X: exit())
+add_registered_submenuitems_recursively(main_menu)
+main_menu.show_all()
+main_menu.main_popup()
+gtk.main()

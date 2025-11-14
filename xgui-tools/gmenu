@@ -96,6 +96,7 @@ class IconMenuItem(MenuItem):
 		return self._icon
 	@icon.setter
 	def icon(self, icon):
+		if not icon: return
 		img = self.get_image()
 		if img is None:
 			img = gtk.Image()

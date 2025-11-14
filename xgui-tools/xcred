@@ -91,7 +91,7 @@ if(defined $url and $url ne '')
 					{
 						my $label = "$propname/$input_method";
 						if($propvalue ne '') { $label = "$propname: $propvalue/$input_method" ; }
-						push @gmenu_items, join "\t", $label, "responsetext", "", "$input_method:$propname";
+						push @gmenu_items, $label ."\t". "responsetext" ."\t"."\t". "$input_method:$propname";
 					}
 				}
 				# found a site which has properties. don't go up to wider site names:
@@ -113,6 +113,7 @@ else
 {
 	push @gmenu_items, "no URL found"."\t"."header";
 }
+
 
 $input = join "\n", @gmenu_items;
 $menu_selection = '';

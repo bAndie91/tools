@@ -91,6 +91,8 @@ class SeparatorMenuItem(gtk.SeparatorMenuItem, MenuItem):
 		MenuItem.__init__(self, labelpath)
 
 class IconMenuItem(MenuItem):
+	# TODO implement a menu item which has hbox and image and label inside it
+	# and do not show default menuitem images
 	@property
 	def icon(self):
 		return self._icon
@@ -140,8 +142,30 @@ class HeaderMenuItem(SeparatorMenuItem):
 		super(HeaderMenuItem, self).__init__(labelpath)
 		self.label_widget = gtk.Label()
 		self.label_widget.set_markup('<b><span size="large">' + glib.markup_escape_text(self.label) + '</span></b>')
-		self.label_widget.set_alignment(0, 0)
-		self.add(self.label_widget)
+		self.label_widget.set_alignment(0, 0.5)
+		inner_widget = gtk.HBox(homogeneous=False, spacing=5)
+		self.img = gtk.Image()
+		inner_widget.pack_start(self.img, False, False, 0)
+		inner_widget.pack_start(self.label_widget, True, True, 0)
+		self.add(inner_widget)
+	@property
+	def icon(self):
+		return self._icon
+	@icon.setter
+	def icon(self, icon):
+		if not icon: return
+		if self.img is None:
+			self.img = gtk.Image()
+		if icon.startswith(os.path.sep):
+			self.img.set_from_file(icon)
+		elif icon in gtk.stock_list_ids():
+			self.img.set_from_stock(icon, gtk.ICON_SIZE_MENU)
+		elif gtk.icon_theme_get_default().lookup_icon(icon, gtk.ICON_SIZE_MENU, 0) is not None:
+			self.img.set_from_icon_name(icon, gtk.ICON_SIZE_MENU)
+		else:
+			self.img.set_from_file(find_icon_file(icon, gtk.icon_size_lookup(gtk.ICON_SIZE_MENU)[0]))
+		self._icon = icon
+		return self
 
 
 def get_menuitem(labelpath, cls=ParentMenuItem):

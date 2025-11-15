@@ -58,13 +58,20 @@ sub extract_url
 	# put other web browsers here
 	else
 	{
-		push @gmenu_items, "unknown foreground application: ".esc($win->{class})."\t"."header";
+		push @gmenu_items, GmenuHeader("unknown foreground application: ".esc($win->{class}), 'emblem-question');
 	}
 	return $url;
 }
 
+sub GmenuItem { join "\t", map {s/\t/ /gr} @_; }
+sub GmenuHeader { GmenuItem($_[0], "header", $_[1]); }
+sub GmenuSeparator { GmenuItem($_[0], "sep"); }
+sub GmenuResponseText { GmenuItem($_[0], "responsetext", $_[2], $_[1]); }
 
-@gmenu_items = ();
+@gmenu_items = (
+	GmenuHeader("Credentials [xcred]", 'dialog-password'),
+	GmenuSeparator("Credentials [xcred] sep"),
+);
 $url = extract_url;
 $cred_site = undef;
 
@@ -81,8 +88,8 @@ if(defined $url and $url ne '')
 			if($output ne '')
 			{
 				$cred_site = $hostname;
-				push @gmenu_items, "site: $cred_site"."\t"."header";
-				push @gmenu_items, "site: $cred_site sep"."\t"."sep";
+				push @gmenu_items, GmenuHeader("site: $cred_site", 'application-x-geneweb');
+				push @gmenu_items, GmenuSeparator("site: $cred_site sep");
 				for my $prop (map {[split /\t/, $_, 2]} split /\n/, $output)
 				{
 					my ($propname, $propvalue) = @$prop;
@@ -91,7 +98,7 @@ if(defined $url and $url ne '')
 					{
 						my $label = "$propname/$input_method";
 						if($propvalue ne '') { $label = "$propname: $propvalue/$input_method" ; }
-						push @gmenu_items, $label ."\t". "responsetext" ."\t"."\t". "$input_method:$propname";
+						push @gmenu_items, GmenuResponseText($label, "$input_method:$propname");
 					}
 				}
 				# found a site which has properties. don't go up to wider site names:
@@ -99,23 +106,25 @@ if(defined $url and $url ne '')
 			}
 			elsif($error ne '')
 			{
-				push @gmenu_items, esc($error)."\t"."header";
+				push @gmenu_items, GmenuHeader(esc($error));
 			}
 			$hostname =~ s/^[^.]+(\.|$)//;
 		}
 		1;
 	})
 	{
-		push @gmenu_items, esc($@)."\t"."header";
+		push @gmenu_items, GmenuHeader(esc($@));
 	}
 }
 else
 {
-	push @gmenu_items, "no URL found"."\t"."header";
+	push @gmenu_items, GmenuHeader("no URL found");
 }
 
 
 $input = join "\n", @gmenu_items;
+print $input;
+die;
 $menu_selection = '';
 run ['gmenu',], \$input, \$menu_selection;
 

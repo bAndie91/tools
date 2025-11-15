@@ -63,6 +63,17 @@ def find_icon_file(iconname, preferred_size_px):
 			if iconname.find(os.path.extsep):
 				break
 
+def get_pixbuf_from_file_at_size(filepath, width_px, height_px):
+	pixbuf = gtk.gdk.pixbuf_new_from_file(filepath)
+	w = pixbuf .get_width()
+	h = pixbuf .get_height()
+	if width_px != w or height_px != h:
+		scale = min(float(width_px)/w, float(height_px)/h)
+		resized_w = int(w * scale)
+		resized_h = int(h * scale)
+		pixbuf = pixbuf.scale_simple(resized_w, resized_h, gtk.gdk.INTERP_HYPER)
+	return pixbuf
+
 
 class Menu(gtk.Menu):
 	def __init__(self):
@@ -127,14 +138,20 @@ class IconMenuItem(MenuItem):
 	@icon.setter
 	def icon(self, icon):
 		if not icon: return
-		if icon.startswith(os.path.sep):
-			self.icon_widget.set_from_file(icon)
+		if os.path.isfile(icon):
+			width_px, height_px = self.icon_widget.get_size_request()[:]
+			pixbuf = get_pixbuf_from_file_at_size(icon, width_px, height_px)
+			self.icon_widget.set_from_pixbuf(pixbuf)
 		elif icon in gtk.stock_list_ids():
 			self.icon_widget.set_from_stock(icon, gtk.ICON_SIZE_MENU)
 		elif gtk.icon_theme_get_default().lookup_icon(icon, gtk.ICON_SIZE_MENU, 0) is not None:
 			self.icon_widget.set_from_icon_name(icon, gtk.ICON_SIZE_MENU)
 		else:
-			self.icon_widget.set_from_file(find_icon_file(icon, gtk.icon_size_lookup(gtk.ICON_SIZE_MENU)[0]))
+			width_px, height_px = self.icon_widget.get_size_request()[:]
+			iconfile = find_icon_file(icon, width_px)
+			if iconfile is not None:
+				pixbuf = get_pixbuf_from_file_at_size(iconfile, width_px, height_px)
+				self.icon_widget.set_from_pixbuf(pixbuf)
 		self._icon = icon
 		return self
 

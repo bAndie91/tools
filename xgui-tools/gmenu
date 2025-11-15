@@ -12,10 +12,10 @@ import glob
 
 
 # it'd be nice if i could remove the left-side padding where the
-# ImageMenuItem icons are used to be, but it's unneccessary because i
-# implemented menu icons separately (to put icons to HeaderMenuItem too
-# which needs to be a SeparatorMenuItem to prevent activation)
-gtk.settings_get_default().set_property("gtk-menu-images", False)
+# ImageMenuItem icons normally are, but those are unneccessary because
+# i implemented menu icons separately to put icons to HeaderMenuItem too
+# (which needs to be a SeparatorMenuItem to prevent activation)
+#gtk.settings_get_default().set_property("gtk-menu-images", False)
 
 
 def exit():
@@ -100,14 +100,14 @@ class MenuItem(gtk.MenuItem):
 		self.submenuitems = []
 		self.icon = None
 	def __repr__(self):
-		return "<%s label='%s' path='%s' icon=%s>" %(self.__class__.__name__, self.label, self.labelpath, repr(self.icon))
+		return "<%s label='%s' path='%s' icon=%s>" %(self.__class__.__name__, self.label, self.labelpath, repr(self.icon) if hasattr(self, 'icon') else 'None')
 	def register_child(self, mi):
 		self.submenuitems.append(mi)
 
 class IconMenuItem(MenuItem):
 	def __init__(self, labelpath):
 		super(IconMenuItem, self).__init__(labelpath)
-		inner_widget = gtk.HBox(homogeneous=False, spacing=5) #TODO get spacing from theme
+		inner_widget = gtk.HBox(homogeneous=False, spacing=5) #TODO get spacing from toggle-spacing style prop
 		self.label_widget = gtk.Label()
 		self.label_widget.set_alignment(0, 0.5)
 		self.label_widget.set_use_underline(False)
@@ -187,6 +187,15 @@ class HeaderMenuItem(SeparatorMenuItem, IconMenuItem):
 		super(HeaderMenuItem, self).__init__(labelpath)
 		IconMenuItem.__init__(self, labelpath)
 		self.label_markup = '<b><span size="large">' + glib.markup_escape_text(self.label) + '</span></b>'
+		
+		# an other trick to prevent HeaderMenuItem to be activatable is to set to insensitive
+		# but render it like STATE_NORMAL visually (set the foreground color to that of normal fg and white_gc to background color)
+		# however images on insensitive widgets are also rendered in gray, which is hard to restore.
+		#self.set_sensitive(False)
+		# keep the insensitive state the same style as the active (sensitive) state
+		#for prop in ['fg', 'bg', 'text', 'base']:
+		#	getattr(self.label_widget, 'modify_'+prop)(gtk.STATE_INSENSITIVE, getattr(self.label_widget.get_style(), prop)[gtk.STATE_NORMAL])
+		#self.label_widget.modify_white_gc(gtk.STATE_INSENSITIVE, self.label_widget.get_style().white_gc[gtk.STATE_NORMAL])
 
 
 

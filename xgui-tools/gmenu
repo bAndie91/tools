@@ -174,9 +174,9 @@ class HeaderMenuItem(SeparatorMenuItem, IconMenuItem):
 
 
 def get_menuitem(labelpath, cls=ParentMenuItem):
-	# TODO support equivalent labels on the same level
-	if labelpath in menuitem_by_labelpath:
-		return menuitem_by_labelpath[labelpath]
+	if cls == ParentMenuItem:
+		if labelpath in menuitem_by_labelpath:
+			return menuitem_by_labelpath[labelpath]
 	
 	if labelpath == '':
 		mi = Menu()

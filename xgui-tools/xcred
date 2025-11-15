@@ -58,7 +58,7 @@ sub extract_url
 	# put other web browsers here
 	else
 	{
-		push @gmenu_items, GmenuHeader("unknown foreground application: ".esc($win->{class}), 'question');
+		push @gmenu_items, GmenuHeader("unknown foreground application: ".esc($win->{class}), 'dialog-question');
 	}
 	return $url;
 }
@@ -93,7 +93,6 @@ if(defined $url and $url ne '')
 			{
 				$cred_site = $hostname;
 				push @gmenu_items, GmenuHeader("site: $cred_site", 'web-browser');
-				push @gmenu_items, GmenuSeparator("-");
 				for my $prop (map {[split /\t/, $_, 2]} split /\n/, $output)
 				{
 					my ($propname, $propvalue) = @$prop;

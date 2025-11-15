@@ -9,9 +9,12 @@ use File::Slurp;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 
-$Xorg = X11::Protocol->new();
-$RootWindow = $Xorg->root;
+sub GmenuItem { join "\t", map {s/\t/ /gr} @_; }
+sub GmenuHeader { GmenuItem($_[0], "header", $_[1]); }
+sub GmenuSeparator { GmenuItem($_[0], "sep"); }
+sub GmenuResponseText { GmenuItem($_[0], "responsetext", $_[2], $_[1]); }
 
+%IconByInputMethod = (type => 'keyboard', clip => 'gtk-copy');
 
 sub esc
 {
@@ -63,10 +66,9 @@ sub extract_url
 	return $url;
 }
 
-sub GmenuItem { join "\t", map {s/\t/ /gr} @_; }
-sub GmenuHeader { GmenuItem($_[0], "header", $_[1]); }
-sub GmenuSeparator { GmenuItem($_[0], "sep"); }
-sub GmenuResponseText { GmenuItem($_[0], "responsetext", $_[2], $_[1]); }
+
+$Xorg = X11::Protocol->new();
+$RootWindow = $Xorg->root;
 
 @gmenu_items = (
 	GmenuHeader("Credentials [xcred]", 'dialog-password'),
@@ -101,7 +103,7 @@ if(defined $url and $url ne '')
 					{
 						my $label = "$propname/$input_method";
 						if($propvalue ne '') { $label = "$propname: $propvalue/$input_method" ; }
-						push @gmenu_items, GmenuResponseText($label, "$input_method:$propname");
+						push @gmenu_items, GmenuResponseText($label, "$input_method:$propname", $IconByInputMethod{$input_method});
 					}
 				}
 				# found a site which has properties. don't go up to wider site names:

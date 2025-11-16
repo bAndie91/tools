@@ -1,6 +1,4 @@
 
-REPO_ROOT ?= ..
-
 # specify INSTALL_WRAPPER=sudo at the make command if you need
 INSTALL_WRAPPER =
 
@@ -14,6 +12,10 @@ NORMAL_TOOLS = $(filter-out $(SYMLINK_TOOLS),$(TOOLS))
 TOOLS_TARGET_FILES = $(addprefix $(TOOLS_TARGET_DIR)/,$(NORMAL_TOOLS))
 TOOLS_TARGET_SYMLINKS = $(addprefix $(TOOLS_TARGET_DIR)/,$(SYMLINK_TOOLS))
 
+
+define record_uninstall
+	echo remove $@ >> uninstall.sh
+endef
 
 
 default:
@@ -29,50 +31,51 @@ $(TOOLS_TARGET_DIR)/multithrottler: /usr/lib/multithrottler/Throttler.pm
 $(TOOLS_TARGET_DIR)/git-mirrors: /usr/share/bash-completion/completions/git-mirrors
 $(TOOLS_TARGET_DIR)/git-push-remotes: /usr/share/bash-completion/completions/git-push-remotes
 
-COMPLETION_BASH_SCRIPTS = $(foreach path,$(wildcard $(REPO_ROOT)/bash/bash_completion.d/*),$(notdir $(path)))
+COMPLETION_BASH_SCRIPTS = $(foreach path,$(wildcard ../bash/bash_completion.d/*),$(notdir $(path)))
 
-$(addprefix /usr/share/bash-completion/completions/,$(COMPLETION_BASH_SCRIPTS)): /usr/share/bash-completion/completions/%: $(REPO_ROOT)/bash/bash_completion.d/%
+$(addprefix /usr/share/bash-completion/completions/,$(COMPLETION_BASH_SCRIPTS)): /usr/share/bash-completion/completions/%: ../bash/bash_completion.d/%
 	$(INSTALL_WRAPPER) install $< $@
-	@echo remove $@ >> uninstall.sh
+	@$(record_uninstall)
 
-/usr/libexec/perlshell: $(REPO_ROOT)/libexec/perlshell
+/usr/libexec/perlshell: ../libexec/perlshell
 	$(INSTALL_WRAPPER) install $< $@
-	@echo remove $@ >> uninstall.sh
+	@$(record_uninstall)
 
-/usr/share/doc/tool/rsync-semichroot.txt: $(REPO_ROOT)/doc/rsync-semichroot.txt | /usr/share/doc/tool
+/usr/share/doc/tool/rsync-semichroot.txt: ../doc/rsync-semichroot.txt | /usr/share/doc/tool
 	$(INSTALL_WRAPPER) install $< $@
-	@echo remove $@ >> uninstall.sh
+	@$(record_uninstall)
 
-/usr/lib/tool/bash-utils: $(REPO_ROOT)/bash/bash-utils | /usr/lib/tool
+/usr/lib/tool/bash-utils: ../bash/bash-utils | /usr/lib/tool
 	$(INSTALL_WRAPPER) install $< $@
-	@echo remove $@ >> uninstall.sh
+	@$(record_uninstall)
 
-/usr/lib/multithrottler/Throttler.pm: $(REPO_ROOT)/lib/multithrottler/Throttler.pm | /usr/lib/multithrottler
+/usr/lib/multithrottler/Throttler.pm: ../lib/multithrottler/Throttler.pm | /usr/lib/multithrottler
 	$(INSTALL_WRAPPER) install $< $@
-	@echo remove $@ >> uninstall.sh
+	@$(record_uninstall)
 
 /usr/lib/multithrottler:
 	[ -d $@ ] || mkdir $@
-	@echo remove $@ >> uninstall.sh
+	@$(record_uninstall)
 
 
 $(TOOLS_TARGET_DIR):
 	[ -d $@ ] || mkdir $@
-	@echo remove $@ >> uninstall.sh
+	@$(record_uninstall)
 
 /usr/share/doc/tool:
 	[ -d $@ ] || mkdir $@
-	@echo remove $@ >> uninstall.sh
+	@$(record_uninstall)
 
 /usr/lib/tool:
 	[ -d $@ ] || mkdir $@
-	@echo remove $@ >> uninstall.sh
+	@$(record_uninstall)
 
 
 
 DEPCHECK_TARGETS = $(addprefix DEPCHECK/,$(NORMAL_TOOLS))
 depcheck-all: $(DEPCHECK_TARGETS)
 .PHONY: $(DEPCHECK_TARGETS)
+
 
 DEPCHECK/lines:
 	perl -MARGV::readonly -e 1
@@ -115,24 +118,24 @@ install-all: \
 # so merely switching branches does not make 'make' believe that the requirement files are newer.
 .PHONY: git-utimes
 git-utimes:
-	git utimes || true
+	git utimes . || true
 
 .PHONY: install-tools
-install-tools: depcheck-all $(TOOLS_TARGET_FILES) $(TOOLS_TARGET_SYMLINKS)
+install-tools: $(TOOLS_TARGET_FILES) $(TOOLS_TARGET_SYMLINKS)
 
 $(TOOLS_TARGET_FILES) $(TOOLS_TARGET_SYMLINKS): | $(TOOLS_TARGET_DIR)
 
 $(TOOLS_TARGET_FILES): $(TOOLS_TARGET_DIR)/%: %
 	$(MAKE) DEPCHECK/$<
 	$(INSTALL_WRAPPER) install $< $@
-	@echo remove $@ >> uninstall.sh
+	@$(record_uninstall)
 
 install-symlinks: $(TOOLS_TARGET_SYMLINKS)
 .PHONY: install-symlinks
 
 $(TOOLS_TARGET_SYMLINKS): $(TOOLS_TARGET_DIR)/%: %
 	$(INSTALL_WRAPPER) ln -snfv $(shell readlink $<) $@
-	@echo remove $@ >> uninstall.sh
+	@$(record_uninstall)
 
 
 list-tools:

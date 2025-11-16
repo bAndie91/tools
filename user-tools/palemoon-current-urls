@@ -7,6 +7,14 @@ true <<EOF
 
 palemoon-current-urls - Display Palemoon web browser's currently opened URLs per window and per tab
 
+=head1 LIMITATIONS
+
+Assuming the "default" browser profile.
+
+Assuming the "default" browser profile is in the B<*.default> folder in Pale Moon's profiles folder.
+
+Assuming F<sessionstore.js> is up-to-date.
+
 =cut
 
 EOF

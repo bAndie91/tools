@@ -3,10 +3,6 @@ ifndef TOOLS
 $(error TOOLS is not set in Makefile)
 endif
 
-ifndef REPO_ROOT
-$(error REPO_ROOT is not set in Makefile)
-endif
-
 MANPAGE_SECTION ?= 1
 MANPAGE_SECTION_EXT ?= $(MANPAGE_SECTION)
 
@@ -34,7 +30,7 @@ $(MANPAGE_FILES): $(MANPAGES_SUBDIR)/%$(MANPAGE_FILE_SUFFIX): %
 		pod2man --name="$<" --section $(MANPAGE_SECTION_EXT) --utf8 "$<" | $(MANPAGES_COMPRESSOR) > "$@~" &&\
 		mv -f "$@~" "$@" ;\
 	else \
-		touch "$@" ;\
+		true > "$@" ;\
 	fi
 
 

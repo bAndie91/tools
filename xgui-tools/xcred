@@ -5,12 +5,21 @@ use List::MoreUtils qw/all any none uniq/;
 use Data::Dumper;
 use X11::Protocol;
 use URI;
+use File::Slurp;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 
-$Xorg = X11::Protocol->new();
-$RootWindow = $Xorg->root;
+sub GmenuItem { join "\t", map {s/\t/ /gr} @_; }
+sub GmenuHeader { GmenuItem($_[0], "header", $_[1]); }
+sub GmenuSeparator { GmenuItem($_[0], "sep"); }
+sub GmenuResponseText { GmenuItem($_[0], "responsetext", $_[2], $_[1]); }
 
+%IconByInputMethod = (type => 'keyboard', clip => 'gtk-copy');
+
+sub esc
+{
+	$_[0] =~ s{[/\\]}{\\$&}gr =~ s{[\t\r\n]}{ }gr;
+}
 
 sub current_xorg_window
 {
@@ -28,64 +37,113 @@ sub extract_url
 	my $url;
 	if($win->{class} =~ /^navigator\.firefox/i)
 	{
+		my $output = '';
+		run ['firefox-current-url'], '<', \undef, '>', \$url;
 	}
 	elsif($win->{class} =~ /^navigator\.pale/i)
 	{
-		my $output = '';
-		run ['palemoon-current-urls'], '<', \undef,
-			'|', ['td-filter', 'WIN_SELECTED', '=', 'true'],
-			'|', ['td-filter', 'TAB_SELECTED', '=', 'true'],
-			'|', ['td-select', '-H', 'URL'], 
-			'>', \$url;
+		# Install git://git.uucp.hu/sysop/xul-extension-current-url XUL extension in Pale Moon
+		# to get this file:
+		my $current_page_url_file = "$ENV{HOME}/.cache/pale moon/current_page_url";
+		if(-s $current_page_url_file)
+		{
+			$url = read_file($current_page_url_file);
+		}
+		else
+		{
+			run ['palemoon-current-urls'], '<', \undef,
+				'|', ['td-filter', 'WIN_SELECTED', '=', 'true'],
+				'|', ['td-filter', 'TAB_SELECTED', '=', 'true'],
+				'|', ['td-select', '-H', 'URL'], 
+				'>', \$url;
+		}
 	}
 	# put other web browsers here
 	else
 	{
-		push @menu_items, "unknown foreground application: $win->{class}";
+		push @gmenu_items, GmenuHeader("unknown foreground application: ".esc($win->{class}), 'dialog-question');
 	}
 	return $url;
 }
 
 
-@menu_items = ();
+$Xorg = X11::Protocol->new();
+$RootWindow = $Xorg->root;
+
+@gmenu_items = (
+	GmenuHeader("Credentials [xcred]", 'dialog-password'),
+	GmenuSeparator("-"),
+);
 $url = extract_url;
 $cred_site = undef;
 
 
-if(defined $url)
+if(defined $url and $url ne '')
 {
-	$a = URI->new($url);
-	warn Dumper $a, $url;
-	my $hostname = URI->new($url)->ihost;
-	while($hostname ne '')
-	{
-		my $output = '';
-		run ['cred', 'site', $hostname, 'dump', 'blank-secrets'], \undef, \$output;
-		if($output ne '')
+	unless(eval {
+		my $hostname = URI->new($url)->ihost;
+		my $hostname_attempt = 0;
+		while($hostname ne '')
 		{
-			$cred_site = $hostname;
-			push @menu_items, sprintf "[SITE %s]", $cred_site;
-			for my $prop (map {[split /\t/, $_, 2]} split /\n/, $output)
+			$hostname_attempt++;
+			push @gmenu_items, GmenuSeparator("-") if $hostname_attempt > 1;
+			
+			my $output = '';
+			my $error = '';
+			run ['cred', 'site', $hostname, 'dump', 'blank-secrets', 'subdirs'], \undef, \$output, \$error;
+			if($output ne '')
 			{
-				my $item = $prop->[0];
-				if($prop->[1] ne '') { $item = $prop->[0] . ": " . $prop->[1]; }
-				push @menu_items, $item;
+				$cred_site = $hostname;
+				push @gmenu_items, GmenuHeader("site: $cred_site", 'web-browser');
+				for my $prop (map {[split /\t/, $_, 2]} split /\n/, $output)
+				{
+					my ($propname, $propvalue) = @$prop;
+					$propvalue =~ s{[\\/]}{\\$&}g;
+					for my $input_method (qw/clip type/)
+					{
+						my $label = "$propname/$input_method";
+						if($propvalue ne '') { $label = "$propname: $propvalue/$input_method" ; }
+						push @gmenu_items, GmenuResponseText($label, "$input_method:$propname", $IconByInputMethod{$input_method});
+					}
+				}
+				# found a site which has properties. don't go up to wider site names:
+				last;
 			}
-			last;
+			elsif($error ne '')
+			{
+				push @gmenu_items, GmenuHeader("site: $hostname", 'web-browser');
+				push @gmenu_items, GmenuHeader(esc($error));
+			}
+			$hostname =~ s/^[^.]+(\.|$)//;
 		}
-		$hostname =~ s/^[^.]+(\.|$)//;
+		1;
+	})
+	{
+		push @gmenu_items, GmenuHeader(esc($@));
 	}
 }
+else
+{
+	push @gmenu_items, GmenuHeader("no URL found");
+}
 
-$input = join "\n", @menu_items;
+
+$input = join "\n", @gmenu_items;
 $menu_selection = '';
-run ['dmenu', '-fn', '24pt'], \$input, \$menu_selection;
+run ['gmenu',], \$input, \$menu_selection;
 
 if(defined $cred_site)
 {
 	chomp $menu_selection;
-	($prop_name) = $menu_selection =~ /^([^:]+)/;
-	$prop_value = '';
-	run ['cred', 'site', $cred_site, 'reveal', $prop_name], \undef, \$prop_value;
-	run ['xdotool', 'type', '--delay', '100ms', $prop_value];
+	my ($input_method, $propname) = $menu_selection =~ /^([^:]+):(.+)/;
+	if($input_method eq 'clip')
+	{
+		run ['cred', 'site', $cred_site, 'clip', $propname], \undef;
+	}
+	elsif($input_method eq 'type')
+	{
+		my $propvalue = '';
+		run ['cred', 'site', $cred_site, 'reveal', $propname], \undef, \$propvalue;
+		run ['xdotool', 'type', '--delay', '100ms', $propvalue . "\t"];
+	}
 }

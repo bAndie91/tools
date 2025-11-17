@@ -7,41 +7,35 @@ import gobject
 import sys
 import pango
 
+from hband_gui_elements import *
 
-class StdinViewer(object):
-	def __init__(self, title, reading_indicator_text, width, height):
-		self.title_text = title
-		
-		self.window = gtk.Window(gtk.WINDOW_TOPLEVEL)
-		self.window.set_title(reading_indicator_text + self.title_text)
-		self.window.connect("destroy", gtk.main_quit)
+
+class TextFlowViewer(gtk.ScrolledWindow):
+	__gsignals__ = {
+		'loading-finished': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
+	}
+	
+	def __init__(self):
+		super(TextFlowViewer, self).__init__()
+		self.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+		self._font_size = 10
 		
 		self.textview = gtk.TextView()
 		self.textview.set_editable(False)
-		self._font_size = 10
-		self.font_size = 10
-		self.buffer = self.textview.get_buffer()
-		
+		self.font_size = self._font_size
 		self.textview.add_events(gtk.gdk.SCROLL_MASK)
 		self.textview.connect("scroll-event", self.on_scroll)
-		
-		scroller = gtk.ScrolledWindow()
-		scroller.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-		scroller.add(self.textview)
-		
-		self.window.add(scroller)
-		self.window.set_default_size(width, height)
-		self.window.show_all()
+		self.add(self.textview)
 		
 		# Add io watch
 		gobject.io_add_watch(sys.stdin.fileno(), gobject.IO_IN, self.on_stdin_readable)
-		gobject.io_add_watch(sys.stdin.fileno(), gobject.IO_HUP, self.on_stdin_eof)
 	
 	def append_text(self, text):
-		end_iter = self.buffer.get_end_iter()
-		self.buffer.insert(end_iter, text)
+		buffer = self.textview.get_buffer()
+		end_iter = buffer.get_end_iter()
+		buffer.insert(end_iter, text)
 		# Auto-scroll
-		mark = self.buffer.create_mark(None, self.buffer.get_end_iter(), False)
+		mark = buffer.create_mark(None, buffer.get_end_iter(), False)
 		self.textview.scroll_to_mark(mark, 0.0, True, 0.0, 1.0)
 	
 	def on_stdin_readable(self, source, condition):
@@ -51,12 +45,13 @@ class StdinViewer(object):
 		except OSError:
 			return False
 		if not chunk:
+			self.on_stdin_eof()
 			return False
 		self.append_text(chunk)
 		return True
 	
-	def on_stdin_eof(self, *args):
-		self.window.set_title(self.title_text)
+	def on_stdin_eof(self):
+		self.emit('loading-finished')
 		return False
 	
 	def on_scroll(self, widget, event):
@@ -78,16 +73,40 @@ class StdinViewer(object):
 		self.textview.modify_font(pango.FontDescription("Monospace %d"%(pt,)))
 
 
+def on_loaded(viewer, window):
+	window.title = args.title
+	if args.loading_icon is not None:
+		iconfile = find_icon_file(args.loading_icon, gtk.icon_size_lookup(gtk.ICON_SIZE_LARGE_TOOLBAR)[0])
+		if iconfile is not None:
+			window.set_icon(gtk.gdk.pixbuf_new_from_file(iconfile))
+
 
 parser = argparse.ArgumentParser(description='GTK2 text/tail viewer')
-parser.add_argument('--title', type=str, default='Text', help='Window title text')
-parser.add_argument('--reading-text', type=str, default='[reading…] ', help='In-progress indicator text')
+parser.add_argument('--title', type=str, default='', help='Window title text')
+parser.add_argument('--loading-prefix', type=str, default='[loading…] ', help='In-progress indicator text')
 parser.add_argument('--geometry', type=str, default='600x400', help='Window geometry WxH')
+parser.add_argument('--icon', type=str, help='Window icon file name or symbolic name')
+parser.add_argument('--loading-icon', type=str, help='Window icon while reading is in progress')
 #parser.add_argument('--file', type=str, help='File to read instead of stdin')
 args = parser.parse_args()
 
-width, height = [int(size) for size in args.geometry.split('x')]
+
 
 gobject.threads_init()
-viewer = StdinViewer(args.title, args.reading_text, width, height)
+
+window = Window(gtk.WINDOW_TOPLEVEL)
+window.title = args.loading_prefix + args.title
+if args.icon is not None:
+	iconfile = find_icon_file(args.icon, gtk.icon_size_lookup(gtk.ICON_SIZE_LARGE_TOOLBAR)[0])
+	if iconfile is not None:
+		window.set_icon(gtk.gdk.pixbuf_new_from_file(iconfile))
+width, height = [int(size) for size in args.geometry.split('x')]
+window.set_default_size(width, height)
+window.connect("destroy", gtk.main_quit)
+viewer = TextFlowViewer()
+viewer.connect('loading-finished', on_loaded, window)
+
+window.add(viewer)
+window.show_all()
+
 gtk.main()

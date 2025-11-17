@@ -1,0 +1,19 @@
+#!/bin/bash
+
+selection=$(xrectsel -p)
+rc=$?
+[ $rc = 0 ] || exit $rc
+
+coords=$(echo "$selection" | sed -ne 1p)
+
+if [ -n "$coords" ]
+then
+	# select the whole window under the cursor if not a region was selected, just a point
+	if expr "$coords" : '^0x0[+-]' >/dev/null
+	then
+		coords=$(echo "$selection" | sed -ne 2p)
+	fi
+fi
+
+# may remove 'xwdtopnm' if your imagemagick version supports "X-Window screen dump" format
+xwd -root | xwdtopnm | convert - ${coords:+-crop "$coords"} png:-

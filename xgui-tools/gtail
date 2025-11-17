@@ -1,399 +1,93 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 
-import os
-import sys
-import signal
-import select
-import fcntl
+import argparse
 import gtk
 import gobject
+import sys
 import pango
-import gettext
-_ = gettext.gettext
-import threading
-gtk.threads_init()
-import argparse
-import time
-import glib
 
 
-
-class TailThread(threading.Thread):
-	def __init__(self, filenames, tail_opts=[]):
-		threading.Thread.__init__(self)
-		self.filenames = filenames
-		self.tail_opts = tail_opts
-		self.tail_pid = None
-		self.fork_event = threading.Event()
-		self.exiting = False
-	def kill(self):
-		if self.tail_pid is None:
-			self.fork_event.wait()
-		if self.tail_pid is not None:
-			self.exiting = True
-			try:
-				os.kill(self.tail_pid, signal.SIGINT)
-			except OSError:
-				pass
-	def pause(self):
-		if self.tail_pid is None:
-			self.fork_event.wait()
-		try:
-			os.kill(self.tail_pid, signal.SIGSTOP)
-		except OSError, e:
-			if e.errno != os.errno.ESRCH:
-				# No such process
-				raise
-	def unpause(self):
-		if self.tail_pid is None:
-			self.fork_event.wait()
-		try:
-			os.kill(self.tail_pid, signal.SIGCONT)
-		except OSError, e:
-			display_error(e)
-			self.tail_pid = None
-	def run(self):
-		gtk.threads_enter()
-		n_lines = spin.get_text()
-		gtk.threads_leave()
+class StdinViewer(object):
+	def __init__(self, title, reading_indicator_text, width, height):
+		self.title_text = title
+		
+		self.window = gtk.Window(gtk.WINDOW_TOPLEVEL)
+		self.window.set_title(reading_indicator_text + self.title_text)
+		self.window.connect("destroy", gtk.main_quit)
+		
+		self.textview = gtk.TextView()
+		self.textview.set_editable(False)
+		self._font_size = 10
+		self.font_size = 10
+		self.buffer = self.textview.get_buffer()
+		
+		self.textview.add_events(gtk.gdk.SCROLL_MASK)
+		self.textview.connect("scroll-event", self.on_scroll)
+		
+		scroller = gtk.ScrolledWindow()
+		scroller.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+		scroller.add(self.textview)
+		
+		self.window.add(scroller)
+		self.window.set_default_size(width, height)
+		self.window.show_all()
+		
+		# Add io watch
+		gobject.io_add_watch(sys.stdin.fileno(), gobject.IO_IN, self.on_stdin_readable)
+		gobject.io_add_watch(sys.stdin.fileno(), gobject.IO_HUP, self.on_stdin_eof)
 	
-		pipe_read, pipe_write = os.pipe()
-		pipe_read = os.fdopen(pipe_read, 'r')
-		pipe_write = os.fdopen(pipe_write, 'w')
-		pid = os.fork()
-		if pid == 0:
-			pipe_read.close()
-			os.dup2(pipe_write.fileno(), sys.stdout.fileno())
-			#os.dup2(pipe_write.fileno(), sys.stderr.fileno())
-			try:
-				#sys.stderr.write(">> tail -f -F -n %s %s\n" % (n_lines, self.filename))
-				os.execvp('tail', ['-f', '-F', '-n', n_lines] + self.tail_opts + self.filenames)
-			except OSError, exc:
-				pass
-			os._exit(127)
-		else:
-			self.tail_pid = pid
-			self.fork_event.set()
-			pipe_write.close()
-			gtk.threads_enter()
-			textbuffer.set_text('')
-			btn_conn.set_active(True)
-			set_tooltip_btn_conn()
-			gtk.threads_leave()
-			
-			info = {}
-			set_blocking(pipe_read, True)
-			while waitpid_but_running(pid, info):
-				inputs = [pipe_read]
-				text_append = ''
-				readable, x, x = select.select(inputs, [], [], 1.0)
-				if pipe_read in readable:
-					try:
-						# tail(1) streams line-by-line
-						line = pipe_read.readline()
-						if line == '': break
-					except IOError, exc:
-						self.kill()
-						break
-					text_append += line
-				if text_append:
-					gtk.threads_enter()
-					append_lines(text_append)
-					limit_lines()
-					gtk.threads_leave()
-			pipe_read.close()
-			if not self.exiting:
-				gtk.threads_enter()
-				display_error("tail exited with code %s%s." %(info['code'], (",\nkilled by signal %s" %(signame(info['signal']),) if info['signal'] else '.')))
-				gtk.threads_leave()
-		return
-
-def waitpid_but_running(expect_pid, info):
-	pid, status = os.waitpid(expect_pid, os.WNOHANG)
-	if pid == expect_pid:
-		info['signal'] = status & 0xFF
-		info['code'] = status >> 8
+	def append_text(self, text):
+		end_iter = self.buffer.get_end_iter()
+		self.buffer.insert(end_iter, text)
+		# Auto-scroll
+		mark = self.buffer.create_mark(None, self.buffer.get_end_iter(), False)
+		self.textview.scroll_to_mark(mark, 0.0, True, 0.0, 1.0)
+	
+	def on_stdin_readable(self, source, condition):
+		import os
+		try:
+			chunk = os.read(source, 4096)
+		except OSError:
+			return False
+		if not chunk:
+			return False
+		self.append_text(chunk)
+		return True
+	
+	def on_stdin_eof(self, *args):
+		self.window.set_title(self.title_text)
 		return False
-	return True
-
-def signame(n):
-	for name, num in signal.__dict__.iteritems():
-		if name.startswith('SIG') and num == n:
-			return name
-
-def set_blocking(fd, on):
-	fl = fcntl.fcntl(fd, fcntl.F_GETFL)
-	if on:
-		mask = fl & ~os.O_NONBLOCK
-	else:
-		mask = fl | os.O_NONBLOCK
-	fcntl.fcntl(fd, fcntl.F_SETFL, mask)
-
-def main_win_show(widget, event):
-	win.disconnect(start_evt)
-	start_tail_thread()
-	win_set_title()
-
-def add_key_binding(widget, keyname, callback):
-	accelgroup = gtk.AccelGroup()
-	key, modifier = gtk.accelerator_parse(keyname)
-	accelgroup.connect_group(key, modifier, gtk.ACCEL_VISIBLE, callback)
-	widget.add_accel_group(accelgroup)
-
-def stop_tail_thread():
-	if Global['Thread'] is not None:
-		gtk.threads_leave()
-		Global['Thread'].kill()
-		Global['Thread'].join()
-		gtk.threads_enter()
-
-def start_tail_thread(wdg=None):
-	stop_tail_thread()
-	tail_opts = []
-	for opt in 'bytes', 'pid', 'quiet', 'retry', 'verbose':
-		val = getattr(Args, opt)
-		if val:
-			tail_opts.append('--'+opt)
-			if val is not True:
-				tail_opts.append(str(val))
-	Global['Thread'] = TailThread(Args.FILE, tail_opts)
-	Global['Thread'].start()
-
-def append_lines(text):
-	textbuffer.insert(textbuffer.get_end_iter(), text)
-
-def limit_lines(corrig=0):
-	clns = textbuffer.get_line_count() + corrig
-	rlns = int(spin.get_text())
-	if clns > rlns:
-		vadjustment.handler_block(vadjustment.get_data('handler-value-changed'))
-		textbuffer.delete(textbuffer.get_start_iter(), textbuffer.get_iter_at_line(clns - rlns))
-		glib.idle_add(lambda: vadjustment.handler_unblock(vadjustment.get_data('handler-value-changed')), priority=glib.PRIORITY_DEFAULT_IDLE)
-
-def lines_changed(wdg):
-	limit_lines(-1)
-
-def lines_changed_restart(wdg):
-	timer = wdg.get_data('timer')
-	if timer is not None:
-		gobject.source_remove(timer)
-	timer = gobject.timeout_add(1000, start_tail_thread)
-	wdg.set_data('timer', timer)
-
-def cb_connect(wdg):
-	if wdg.get_active():
-		Global['Thread'].unpause()
-	else:
-		Global['Thread'].pause()
-	set_tooltip_btn_conn()
-
-def set_tooltip_btn_conn():
-	if btn_conn.get_active():
-		btn_conn.set_stock_id(gtk.STOCK_CONNECT)
-		btn_conn.set_tooltip_text(_("Pause"))
-	else:
-		btn_conn.set_stock_id(gtk.STOCK_DISCONNECT)
-		btn_conn.set_tooltip_text(_("Unpause and watch"))
-
-def scrollbar_adjusted(vadj):
-	pos = vadj.get_value()
-	bottom = vadj.get_upper() - vadj.get_page_size()
-	btn_auto.set_active(pos >= bottom)
-
-def scroll_down():
-	vadjustment.set_value(vadjustment.get_upper() - vadjustment.get_page_size())
-
-def scroll_down_conditional(*x):
-	if btn_auto.get_active():
-		scroll_down()
-
-def cb_click_follow(*ignore):
-	scroll_down_conditional()
-
-def toggle_follow(*ignore):
-	btn_auto.set_active(not btn_auto.get_active())
-	scroll_down_conditional()
-
-def do_connect(*ignore):
-	btn_conn.set_active(True)
-
-def dont_connect(*ignore):
-	btn_conn.set_active(False)
-
-def display_error(e):
-	text = None
-	if isinstance(e, OSError) or isinstance(e, IOError):
-		text = e.strerror + " (#" + str(e.errno) + ")\n" + str(e.filename)
-	elif isinstance(e, Exception):
-		text = e.message
-	elif type(e) == type([]):
-		text = ''.join(e)
-	if text is None:
-		text = str(e)
-	dlg = gtk.MessageDialog(win, gtk.DIALOG_MODAL | gtk.DIALOG_DESTROY_WITH_PARENT, gtk.MESSAGE_ERROR, gtk.BUTTONS_OK, text)
-	dlg.run()
-	dlg.destroy()
-
-def open_new_file(*ignore):
-	dialog = gtk.FileChooserDialog(_("Select a file"), None, gtk.FILE_CHOOSER_ACTION_OPEN, (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL, gtk.STOCK_OPEN, gtk.RESPONSE_OK))
-	dialog.set_action(gtk.FILE_CHOOSER_ACTION_OPEN)
-	if len(Args.FILE) == 1:
-		initdir = os.path.dirname(Args.FILE[0])
-	else:
-		initdir = os.getcwd()
-	dialog.set_current_folder(initdir)
-	response = dialog.run()
-	if response == gtk.RESPONSE_OK:
-		Args.FILE = [dialog.get_filename()]
-		start_tail_thread()
-		win_set_title()
-	dialog.destroy()
-
-def on_button_press(wdg, event, spec):
-	if event.type == gtk.gdk.BUTTON_PRESS:
-		for num, key in (1, 'left'), (2, 'middle'), (3, 'right'):
-			if event.button == num and spec.has_key(key):
-				func = spec[key][0]
-				args = spec[key][1]
-				func(wdg, *args)
-
-def set_font_size_delta(wdg, delta):
-	pt = Global['Font']['Size'] + delta
-	if pt < 1: pt = 1
-	set_font_size(wdg, pt)
-
-def set_font_size(wdg, pt):
-	Global['Font']['Size'] = pt
-	fontdesc = pango.FontDescription('monospace %d' % Global['Font']['Size'])
-	textview.modify_font(fontdesc)
-
-def win_set_title():
-	win.set_title('; '.join(Args.FILE))
-
-def bye(*ignore):
-	stop_tail_thread()
-	gtk.main_quit()
-
-def cb_lines_inc(*ignore):
-	adjus.set_value(adjus.get_value()+1)
-def cb_lines_dec(*ignore):
-	adjus.set_value(adjus.get_value()-1)
-def cb_font_enlarge(*ignore):
-	set_font_size_delta(None, +1)
-def cb_font_minify(*ignore):
-	set_font_size_delta(None, -1)
-def cb_font_default(*ignore):
-	set_font_size(None, 12)
+	
+	def on_scroll(self, widget, event):
+		if event.state & gtk.gdk.CONTROL_MASK:
+			if event.direction == gtk.gdk.SCROLL_UP:
+				self.font_size += 1
+			elif event.direction == gtk.gdk.SCROLL_DOWN:
+				self.font_size = max(1, self.font_size-1)
+			return True
+		return False
+	
+	@property
+	def font_size(self):
+		return self._font_size
+	
+	@font_size.setter
+	def font_size(self, pt):
+		self._font_size = pt
+		self.textview.modify_font(pango.FontDescription("Monospace %d"%(pt,)))
 
 
 
-Global = {'Thread': None, 'Font': {'Size': 12,},}
+parser = argparse.ArgumentParser(description='GTK2 text/tail viewer')
+parser.add_argument('--title', type=str, default='Text', help='Window title text')
+parser.add_argument('--reading-text', type=str, default='[reading…] ', help='In-progress indicator text')
+parser.add_argument('--geometry', type=str, default='600x400', help='Window geometry WxH')
+#parser.add_argument('--file', type=str, help='File to read instead of stdin')
+args = parser.parse_args()
 
-argparser = argparse.ArgumentParser(epilog=_("See tail(1), `tail --help´"))
-argparser.add_argument('-c', '--bytes', metavar='BYTES', type=int)
-argparser.add_argument('-n', '--lines', metavar='LINES', type=int, default=10)
-argparser.add_argument('--pid', metavar='PID', type=int)
-argparser.add_argument('-q', '--quiet', '--silent', action='store_true')
-argparser.add_argument('--retry', action='store_true')
-argparser.add_argument('-v', '--verbose', action='store_true')
-argparser.add_argument('FILE', nargs='*', help=_("File(s) to watch"))
-Args = argparser.parse_args()
-if len(Args.FILE) < 1:
-	Args.FILE.append('/dev/stdin')
+width, height = [int(size) for size in args.geometry.split('x')]
 
-
-
-win = gtk.Window()
-win.set_default_size(720, 350)
-win.connect('delete-event', bye)
-start_evt = win.connect('map-event', main_win_show)
-add_key_binding(win, 'Escape', bye)
-add_key_binding(win, '<Control>C', bye)
-add_key_binding(win, '<Control>O', open_new_file)
-add_key_binding(win, 'F', toggle_follow)
-add_key_binding(win, '<Shift>F', toggle_follow)
-add_key_binding(win, 'plus', cb_font_enlarge)
-add_key_binding(win, 'minus', cb_font_minify)
-add_key_binding(win, 'equal', cb_font_default)
-add_key_binding(win, 'KP_Add', cb_font_enlarge)
-add_key_binding(win, 'KP_Subtract', cb_font_minify)
-add_key_binding(win, 'KP_Equal', cb_font_default)
-add_key_binding(win, '<Control>S', dont_connect)
-add_key_binding(win, '<Control>Q', do_connect)
-
-frame = gtk.VBox()
-toolbar = toolbar = gtk.Toolbar()
-toolbar.set_style(gtk.TOOLBAR_ICONS)
-scroll = gtk.ScrolledWindow()
-scroll.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-vadjustment = scroll.get_vadjustment()
-vadj_handler = vadjustment.connect('value-changed', scrollbar_adjusted)
-vadjustment.set_data('handler-value-changed', vadj_handler)
-
-textbuffer = gtk.TextBuffer()
-textview = gtk.TextView(textbuffer)
-textview.set_editable(False)
-textview.connect('size-allocate', scroll_down_conditional)
-set_font_size_delta(None, 0)
-
-win.add(frame)
-frame.pack_start(toolbar, False, True, 0)
-frame.pack_start(scroll, True, True, 0)
-scroll.add(textview)
-
-
-btn_close = gtk.ToolButton(gtk.STOCK_CLOSE)
-btn_close.set_tooltip_text(_("Close"))
-btn_close.connect('clicked', bye)
-toolbar.insert(btn_close, -1)
-btn_open = gtk.ToolButton(gtk.STOCK_OPEN)
-btn_open.set_tooltip_text(_("Open..."))
-btn_open.connect('clicked', open_new_file)
-toolbar.insert(btn_open, -1)
-btn_conn = gtk.ToggleToolButton()
-set_tooltip_btn_conn()
-btn_conn.connect('toggled', cb_connect)
-toolbar.insert(btn_conn, -1)
-btn_auto = gtk.ToggleToolButton(gtk.STOCK_GOTO_BOTTOM)
-btn_auto.set_active(True)
-btn_auto.set_tooltip_text(_("Auto Scroll"))
-btn_auto.connect('clicked', cb_click_follow)
-toolbar.insert(btn_auto, -1)
-toolbar.insert(gtk.SeparatorToolItem(), -1)
-btn_size_plus = gtk.ToolButton(gtk.STOCK_ZOOM_IN)
-btn_size_plus.set_tooltip_text(_("Bigger font"))
-btn_size_plus.child.connect('button-press-event', on_button_press, {'left': (set_font_size_delta, [+1])})
-toolbar.insert(btn_size_plus, -1)
-btn_size_dflt = gtk.ToolButton(gtk.STOCK_ZOOM_100)
-btn_size_dflt.set_tooltip_text(_("Default size"))
-btn_size_dflt.child.connect('button-press-event', on_button_press, {'left': (set_font_size, [12])})
-toolbar.insert(btn_size_dflt, -1)
-btn_size_mins = gtk.ToolButton(gtk.STOCK_ZOOM_OUT)
-btn_size_mins.set_tooltip_text(_("Smaller font"))
-btn_size_mins.child.connect('button-press-event', on_button_press, {'left': (set_font_size_delta, [-1])})
-toolbar.insert(btn_size_mins, -1)
-
-ti_sep = gtk.SeparatorToolItem()
-ti_sep.set_expand(True)
-ti_sep.set_draw(False)
-toolbar.insert(ti_sep, -1)
-
-ti_label1 = gtk.ToolItem()
-label1 = gtk.Label(_("Lines: "))
-ti_label1.add(label1)
-toolbar.insert(ti_label1, -1)
-
-ti_spin = gtk.ToolItem()
-adjus = gtk.Adjustment(value=Args.lines, lower=1, upper=9999, step_incr=1, page_incr=10)
-spin = gtk.SpinButton(adjus)
-spin.set_numeric(True)
-spin.set_alignment(1)
-spin.connect('value-changed', lines_changed)
-ti_spin.add(spin)
-toolbar.insert(ti_spin, -1)
-
-
-win.show_all()
+gobject.threads_init()
+viewer = StdinViewer(args.title, args.reading_text, width, height)
 gtk.main()
-

@@ -7,7 +7,7 @@ import gobject
 import sys
 import pango
 
-from hband_gui_elements import *
+from hband_tools.gui import *
 
 
 class TextFlowViewer(Scrollable):
@@ -89,7 +89,8 @@ def set_icon(window, icon):
 parser = argparse.ArgumentParser(description='GTK-2 text/tail viewer')
 parser.add_argument('--title', type=str, default='', help='Window title text')
 parser.add_argument('--loading-prefix', type=str, default='[loading…] ', help='In-progress indicator text in the window title')
-parser.add_argument('--geometry', type=str, default='600x400', help='Window geometry WxH')
+parser.add_argument('--app-instance', type=str, help='User-defined name of this specific gtail instance')
+parser.add_argument('--geometry', type=str, help='Window geometry WxH')
 parser.add_argument('--icon', type=str, help='Window icon file name or symbolic name')
 parser.add_argument('--loading-icon', type=str, help='Window icon while reading is in progress')
 parser.add_argument('--file', type=str, help='File to read instead of stdin')
@@ -98,13 +99,16 @@ args = parser.parse_args()
 
 
 APPNAME = 'gtail'
+if args.app_instance is not None:
+	APPNAME += '.' + args.app_instance
 gobject.threads_init()
 
 window = Window()
 window.title = args.loading_prefix + args.title
 set_icon(window, args.loading_icon or args.icon)
-width, height = [int(size) for size in args.geometry.split('x')]
-window.set_default_size(width, height)
+if args.geometry is not None:
+	width, height = [int(size) for size in args.geometry.split('x')]
+	window.set_default_size(width, height)
 window.connect('destroy', gtk.main_quit)
 if args.file is not None:
 	inputfile = open(args.file)

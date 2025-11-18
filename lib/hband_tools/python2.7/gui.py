@@ -68,8 +68,10 @@ class Window(gtk.Window):
 	def __init__(self, *args):
 		super(Window, self).__init__(*args)
 		property_persistor = PropertyPersistor(self, 'window.main', [
-			( 'configure-event', lambda wdg, evt: dict(zip(['width', 'height', 'pos.x', 'pos.y'], self.get_size() + self.set_position() )), )
+			( 'geometry', 'configure-event', lambda wdg, evt: '%d %d'%(evt.width, evt.height), lambda wdg, value: wdg.set_default_size(*map(int, value.split(' '))) ),
+			( 'position', 'configure-event', lambda wdg, evt: '%d %d'%(evt.x, evt.y),          lambda wdg, value: wdg.move(*map(int, value.split(' '))) ),
 		])
+		property_persistor.apply_saved_properties()
 	
 	@property
 	def title(self):
@@ -87,29 +89,54 @@ class Scrollable(gtk.ScrolledWindow):
 			self.add(child)
 
 class PropertyPersistor(object):
-	def __init__(self, obj, obj_name, event_descriptors):
+	def __init__(self, obj, obj_name, property_descriptors):
 		assert hasattr(__main__, 'APPNAME') and isinstance(__main__.APPNAME, basestring) and __main__.APPNAME, "Set APPNAME global variable."
 		self.obj = obj
 		self.obj_name = obj_name
+		self._filepath = os.path.join(xdg.BaseDirectory.save_config_path(__main__.APPNAME), 'auto-properties.ini')
+		self._inifile = None
+		self.triggers = {}
+		self.applicators = {}
 		
-		for signal_name, getter in event_descriptors:
-			obj.connect(signal_name, self.on_event, getter)
+		for prop_name, trigger_signal, getter, applicator in property_descriptors:
+			if trigger_signal not in self.triggers:
+				self.triggers[trigger_signal] = []
+				obj.connect(trigger_signal, self.on_trigger, trigger_signal)
+			self.triggers[trigger_signal].append((prop_name, getter))
+			self.applicators[prop_name] = applicator
 	
-	def on_event(self, widget, event, getter):
-		properties = getter(widget, event)
-		self.persist(properties)
+	def on_trigger(self, widget, event, trigger_signal):
+		changed_props = {}
+		for prop_name, getter in self.triggers[trigger_signal]:
+			value = getter(widget, event)
+			changed_props[prop_name] = value
+		self.persist(changed_props)
+		# TODO add timer to better schedule writing to disk
+	
+	def load_inifile(self):
+		self._inifile = IniFile(self._filepath)
 	
 	def persist(self, properties):
-		filepath = os.path.join(xdg.BaseDirectory.save_config_path(__main__.APPNAME), 'auto-properties.ini')
-		ini = IniFile(filepath)
-		ini[self.obj_name].update(properties)
+		self.load_inifile()
+		self._inifile[self.obj_name].update(properties)
 		
 		try:
-			dirpath = os.path.dirname(filepath)
+			dirpath = os.path.dirname(self._filepath)
 			if not os.path.exists(dirpath):
 				os.makedirs(dirpath)
-			with open(filepath, 'w') as f:
-				f.write(str(ini))
+			with open(self._filepath, 'w') as f:
+				f.write(str(self._inifile))
 		except:
 			traceback.print_exc()
+	
+	@property
+	def props(self):
+		if self._inifile is None: self.load_inifile()
+		return self._inifile[self.obj_name]
+		# TODO combine ini files with less specific appname to fall back to the app's base instance properties if this app instance does not have a certain prop
+	
+	def apply_saved_properties(self):
+		for prop_name, value in self.props.iteritems():
+			if prop_name in self.applicators:
+				self.applicators[prop_name](self.obj, value)
 

@@ -5,6 +5,7 @@ import glob
 import glib
 import gtk
 import xdg.BaseDirectory
+import fcntl
 import traceback
 from .files import *
 import __main__
@@ -117,17 +118,19 @@ class PropertyPersistor(object):
 		self._inifile = IniFile(self._filepath)
 	
 	def persist(self, properties):
-		self.load_inifile()
-		self._inifile[self.obj_name].update(properties)
+		dirpath = os.path.dirname(self._filepath)
+		if not os.path.exists(dirpath):
+			os.makedirs(dirpath)
 		
-		try:
-			dirpath = os.path.dirname(self._filepath)
-			if not os.path.exists(dirpath):
-				os.makedirs(dirpath)
-			with open(self._filepath, 'w') as f:
-				f.write(str(self._inifile))
-		except:
-			traceback.print_exc()
+		with open(self._filepath, 'r+') as fh:
+			fcntl.flock(fh, fcntl.LOCK_EX)
+			self._inifile = IniFile(fh)
+			self._inifile[self.obj_name].update(properties)
+			
+			try:
+				fh.write(str(self._inifile))
+			except:
+				traceback.print_exc()
 	
 	@property
 	def props(self):

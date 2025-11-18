@@ -5,11 +5,13 @@ import json
 
 
 class IniFile(dict):
-	def __init__(self, filepath=None):
+	def __init__(self, inifile=None):
 		self.cp = ConfigParser.ConfigParser()
-		if filepath is not None:
+		if isinstance(inifile, file):
+			self.cp.readfp(inifile)
+		elif inifile is not None:
 			try:
-				self.cp.read(filepath)
+				self.cp.read(inifile)
 			except:
 				# don't fail if file not found, just reflect emptiness.
 				pass

@@ -68,8 +68,8 @@ class Window(gtk.Window):
 	def __init__(self, *args):
 		super(Window, self).__init__(*args)
 		property_persistor = PropertyPersistor(self, 'window.main', [
-			( 'geometry', 'configure-event', lambda wdg, evt: '%d %d'%(evt.width, evt.height), lambda wdg, value: wdg.set_default_size(*map(int, value.split(' '))) ),
-			( 'position', 'configure-event', lambda wdg, evt: '%d %d'%wdg.get_position()[:],   lambda wdg, value: wdg.move(*map(int, value.split(' '))) ),
+			( 'geometry', 'configure-event', lambda wdg, evt: [evt.width, evt.height], lambda wdg, value: wdg.set_default_size(*value) ),
+			( 'position', 'configure-event', lambda wdg, evt: wdg.get_position()[:],   lambda wdg, value: wdg.move(*value) ),
 		])
 		property_persistor.apply_saved_properties()
 	
@@ -138,5 +138,7 @@ class PropertyPersistor(object):
 	def apply_saved_properties(self):
 		for prop_name, value in self.props.iteritems():
 			if prop_name in self.applicators:
-				self.applicators[prop_name](self.obj, value)
-
+				try:
+					self.applicators[prop_name](self.obj, value)
+				except:
+					traceback.print_exc()

@@ -1,6 +1,7 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 
+import os
 import argparse
 import gtk
 import gobject
@@ -27,7 +28,7 @@ class TextFlowViewer(Scrollable):
 		self.watch_file(fileno)
 	
 	def watch_file(self, fileno):
-		gobject.io_add_watch(fileno, gobject.IO_IN, self.on_file_readable)
+		gobject.io_add_watch(fileno, gobject.IO_IN | gobject.IO_HUP | gobject.IO_ERR, self.on_file_readable)
 		self.emit('loading-started')
 	
 	def append_text(self, text):
@@ -39,15 +40,11 @@ class TextFlowViewer(Scrollable):
 		self.textview.scroll_to_mark(mark, 0.0, True, 0.0, 1.0)
 	
 	def on_file_readable(self, source, condition):
-		import os
-		try:
-			chunk = os.read(source, 4096)
-		except OSError:
-			return False
-		if not chunk:
+		chunk = os.read(source, 4096)
+		self.append_text(chunk)
+		if chunk == '':
 			self.on_eof()
 			return False
-		self.append_text(chunk)
 		return True
 	
 	def on_eof(self):

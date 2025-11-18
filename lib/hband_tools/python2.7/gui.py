@@ -114,23 +114,24 @@ class PropertyPersistor(object):
 		self.persist(changed_props)
 		# TODO add timer to better schedule writing to disk
 	
-	def load_inifile(self):
-		self._inifile = IniFile(self._filepath)
-	
 	def persist(self, properties):
 		dirpath = os.path.dirname(self._filepath)
 		if not os.path.exists(dirpath):
 			os.makedirs(dirpath)
 		
-		with open(self._filepath, 'r+') as fh:
+		with openfile(self._filepath, os.O_RDWR | os.O_CREAT, 'r+') as fh:
 			fcntl.flock(fh, fcntl.LOCK_EX)
 			self._inifile = IniFile(fh)
 			self._inifile[self.obj_name].update(properties)
 			
 			try:
+				fh.seek(0)
 				fh.write(str(self._inifile))
 			except:
 				traceback.print_exc()
+	
+	def load_inifile(self):
+		self._inifile = IniFile(self._filepath)
 	
 	@property
 	def props(self):

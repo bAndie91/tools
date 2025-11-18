@@ -1,4 +1,5 @@
 
+import os
 import ConfigParser
 from StringIO import StringIO
 import json
@@ -106,3 +107,23 @@ class IniFileSection(dict):
 		tmp = IniFile()
 		tmp[self.section] = self
 		return str(tmp)
+
+class openfile(object):
+	def __init__(self, filepath, openflags=os.O_RDWR, fdmode='r', createmode=None):
+		self.filepath = filepath
+		self.openflags = openflags
+		self.fdmode = fdmode
+		self.createmode = createmode
+		self.fh = None
+	def __enter__(self):
+		args = [self.filepath, self.openflags]
+		if self.createmode is not None: args.append(self.createmode)
+		fd = os.open(*args)
+		self.fh = os.fdopen(fd, self.fdmode)
+		return self.fh
+	def __exit__(self, exc_type, exc, tb):
+		try:
+			if self.fh is not None:
+				self.fh.close()
+		finally:
+			self.fh = None

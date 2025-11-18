@@ -190,12 +190,22 @@ print_traceback()
 
 trap 'print_traceback >&2' ERR
 
+
+exit_with_msg()
+{
+	if [ ! $opt_quiet ]
+	then
+		warnx "$2"
+	fi
+	exit $1
+}
+
 set_site_func()
 {
 	local param=$1
 	if [ -z "$1" ]
 	then
-		errx 1 "Enter site name or directory!"
+		exit_with_msg 1 "Enter site name or directory!"
 	elif [ -d "$param" ]
 	then
 		site=`basename "$param"`
@@ -290,7 +300,7 @@ prop()
 			otp_codes=($(echo "$td" | td-select -H CODE))
 			if [ ${#otp_codes[@]} -ne 1 ]
 			then
-				errx 3 "Found ${#otp_codes[@]} TOTP codes."
+				exit_with_msg 3 "Found ${#otp_codes[@]} TOTP codes."
 			fi
 			echo "${otp_codes[0]}"
 			return
@@ -423,6 +433,18 @@ dump()
 basedir=~/cred
 site=''
 basesite=''
+opt_quiet=''
+
+while [ $# -gt 0 ]
+do
+	case "$1" in
+	(--quiet)	opt_quiet=1;;
+	(--)		shift; break;;
+	(-*)		errx 1 "unknown option: $1";;
+	(*)			break;;
+	esac
+	shift
+done
 
 
 if [ "${1:-}" = site ]
@@ -441,7 +463,7 @@ case "$subcmd" in
 	set_site
 	if [ ! -e "$basedir/$site" ]
 	then
-		errx 2 "no such site"
+		exit_with_msg 2 "no such site"
 	fi
 	
 	dump "$site" "$@"
@@ -479,14 +501,14 @@ case "$subcmd" in
 		sleep 1
 		xdotool type --delay 100ms "$strings"
 	else
-		errx 1 "Enter property names in order to fill the form on the window brought to focus by Alt+Tab."
+		exit_with_msg 1 "Enter property names in order to fill the form on the window brought to focus by Alt+Tab."
 	fi
 	;;
 (list-props)
 	set_site
 	if [ ! -e "$basedir/$site" ]
 	then
-		errx 2 "no such site"
+		exit_with_msg 2 "no such site"
 	fi
 	find -L "$basedir/$site" -type f -printf "%P\n"
 	;;
@@ -542,7 +564,7 @@ _autocomplete_cred() {
 		(prop)
 			case $cword_idx in
 			(3)
-				compreply=`cred list-props "$site"`
+				compreply=`cred --quiet list-props "$site"`
 				;;
 			(4)
 				compreply=$prop_subcmds
@@ -551,7 +573,7 @@ _autocomplete_cred() {
 			;;
 		# NOTE: align with $prop_subcmds!
 		(fill-form|set|edit|read|del|show|reveal|clip)
-			compreply=`cred list-props "$site"`
+			compreply=`cred --quiet list-props "$site"`
 			if [ "$subcmd" = set ]
 			then
 				common_properties="EMAIL USERNAME LOGIN PASSWORD PIN KEY TOKEN TOTP"
@@ -575,9 +597,7 @@ complete -F _autocomplete_cred cred
 EOF
 	;;
 (*)
-	warnx 'Use tab-completion!'
-	warnx 'Example: eval "$(cred compscript)"'
-	false
+	exit_with_msg 1 'Use tab-completion! Example: eval "$(cred compscript)"'
 	;;
 esac
 

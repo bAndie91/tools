@@ -10,6 +10,8 @@ import gtk
 import glib
 import glob
 
+from hband_gui_elements import *
+
 
 # it'd be nice if i could remove the left-side padding where the
 # ImageMenuItem icons normally are, but those are unneccessary because
@@ -30,49 +32,6 @@ def pathsplit(path):
 	for i in range(0, len(pairs), 2):
 		elements.append(pairs[i] + pairs[i+1])
 	return ['/'.join(elements[0:-1]), elements[-1]]
-
-
-def icondir2size(path):
-	match = re.findall(r'/([0-9]+)x[0-9]+', path)
-	if not match: return -1
-	return match[0]
-
-def find_icon_file(iconname, preferred_size_px):
-	dirs = []
-	for categ in 'hicolor', 'locolor', 'gnome':
-		directory = os.path.join('/usr/share/icons/', categ)
-		small = []
-		for icondir in sorted(glob.glob(directory+'/*x*/*'), key = icondir2size):
-			if icondir2size(icondir) < preferred_size_px:
-				small.insert(0, icondir)
-			else:
-				dirs.append(icondir)
-		dirs.append(directory+'/scalable/*')
-		dirs.extend(small)
-	dirs.append('/usr/share/pixmaps')
-	
-	for icondir in dirs:
-		iconpath_test = None
-		for ext in 'png', 'xpm', 'svg':
-			if iconname.find(os.path.extsep):
-				iconpath_test = os.path.join(icondir, iconname)
-			else:
-				iconpath_test = os.path.join(icondir, iconname) + os.path.extsep + ext
-			if os.path.exists(iconpath_test):
-				return iconpath_test
-			if iconname.find(os.path.extsep):
-				break
-
-def get_pixbuf_from_file_at_size(filepath, width_px, height_px):
-	pixbuf = gtk.gdk.pixbuf_new_from_file(filepath)
-	w = pixbuf .get_width()
-	h = pixbuf .get_height()
-	if width_px != w or height_px != h:
-		scale = min(float(width_px)/w, float(height_px)/h)
-		resized_w = int(w * scale)
-		resized_h = int(h * scale)
-		pixbuf = pixbuf.scale_simple(resized_w, resized_h, gtk.gdk.INTERP_HYPER)
-	return pixbuf
 
 
 class Menu(gtk.Menu):

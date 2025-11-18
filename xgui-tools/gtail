@@ -100,7 +100,7 @@ args = parser.parse_args()
 APPNAME = 'gtail'
 gobject.threads_init()
 
-window = Window(gtk.WINDOW_TOPLEVEL)
+window = Window()
 window.title = args.loading_prefix + args.title
 set_icon(window, args.loading_icon or args.icon)
 width, height = [int(size) for size in args.geometry.split('x')]

@@ -108,7 +108,7 @@ if args.app_instance is not None:
 	APPNAME += '.' + args.app_instance
 gobject.threads_init()
 
-window = Window()
+window = Window({'name': 'window.main', 'gtk-args': []})
 window.title = args.loading_prefix + args.title
 set_icon(window, args.loading_icon or args.icon)
 if args.geometry is not None:

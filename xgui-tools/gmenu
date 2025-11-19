@@ -10,7 +10,7 @@ import gtk
 import glib
 import glob
 
-from hband_gui_elements import *
+from hband_tools.gui import *
 
 
 # it'd be nice if i could remove the left-side padding where the

@@ -106,10 +106,12 @@ class PropertyPersistor(object):
 			self.triggers[trigger_signal].append((prop_name, getter))
 			self.applicators[prop_name] = applicator
 	
-	def on_trigger(self, widget, event, trigger_signal):
+	def on_trigger(self, widget, *cb_args):
+		signal_args = cb_args[0:-1]
+		trigger_signal = cb_args[-1]
 		changed_props = {}
 		for prop_name, getter in self.triggers[trigger_signal]:
-			value = getter(widget, event)
+			value = getter(widget, *signal_args)
 			changed_props[prop_name] = value
 		self.persist(changed_props)
 		# TODO add timer to better schedule writing to disk
@@ -122,13 +124,16 @@ class PropertyPersistor(object):
 		with openfile(self._filepath, os.O_RDWR | os.O_CREAT, 'r+') as fh:
 			fcntl.flock(fh, fcntl.LOCK_EX)
 			self._inifile = IniFile(fh)
+			before = str(self._inifile)
 			self._inifile[self.obj_name].update(properties)
+			after = str(self._inifile)
 			
-			try:
-				fh.seek(0)
-				fh.write(str(self._inifile))
-			except:
-				traceback.print_exc()
+			if before != after:
+				try:
+					fh.seek(0)
+					fh.write(str(self._inifile))
+				except:
+					traceback.print_exc()
 	
 	def load_inifile(self):
 		self._inifile = IniFile(self._filepath)

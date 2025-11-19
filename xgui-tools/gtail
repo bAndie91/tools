@@ -13,18 +13,25 @@ from hband_tools.gui import *
 
 class TextFlowViewer(Scrollable):
 	__gsignals__ = {
-		'loading-started': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
-		'loading-finished': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
+		'loading-started': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE, ()),
+		'loading-finished': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE, ()),
+		'font-size-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE, (gobject.TYPE_INT,)),
 	}
 	
 	def __init__(self, fileno):
 		self.textview = gtk.TextView()
 		self.textview.set_editable(False)
-		self._font_size = 10
-		self.font_size = self._font_size
+		super(TextFlowViewer, self).__init__(self.textview)
 		self.textview.add_events(gtk.gdk.SCROLL_MASK)
 		self.textview.connect("scroll-event", self.on_scroll)
-		super(TextFlowViewer, self).__init__(self.textview)
+		
+		self._font_size = 10
+		self.font_size = self._font_size
+		self.property_persistor = PropertyPersistor(self, "text-flow-viewer", [
+			( 'font-size', 'font-size-changed', lambda w, pt: pt, lambda w, pt: setattr(w, 'font_size', pt), )
+		])
+		self.property_persistor.apply_saved_properties()
+		
 		self.watch_file(fileno)
 	
 	def watch_file(self, fileno):
@@ -68,6 +75,7 @@ class TextFlowViewer(Scrollable):
 	def font_size(self, pt):
 		self._font_size = pt
 		self.textview.modify_font(pango.FontDescription("Monospace %d"%(pt,)))
+		self.emit('font-size-changed', pt)
 
 
 def on_loaded(viewer, window):

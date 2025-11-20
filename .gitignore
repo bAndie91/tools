@@ -9,3 +9,4 @@
 uninstall.sh
 gen-doc/
 .stamp.*
+tools-with-pod

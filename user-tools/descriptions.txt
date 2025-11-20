@@ -7,6 +7,7 @@ PMdirindex - Poor man's hex diff viewer
 PMnslist - Poor man's namespace list
 PMpwgen - Poor man's password generator
 PMrecdiff - Poor man's directory tree difference viewer, comparing file names and sizes recursively
+PMwrite - poor man's write - BSD write program alternative
 Tail - output as many lines from the end of files as many lines on the terminal currently
 a8e - Abbreviate words in the input stream
 adr2html - Convert Opera Hostlist 2.0 bookmarks to HTML
@@ -22,9 +23,9 @@ cdexec - Run a given command in the given directory
 chattr-cow - try hard to enable Copy-on-Write attribute on files
 chromium_cookie_decrypt.py - Decrypt Chromium web browser stored cookies and output cleartext
 chshebang - Change a script's default interpreter
-cled - Command Line-Editor - Edit text file lines by commands directly from shell
 convert_chromium_cookies_to_netscape.sh - Convert Chromium and derivative web browser's cookies to Netscape format (used by wget and curl)
 corner_time - Place a digital clock in the upper right hand corner of the terminal
+cpfx2indent - Filter text of lines by replacing common prefixes to indentation
 cpyfattr - Copy file attributes (xattr)
 cred - Credentials and secrets management in command line
 cronrun - convenience features to run commands in task scheduler environment
@@ -41,12 +42,14 @@ diu - Display Inode usage, similar to du(1) for space usage
 dlnew - Download web resource if local copy is older
 eat - Read and echo back input (like cat(1)) until interrupted (ie. ignore end-of-file)
 errorlevel - Exit with the given status code
+evhand - Process new events in a textfile, events described per lines
 fc-search-codepoint - Print the names of available X11 fonts containing the given code point(s)
 fcomplete - Complete a smaller file with the data from a bigger one
 fdupes-hardlink - Make hardlinks from identical files as reported by fdupes(1)
 ff - Find files horizontally, ie. a whole directory level at a time, across subtrees
-ffilt - Filter a file via a command's STDIO and write back to it
+ffilt - Filter a file via a command's STDIO and write back to the file
 fgat - Execute command in foreground at a given time
+filesets - Set operations on text files, lines being set elements
 filterexec - Echo those arguments with which the given command returns zero.
 find-by-date - Find files with GNU find(1) but with easier to comprehend time interval formats
 findnewestfile - Search for the newest file in a given path recursively and always show the most recent while scanning
@@ -97,9 +100,8 @@ netrc - manage ~/.netrc file
 noacute - Strip diacritics (acute, umlaut, ...) from letters on the input stream
 nocomment - remove comment lines from input stream
 notashell - A non-interactive shell lacking of any shell syntax
-oded - On-disk editor - edit text files by commands directly from shell
 organizebydate - Rename files based on their date-time
-palemoon-current-url - Display the webpage's URL which is currently open in Palemoon web browser
+palemoon-current-urls - Display Palemoon web browser's currently opened URLs per window and per tab
 pararun - run commands parallelly
 parsel - Select parts of a HTML document based on CSS selectors
 partial - Show an earlier started long-running command's partial output
@@ -121,7 +123,7 @@ redirexec - Execute a command with some file descriptors redirected.
 regargwrap - Replace non-regular file arguments to regular ones
 rename.td - rename multiple files by a Perl expression
 renamemanual - Interactive file rename tool
-repeat - Run a give command repeatedly
+repeat - Run the given command repeatedly
 replcmd - Wrap any command in a REPL interface
 reportcmdstatus - Textually show how the given command finished (exit status/signal)
 rsacrypt - Encrypt/decrypt files with RSA
@@ -165,7 +167,7 @@ url_encode_bf - Make all chars given either in parameters or in stdin to percent
 verscmp - Compare version numbers
 vidir-sanitize - Helper script to change tricky filenames in a directory
 vifiles - Edit multiple files as one
-visymlinks - Bulk edit target of symlinks
+visymlinks - Bulk edit symlinks names and targets
 waitpid - Wait for a process to end (even if not child of current shell)
 whisper-retention-info - Show data retention policy in Whisper timeseries database file
 wikibot - Update Wikimedia (Wikipedia) article

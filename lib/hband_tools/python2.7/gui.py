@@ -132,7 +132,7 @@ class PropertyPersistor(object):
 				try:
 					fh.seek(0)
 					fh.write(str(self._inifile))
-					th.truncate()
+					fh.truncate()
 				except:
 					traceback.print_exc()
 	

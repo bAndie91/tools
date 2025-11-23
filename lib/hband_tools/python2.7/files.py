@@ -7,7 +7,7 @@ import json
 
 class IniFile(dict):
 	def __init__(self, inifile=None):
-		self.cp = ConfigParser.ConfigParser()
+		self.cp = ConfigParser.RawConfigParser(allow_no_value=True)
 		if isinstance(inifile, file):
 			self.cp.readfp(inifile)
 		elif inifile is not None:
@@ -22,6 +22,13 @@ class IniFile(dict):
 	def iteritems(self):
 		for section in self.cp.sections():
 			yield (section, IniFileSection(self, section))
+	def items(self):
+		return [item for item in self.iteritems()]
+	def keys(self):
+		return self.cp.sections()
+	def values(self):
+		return [value for key, value in self.iteritems()]
+	
 	def __getitem__(self, section_name):
 		return IniFileSection(self, str(section_name))
 	def __setitem__(self, section_name, section_dict):
@@ -56,19 +63,26 @@ class IniFileSection(dict):
 		if self.inifile.cp.has_section(self.section):
 			for key in self.inifile.cp.options(self.section):
 				yield (key, self[key])
+	def items(self):
+		return [item for item in self.iteritems()]
+	def keys(self):
+		return self.inifile.cp.options(self.section)
+	def values(self):
+		return [value for key, value in self.iteritems()]
+	
 	def __getitem__(self, key, type=None):
 		key = str(key)
 		if self.inifile.cp.has_option(self.section, key):
 			if type == self.BOOL:
-				return self.inifile.cp.getboolean(self.section, key, raw=True)
+				return self.inifile.cp.getboolean(self.section, key)
 			elif type == self.INT:
-				return self.inifile.cp.getint(self.section, key, raw=True)
+				return self.inifile.cp.getint(self.section, key)
 			elif type == self.FLOAT:
-				return self.inifile.cp.getfloat(self.section, key, raw=True)
+				return self.inifile.cp.getfloat(self.section, key)
 			elif type == self.STRING:
-				return self.inifile.cp.get(self.section, key, raw=True)
+				return self.inifile.cp.get(self.section, key)
 			else:
-				return json.loads(self.inifile.cp.get(self.section, key, raw=True))
+				return json.loads(self.inifile.cp.get(self.section, key))
 		else:
 			return None
 	def get(self, key, default=None, type=None):
@@ -84,11 +98,6 @@ class IniFileSection(dict):
 		return self.__getitem__(key, self.INT)
 	def getfoat(self, key):
 		return self.__getitem__(key, self.FLOAT)
-	
-	def keys(self):
-		return self.inifile.cp.options(self.section)
-	def values(self):
-		return [value for key, value in self.iteritems()]
 	
 	def __setitem__(self, key, value, type=None):
 		if not self.inifile.cp.has_section(self.section):

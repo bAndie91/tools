@@ -11,6 +11,10 @@ from .files import *
 import __main__
 
 
+MOUSE_BUTTON_LEFT = 1
+MOUSE_BUTTON_MIDDLE = 2
+MOUSE_BUTTON_RIGHT = 3
+
 def icondir2size(path):
 	match = re.findall(r'/([0-9]+)x[0-9]+', path)
 	if not match: return -1

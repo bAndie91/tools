@@ -18,7 +18,7 @@ def icondir2size(path):
 
 def find_icon_file(iconname, preferred_size_px):
 	dirs = []
-	for categ in 'hicolor', 'locolor', 'gnome':
+	for categ in gtk.settings_get_default().props.gtk_icon_theme_name, 'hicolor', 'locolor', 'gnome':
 		directory = os.path.join('/usr/share/icons', categ)
 		small = []
 		for icondir in sorted(glob.glob(directory+'/*x*/*/'), key = icondir2size):
@@ -65,14 +65,60 @@ def configured_object(obj, configsteps):
 	return obj
 
 
+class Image(gtk.Image):
+	def __init__(self, *pargs, **kwargs):
+		super(Image, self).__init__(*pargs, **kwargs)
+		self._icon_size = None
+	@property
+	def icon_size(self):
+		return self._icon_size
+	@icon_size.setter
+	def icon_size(self, new):
+		self._icon_size = new  # TODO resize already loaded icon
+	@property
+	def icon(self):
+		return self._icon
+	@icon.setter
+	def icon(self, icon):
+		if isinstance(icon, tuple):
+			icon, self._icon_size = icon[:]
+		
+		if icon.find(os.path.sep)>=0 and os.path.isfile(icon):
+			if self._icon_size is not None:
+				width_px, height_px = gtk.icon_size_lookup(self._icon_size)
+				pixbuf = get_pixbuf_from_file_at_size(icon, width_px, height_px)
+				self.set_from_pixbuf(pixbuf)
+			else:
+				self.set_from_file(icon)
+		elif icon in gtk.stock_list_ids():
+			self.set_from_stock(icon, self._icon_size)
+		elif gtk.icon_theme_get_default().lookup_icon(icon, self._icon_size, 0) is not None:
+			self.set_from_icon_name(icon, self._icon_size)
+		else:
+			width_px, height_px = gtk.icon_size_lookup(self._icon_size)
+			iconfile = find_icon_file(icon, width_px)
+			if iconfile is not None:
+				pixbuf = get_pixbuf_from_file_at_size(iconfile, width_px, height_px)
+				self.set_from_pixbuf(pixbuf)
+				self._icon_file = iconfile
+		self._icon = icon
+		return self
+
 class Window(gtk.Window):
 	def __init__(self, opt):
 		super(Window, self).__init__(*opt.get('gtk-args', []))
-		property_persistor = PropertyPersistor(self, opt.get('name', self.get_name()), [
+		self.property_persistor = PropertyPersistor(self, opt.get('name', self.get_name()), [
 			( 'geometry', 'configure-event', lambda wdg, evt: [evt.width, evt.height], lambda wdg, value: wdg.set_default_size(*value) ),
 			( 'position', 'configure-event', lambda wdg, evt: wdg.get_position()[:],   lambda wdg, value: wdg.move(*value) ),
 		])
-		property_persistor.apply_saved_properties()
+		self.map_signal_hander_id = self.connect('map-event', self._first_map_event)
+		self.property_persistor.apply_saved_properties()
+	
+	def _first_map_event(self, w, e):
+		self.disconnect(self.map_signal_hander_id)
+		delattr(self, 'map_signal_hander_id')
+		pos = self.property_persistor.props.get('position')
+		if pos is not None: self.move(*pos)
 	
 	@property
 	def title(self):

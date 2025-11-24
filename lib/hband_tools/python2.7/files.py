@@ -79,10 +79,13 @@ class IniFileSection(dict):
 				return self.inifile.cp.getint(self.section, key)
 			elif type == self.FLOAT:
 				return self.inifile.cp.getfloat(self.section, key)
-			elif type == self.STRING:
-				return self.inifile.cp.get(self.section, key)
 			else:
-				return json.loads(self.inifile.cp.get(self.section, key))
+				raw = self.inifile.cp.get(self.section, key)
+				if type == self.STRING:
+					return raw
+				else:
+					if raw is None: return None
+					return json.loads(raw)
 		else:
 			return None
 	def get(self, key, default=None, type=None):

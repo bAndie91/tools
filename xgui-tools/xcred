@@ -44,7 +44,7 @@ sub extract_url
 	{
 		# Install git://git.uucp.hu/sysop/xul-extension-current-url XUL extension in Pale Moon
 		# to get this file:
-		my $current_page_url_file = "$ENV{HOME}/.cache/pale moon/current_page_url";
+		my $current_page_url_file = "$ENV{HOME}/.cache/moonchild productions/pale moon/current_page_url";
 		if(-s $current_page_url_file)
 		{
 			$url = read_file($current_page_url_file);

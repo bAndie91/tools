@@ -115,14 +115,15 @@ class Window(gtk.Window):
 			( 'geometry', 'configure-event', lambda wdg, evt: [evt.width, evt.height], lambda wdg, value: wdg.set_default_size(*value) ),
 			( 'position', 'configure-event', lambda wdg, evt: wdg.get_position()[:],   lambda wdg, value: wdg.move(*value) ),
 		])
-		self.map_signal_hander_id = self.connect('map-event', self._first_map_event)
 		self.property_persistor.apply_saved_properties()
 	
-	def _first_map_event(self, w, e):
-		self.disconnect(self.map_signal_hander_id)
-		delattr(self, 'map_signal_hander_id')
+	def show(self, show_all=False):
 		pos = self.property_persistor.props.get('position')
+		getattr(super(Window, self), 'show_all' if show_all else 'show')()
 		if pos is not None: self.move(*pos)
+	
+	def show_all(self):
+		self.show(show_all=True)
 	
 	@property
 	def title(self):

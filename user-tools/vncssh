@@ -1,0 +1,89 @@
+#!/bin/bash
+
+set -eo pipefail
+set -u
+
+server_side_workdir_prefix=/tmp/vncssh
+
+
+if [ "$1" = --remote-side ]
+then
+	shift
+	workdir=$server_side_workdir_prefix.$USER
+	listening_sock=$workdir/vnc.sock
+	
+	mkdir -p "$workdir"
+	if grep -Fq "$listening_sock" /proc/net/unix
+	then
+		echo "$listening_sock: already listening. not starting new VNC Server." >&2
+		echo "going to sleep to keep up the connection." >&2
+		sleep inf
+	else
+		echo "$listening_sock: starting new VNC Server." >&2
+		tigervncserver -rfbunixpath "$listening_sock" -rfbport -1 -SecurityTypes None -xstartup /etc/X11/Xsession -autokill yes -fg
+	fi
+
+elif [ "$1" = --via-cmd ]
+then
+	shift
+	
+	# 1-letter env vars passed by xvncviewer:
+	rhost=$G
+	lport=$L
+	rport=$R  # unused
+	lhost=$H  # unused
+	rsock=$server_side_workdir_prefix.$SSH_LOGIN/vnc.sock
+	
+	declare -a ssh_opts=()
+	for ((i=0; i < $SSH_OPT_COUNT; i++))
+	do
+		varname=SSH_OPT_$i
+		ssh_opts+=("${!varname}")
+	done
+	
+	set -x
+	ssh "${ssh_opts[@]}" "$rhost" -o ControlPath=none -o ExitOnForwardFailure=yes -o ForkAfterAuthentication=yes -L "$lport:$rsock" -T "bash /dev/stdin --remote-side" < "$0"
+	set +x
+	
+	# verify if the server respons on the port.
+	# let xvncviewer proceed only if we can read at least 1 byte from the VNC server.
+	LPORT=$lport \
+		perl -e 'use IO::Socket::INET; use IO::Select;
+			RETRY: $sock = IO::Socket::INET->new(PeerAddr=>"127.0.0.1", PeerPort=>$ENV{LPORT}, Proto=>"tcp", Timeout=>1);
+			goto RETRY unless $sock;
+			$sel = IO::Select->new($sock);
+			@ready = $sel->can_read(0.2);
+			goto RETRY unless @ready;
+			$n = sysread($sock, $buf, 1);
+			goto RETRY unless $n;
+			warn "tcp $ENV{LPORT} port is ready to read.\n";
+			exit 0;
+		'
+
+else
+	declare -a ssh_opts=()
+	target=$1
+	
+	if [[ $target =~ ^([^@]+)@(.+)$ ]]
+	then
+		SSH_LOGIN=${BASH_REMATCH[1]}
+		ssh_opts+=(-l "$SSH_LOGIN")
+		rhost=${BASH_REMATCH[2]}
+	else
+		SSH_LOGIN=$USER
+		rhost=$target
+	fi
+	
+	for ((i=0; i < ${#ssh_opts[@]}; i++))
+	do
+		eval "SSH_OPT_$i=\${ssh_opts[$i]}"
+		eval "export SSH_OPT_$i"
+	done
+	export SSH_OPT_COUNT=$i
+	export SSH_LOGIN
+	
+	desktop_size=`xwininfo -root | grep geometry | awk '{print $2}'`
+	
+	VNC_VIA_CMD="$0 --via-cmd" \
+		xvncviewer -DesktopSize="$desktop_size" -via "$rhost" localhost
+fi

@@ -215,6 +215,7 @@ TOOLS ?= \
   vidir-sanitize \
   vifiles \
   visymlinks \
+  vncssh \
   w3m-render \
   waitpid \
   wget-mirror \

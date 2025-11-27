@@ -9,6 +9,8 @@ server_side_workdir_prefix=/tmp/vncssh
 if [ "$1" = --remote-side ]
 then
 	shift
+	ssh_hostname=$1
+	shift
 	workdir=$server_side_workdir_prefix.$USER
 	listening_sock=$workdir/vnc.sock
 	
@@ -20,7 +22,7 @@ then
 		sleep inf
 	else
 		echo "$listening_sock: starting new VNC Server." >&2
-		tigervncserver -rfbunixpath "$listening_sock" -rfbport -1 -SecurityTypes None -xstartup /etc/X11/Xsession -autokill yes -fg
+		tigervncserver -rfbunixpath "$listening_sock" -rfbport -1 -SecurityTypes None -xstartup /etc/X11/Xsession -autokill yes -fg -desktop "$ssh_hostname"
 	fi
 
 elif [ "$1" = --via-cmd ]
@@ -44,11 +46,13 @@ then
 	rsock=$server_side_workdir_prefix.$ruser/vnc.sock
 	
 	set -x
-	ssh "${ssh_opts[@]}" "$rhost" -o ControlPath=none -o ExitOnForwardFailure=yes -o ForkAfterAuthentication=yes -L "$lport:$rsock" -T "bash /dev/stdin --remote-side" < "$0"
+	# TODO FIXME dont listen on local tcp port: make vnc viewer connect to UDS instead!
+	ssh "${ssh_opts[@]}" "$rhost" -o ControlPath=none -o ExitOnForwardFailure=yes -o ForkAfterAuthentication=yes -L "$lport:$rsock" -T "bash /dev/stdin --remote-side $rhost" < "$0"
 	set +x
 	
 	# verify if the server respons on the port.
 	# let xvncviewer proceed only if we can read at least 1 byte from the VNC server.
+	# TODO FIXME this triggers "CConn:       Authentication failure: Too many security failures" in the server
 	LPORT=$lport \
 		perl -e 'use IO::Socket::INET; use IO::Select;
 			RETRY: $sock = IO::Socket::INET->new(PeerAddr=>"127.0.0.1", PeerPort=>$ENV{LPORT}, Proto=>"tcp", Timeout=>1);
@@ -56,7 +60,7 @@ then
 			$sel = IO::Select->new($sock);
 			@ready = $sel->can_read(0.2);
 			goto RETRY unless @ready;
-			$n = sysread($sock, $buf, 1);
+			$n = sysread($sock, $buf, 12);  # RFB banner line is 12 bytes.
 			goto RETRY unless $n;
 			warn "tcp $ENV{LPORT} port is ready to read.\n";
 			exit 0;

@@ -32,7 +32,6 @@ then
 	lport=$L
 	rport=$R  # unused
 	lhost=$H  # unused
-	rsock=$server_side_workdir_prefix.$SSH_LOGIN/vnc.sock
 	
 	declare -a ssh_opts=()
 	for ((i=0; i < $SSH_OPT_COUNT; i++))
@@ -40,6 +39,9 @@ then
 		varname=SSH_OPT_$i
 		ssh_opts+=("${!varname}")
 	done
+	
+	ruser=`ssh "${ssh_opts[@]}" "$rhost" -G | awk '$1 == "user" { print $2 }'`
+	rsock=$server_side_workdir_prefix.$ruser/vnc.sock
 	
 	set -x
 	ssh "${ssh_opts[@]}" "$rhost" -o ControlPath=none -o ExitOnForwardFailure=yes -o ForkAfterAuthentication=yes -L "$lport:$rsock" -T "bash /dev/stdin --remote-side" < "$0"
@@ -66,11 +68,9 @@ else
 	
 	if [[ $target =~ ^([^@]+)@(.+)$ ]]
 	then
-		SSH_LOGIN=${BASH_REMATCH[1]}
-		ssh_opts+=(-l "$SSH_LOGIN")
+		ssh_opts+=(-l "${BASH_REMATCH[1]}")
 		rhost=${BASH_REMATCH[2]}
 	else
-		SSH_LOGIN=$USER
 		rhost=$target
 	fi
 	
@@ -80,7 +80,6 @@ else
 		eval "export SSH_OPT_$i"
 	done
 	export SSH_OPT_COUNT=$i
-	export SSH_LOGIN
 	
 	desktop_size=`xwininfo -root | grep geometry | awk '{print $2}'`
 	

@@ -132,7 +132,13 @@ Put this in your inittab(5):
 
 This one removes the socket file in case of it's left there:
 
+ dm:2345:respawn:multicmd -d -- rm /var/run/dmaster.sock -- loggerexec daemon dmaster dmaster
+
+May use the default (although a bit confusing) semicolon multicmd(1) delimiter if your init(1) supports the "at" mark (C<@>) syntax:
+
  dm:2345:respawn:@multicmd rm /var/run/dmaster.sock ; loggerexec daemon dmaster dmaster
+
+Don't forget to place this inittab(5) entry above any entry with a B<wait> action.
 
 =head1 SEE ALSO
 

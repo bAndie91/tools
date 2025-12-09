@@ -1,0 +1,59 @@
+#!/usr/bin/env python
+
+"""
+This gno2gron takes .GNO file (GenoPro) as argument and
+outputs a gron(1) format text forto be able to parse and diff it better.
+Replaces the lists to dicts by taking each element ID attribute as key.
+"""
+
+from __future__ import print_function
+import os
+import sys
+import xmltodict
+import json
+import subprocess
+
+def force_list_decider(path, key, value):
+	if len(path) == 2 and path[1][0].endswith('s'):
+		return True
+
+def getkey_default(item):
+	return item['@ID']
+
+def getkey_GenoMap(item):
+	return item['@Name']
+
+def getkey_PedigreeLink(item):
+	return '.'.join([item['@Individual'], item['@Family'], item['@PedigreeLink']])
+
+def transform_list_to_dict(typ, lst):
+	getkey_funcname = 'getkey_' + typ
+	if getkey_funcname in globals():
+		getkey = globals()[getkey_funcname]
+	else:
+		getkey = getkey_default
+	return [(getkey(item), item) for item in lst]
+
+def transform_lists_to_dict_recursively(obj, path=()):
+	for key, value in obj.items():
+		if isinstance(value, list):
+			try:
+				obj[key] = dict(transform_list_to_dict(key, value))
+			except:
+				print("Exception at path:", path, file=sys.stderr)
+				raise
+		elif isinstance(value, dict):
+			transform_lists_to_dict_recursively(value, path+(key,))
+
+
+xmldata = subprocess.check_output(['unzip', '-p', sys.argv[1], 'Data.xml'])
+data = xmltodict.parse(xmldata, force_list=force_list_decider)
+
+transform_lists_to_dict_recursively(data)
+
+json2gron = subprocess.Popen(['json2gron'], stdin=subprocess.PIPE)
+json.dump(data, json2gron.stdin, sort_keys=True)
+json2gron.stdin.close()
+json2gron.wait()
+sys.exit(json2gron.returncode)
+

@@ -151,11 +151,13 @@ class PropertyPersistor(object):
 		self._inifile = None
 		self.triggers = {}
 		self.applicators = {}
-		
+		self.add_properties(property_descriptors)
+	
+	def add_properties(self, property_descriptors):
 		for prop_name, trigger_signal, getter, applicator in property_descriptors:
 			if trigger_signal not in self.triggers:
 				self.triggers[trigger_signal] = []
-				obj.connect(trigger_signal, self.on_trigger, trigger_signal)
+				self.obj.connect(trigger_signal, self.on_trigger, trigger_signal)
 			self.triggers[trigger_signal].append((prop_name, getter))
 			self.applicators[prop_name] = applicator
 	

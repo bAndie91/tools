@@ -83,12 +83,15 @@ else
 	
 	if ! socket_live "$lsock"
 	then
-		if [ -S "$lsock" ]
+		if [ -e "$lsock" ]
 		then
-			rm "$lsock"
-		else
-			echo "$lsock: Can not listen on socket. File exists and not a socket." >&2
-			exit 2
+			if [ -S "$lsock" ]
+			then
+				rm "$lsock"
+			else
+				echo "$lsock: Can not listen on socket. File exists and not a socket." >&2
+				exit 2
+			fi
 		fi
 		
 		fifo_dir=`mktemp -d -t vncssh-XXXXXX`

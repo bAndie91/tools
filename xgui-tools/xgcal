@@ -543,7 +543,7 @@ def update_solartime_continous():
 def update_solartime(*X):
 	lon = box_longitude.signed_value
 	save_config_queue()
-	# if solartime supports overrtiding current time by DATETIME_UTC env:
+	# if solartime supports overriding current time by DATETIME_UTC env:
 	DATETIME_UTC = time.strftime('%F %T', time.gmtime(selected_date_timestamp()))
 	os.putenv('DATETIME_UTC', DATETIME_UTC)
 	cmd = 'solartime %s "%%a %%H:%%M"' % (lon,)
@@ -606,6 +606,7 @@ def update_celestial_info(when=None):
 	
 	with os.popen("pom %s" % (time.strftime('%Y%m%d%H', time.localtime(when)),)) as pipe:
 		moon_phase = pipe.readline()
+		moon_phase = moon_phase.replace('\n', '')
 		moon_phase = re.sub(r'^.*The Moon (is|was|will be) ', '', moon_phase)
 	
 	tzmin = get_current_timezone_offset_minutes()
@@ -1035,6 +1036,7 @@ add_key_binding(win_main, 'Escape', act_main_hide)
 
 label_solartime.set_markup(PMU_SOLARCLOCK + ':' + PMU_SOLARCLOCK_END)
 label_solartime.set_selectable(True)
+label_solartime.set_tooltip_text(_("Current solar time on the selected longitude"))
 sunclock_socket.connect('size-allocate', sunclock_elhelyez)
 sunclock_socket.connect('plug-removed', lambda *X: True)
 sunclock_socket.connect('plug-added', on_sunclock_embedded)
@@ -1086,11 +1088,11 @@ box2.pack_start(label_clock, 1, 1)
 box_timezone.pack_start(timezone_image, 0, 1)
 box_timezone.pack_start(entry_timezone, 0, 0)
 
-box_solartime.pack_start(label_solartime, 0, 1)
 box_solartime.pack_start(box_sunclock, 0, 1)
 box_sunclock.pack_start(sunclock_image, 0, 1)
 box_sunclock.pack_start(sunclock_socket, 0, 1)
 box_solartime.pack_start(label_celestial, 0, 1)
+box_solartime.pack_start(label_solartime, 0, 1)
 
 win_main.show_all()
 box_coordinates.hide()

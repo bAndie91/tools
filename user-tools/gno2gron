@@ -12,6 +12,8 @@ import sys
 import xmltodict
 import json
 import subprocess
+import traceback
+
 
 def force_list_decider(path, key, value):
 	if len(path) == 2 and path[1][0].endswith('s'):
@@ -26,21 +28,48 @@ def getkey_GenoMap(item):
 def getkey_PedigreeLink(item):
 	return '.'.join([item['@Individual'], item['@Family'], item['@PedigreeLink']])
 
+def getkey_SocialRelationship(item):
+	return '.'.join([item['@Entity1'], item['@Entity2'], item['@Connection']])
+
+class DuplicateKeyError(Exception):
+	pass
+
 def transform_list_to_dict(typ, lst):
+	state = {}
 	getkey_funcname = 'getkey_' + typ
 	if getkey_funcname in globals():
 		getkey = globals()[getkey_funcname]
 	else:
 		getkey = getkey_default
-	return [(getkey(item), item) for item in lst]
+	state['getkey_method'] = getkey
+	res = {}
+	for idx, item in enumerate(lst):
+		state['index'] = idx
+		try:
+			key = getkey(item)
+			if key in res.keys():
+				try:
+					raise DuplicateKeyError(key)
+				except DuplicateKeyError as ex:
+					print("The following", ex.__class__.__name__, "is ignored. State:", state, file=sys.stderr)
+					traceback.print_exc()
+					print("Previous item:", res[key], file=sys.stderr)
+					print("This item:", item, file=sys.stderr)
+			res[key] = item
+		except Exception as ex:
+			ex.transform_list_to_dict_state = state
+			raise
+	return res
 
 def transform_lists_to_dict_recursively(obj, path=()):
 	for key, value in obj.items():
 		if isinstance(value, list):
 			try:
-				obj[key] = dict(transform_list_to_dict(key, value))
-			except:
-				print("Exception at path:", path, file=sys.stderr)
+				obj[key] = transform_list_to_dict(key, value)
+			except Exception as ex:
+				print("Exception at path:", path, "key:", key, file=sys.stderr)
+				if hasattr(ex, 'transform_list_to_dict_state'):
+					print("transform_list_to_dict state:", ex.transform_list_to_dict_state, file=sys.stderr)
 				raise
 		elif isinstance(value, dict):
 			transform_lists_to_dict_recursively(value, path+(key,))

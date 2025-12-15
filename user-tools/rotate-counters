@@ -5,7 +5,7 @@ true <<EOF
 
 =head1 NAME
 
-logrotate-counters - Increment numbers in file names
+rotate-counters - Increment numbers in file names
 
 =cut
 

@@ -96,7 +96,6 @@ TOOLS ?= \
   lnto \
   locale-validator \
   loggerexec \
-  logrotate-counters \
   logto \
   lpjobs \
   lpset \
@@ -166,6 +165,7 @@ TOOLS ?= \
   replcmd \
   reportcmdstatus \
   rn \
+  rotate-counters \
   rr \
   rsacrypt \
   rsync-semichroot \
@@ -184,6 +184,7 @@ TOOLS ?= \
   ssh-agent-finder \
   stdfilt \
   stdmux \
+  stdout2env \
   straceall \
   strip-ansi-seq \
   substenv \

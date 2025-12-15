@@ -1,0 +1,131 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+stdout2env - Substitute other command's STDOUT in command arguments and run the resulting command
+
+=head1 SYNOPSIS
+
+stdout2env [I<OPTIONS>] -- I<ENVNAME-1> I<CMD-1> [I<ARG> [I<ARG> [...]]] [-- I<ENVNAME-2> I<CMD-2> [I<ARG> [I<ARG> [...]]] [-- ...]] [--] I<COMMAND> [I<ARGS>]
+
+=head1 DESCRIPTION
+
+Run all I<CMD-1>, I<CMD-2>, ... commands in series,
+and after each run, set the I<ENVNAME-n> environment variable to the corresponding command's STDOUT output.
+Then at the end, run the last I<COMMAND> with all the environment set up.
+Very similar to backtick notation C<`CMD`> (and C<$(CMD)>) in ordinary shells.
+
+Earlier set I<ENVNAME> variables are visible in later commands with their new value.
+
+=head1 OPTIONS
+
+=over 4
+
+-d, --delimiter I<STRING>
+
+Take I<STRING> as the command argv-list delimiter.
+Default is double-dash C<-->.
+
+--keep-eol
+
+Keep the newline char at the very end of each output.
+
+=back
+
+=head1 CAVEATS
+
+Overwriting B<PATH> environment may render the subsequent commands not being found.
+
+=head1 RATIONALE
+
+Sometimes you don't want a shell to be in the picture when composing commands.
+
+=head1 SEE ALSO
+
+backtick by execlineb(1), multicmd(1), substenv(1)
+
+=cut
+
+
+use Data::Dumper;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order pass_through/;
+use Pod::Usage;
+use IPC::Run qw/run harness/;
+use POSIX qw/:sys_wait_h/;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+
+
+$OptDelimiter = '--';
+$OptKeepEOL = 0;
+
+GetOptions(
+	'd|delimiter=s' => \$OptDelimiter,
+	'keep-eol!' => \$OptKeepEOL,
+	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+) or pod2usage(-exitval=>2, -verbose=>99);
+# Getopt's pass_through mode leaves "--" there
+shift @ARGV if $ARGV[0] eq '--';
+shift @ARGV if $ARGV[0] eq $OptDelimiter;
+if(not @ARGV)
+{
+	pod2usage(-exitval=>2, -verbose=>99);
+}
+
+
+sub capture_cmd_stdout_in_env
+{
+	my $env_ref = shift;
+	my $envname = shift;
+	my @cmd = @_;
+	if(not @cmd)
+	{
+		warn "$0: no command given for env '$envname'\n";
+		pod2usage(-exitval=>2, -verbose=>99);
+	}
+	my $output;
+	my $process = harness [@cmd], \undef, \$output, init => sub { %ENV = %$env_ref; };
+	$process->run;
+	my $status = $process->full_result;
+	if($status != 0)
+	{
+		my $msg = "error ".WEXITSTATUS($status);
+		if(WIFSIGNALED($status)) { $msg = "killed by signal ".WTERMSIG($status); }
+		warn "$0: $cmd[0]: $msg\n";
+		my $exitcode = WIFSIGNALED($status) ? 128 + WTERMSIG($status) : WEXITSTATUS($status);
+		exit $exitcode;
+	}
+	if(not $OptKeepEOL)
+	{
+		$output =~ s/\n$//;
+	}
+	$env_ref->{$envname} = $output;
+}
+
+
+%sub_env = %ENV;
+@sub_cmd = ();
+
+while(@ARGV)
+{
+	last unless $OptDelimiter ~~ @ARGV;
+	
+	my $arg = shift @ARGV;
+	if($arg eq $OptDelimiter)
+	{
+		capture_cmd_stdout_in_env(\%sub_env, @sub_cmd);
+		@sub_cmd = ();
+	}
+	else
+	{
+		push @sub_cmd, $arg;
+	}
+}
+
+
+%ENV = %sub_env;
+exec {$ARGV[0]} @ARGV;
+($errno, $errstr) = (int $!, $!);
+warn "$0: ${ARGV[0]}: $errstr\n";
+exit 125+$errno;

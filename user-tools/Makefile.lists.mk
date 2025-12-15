@@ -170,6 +170,7 @@ TOOLS ?= \
   rsacrypt \
   rsync-semichroot \
   rsysrq \
+  saveout \
   screenconsole \
   screendetach \
   screen-notify \

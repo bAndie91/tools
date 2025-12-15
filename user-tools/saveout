@@ -1,0 +1,202 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+saveout - Save a programm's output to dynamically named files
+
+=head1 SYNOPSIS
+
+saveout [I<OPTIONS>] [--] I<COMMAND> [I<ARGS>]
+
+=head1 DESCRIPTION
+
+TODO
+Always append.
+
+=head1 OPTIONS
+
+=over 4
+
+=item --out I<TEMPLATE>
+
+=item --err I<TEMPLATE>
+
+=item --fd-B<N> I<TEMPLATE>
+
+I<TEMPLATE> is a file path, may contain the following macros:
+
+=over 8
+
+=item all strftime(3) macros
+
+=back
+
+=back
+
+=head1 SEE ALSO
+
+savelog(8), logto(1), stdsyslog(1), loggerexec(1), redirexec(1), logger(1)
+
+=cut
+
+
+
+use Data::Dumper;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev/;
+use Fcntl qw/F_GETFL F_SETFL O_NONBLOCK/;
+use POSIX qw/strftime :sys_wait_h/;
+use Pod::Usage;
+use List::MoreUtils qw/all any none/;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+
+
+%OptFDPath = ();
+
+@args = ();
+while(@ARGV)
+{
+	my $arg = shift @ARGV;
+	$arg =~ s/^(--fd)-(\d+)=/$1=$2=/;
+	if($arg =~ /^--fd-(\d+)$/)
+	{
+		push @args, '--fd', "$1=" . (shift @ARGV);
+		next;
+	}
+	push @args, $arg;
+}
+@ARGV = @args;
+
+GetOptions(
+	'o|out=s' => \$OptFDPath{1},
+	'e|err=s' => \$OptFDPath{2},
+	'fd=s' => \%OptFDPath,
+	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+
+sub expand_template
+{
+	my $template = shift;
+	return strftime($template, localtime);
+}
+
+sub process_line
+{
+	my $line = shift;
+	my $output = shift;
+	my $output_file = expand_template($output->{'template'});
+	if(not defined $output->{'fh'} or $output_file ne $output->{'file'})
+	{
+		warn Dumper [ $output->{'template'}, $output_file ];
+		open $output->{'fh'}, '>>', $output_file or die "$0: open: $output_file: $!\n";  # TODO SIGPIPE CHILD_PID ?
+		$output->{'file'} = $output_file;
+	}
+	print {$output->{'fh'}} $line;
+	# TODO flush? buffering?
+}
+
+sub process_stream
+{
+	my $stream = shift;
+	while(1)
+	{
+		my $nl = index $stream->{'buf'}, "\n";
+		last if $nl == -1;  # ain't a complete line is there
+		$nl++;
+		
+		my $line = substr $stream->{'buf'}, 0, $nl;
+		process_line $line, $stream->{'output'};
+		
+		$stream->{'buf'} = substr $stream->{'buf'}, $nl;
+	}
+}
+
+
+
+$Stream = {};
+
+for my $fdnum (keys %OptFDPath)
+{
+	pipe(my $reader, my $writer) or die "$0: pipe: $!\n";
+	$Stream->{$fdnum} = {
+		'reader' => $reader,
+		'writer' => $writer,
+		'buf' => '',
+		'output' => {
+			'template' => $OptFDPath{$fdnum},
+			'file' => '',
+			'fh' => undef,
+		},
+	};
+}
+
+$CHILD_PID = fork // die "$0: fork: $!\n";
+
+if($CHILD_PID == 0)
+{
+	for my $fdnum (keys %$Stream)
+	{
+		open $fdnum, '>&=', fileno($Stream->{$fdnum}->{'writer'}) or die "$0: fdopen: $fdnum: $!\n";
+		close $Stream->{$fdnum}->{'reader'};
+	}	
+	
+	exec {$ARGV[0]} @ARGV;
+	my ($errno, $errstr) = (int $!, $!);
+	warn "$0: ${ARGV[0]}: $errstr\n";
+	exit 125+$errno;
+}
+
+
+my $child_status = undef;
+close STDIN;
+for my $fdnum (keys %$Stream)
+{
+	fcntl($Stream->{$fdnum}->{'reader'}, F_SETFL, fcntl($Stream->{$fdnum}->{'reader'}, F_GETFL, 0) | O_NONBLOCK);
+	close $Stream->{$fdnum}->{'writer'};
+}	
+
+
+
+while(1)
+{
+	$fds = '';
+	for my $fdnum (keys %$Stream)
+	{
+		vec($fds, fileno($Stream->{$fdnum}->{'reader'}), 1) = 1 if defined $Stream->{$fdnum}->{'reader'};
+	}
+	last if $fds eq '';
+	
+	$! = 0;
+	select($fds, undef, undef, undef);
+	my $errno = int $!;
+	next if $errno;
+	
+	for my $fdnum (keys %$Stream)
+	{
+		my $reader = $Streams->{$fdnum}->{'reader'};
+		if(vec($fds, fileno($reader), 1) == 1)
+		{
+			my $bytes = sysread $reader, $Stream->{$fdnum}->{'buf'}, 1024, length $Stream->{$fdnum}->{'buf'};
+			if($bytes)
+			{
+				process_stream($Stream->{$fdnum});
+			}
+			else
+			{
+				# this stream is closed.
+				undef $Stream->{$fdnum}->{'reader'};
+				# process last unterminated line (if any)
+				process_line($Stream->{$fdnum}->{'buf'}, $Stream->{$fdnum}->{'output'}) if length $Stream->{$fdnum}->{'buf'};
+			}
+		}
+	}
+}
+
+waitpid($CHILD_PID, 0);
+$child_status = $?;
+$exit_status = WEXITSTATUS($child_status);
+$exit_status = 128 + WTERMSIG($child_status) if WIFSIGNALED($child_status);
+exit $exit_status;

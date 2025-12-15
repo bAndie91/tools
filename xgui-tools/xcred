@@ -40,7 +40,7 @@ sub extract_url
 		my $output = '';
 		run ['firefox-current-url'], '<', \undef, '>', \$url;
 	}
-	elsif($win->{class} =~ /^navigator\.pale/i)
+	elsif($win->{class} =~ /^(navigator\.pale|Dialog.pale moon)/i)
 	{
 		# Install git://git.uucp.hu/sysop/xul-extension-current-url XUL extension in Pale Moon
 		# to get this file:

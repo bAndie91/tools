@@ -8,12 +8,21 @@ saveout - Save a programm's output to dynamically named files
 
 =head1 SYNOPSIS
 
-saveout [I<OPTIONS>] [--] I<COMMAND> [I<ARGS>]
+saveout I<OPTIONS> [--] I<COMMAND> [I<ARGS>]
 
 =head1 DESCRIPTION
 
-TODO
-Always append.
+Run I<COMMAND> and redirect its STDOUT, and/or STDERR, and/or other file descriptors,
+line-by-line, to dynamically named files.
+Always append to output files.
+Useful for eg. to save logs of a long running command (service) in separate files per day.
+
+You can set flush rules (see below) for each output (STDOUT, STDERR, specific FD...).
+A particular file is always flushed when the filename of the given output changes
+(as the old file is closed).
+Output is written per complete lines, so don't expect long data not delimited by B<linefeed> to appear chunk-by-chunk,
+even with bytes- or time-based flushing.
+Only B<linefeed> is taken as line terminator, not even a sole B<carriage-return>.
 
 =head1 OPTIONS
 
@@ -21,23 +30,104 @@ Always append.
 
 =item --out I<TEMPLATE>
 
+Equivalent to --fd-1 I<TEMPLATE>.
+
 =item --err I<TEMPLATE>
 
-=item --fd-B<N> I<TEMPLATE>
+Equivalent to --fd-2 I<TEMPLATE>.
 
-I<TEMPLATE> is a file path, may contain the following macros:
+=item --fd-I<N> I<TEMPLATE>
+
+Write I<COMMAND>'s output on the I<N>th file descriptor (STDOUT, STDERR, ...)
+to a file of which path and name is constructed according to I<TEMPLATE>.
+I<TEMPLATE> may contain the following macros:
 
 =over 8
 
-=item all strftime(3) macros
+=item time macros
+
+Support all strftime(3) macros, eg. B<%c>, B<%s>, B<%F>, B<%T>, ...
+
+=item %[pid]
+
+The PID of the process running I<COMMAND>.
+
+=item %[substr:I<POS>[:I<LEN>]]
+
+The line's substring at the given I<POS> position and I<LEN> length,
+or to the end of line (excluding the terminating B<linefeed> char) if B<:>I<LEN> is not given.
+Both I<POS> and I<LEN> can be negative;
+see B<perldoc -f substr> for details.
+
+B<Beware of potential unwanted path traversal!>
+Make sure that the resulting file path does not go outsite of the directory you intended to write,
+by eg. output, controlled by untrusted party, containing something like C<../../../etc/>.
+
+=item %[regex:I<PATTERN>:I<CAPTURE>]
+
+Not implemented.
+
+=item %[perl:I<EXPR>]
+
+Not implemented.
 
 =back
 
+=item -L, --flush-lines [I<LINES>]
+
+Flush output files after I<LINES> number of lines.
+Flush per each line if I<LINES> is not given (default I<LINES> is 1).
+By default, leaves flushing to the underlaying IO layer, which usually buffers 4-8k blocks.
+If you want to set different flushing rules on different outputs,
+othen than buffered-IO or other than the default given by B<-L> option,
+override by B<-Lo>, B<-Le>, and/or B<-Ln>.
+See below.
+
+=item -Lo, --flush-lines-stdout [I<LINES>]
+
+Equivalent to C<< -Ln 1=I<LINES> >>.
+
+=item -Le, --flush-lines-stdout [I<LINES>]
+
+Equivalent to C<< -Ln 2=I<LINES> >>.
+
+=item -Ln, --flush-lines-fd I<FD>[=I<LINES>]
+
+Set file descriptor I<FD>'s output to be flushed by each I<LINES> lines.
+Default I<LINES> is 1.
+
+=item -B, --flush-bytes I<BYTES>
+
+=item -Bo, --flush-bytes-stdout I<BYTES>
+
+=item -Bo, --flush-bytes-stderr I<BYTES>
+
+=item -Bn, --flush-bytes-fd I<FD>[=I<BYTES>]
+
+Similar to the B<--flush-lines> option group,
+except flush after at least I<BYTES> bytes are written to the selected outputs.
+Maybe does not make sense to set more than the buffered-IO block size.
+
+=item -S, --flush-sec I<SEC>
+
+=item -So, --flush-sec-stdout I<SEC>
+
+=item -So, --flush-sec-stderr I<SEC>
+
+=item -Sn, --flush-sec-fd I<FD>[=I<SEC>]
+
+Similar to the B<--flush-lines> and B<--flush-bytes> option groups,
+except flush after at least I<SEC> seconds passed since last write to the selected outputs.
+
 =back
+
+=head1 SECURITY
+
+See the above comment on C<%[substr]> template macro.
 
 =head1 SEE ALSO
 
-savelog(8), logto(1), stdsyslog(1), loggerexec(1), redirexec(1), logger(1)
+savelog(8), logto(1), stdsyslog(1), loggerexec(1), redirexec(1), logger(1), stdfilt(1)
 
 =cut
 
@@ -46,13 +136,18 @@ savelog(8), logto(1), stdsyslog(1), loggerexec(1), redirexec(1), logger(1)
 use Data::Dumper;
 use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev/;
 use Fcntl qw/F_GETFL F_SETFL O_NONBLOCK/;
-use POSIX qw/strftime :sys_wait_h/;
+use POSIX qw/strftime :sys_wait_h dup2/;
 use Pod::Usage;
 use List::MoreUtils qw/all any none/;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 
-%OptFDPath = ();
+$Stream = {};
+$OptDefaultFlush = {
+	'lines' => undef,
+	'bytes' => undef,
+	'sec' => undef,
+};
 
 @args = ();
 while(@ARGV)
@@ -68,34 +163,137 @@ while(@ARGV)
 }
 @ARGV = @args;
 
+sub set_flush_opt
+{
+	my $by = shift;
+	if($_[1] =~ /^(\d+)(?:=(\d+)|)$/)
+	{
+		$Stream->{$1}->{'flush-by'}->{$by} = $2//1;
+	}
+	else
+	{
+		die "Invalid argument for ".$_[0]->{starter}.$_[0]->{given}." option: '".$_[1]."'";
+	}
+}
+
 GetOptions(
-	'o|out=s' => \$OptFDPath{1},
-	'e|err=s' => \$OptFDPath{2},
-	'fd=s' => \%OptFDPath,
+	'o|out=s' => \$Stream->{1}->{'output'}->{'template'},
+	'e|err=s' => \$Stream->{2}->{'output'}->{'template'},
+	'fd=s' => sub {
+		if($_[1] =~ /^(\d+)=(\S+)$/) {
+			$Stream->{$1}->{'output'}->{'template'} = $2; }
+		else {
+			die "Invalid argument for ".$_[0]->{starter}.$_[0]->{given}." option: '".$_[1]."'";
+		}
+	},
+	
+	'L|flush-lines:+' => \$OptDefaultFlush->{'lines'},
+	'Lo|flush-lines-stdout:+' => \$Stream->{1}->{'flush-by'}->{'lines'},
+	'Le|flush-lines-stderr:+' => \$Stream->{2}->{'flush-by'}->{'lines'},
+	'Ln|flush-lines-fd=s' => sub { set_flush_opt('lines', @_); },
+	
+	'B|flush-bytes:+' => \$OptDefaultFlush->{'bytes'},
+	'Bo|flush-bytes-stdout:+' => \$Stream->{1}->{'flush-by'}->{'bytes'},
+	'Be|flush-bytes-stderr:+' => \$Stream->{2}->{'flush-by'}->{'bytes'},
+	'Bn|flush-bytes-fd=s' => sub { set_flush_opt('bytes', @_); },
+	
+	'S|flush-sec:+' => \$OptDefaultFlush->{'sec'},
+	'So|flush-sec-stdout:+' => \$Stream->{1}->{'flush-by'}->{'sec'},
+	'Se|flush-sec-stderr:+' => \$Stream->{2}->{'flush-by'}->{'sec'},
+	'Sn|flush-sec-fd=s' => sub { set_flush_opt('sec', @_); },
+	
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
 ) or pod2usage(-exitval=>2, -verbose=>99);
+
+for my $fd (keys %$Stream)
+{
+	delete $Stream->{$fd} unless defined $Stream->{$fd}->{'output'}->{'template'};
+}
+
+for my $by (keys %$OptDefaultFlush)
+{
+	if($OptDefaultFlush->{$by})
+	{
+		for my $s (values %$Stream)
+		{
+			$s->{'flush-by'}->{$by} = $OptDefaultFlush->{$by} unless defined $s->{'flush-by'}->{$by};
+		}
+	}
+}
+
 
 
 sub expand_template
 {
 	my $template = shift;
-	return strftime($template, localtime);
+	my $line = shift;
+	
+	my $res = strftime($template, localtime);
+	# strftime leaves "%[...]" as-is.
+	$res =~ s{%\[pid\]}{$CHILD_PID}g;
+	$res =~ s{%\[substr:(-?\d+)(?::(-?\d+))?\]}{substr $line, $1, $2||(length($line)-$1)}eg;
+	return $res;
 }
 
 sub process_line
 {
 	my $line = shift;
 	my $output = shift;
-	my $output_file = expand_template($output->{'template'});
+	my $flush_by = shift;
+	my $do_flush = 0;
+	
+	my $output_file = expand_template($output->{'template'}, substr($line, 0, -1));
+	if(defined $output->{'fh'} and $output_file ne $output->{'file'})
+	{
+		close $output->{'fh'};
+		$output->{'fh'} = undef;
+	}
 	if(not defined $output->{'fh'} or $output_file ne $output->{'file'})
 	{
-		warn Dumper [ $output->{'template'}, $output_file ];
 		open $output->{'fh'}, '>>', $output_file or die "$0: open: $output_file: $!\n";  # TODO SIGPIPE CHILD_PID ?
 		$output->{'file'} = $output_file;
 	}
-	print {$output->{'fh'}} $line;
-	# TODO flush? buffering?
+	
+	my $written_bytes = print {$output->{'fh'}} $line;
+	
+	if($flush_by->{'bytes'})
+	{
+		$output->{'written_bytes'} += $written_bytes;
+		if($flush_by->{'bytes'} <= $output->{'written_bytes'})
+		{
+			$do_flush = 1;
+			$output->{'written_bytes'} = 0;
+			return;
+		}
+	}
+	if($flush_by->{'lines'})
+	{
+		$output->{'written_lines'} += 1;
+		if($flush_by->{'lines'} <= $output->{'written_lines'})
+		{
+			do_flush($output, $flush_by);
+			$output->{'written_lines'} = 0;
+			return;
+		}
+	}
+	
+	if($do_flush)
+	{
+		do_flush($output, $flush_by);
+	}
+}
+
+sub do_flush
+{
+	my $output = shift;
+	my $flush_by = shift;
+	
+	$output->{'fh'}->flush;
+	if($flush_by->{'sec'})
+	{
+		$output->{'last_flush_time'} = time;
+	}
 }
 
 sub process_stream
@@ -108,7 +306,7 @@ sub process_stream
 		$nl++;
 		
 		my $line = substr $stream->{'buf'}, 0, $nl;
-		process_line $line, $stream->{'output'};
+		process_line $line, $stream->{'output'}, $stream->{'flush-by'};
 		
 		$stream->{'buf'} = substr $stream->{'buf'}, $nl;
 	}
@@ -116,22 +314,16 @@ sub process_stream
 
 
 
-$Stream = {};
-
-for my $fdnum (keys %OptFDPath)
+for my $fdnum (keys %$Stream)
 {
 	pipe(my $reader, my $writer) or die "$0: pipe: $!\n";
-	$Stream->{$fdnum} = {
-		'reader' => $reader,
-		'writer' => $writer,
-		'buf' => '',
-		'output' => {
-			'template' => $OptFDPath{$fdnum},
-			'file' => '',
-			'fh' => undef,
-		},
-	};
+	$Stream->{$fdnum}->{'reader'} = $reader;
+	$Stream->{$fdnum}->{'writer'} = $writer;
+	$Stream->{$fdnum}->{'buf'} => '';
+	$Stream->{$fdnum}->{'output'}->{'file'} = '';
+	$Stream->{$fdnum}->{'output'}->{'fh'} = undef;
 }
+
 
 $CHILD_PID = fork // die "$0: fork: $!\n";
 
@@ -139,7 +331,8 @@ if($CHILD_PID == 0)
 {
 	for my $fdnum (keys %$Stream)
 	{
-		open $fdnum, '>&=', fileno($Stream->{$fdnum}->{'writer'}) or die "$0: fdopen: $fdnum: $!\n";
+		my $writer_fd = fileno($Stream->{$fdnum}->{'writer'});
+		dup2($writer_fd, $fdnum) or die "$0: dup2: $writer_fd: $!\n";
 		close $Stream->{$fdnum}->{'reader'};
 	}	
 	
@@ -169,14 +362,18 @@ while(1)
 	}
 	last if $fds eq '';
 	
+	# TODO timeout select() to do timed flushes if any...
+	
 	$! = 0;
 	select($fds, undef, undef, undef);
 	my $errno = int $!;
 	next if $errno;
 	
+	# TODO check flush timers
+	
 	for my $fdnum (keys %$Stream)
 	{
-		my $reader = $Streams->{$fdnum}->{'reader'};
+		my $reader = $Stream->{$fdnum}->{'reader'};
 		if(vec($fds, fileno($reader), 1) == 1)
 		{
 			my $bytes = sysread $reader, $Stream->{$fdnum}->{'buf'}, 1024, length $Stream->{$fdnum}->{'buf'};
@@ -189,7 +386,8 @@ while(1)
 				# this stream is closed.
 				undef $Stream->{$fdnum}->{'reader'};
 				# process last unterminated line (if any)
-				process_line($Stream->{$fdnum}->{'buf'}, $Stream->{$fdnum}->{'output'}) if length $Stream->{$fdnum}->{'buf'};
+				process_line($Stream->{$fdnum}->{'buf'}, $Stream->{$fdnum}->{'output'}, $Stream->{$fdnum}->{'flush-by'}) if length $Stream->{$fdnum}->{'buf'};
+				close $Stream->{$fdnum}->{'output'}->{'fh'};
 			}
 		}
 	}

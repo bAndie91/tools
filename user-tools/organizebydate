@@ -58,7 +58,7 @@ Default: %Y/%m/%d/
 
 Extra macros accepted:
 
-=over 8
+=over 4
 
 =item %@
 
@@ -106,50 +106,86 @@ Run a custom conflict resolver logic on already existing target files.
 Unless conflict resolver is given, organizebydate(1) ignores conflicts silently
 or overwrites target unconditionally if B<--overwrite> is specified.
 
-The conflict resolver can either be a single word command
-or a command and its arguments when I<CMD> contains space
-(in this case you can not pass argument itself with spaces to the command
-because each space-delimited words go to separate arguments),
-or a whole bash(1) script if B<--conflict-resolver-script> is given.
-I<SCRIPT> is run as a separate command too, not in organizebydate(1)'s own context.
+The conflict resolver can either be a B<single word> command
+or a B<command and arguments> - when I<CMD> contains IFS chars (like space)
+(in this case you can not pass arguments themself containing spaces to the command
+because each space-delimited word goes to a separate argument),
+or a whole bash(1) B<script> if B<--conflict-resolver-script> is given.
+I<SCRIPT> is run as a separate command too, not in organizebydate(1)'s own shell context.
 
-Arguments passed to this command (after the arguments included in I<CMD>, if any)
-are the source file's path first and the target path secondly.
-Environment variables passed:
+COMMAND ARGUMENTS
 
-=over 8
+Arguments passed to conflict resolver command/script (after the arguments included in I<CMD>, if any)
+are the source file's path first and the target path secondly:
 
-=item ORGANIZEBYDATE_MODE
+=over 4
+
+=item 1. source file path
+
+=item 2. target file path
+
+=back
+
+EXAMPLES
+
+ --conflict-resolver-cmd some-command
+ # runs this: some-command SOURCE TARGET
+ 
+ --conflict-resolver-cmd "some-command --option x"
+ # runs this: some-command --option x SOURCE TARGET
+
+ --conflict-resolver-cmd "some-command --option \"a and b\""
+ # WRONG: "a and b" goes into 3 separate arguments, not one
+ 
+ --conflict-resolver-script "some-command --option \"a and b\" \"$@\""
+ # RIGHT: runs this within a bash script
+ # and the end this in ran: some-command --option "a and b" SOURCE TARGET
+
+ENVIRONMENT
+
+Environment variables passed to conflict resolver programms:
+
+=over 4
+
+=item C<ORGANIZEBYDATE_MODE>
 
 B<copy> or B<move>
 
-=item SOURCE_FILE_MTIME
+=item C<SOURCE_FILE_MTIME>
 
-=item TARGET_FILE_MTIME
+=item C<TARGET_FILE_MTIME>
 
-=item SOURCE_FILE_CTIME
+=item C<SOURCE_FILE_CTIME>
 
-=item TARGET_FILE_CTIME
+=item C<TARGET_FILE_CTIME>
 
-=item SOURCE_FILE_ATIME
+=item C<SOURCE_FILE_ATIME>
 
-=item TARGET_FILE_ATIME
+=item C<TARGET_FILE_ATIME>
 
-=item SOURCE_FILE_SIZE
+=item C<SOURCE_FILE_SIZE>
 
-=item TARGET_FILE_SIZE
+=item C<TARGET_FILE_SIZE>
 
 Some attributes of the source and target files to help the resolver.
 File time attributes are in unix timestamp, size is in bytes.
 
 =back
 
-Non-zero exit status is considered failure (and recorded if B<--faillog> is given).
-On zero exit status, the conflict resolution is get from the last line in the command's output.
-Don't write more than 1 newline char (C<\n>) to the very end.
-Conflict resolutions:
+EXIT STATUS
 
-=over 8
+If the conflict resolver programm return a non-zero exit status,
+it is considered failure (and recorded if B<--faillog> is given).
+On zero exit status, the conflict resolution is get from the command's output's last line.
+Don't write more than 1 newline char (C<\n>) to the very end,
+otherwise the last line would only contain the empty string.
+
+SIGNALS
+
+Conflict resolution signals,
+ie. what the resolver programm can signal back to organizebydate(1) by its last STDOUT line.
+
+=over 4
 
 =item B<skip>
 
@@ -233,7 +269,7 @@ Dry run. Do not copy (move) files.
 Output what would be done in C<< I<OPERATION> B<TAB> I<SOURCE> B<TAB> I<TARGET> >> format.
 Where I<OPERATION> is one of:
 
-=over 8
+=over 4
 
 =item copy
 
@@ -446,9 +482,7 @@ do
 		fi
 		shift
 		conflict_resolver_cmd=$1
-		set -f
-		declare -a conflict_resolver_cmd_args=($conflict_resolver_cmd)
-		set +f
+		read -r -a conflict_resolver_cmd_args <<< "$conflict_resolver_cmd"
 		;;
 	(--conflict-resolver-script)
 		if [ -n "$conflict_resolver_cmd" ]

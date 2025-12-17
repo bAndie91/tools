@@ -2,8 +2,11 @@
 
 use Data::Dumper;
 use Digest::SHA;
+use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat no_auto_abbrev require_order/;
+use Pod::Usage;
 
-$version_sep = '.';
+$version_sep1 = '.';
+$version_sep2 = '';
 
 sub checksum_file
 {
@@ -11,6 +14,60 @@ sub checksum_file
 	$digest->addfile($_[0]);
 	return $digest->hexdigest;
 }
+
+=pod
+
+=head1 NAME
+
+organizebydate-conflict-resolve-filename-version - Filename conflict resolver script for organizebydate(1)
+
+=head1 SYNOPSIS
+
+organizebydate-conflict-resolve-filename-version [I<OPTIONS>] I<SOURCE> I<TARGET>
+
+=head1 DESCRIPTION
+
+This is a helper programm used by organizebydate(1) as a filename conflict resolver command.
+It signals that the I<SOURCE> is already equivalent to the I<TARGET> if their SHA-256 checksums match.
+If not, then sets a new target file name for organizebydate(1).
+The new target includes a version number in between the file's basename and extension,
+taking into account any already existing versioned file names, so no files gonna be overwritten
+(unless there is a race condition with other processes writing to the target directory).
+
+=head1 OPTIONS
+
+=over 4
+
+=item -s I<STR>
+
+Set I<STR> as the string separating the filename (basename) from the version number.
+Default is dot: C<.>.
+
+=item -t I<STR>
+
+Set I<STR> as the string separating the version number from the filename suffix (extension).
+Default is empty, so the version number is followed by the dot directly which is the part of the suffix,
+if there is an extension.
+
+=back
+
+=head1 EXAMPLES
+
+ organizebydate-conflict-resolve-filename-version -s '(v' -t ')' ...
+
+=head1 SEE ALSO
+
+organizebydate(1)
+
+=cut
+
+GetOptions(
+	's=s' => \$version_sep1,
+	't=s' => \$version_sep2,
+	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+pod2usage(-exitval=>2, -verbose=>99) unless scalar @ARGV == 2;
 
 
 $Source = $ARGV[0];
@@ -46,7 +103,7 @@ else
 $version = 2;
 
 # notice if the filename already has a version number:
-if($prefix =~ /\Q$version_sep\E(\d+)$/)
+if($prefix =~ /\Q$version_sep1\E(\d+)\Q$version_sep2\E$/)
 {
 	$version = $1 + 1;
 	$prefix = $`;
@@ -57,7 +114,7 @@ if($prefix =~ /\Q$version_sep\E(\d+)$/)
 while(1)
 {
 	# insert the version number right before the extension:
-	$new_target = $target_dir . $prefix . $version_sep . $version . $suffix;
+	$new_target = $target_dir . $prefix . $version_sep1 . $version . $version_sep2 . $suffix;
 	last if ! -e $new_target and ! -l $new_target;
 	$version++;
 }

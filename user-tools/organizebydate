@@ -198,7 +198,8 @@ Copy (move) source to target.
 Optionally with a new target path.
 This always (attempts to) overwrites the target
 even if B<--overwrite> is not given,
-and in either cases: with or without I<NEW-TARGET> being given.
+and either if I<NEW-TARGET> is given or nor.
+So it's the resolver programm's responsibility to prevent unwanted overwrite.
 
 =item B<done>
 

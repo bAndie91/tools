@@ -1,0 +1,67 @@
+#!/usr/bin/env perl
+
+use Data::Dumper;
+use Digest::SHA;
+
+$version_sep = '.';
+
+sub checksum_file
+{
+	my $digest = Digest::SHA->new('sha-256');
+	$digest->addfile($_[0]);
+	return $digest->hexdigest;
+}
+
+
+$Source = $ARGV[0];
+$Target = $ARGV[1];
+
+warn "filename conflict resolver: source: $Source\n";
+warn "filename conflict resolver: target: $Target\n";
+warn "comparing checksums...\n";
+if(checksum_file($Source) eq checksum_file($Target))
+{
+	warn "checksums match exactly.\n";
+	print "done\n";
+	exit 0;
+}
+else
+{
+	warn "checksums differ.\n";
+}
+
+
+my ($target_dir, $target_file) = $Target =~ /^(.*?)([^\/]+)$/;
+# keep the last dot-delimited substring as filename extension:
+if($target_file =~ /^(.+?)(\.[^\.]+)$/)
+{
+	$prefix = $1;
+	$suffix = $2;
+}
+else
+{
+	$prefix = $target_file;
+	$suffix = '';
+}
+$version = 2;
+
+# notice if the filename already has a version number:
+if($prefix =~ /\Q$version_sep\E(\d+)$/)
+{
+	$version = $1 + 1;
+	$prefix = $`;
+}
+
+
+# find the next version number:
+while(1)
+{
+	# insert the version number right before the extension:
+	$new_target = $target_dir . $prefix . $version_sep . $version . $suffix;
+	last if ! -e $new_target and ! -l $new_target;
+	$version++;
+}
+
+warn "filename conflict resolver: new target: $new_target\n";
+print "proceed $new_target\n";
+exit 0;

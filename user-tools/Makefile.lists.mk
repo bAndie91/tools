@@ -128,6 +128,7 @@ TOOLS ?= \
   nthash.py \
   ocspverify \
   organizebydate \
+  organizebydate-conflict-resolve-filename-version \
   palemoon-current-urls \
   pararun \
   parsel \

@@ -70,6 +70,7 @@ append
   | 2>&1            | stderr:c:fd:stdout            |
   |                 | 2:c:fd:1                      |
   |                 | --stderr-fd=1                 |
+  |                 | --stderr-fd=stdout            |
   +-----------------+-------------------------------+
   | < /dev/null     | 0:r:file:/dev/null            |
   |                 | 0:-                           |

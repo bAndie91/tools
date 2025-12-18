@@ -142,6 +142,7 @@ use List::MoreUtils qw/all any none/;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 
+$0 = "saveout";
 $Stream = {};
 $OptDefaultFlush = {
 	'lines' => undef,
@@ -241,13 +242,11 @@ sub process_line
 	my $line = shift;
 	my $output = shift;
 	my $flush_by = shift;
-	my $do_flush = 0;
 	
 	my $output_file = expand_template($output->{'template'}, substr($line, 0, -1));
 	if(defined $output->{'fh'} and $output_file ne $output->{'file'})
 	{
-		close $output->{'fh'};
-		$output->{'fh'} = undef;
+		close_output($output);
 	}
 	if(not defined $output->{'fh'} or $output_file ne $output->{'file'})
 	{
@@ -255,16 +254,16 @@ sub process_line
 		$output->{'file'} = $output_file;
 	}
 	
-	my $written_bytes = print {$output->{'fh'}} $line;
+	my $write_ok = print {$output->{'fh'}} $line;
+	# TODO SIGPIPE unless write_ok?
 	
 	if($flush_by->{'bytes'})
 	{
-		$output->{'written_bytes'} += $written_bytes;
+		$output->{'written_bytes'} += length $line;
 		if($flush_by->{'bytes'} <= $output->{'written_bytes'})
 		{
-			$do_flush = 1;
+			do_flush($output);
 			$output->{'written_bytes'} = 0;
-			return;
 		}
 	}
 	if($flush_by->{'lines'})
@@ -272,28 +271,31 @@ sub process_line
 		$output->{'written_lines'} += 1;
 		if($flush_by->{'lines'} <= $output->{'written_lines'})
 		{
-			do_flush($output, $flush_by);
+			do_flush($output);
 			$output->{'written_lines'} = 0;
-			return;
 		}
 	}
-	
-	if($do_flush)
+	if($flush_by->{'sec'} and not defined $output->{'flush_at'})
 	{
-		do_flush($output, $flush_by);
+		$output->{'flush_at'} = time + $flush_by->{'sec'};
 	}
 }
 
 sub do_flush
 {
 	my $output = shift;
-	my $flush_by = shift;
-	
 	$output->{'fh'}->flush;
-	if($flush_by->{'sec'})
-	{
-		$output->{'last_flush_time'} = time;
-	}
+	$output->{'flush_at'} = undef;
+}
+
+sub close_output
+{
+	my $output = shift;
+	do_flush($output);
+	close $output->{'fh'};
+	$output->{'fh'} = undef;
+	$output->{'written_bytes'} = 0;
+	$output->{'written_lines'} = 0;
 }
 
 sub process_stream
@@ -362,32 +364,43 @@ while(1)
 	}
 	last if $fds eq '';
 	
-	# TODO timeout select() to do timed flushes if any...
+	my $timeout = undef;
+	my ($earliest_scheduled_flush) = sort grep {defined} map { $_->{'output'}->{'flush_at'} } values %$Stream;
+	$timeout = $earliest_scheduled_flush - time if defined $earliest_scheduled_flush;
 	
 	$! = 0;
-	select($fds, undef, undef, undef);
-	my $errno = int $!;
-	next if $errno;
+	select($fds, undef, undef, $timeout);
+	my $select_errno = int $!;
 	
-	# TODO check flush timers
-	
-	for my $fdnum (keys %$Stream)
+	# flush scheduled outputs, if any
+	my $now = time;
+	for my $stream (values %$Stream)
 	{
-		my $reader = $Stream->{$fdnum}->{'reader'};
+		if(defined $stream->{'output'}->{'flush_at'} and $stream->{'output'}->{'flush_at'} <= $now)
+		{
+			do_flush($stream->{'output'});
+		}
+	}
+	
+	next if $select_errno;
+	
+	for my $stream (values %$Stream)
+	{
+		my $reader = $stream->{'reader'};
 		if(vec($fds, fileno($reader), 1) == 1)
 		{
-			my $bytes = sysread $reader, $Stream->{$fdnum}->{'buf'}, 1024, length $Stream->{$fdnum}->{'buf'};
+			my $bytes = sysread $reader, $stream->{'buf'}, 1024, length $stream->{'buf'};
 			if($bytes)
 			{
-				process_stream($Stream->{$fdnum});
+				process_stream($stream);
 			}
 			else
 			{
 				# this stream is closed.
-				undef $Stream->{$fdnum}->{'reader'};
+				undef $stream->{'reader'};
 				# process last unterminated line (if any)
-				process_line($Stream->{$fdnum}->{'buf'}, $Stream->{$fdnum}->{'output'}, $Stream->{$fdnum}->{'flush-by'}) if length $Stream->{$fdnum}->{'buf'};
-				close $Stream->{$fdnum}->{'output'}->{'fh'};
+				process_line($stream->{'buf'}, $stream->{'output'}, $stream->{'flush-by'}) if length $stream->{'buf'};
+				close_output($stream->{'output'});
 			}
 		}
 	}

@@ -9,6 +9,7 @@ use List::MoreUtils qw/all any none/;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 
+$0 = "stdfilt";
 @Filters = ();
 @initialARGV = @ARGV;
 

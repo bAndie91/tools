@@ -14,7 +14,7 @@ Switches UID to I<USER>, GID to his primary GID,
 and additional groups according to system group database,
 then executes into I<COMMAND> (does not fork(2)).
 
-It keeps these environment variables automatically:
+It always keeps these environment variables:
 
 =over 4
 
@@ -26,7 +26,7 @@ It keeps these environment variables automatically:
 
 =back
 
-and sets these environment variables to their correct values respecting the I<USER>'s properties:
+And sets all of these environment variables to their correct values according to the system passwd(5) NSS database:
 
 =over 4
 
@@ -40,13 +40,15 @@ and sets these environment variables to their correct values respecting the I<US
 
 =back
 
-and keeps those environment variables which are listed in the comma-delimited list of B<RUNAS_KEEP_ENVS> environment variable.
+And keeps those environment variables which are listed in the comma-delimited list of B<RUNAS_KEEP_ENVS> environment variable.
 
 =head1 ENVIRONMENT
 
 =over 4
 
 =item RUNAS_KEEP_ENVS
+
+Comma-delimited list of variable names which runas(1) won't remove from the environment.
 
 =back
 
@@ -57,7 +59,7 @@ otherwise exits B<125 + errno>, eg. 127 when command not found.
 
 =head1 SEE ALSO
 
-su(1), sg(1), sudo(8), setpriv(1), initgroups(3), execve(2), getpwnam(3)
+su(1), sg(1), sudo(8), setpriv(1), initgroups(3), execve(2), getpwnam(3), environ(7)
 
 =cut
 

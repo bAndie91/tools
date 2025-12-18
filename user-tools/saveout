@@ -347,7 +347,7 @@ sub process_line
 sub do_flush
 {
 	my $output = shift;
-	$output->{'fh'}->flush;
+	$output->{'fh'}->flush if defined $output->{'fh'};
 	$output->{'flush_at'} = undef;
 }
 

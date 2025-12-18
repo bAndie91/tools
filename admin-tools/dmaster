@@ -17,7 +17,7 @@ Start programs defined in B<daemontab> file.
 Restart them when ended.
 
 Re-read the B<daemontab> file on B<HUP> signal,
-stops processes which are no longer in it (or I<ID> changed),
+stops processes which are no longer in it (or I<ID> changed) with SIGTERM signal,
 and starts new ones.
 Those daemons whose I<COMMAND> I<ARGS> changed, are not restarted automatically.
 
@@ -83,9 +83,9 @@ Write internal state into F</var/run/shm/dmaster.state> file.
 
 =item TERM, INT
 
-Terminate managed daemons (always with B<TERM> signal),
-wait for them to exit, then exit dmaster(1) itself.
-If a daemon is a process group leader, sends signal to the whole process group.
+Terminate managed daemons, always with one B<TERM> signal each,
+wait for all of them to exit, then exit dmaster(1) itself.
+If a daemon is a process group leader (become on its own or started via setpgrp(1)), sends the signal to the whole process group at once.
 
 =item HUP
 
@@ -142,7 +142,7 @@ Don't forget to place this inittab(5) entry above any entry with a B<wait> actio
 
 =head1 SEE ALSO
 
-supervisor(1), supervise(8), daemon(1), runit(1), L<sinit|https://core.suckless.org/sinit/>
+supervisor(1), supervise(8), daemon(1), runit(1), L<sinit|https://core.suckless.org/sinit/>, setpgrp(1)
 
 =cut
 

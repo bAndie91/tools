@@ -119,6 +119,31 @@ Maybe does not make sense to set more than the buffered-IO block size.
 Similar to the B<--flush-lines> and B<--flush-bytes> option groups,
 except flush after at least I<SEC> seconds passed since last write to the selected outputs.
 
+=item -f, --failure I<ACTION>
+
+If can not write to the output file, or can not even open it,
+print the failed line of text to its own STDERR,
+then depending on the I<ACTION>:
+
+=over 4
+
+=item TERM
+
+Terminate I<COMMAND> by SIGTERM, then continue running,
+but will also exit soon as I<COMMAND> probably terminates upon the signal.
+This is the default.
+
+=item PIPE
+
+Send SIGPIPE to I<COMMAND>, then continue running.
+I<COMMAND> may recover from the error condition itself.
+
+=item IGNORE
+
+Just ignore.
+
+=back
+
 =back
 
 =head1 SECURITY
@@ -149,6 +174,8 @@ $OptDefaultFlush = {
 	'bytes' => undef,
 	'sec' => undef,
 };
+@FailureActions = ('TERM', 'PIPE', 'IGNORE');
+$OptFailAction = $FailureActions[0];
 
 @args = ();
 while(@ARGV)
@@ -164,6 +191,11 @@ while(@ARGV)
 }
 @ARGV = @args;
 
+sub die_invalid_option_argument
+{
+	die "Invalid argument for ".$_[0]->{starter}.$_[0]->{given}." option: '".$_[1]."'\n";
+}
+
 sub set_flush_opt
 {
 	my $by = shift;
@@ -173,7 +205,7 @@ sub set_flush_opt
 	}
 	else
 	{
-		die "Invalid argument for ".$_[0]->{starter}.$_[0]->{given}." option: '".$_[1]."'";
+		die_invalid_option_argument(@_);
 	}
 }
 
@@ -184,8 +216,7 @@ GetOptions(
 		if($_[1] =~ /^(\d+)=(\S+)$/) {
 			$Stream->{$1}->{'output'}->{'template'} = $2; }
 		else {
-			die "Invalid argument for ".$_[0]->{starter}.$_[0]->{given}." option: '".$_[1]."'";
-		}
+			die_invalid_option_argument(@_); }
 	},
 	
 	'L|flush-lines:+' => \$OptDefaultFlush->{'lines'},
@@ -202,6 +233,13 @@ GetOptions(
 	'So|flush-sec-stdout:+' => \$Stream->{1}->{'flush-by'}->{'sec'},
 	'Se|flush-sec-stderr:+' => \$Stream->{2}->{'flush-by'}->{'sec'},
 	'Sn|flush-sec-fd=s' => sub { set_flush_opt('sec', @_); },
+	
+	'f|fail|failure=s' => sub {
+		if($_[1] ~~ @FailureActions) {
+			$OptFailAction = $_[1]; }
+		else {
+			die_invalid_option_argument(@_); }
+	},
 	
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
@@ -237,6 +275,20 @@ sub expand_template
 	return $res;
 }
 
+sub handle_failure
+{
+	my $msg = shift;
+	my $fdnum = shift;
+	my $linetext = shift;
+	
+	warn "$0: $msg\n";
+	print STDERR "$0: fd $fdnum: can not save: $linetext";
+	if($OptFailAction ~~ ['TERM', 'PIPE'])
+	{
+		kill $OptFailAction, $CHILD_PID;
+	}
+}
+
 sub process_line
 {
 	my $line = shift;
@@ -250,12 +302,22 @@ sub process_line
 	}
 	if(not defined $output->{'fh'} or $output_file ne $output->{'file'})
 	{
-		open $output->{'fh'}, '>>', $output_file or die "$0: open: $output_file: $!\n";  # TODO SIGPIPE CHILD_PID ?
+		my $open_ok = open $output->{'fh'}, '>>', $output_file;
+		if(not $open_ok)
+		{
+			handle_failure("open: $output_file: $!", $output->{'child_fdnum'}, $line);
+			return 0;
+		}
 		$output->{'file'} = $output_file;
 	}
 	
+	$! = 0;
 	my $write_ok = print {$output->{'fh'}} $line;
-	# TODO SIGPIPE unless write_ok?
+	if(not $write_ok)
+	{
+		handle_failure("write: $output_file: $!", $output->{'child_fdnum'}, $line);
+		return 0;
+	}
 	
 	if($flush_by->{'bytes'})
 	{
@@ -279,6 +341,7 @@ sub process_line
 	{
 		$output->{'flush_at'} = time + $flush_by->{'sec'};
 	}
+	return 1;
 }
 
 sub do_flush
@@ -303,14 +366,17 @@ sub process_stream
 	my $stream = shift;
 	while(1)
 	{
-		my $nl = index $stream->{'buf'}, "\n";
-		last if $nl == -1;  # ain't a complete line is there
-		$nl++;
+		my $nlpos = index $stream->{'buf'}, "\n";
+		last if $nlpos == -1;  # ain't a complete line there
+		$nlpos++;
 		
-		my $line = substr $stream->{'buf'}, 0, $nl;
-		process_line $line, $stream->{'output'}, $stream->{'flush-by'};
+		my $line = substr $stream->{'buf'}, 0, $nlpos;
+		my $line_put_ok = process_line $line, $stream->{'output'}, $stream->{'flush-by'};
+		# maybe keep the line in the buffer unless $line_put_ok?
+		# this either blocks subsequent lines to be sent to output,
+		# or mixes up the order and/or timestamping of reprocessed lines.
 		
-		$stream->{'buf'} = substr $stream->{'buf'}, $nl;
+		$stream->{'buf'} = substr $stream->{'buf'}, $nlpos;
 	}
 }
 
@@ -324,6 +390,7 @@ for my $fdnum (keys %$Stream)
 	$Stream->{$fdnum}->{'buf'} => '';
 	$Stream->{$fdnum}->{'output'}->{'file'} = '';
 	$Stream->{$fdnum}->{'output'}->{'fh'} = undef;
+	$Stream->{$fdnum}->{'output'}->{'child_fdnum'} = $fdnum;
 }
 
 

@@ -7,7 +7,10 @@ opt_newer=''
 opt_older=''
 opt_newer_rel=''
 opt_older_rel=''
+opt_date=''
+opt_week=''
 toggle_pathsonly=''
+week_start_on_Monday=1
 
 opt_parser_set_opt()
 {
@@ -54,6 +57,16 @@ do
 	fi
 	shift
 done
+
+if [ -n "$opt_week" ]
+then
+	opt_newer=`date +%F -d "$opt_week - $[$(date -d "$opt_week" +%u)-$week_start_on_Monday] days"`
+	opt_older=`date +%F -d "$opt_newer + 1 week"`
+elif [ -n "$opt_date" ]
+then
+	opt_newer=`date +%F -d "$opt_date"`
+	opt_older=`date +%F -d "$opt_date + 1 day"`
+fi
 
 find "$opt_maildir" -maxdepth 1 -type f \
 	${opt_newer:+-newermt "$opt_newer"} ${opt_older:+! -newermt "$opt_older"} \

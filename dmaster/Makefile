@@ -28,6 +28,10 @@ endef
 	$(call install_manpage,$<,5,daemontab,$@)
 
 
+dmaster.troff dmaster-signal.troff: %.troff: %
+	pod2man --name="$(basename $<)" --section 8 --utf8 "$<" > "$@~" && mv "$@~" "$@"
+
+
 
 define remove
 @[ ! -e $(1) ] || rm -v $(1)

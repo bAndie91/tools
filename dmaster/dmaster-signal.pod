@@ -1,0 +1,21 @@
+=pod
+
+=head1 NAME
+
+dmaster-signal - Send a signal to a daemon managed by dmaster
+
+=head1 SYNOPSIS
+
+dmaster-signal I<DAEMON-ID> I<SIGNAL>
+
+=head1 DESCRIPTION
+
+dmaster-signal(1) utilizes PIDFD to reliably send signal to the daemon
+managed by dmaster(1) and specified by I<DAEMON-ID>.
+
+I<SIGNAL> is either numeric or symbolic signal name.
+
+=head1 SEE ALSO
+
+dmaster(1), pidfd_send_signal(2), signal(7)
+

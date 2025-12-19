@@ -28,8 +28,10 @@ endef
 	$(call install_manpage,$<,5,daemontab,$@)
 
 
-dmaster.8 dmaster-signal.8: %.8: %
-	pod2man --name="$(basename $<)" --section 8 --utf8 "$<" > "$@~" && mv "$@~" "$@"
+.PHONY: update-online-docs
+update-online-docs: dmaster.pod dmaster-signal.pod
+dmaster.pod dmaster-signal.pod: %.pod: %
+	podselect "$<" > "$@~" && mv "$@~" "$@"
 
 
 

@@ -28,10 +28,8 @@ endef
 	$(call install_manpage,$<,5,daemontab,$@)
 
 
-.PHONY: update-online-docs
-update-online-docs: dmaster.pod dmaster-signal.pod
-dmaster.pod dmaster-signal.pod: %.pod: %
-	podselect "$<" > "$@~" && mv "$@~" "$@"
+README.md: dmaster dmaster-signal
+	cat $^ | pod2markdown --utf8 | sed -e 's/^# /#&/; s/^## NAME/# NAME/' > "$@~" && mv "$@~" "$@"
 
 
 

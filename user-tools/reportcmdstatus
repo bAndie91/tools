@@ -6,8 +6,6 @@ use Pod::Usage;
 use IPC::Run qw/start finish/;
 use Data::Dumper;
 
-$0 = "reportcmdstatus";
-
 $opt_report_start = 0;
 $opt_clone_status = 0;
 $opt_wait_end = 0;

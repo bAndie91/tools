@@ -40,8 +40,10 @@ Well, it's called foreground in most service's terminology, but they will be as 
         d1 my-daemon "--param=foo bar"
 
     is what you want.
+    By the way the `"--param=foo bar"` quotation is also valid in shells (and equivalent to `--param="foo bar"`).
 
     It's not recommended to write complex scripts directly in daemontab.
+    Although command-line continuation is possible by backslash (`\`) and the end of a text-line.
     Put them in `/etc/daemons` directory instead and call over to them like:
 
         my-service /etc/daemons/my-service.sh

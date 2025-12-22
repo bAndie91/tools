@@ -46,8 +46,10 @@ is invalid (parsed as 2 parameters: C<--param="foo> and C<bar"> with dangling qu
  d1 my-daemon "--param=foo bar"
 
 is what you want.
+By the way the C<"--param=foo bar"> quotation is also valid in shells (and equivalent to C<--param="foo bar">).
 
 It's not recommended to write complex scripts directly in daemontab.
+Although command-line continuation is possible by backslash (C<\>) and the end of a text-line.
 Put them in F</etc/daemons> directory instead and call over to them like:
 
  my-service /etc/daemons/my-service.sh
@@ -327,10 +329,14 @@ sub read_daemon_inittab
 	open my $fh, '<', $path or logger "open $path: $!";
 	return unless $fh;
 	my %new_daemon = ();
+	my $line = '';
 	while(<$fh>)
 	{
+		chomp;
 		next if /^\s*(#|$)/;
-		if(my ($id, $cmd) = /^(\S+)\s+(.+)$/)
+		$line .= $_;
+		next if $line =~ s/\\$//;  # allow line-continuation at EOL backslash
+		if(my ($id, $cmd) = $line =~ /^(\S+)\s+(.+)$/)
 		{
 			my @cmd_args = parse_cmd_string $cmd;
 			$new_daemon{$id}->{'cmd_args'} = \@cmd_args;
@@ -339,6 +345,7 @@ sub read_daemon_inittab
 		{
 			logger "can not parse line $.";
 		}
+		$line = '';
 	}
 	close $fh;
 	return %new_daemon;

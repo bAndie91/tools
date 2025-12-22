@@ -42,8 +42,13 @@ Well, it's called foreground in most service's terminology, but they will be as 
     is what you want.
     By the way the `"--param=foo bar"` quotation is also valid in shells (and equivalent to `--param="foo bar"`).
 
+    Although command-line continuation is possible by backslash (`\`) and the end of a text-line; like
+
+        my-service command-to-my-service --long-option-a \
+          --long-option-b --other-long-option \
+          --even-longer-option
+
     It's not recommended to write complex scripts directly in daemontab.
-    Although command-line continuation is possible by backslash (`\`) and the end of a text-line.
     Put them in `/etc/daemons` directory instead and call over to them like:
 
         my-service /etc/daemons/my-service.sh

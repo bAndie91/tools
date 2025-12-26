@@ -20,38 +20,49 @@
 abs_cwd=`readlink -f "$PWD"`
 if [[ $abs_cwd =~ (.+?/(ssh|rhome)/([^/]+))/?(.*) ]]
 then
-    mountpoint=${BASH_REMATCH[1]}
-    rhost=${BASH_REMATCH[3]}
-    rpath=${BASH_REMATCH[4]}
-    rhostname=''
-    rport=''
-    if [[ $rhost =~ (.+?)\(([^,]+),([0-9]+)\)$ ]]
-    then
-        rhost=${BASH_REMATCH[1]}
-        rhostname=${BASH_REMATCH[2]}
-        rport=${BASH_REMATCH[3]}
-    fi
-    mounted=`mount | td-trans-mount | td-filter MOUNTPOINT = "$mountpoint" | td-select -H DEVICE`
-    if [[ $mounted =~ :(.*) ]]
-    then
-        rbase=${BASH_REMATCH[1]:-.}
-        if [ "${rbase: -1}" = / ]
-        then
-            rpath=$rbase$rpath
-        else
-            rpath=$rbase/$rpath
-        fi
-    fi
-    printf -v rpath_esc %q "$rpath"
-    echo "rr: running as '$rhost', ${rhostname:+HostName: $rhostname, }${rport:+Port: $rport, }workdir: $rpath_esc" 1>&2
-    declare -a cmdargs_esc=()
-    for arg in "$@"
-    do
-        printf -v arg %q "$arg"
-        cmdargs_esc+=("$arg")
-    done
-    exec ssh "$rhost" ${rhostname:+-o HostName=$rhostname} ${rport:+-o Port=$rport} "cdexec $rpath_esc ${cmdargs_esc[*]}"
+	mountpoint=${BASH_REMATCH[1]}
+	rhost=${BASH_REMATCH[3]}
+	rpath=${BASH_REMATCH[4]}
+	rhostname=''
+	rport=''
+	if [[ $rhost =~ (.+?)\(([^,]+),([0-9]+)\)$ ]]
+	then
+		rhost=${BASH_REMATCH[1]}
+		rhostname=${BASH_REMATCH[2]}
+		rport=${BASH_REMATCH[3]}
+	fi
+	mounted=`mount | td-trans-mount | td-filter MOUNTPOINT = "$mountpoint" | td-select -H DEVICE`
+	if [[ $mounted =~ :(.*) ]]
+	then
+		rbase=${BASH_REMATCH[1]:-.}
+		if [ "${rbase: -1}" = / ]
+		then
+			rpath=$rbase$rpath
+		else
+			rpath=$rbase/$rpath
+		fi
+	fi
+	printf -v rpath_esc %q "$rpath"
+	echo "rr: running as '$rhost', ${rhostname:+HostName: $rhostname, }${rport:+Port: $rport, }workdir: $rpath_esc" 1>&2
+	declare -a ssh_extra_opts=()
+	declare -a cmdargs_esc=()
+	arg_for=ssh
+	for arg in "$@"
+	do
+		if [ "${arg:0:1}" != - ]
+		then
+			arg_for=remote
+		fi
+		if [ $arg_for = ssh ]
+		then
+			ssh_extra_opts+=("$arg")
+		else
+			printf -v arg %q "$arg"
+			cmdargs_esc+=("$arg")
+		fi
+	done
+	exec ssh "$rhost" ${rhostname:+-o HostName=$rhostname} ${rport:+-o Port=$rport} "${ssh_extra_opts[@]}" "cdexec $rpath_esc ${cmdargs_esc[*]}"
 else
-    echo "rr: current path is not detected as being remote mounted" 1>&2;
-    exit 1
+	echo "rr: current path is not detected as being remote mounted" 1>&2;
+	exit 1
 fi

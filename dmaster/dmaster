@@ -226,9 +226,10 @@ use Socket;
 use Config;
 require 'syscall.ph';
 @signal_names = split ' ', $Config{'sig_name'};
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 $pidfd_support = eval q{ use Linux::FD::Pid; 1; };
-warn "deprecating PIDFD support: $@" if $@;
+warn "degrading PIDFD support: $@" if $@;
 
 
 $0 = 'dmaster';

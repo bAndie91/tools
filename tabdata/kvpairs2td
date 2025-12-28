@@ -150,11 +150,13 @@ while(my $Line = <STDIN>)
 		push @Headers, grep { not $_ ~~ @Headers } @OptPredefColumns, $OptRestColumnName;
 		$rest_column_idx = $#Headers;
 		output_record(@Headers);
+		STDOUT->flush;
 	}
 	
 	$record[$rest_column_idx] = $Rest . $Line;
 	
 	output_record(@record);
+	STDOUT->flush;
 	
 	$RN++;
 }

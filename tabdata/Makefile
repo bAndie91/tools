@@ -1,4 +1,6 @@
 
+INSTALL_WRAPPER =
+
 BIN_DIR = /usr/tool
 LIB_DIR = /usr/lib/tool/perl5/tabdata
 
@@ -52,15 +54,15 @@ list-tools:
 
 
 $(TARGET_TOOLS): $(BIN_DIR)/%: %
-	install $(notdir $@) $(BIN_DIR)/
+	$(INSTALL_WRAPPER) install $(notdir $@) $(BIN_DIR)/
 	@echo remove $@ >> uninstall.sh
 
 $(LIB_DIR)/common.pl: common.pl $(LIB_DIR)
-	install $(notdir $@) $(LIB_DIR)/
+	$(INSTALL_WRAPPER) install $(notdir $@) $(LIB_DIR)/
 	@echo remove $@ >> uninstall.sh
 
 $(LIB_DIR):
-	mkdir -p $@
+	$(INSTALL_WRAPPER) mkdir -p $@
 	@echo remove $@ >> uninstall.sh
 
 .PHONY: depcheck

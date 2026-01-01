@@ -73,6 +73,7 @@ close $management_socket;
 
 $flags = 0;
 $! = 0;
+# TODO send signal to the process group if PID is a group leader.
 $ret = syscall SYS_pidfd_send_signal(), int $pidfd, int $signal_num, undef, $flags;
 if($ret == -1)
 {

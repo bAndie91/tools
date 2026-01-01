@@ -1,4 +1,6 @@
 
+INSTALL_WRAPPER =
+
 TARGET_DIR = /usr/tool
 LIBDIR = /usr/lib/tool
 OLDINCLUDEDIR = /usr/include/tool
@@ -28,7 +30,7 @@ install-all: $(NORMAL_TARGET_FILES) $(SPECIAL_TARGET_FILES) install-manpages /sb
 
 
 define install-tool-recipe
-	install $< $@
+	$(INSTALL_WRAPPER) install $< $@
 	@echo remove $@ >> uninstall.sh
 endef
 
@@ -47,20 +49,21 @@ $(NORMAL_TARGET_FILES): $(TARGET_DIR)/%: %
 
 $(TARGET_DIR)/grandparentexe: grandparentexe
 	$(install-tool-recipe)
-	chmod g+s $@
+	$(INSTALL_WRAPPER) chmod g+s $@
 
 $(TARGET_DIR)/netbulk: netbulk
 	$(install-tool-recipe)
-	setcap cap_setgid+ep $(TARGET_DIR)/netbulk
+	$(INSTALL_WRAPPER) setcap cap_setgid+ep $(TARGET_DIR)/netbulk
 
 $(TARGET_DIR)/lastbcsv: $(TARGET_DIR)/lastcsv
-	ln -sfT lastcsv $@
+	$(INSTALL_WRAPPER) ln -sfT lastcsv $@
 	@echo remove $@ >> uninstall.sh
 
 $(TARGET_DIR)/kill-rogue: /usr/share/man/man1/kill-rogue.1.gz
 
 /usr/share/man/man1/kill-rogue.1.gz:
-	cat ../doc/kill-rogue.1 | gzip > $@
+	cat ../doc/kill-rogue.1 | gzip > $(notdir $@)
+	$(INSTALL_WRAPPER) mv $(notdir $@) $@
 	@echo remove $@ >> uninstall.sh
 
 
@@ -80,22 +83,22 @@ loadenv: override CFLAGS += -I$(OLDINCLUDEDIR) -L$(LIBDIR) -larray -Wl,-rpath=$(
 
 
 logbtmp: logbtmp.d/logbtmp
-	install $< $@
+	$(INSTALL_WRAPPER) install $< $@
 logbtmp.d/logbtmp:
 	$(make-subdir-tool-recipe)
 
 lastcsv: lastcsv.d/lastcsv
-	install $< $@
+	$(INSTALL_WRAPPER) install $< $@
 lastcsv.d/lastcsv:
 	$(make-subdir-tool-recipe)
 
 chmod-cheap: coreutils/chmod-cheap
-	install $< $@
+	$(INSTALL_WRAPPER) install $< $@
 coreutils/chmod-cheap:
 	$(make-subdir-tool-recipe)
 
 wall: wall.d/wall
-	install $< $@
+	$(INSTALL_WRAPPER) install $< $@
 wall.d/wall:
 	$(make-subdir-tool-recipe)
 
@@ -113,19 +116,19 @@ SPECIAL_MANPAGES = relpath
 MANPAGE_FILES = $(foreach podfile,$(filter-out $(SPECIAL_MANPAGES),$(POD_FILES)),$(SYSTEM_MANPAGES_PATH)/$(basename $(podfile))$(MANPAGE_FILE_SUFFIX))
 
 $(MANPAGE_FILES): $(SYSTEM_MANPAGES_PATH)/%$(MANPAGE_FILE_SUFFIX): %.pod
-	pod2man --name="$(basename $<)" --section $(MANPAGE_SECTION) --utf8 "$<" | $(COMPRESSOR) > "$@~" && mv "$@~" "$@"
+	pod2man --name="$(basename $<)" --section $(MANPAGE_SECTION) --utf8 "$<" | $(COMPRESSOR) > "$(notdir $@)" && $(INSTALL_WRAPPER) mv "$(notdir $@)" "$@"
 	@echo remove $@ >> uninstall.sh
 
 $(SYSTEM_MANPAGES_PATH)/lastbcsv$(MANPAGE_FILE_SUFFIX): lastcsv.pod
-	ln -sfn lastcsv "$@"
+	$(INSTALL_WRAPPER) ln -sfn lastcsv "$@"
 	@echo remove $@ >> uninstall.sh
 
 $(SYSTEM_MANPAGES_PATH)/relpath.1tool.$(COMPRESSOR_EXT): relpath.pod
-	pod2man --name="$(basename $<)" --section $(MANPAGE_SECTION) --utf8 "$<" | $(COMPRESSOR) > "$@~" && mv "$@~" "$@"
+	pod2man --name="$(basename $<)" --section $(MANPAGE_SECTION) --utf8 "$<" | $(COMPRESSOR) > "$(notdir $@)" && $(INSTALL_WRAPPER) mv "$(notdir $@)" "$@"
 	@echo remove $@ >> uninstall.sh
 
 install-manpages: $(MANPAGE_FILES) $(SYSTEM_MANPAGES_PATH)/lastbcsv$(MANPAGE_FILE_SUFFIX) $(SYSTEM_MANPAGES_PATH)/relpath.1tool.$(COMPRESSOR_EXT)
-	/etc/cron.daily/man-db
+	$(INSTALL_WRAPPER) /etc/cron.daily/man-db
 
 .PHONY: install-manpages
 
@@ -133,5 +136,5 @@ install-manpages: $(MANPAGE_FILES) $(SYSTEM_MANPAGES_PATH)/lastbcsv$(MANPAGE_FIL
 
 
 /sbin/suid-reboot: suid-reboot
-	install -o root -g root -m 4444 $< $@
-	setfacl -m u:reboot:r-x $@
+	$(INSTALL_WRAPPER) install -o root -g root -m 4444 $< $@
+	$(INSTALL_WRAPPER) setfacl -m u:reboot:r-x $@

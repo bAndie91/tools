@@ -51,6 +51,20 @@ then
 fi
 )
 
+(
+set -e
+set -o pipefail
+
+description=$(GIT_DIR="$directory" git show repo-mgmt:description)
+if [ -n "$description" ]
+then
+	echo "Updating repo description..." >&2
+	echo "Previous description was:" >&2
+	cat "$directory/description" | sed -e 's/^\(.\)/  \1/' >&2
+	printf %s "$description" > "$directory/description"
+fi
+)
+
 errstatus=$?
 echo "Repo management commands are over." >&2
 echo "----" >&2

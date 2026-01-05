@@ -20,6 +20,33 @@ done
 
 if [ -n "$directory" ]
 then
+	# check all path components for forbidden names:
+	path=$directory
+	while true
+	do
+		basename=`basename "$path"`
+		case "$basename" in
+		(objects|refs)
+			echo "Forbidden directory name: $basename" >&2
+			exit 1;;
+		esac
+		path=`dirname "$path"`
+		if [ "$path" = / ]; then break; fi
+	done
+	
+	# verify all parent directory not already being a git repo:
+	parent=`dirname "$directory"`
+	while true
+	do
+		if [ -e "$parent/objects" -o -e "$parent/refs" ]
+		then
+			echo "Do not nest a repo into an other: $parent" >&2
+			exit 17
+		fi
+		parent=`dirname "$parent"`
+		if [ "$parent" = / ]; then break; fi
+	done
+	
 	mkdir -p "$directory"
 	chmod u+rwx,o-rwx "$directory"
 	git init --bare "$directory" >&2

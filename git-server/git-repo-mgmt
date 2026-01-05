@@ -60,7 +60,7 @@ if [ -n "$description" ]
 then
 	echo "Updating repo description..." >&2
 	echo "Previous description was:" >&2
-	cat "$directory/description" | sed -e 's/^\(.\)/  \1/' >&2
+	cat "$directory/description" | perl -pe 's/^\r?\n$//; s/^(.)/  $1/; $last = $_; END { print "\n" unless $last =~ /\n/; }' >&2
 	printf %s "$description" > "$directory/description"
 fi
 )

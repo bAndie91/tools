@@ -1,4 +1,5 @@
 
+INSTALL_WRAPPER =
 TARGET_DIR = /usr/tool
 LIBDIR = /usr/lib/tool
 OLDINCLUDEDIR = /usr/include/tool
@@ -24,7 +25,7 @@ default:
 .PHONY: all
 all: $(TOOLS) netbulk lastbcsv
 .PHONY: install-all
-install-all: $(NORMAL_TARGET_FILES) $(SPECIAL_TARGET_FILES) install-manpages /sbin/suid-reboot
+install-all: $(NORMAL_TARGET_FILES) $(SPECIAL_TARGET_FILES) install-manpages /sbin/suid-reboot /sbin/suid-halt
 
 
 define install-tool-recipe
@@ -67,7 +68,7 @@ $(TARGET_DIR)/kill-rogue: /usr/share/man/man1/kill-rogue.1.gz
 netbulk: setgroups.c
 	$(CC) $< $(CFLAGS) -DONLY_ALLOWED_GID=$(shell getent group netbulk | cut -d: -f3) -o $@
 
-suid-reboot: suid-command.c
+suid-reboot suid-halt: suid-command.c
 	gcc $< $(CFLAGS) -o $@
 
 lastbcsv: lastcsv
@@ -125,13 +126,13 @@ $(SYSTEM_MANPAGES_PATH)/relpath.1tool.$(COMPRESSOR_EXT): relpath.pod
 	@echo remove $@ >> uninstall.sh
 
 install-manpages: $(MANPAGE_FILES) $(SYSTEM_MANPAGES_PATH)/lastbcsv$(MANPAGE_FILE_SUFFIX) $(SYSTEM_MANPAGES_PATH)/relpath.1tool.$(COMPRESSOR_EXT)
-	/etc/cron.daily/man-db
+	$(INSTALL_WRAPPER) /etc/cron.daily/man-db
 
 .PHONY: install-manpages
 
 
 
 
-/sbin/suid-reboot: suid-reboot
-	install -o root -g root -m 4444 $< $@
-	setfacl -m u:reboot:r-x $@
+/sbin/suid-reboot /sbin/suid-halt: /sbin/%: %
+	$(INSTALL_WRAPPER) install -o root -g root -m 4444 $< $@
+	$(INSTALL_WRAPPER) setfacl -m u:$(subst /sbin/suid-,,$@):r-x $@

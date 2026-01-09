@@ -50,6 +50,10 @@
 	textconv = soffice2html.pl
 	cachetextconv = true
 
+[diff "genopro"]
+	textconv = gno2gron
+	cachetextconv = true
+
 [color]
 	ui = auto
 	status = auto
@@ -110,6 +114,7 @@
 	search-commit = log -p --pickaxe-all -S
 	grep-commit = log -p --pickaxe-all -G
 	history = ! "cd \"$GIT_PREFIX\" && bash -c 'opts=(); while [ \"${1:0:1}\" = - ]; do opts+=(\"$1\"); shift; done; git log --follow --patch \"${opts[@]}\" -- \"$@\"' --"
+	patch-history = log --pretty=email --patch-with-stat --reverse --full-index --binary -m --first-parent --
 	tags = ! "f(){ git tag -l -n \"$@\" | sort -V; }; f"
 	
 	# get branch/ref info
@@ -142,8 +147,8 @@
 	
 	sed-on-conflict-files = !"bash -c 'set -x; fn(){ sed_cmd=$1; shift; if [ $# = 0 ]; then IFS=$'\\n'; f=($(git conflicting-files)); else f=(\"$@\"); fi; sed -e \"$sed_cmd\" -i -s \"${f[@]}\"; }; fn \"$@\"' --"
 	resolve-keep-union = sed-on-conflict-files "/^[<>=|]\\\\{7\\\\}\\\\(\\ \\\\|$\\\\)/d"
-	resolve-keep-head-hunks = sed-on-conflict-files '/^<\\\\{7\\\\}\\ /d;/^>\\\\{7\\\\}\\ /,/^=\\\\{7\\\\}/d'
-	resolve-keep-incoming-hunks = sed-on-conflict-files "/^<\\\\{7\\\\}\\ /,/^=\\\\{7\\\\}/d;/^>\\\\{7\\\\}\\ /d"
+	resolve-keep-head-hunks = sed-on-conflict-files '/^<<<<<<<\\ /d;/^=======/,/^>>>>>>>\\ /d'
+	resolve-keep-incoming-hunks = sed-on-conflict-files "/^<<<<<<<\\ /,/^=======/d;/^>>>>>>>\\ /d"
 	
 	sum = diff --stat --summary --find-copies --find-renames --ignore-all-space
 	sum-log = log --stat --summary --find-copies --find-renames

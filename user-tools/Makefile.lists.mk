@@ -11,6 +11,7 @@ TOOLS ?= \
   base64url \
   bencode2json \
   body \
+  callgraph.js \
   cdexec \
   chattr-cow \
   chattr-nocow \

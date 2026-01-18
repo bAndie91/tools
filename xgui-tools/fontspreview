@@ -1,0 +1,262 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import pygtk
+pygtk.require('2.0')
+import gtk
+import gtk.gdk
+import glib
+import pango
+
+class FontViewer:
+    def __init__(self):
+        self.window = gtk.Window(gtk.WINDOW_TOPLEVEL)
+        self.window.set_title("Font Viewer")
+        self.window.set_default_size(900, 600)
+        self.window.connect("destroy", gtk.main_quit)
+        
+        # Sample text to display
+        self.sample_text = "The quick brown fox jumps over the lazy dog 0123456789"
+        
+        # Get all available fonts
+        context = self.window.get_pango_context()
+        self.all_fonts = []
+        for family in context.list_families():
+            self.all_fonts.append(family.get_name())
+        self.all_fonts.sort()
+        
+        # Track which fonts are checked
+        self.font_checked = {font: True for font in self.all_fonts}
+        
+        # Timer for delayed preview update
+        self.update_timer = None
+        
+        # Map to track preview widgets for each font
+        self.font_widgets = {}  # font_name -> (name_label, sample_label, separator)
+        
+        # Create UI
+        self.create_ui()
+        
+    def create_ui(self):
+        main_vbox = gtk.VBox(False, 5)
+        main_vbox.set_border_width(5)
+        
+        # Top controls
+        controls_hbox = gtk.HBox(False, 5)
+        
+        # Filter entry
+        filter_label = gtk.Label("Filter:")
+        controls_hbox.pack_start(filter_label, False, False, 0)
+        
+        self.filter_entry = gtk.Entry()
+        self.filter_entry.connect("changed", self.on_filter_changed)
+        controls_hbox.pack_start(self.filter_entry, True, True, 0)
+        
+        # Check all button
+        check_all_btn = gtk.Button("Check All Displayed")
+        check_all_btn.connect("clicked", self.on_check_all)
+        controls_hbox.pack_start(check_all_btn, False, False, 0)
+        
+        # Uncheck all button
+        uncheck_all_btn = gtk.Button("Uncheck All Displayed")
+        uncheck_all_btn.connect("clicked", self.on_uncheck_all)
+        controls_hbox.pack_start(uncheck_all_btn, False, False, 0)
+        
+        main_vbox.pack_start(controls_hbox, False, False, 0)
+        
+        # HPaned for font list and preview
+        hpaned = gtk.HPaned()
+        hpaned.set_position(250)
+        
+        # Left side - font list with checkboxes
+        list_scroll = gtk.ScrolledWindow()
+        list_scroll.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+        
+        self.font_store = gtk.ListStore(bool, str)
+        self.font_tree = gtk.TreeView(self.font_store)
+        self.font_tree.set_headers_visible(True)
+        
+        # Checkbox column
+        toggle_renderer = gtk.CellRendererToggle()
+        toggle_renderer.connect("toggled", self.on_font_toggled)
+        toggle_col = gtk.TreeViewColumn("Show", toggle_renderer, active=0)
+        self.font_tree.append_column(toggle_col)
+        
+        # Font name column
+        text_renderer = gtk.CellRendererText()
+        name_col = gtk.TreeViewColumn("Font Name", text_renderer, text=1)
+        name_col.set_sort_column_id(1)
+        self.font_tree.append_column(name_col)
+        
+        list_scroll.add(self.font_tree)
+        hpaned.pack1(list_scroll, False, True)
+        
+        # Right side - preview area
+        preview_scroll = gtk.ScrolledWindow()
+        preview_scroll.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+        
+        self.preview_vbox = gtk.VBox(False, 10)
+        self.preview_vbox.set_border_width(10)
+        preview_scroll.add_with_viewport(self.preview_vbox)
+        
+        hpaned.pack2(preview_scroll, True, True)
+        
+        main_vbox.pack_start(hpaned, True, True, 0)
+        
+        # Sample text entry at bottom
+        text_hbox = gtk.HBox(False, 5)
+        text_label = gtk.Label("Sample text:")
+        text_hbox.pack_start(text_label, False, False, 0)
+        
+        self.text_entry = gtk.Entry()
+        self.text_entry.set_text(self.sample_text)
+        self.text_entry.connect("changed", self.on_text_changed)
+        text_hbox.pack_start(self.text_entry, True, True, 0)
+        
+        main_vbox.pack_start(text_hbox, False, False, 0)
+        
+        self.window.add(main_vbox)
+        
+        # Populate initial font list
+        self.update_font_list()
+        self.update_preview()
+        
+        self.window.show_all()
+    
+    def get_filtered_fonts(self):
+        """Get list of fonts matching current filter"""
+        filter_text = self.filter_entry.get_text().lower()
+        if not filter_text:
+            return self.all_fonts
+        return [f for f in self.all_fonts if filter_text in f.lower()]
+    
+    def update_font_list(self):
+        """Update the font list based on filter"""
+        self.font_store.clear()
+        filtered = self.get_filtered_fonts()
+        for font in filtered:
+            self.font_store.append([self.font_checked[font], font])
+    
+    def update_preview(self):
+        """Initial setup of preview pane - only called once at startup"""
+        # Add labels for initially checked fonts
+        for font_name in sorted(self.all_fonts):
+            if self.font_checked[font_name]:
+                self.add_font_preview(font_name)
+        
+        self.preview_vbox.show_all()
+    
+    def add_font_preview(self, font_name):
+        """Add preview widgets for a single font at the correct alphabetical position"""
+        # Find the correct position to insert (alphabetically)
+        insert_pos = 0
+        for existing_font in sorted(self.font_widgets.keys()):
+            if existing_font < font_name:
+                insert_pos += 3  # Each font has 3 widgets
+            else:
+                break
+        
+        # Font name label
+        name_label = gtk.Label()
+        name_label.set_markup("<span foreground=\"grey\">%s</span>" % glib.markup_escape_text(font_name))
+        name_label.set_alignment(0, 0.5)
+        name_label.set_selectable(True)
+        self.preview_vbox.pack_start(name_label, False, False, 0)
+        self.preview_vbox.reorder_child(name_label, insert_pos)
+        
+        # Sample text in that font
+        sample_label = gtk.Label(self.sample_text)
+        sample_label.set_alignment(0, 0.5)
+        sample_label.modify_font(pango.FontDescription(font_name + " 18"))
+        self.preview_vbox.pack_start(sample_label, False, False, 0)
+        self.preview_vbox.reorder_child(sample_label, insert_pos + 1)
+        
+        # Separator
+        sep = gtk.HSeparator()
+        self.preview_vbox.pack_start(sep, False, False, 5)
+        self.preview_vbox.reorder_child(sep, insert_pos + 2)
+        
+        # Store references to widgets
+        self.font_widgets[font_name] = (name_label, sample_label, sep)
+        
+        # Show the new widgets
+        name_label.show()
+        sample_label.show()
+        sep.show()
+    
+    def remove_font_preview(self, font_name):
+        """Remove preview widgets for a single font"""
+        if font_name in self.font_widgets:
+            name_label, sample_label, sep = self.font_widgets[font_name]
+            self.preview_vbox.remove(name_label)
+            self.preview_vbox.remove(sample_label)
+            self.preview_vbox.remove(sep)
+            del self.font_widgets[font_name]
+    
+    def on_filter_changed(self, widget):
+        """Handle filter text changes"""
+        self.update_font_list()
+    
+    def on_font_toggled(self, widget, path):
+        """Handle checkbox toggle"""
+        iter = self.font_store.get_iter(path)
+        font_name = self.font_store.get_value(iter, 1)
+        current = self.font_store.get_value(iter, 0)
+        
+        # Toggle state
+        self.font_checked[font_name] = not current
+        self.font_store.set_value(iter, 0, not current)
+        
+        # Add or remove just this font's preview
+        if not current:  # Was unchecked, now checked
+            self.add_font_preview(font_name)
+        else:  # Was checked, now unchecked
+            self.remove_font_preview(font_name)
+    
+    def on_check_all(self, widget):
+        """Check all displayed fonts"""
+        filtered = self.get_filtered_fonts()
+        for font in filtered:
+            if not self.font_checked[font]:  # Only process if currently unchecked
+                self.font_checked[font] = True
+                self.add_font_preview(font)
+        
+        self.update_font_list()
+    
+    def on_uncheck_all(self, widget):
+        """Uncheck all displayed fonts"""
+        filtered = self.get_filtered_fonts()
+        for font in filtered:
+            if self.font_checked[font]:  # Only process if currently checked
+                self.font_checked[font] = False
+                self.remove_font_preview(font)
+        
+        self.update_font_list()
+    
+    def on_text_changed(self, widget):
+        """Handle sample text changes with delay"""
+        self.sample_text = self.text_entry.get_text()
+        
+        # Cancel existing timer if any
+        if self.update_timer:
+            gtk.timeout_remove(self.update_timer)
+        
+        # Set new timer for 500ms delay
+        self.update_timer = gtk.timeout_add(500, self.delayed_preview_update)
+    
+    def delayed_preview_update(self):
+        """Called after delay to update preview text"""
+        # Update text in all existing sample labels
+        for font_name, (name_label, sample_label, sep) in self.font_widgets.items():
+            sample_label.set_text(self.sample_text)
+        
+        self.update_timer = None
+        return False  # Don't repeat timer
+
+def main():
+    gtk.gdk.threads_init()
+    FontViewer()
+    gtk.main()
+
+if __name__ == "__main__":
+    main()

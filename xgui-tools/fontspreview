@@ -2,9 +2,8 @@
 # -*- coding: utf-8 -*-
 
 # TODO red border marks should persist
-# TODO not-marked labels should have border too to prevent layout shit when getting colored border
-# TODO not-yellow red-marked labels should not be white, but transparent/default bg
 # TODO update sample text rendering on the font preview labels asynchronously as well
+# TODO zoom +/- preview font size
 
 import pygtk
 pygtk.require('2.0')
@@ -13,15 +12,17 @@ import gtk.gdk
 import glib
 import pango
 
+White = gtk.gdk.color_parse("white")
+Yellow = gtk.gdk.color_parse("#FFFF99")  # Sticker yellow
+Red = gtk.gdk.color_parse("#FF0000")
+
+
 class FontViewer:
 	def __init__(self):
 		self.window = gtk.Window(gtk.WINDOW_TOPLEVEL)
 		self.window.set_title("Font Viewer")
 		self.window.set_default_size(1300, 700)
 		self.window.connect("destroy", gtk.main_quit)
-		
-		# Sample text to display
-		self.sample_text = "The quick brown fox jumps over the lazy dog 0123456789"
 		
 		self.preview_render_queue = []
 		self.render_scheduler = None
@@ -62,6 +63,8 @@ class FontViewer:
 		
 		self.filter_entry = gtk.Entry()
 		self.filter_entry.connect("changed", self.on_filter_changed)
+		self.filter_entry.set_icon_from_stock(1, gtk.STOCK_CLEAR)
+		self.filter_entry.connect('icon-release', lambda entry, icon_pos, event: entry.set_text(''))
 		controls_hbox.pack_start(self.filter_entry, True, True, 0)
 		
 		# Check all button
@@ -114,7 +117,10 @@ class FontViewer:
 		
 		self.preview_vbox = gtk.VBox(False, 10)
 		self.preview_vbox.set_border_width(10)
-		preview_scroll.add_with_viewport(self.preview_vbox)
+		preview_vbox_evb = gtk.EventBox()
+		preview_vbox_evb.modify_bg(gtk.STATE_NORMAL, White)
+		preview_scroll.add_with_viewport(preview_vbox_evb)
+		preview_vbox_evb.add(self.preview_vbox)
 		
 		hpaned.pack1(preview_scroll, True, True)
 		
@@ -126,7 +132,7 @@ class FontViewer:
 		text_hbox.pack_start(text_label, False, False, 0)
 		
 		self.text_entry = gtk.Entry()
-		self.text_entry.set_text(self.sample_text)
+		self.sample_text = "The quick brown fox jumps over the lazy dog 0123456789"
 		self.text_entry.connect("changed", self.on_text_changed)
 		text_hbox.pack_start(self.text_entry, True, True, 0)
 		
@@ -139,6 +145,14 @@ class FontViewer:
 		self.update_preview()
 		
 		self.window.show_all()
+	
+	@property
+	def sample_text(self):
+		return self.text_entry.get_text()
+	
+	@sample_text.setter
+	def sample_text(self, new):
+		self.text_entry.set_text(new)
 	
 	def get_filtered_fonts(self):
 		"""Get list of fonts matching current filter"""
@@ -168,7 +182,7 @@ class FontViewer:
 		self.preview_render_queue.append(font_name)
 		if self.render_scheduler is None:
 			self.render_scheduler = glib.timeout_add(10, lambda *X: self.add_font_preview_cb(), priority=glib.PRIORITY_DEFAULT_IDLE)
-
+	
 	def add_font_preview_cb(self):
 		"""Add preview widgets for a single font at the correct alphabetical position"""
 		if len(self.preview_render_queue) == 0:
@@ -232,6 +246,8 @@ class FontViewer:
 	
 	def remove_font_preview(self, font_name):
 		"""Remove preview widgets for a single font"""
+		if font_name in self.preview_render_queue:
+			self.preview_render_queue.remove(font_name)
 		if font_name in self.font_widgets:
 			name_label, sample_label, eventbox = self.font_widgets[font_name]
 			self.preview_vbox.remove(eventbox)
@@ -261,14 +277,16 @@ class FontViewer:
 	def update_preview_colors(self, eventbox, font_name):
 		"""Update background and border colors based on marking state"""
 		# Determine colors
-		bg_color = None
-		border_width = 0
+		bg_color = White
+		border_width = 3
+		border_color = White
 		
 		if font_name in self.yellow_marked:
-			bg_color = gtk.gdk.color_parse("#FFFF99")  # Sticker yellow
+			bg_color = Yellow
+			border_color = Yellow
 		
 		if font_name in self.red_marked:
-			border_width = 3
+			border_color = Red
 		
 		# Get the original child (label)
 		if hasattr(eventbox, 'inner_box'):
@@ -279,59 +297,33 @@ class FontViewer:
 			label = eventbox.get_child()
 		
 		# Apply border
-		if border_width > 0:
-			# Create border structure if it doesn't exist
-			if not hasattr(eventbox, 'inner_box'):
-				# Remove label from eventbox
-				eventbox.remove(label)
-				
-				# Create alignment for padding (border thickness)
-				alignment = gtk.Alignment(0.5, 0.5, 1, 1)
-				alignment.set_padding(border_width, border_width, border_width, border_width)
-				
-				# Create inner EventBox for label background
-				inner_box = gtk.EventBox()
-				inner_box.add(label)
-				
-				# Build structure: eventbox (border) -> alignment (spacing) -> inner_box (background) -> label
-				eventbox.add(alignment)
-				alignment.add(inner_box)
-				
-				# Store references
-				eventbox.alignment = alignment
-				eventbox.inner_box = inner_box
+		# Create border structure if it doesn't exist
+		if not hasattr(eventbox, 'inner_box'):
+			# Remove label from eventbox
+			eventbox.remove(label)
 			
-			# Set border color (outer eventbox)
-			eventbox.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse("#FF0000"))
+			# Create alignment for padding (border thickness)
+			alignment = gtk.Alignment(0.5, 0.5, 1, 1)
+			alignment.set_padding(border_width, border_width, border_width, border_width)
 			
-			# Set background color (inner eventbox)
-			if bg_color:
-				eventbox.inner_box.modify_bg(gtk.STATE_NORMAL, bg_color)
-			else:
-				eventbox.inner_box.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse("#FFFFFF"))
-		else:
-			# Remove border structure
-			if hasattr(eventbox, 'inner_box'):
-				# Dismantle the structure
-				eventbox.alignment.remove(eventbox.inner_box)
-				eventbox.remove(eventbox.alignment)
-				eventbox.inner_box.remove(label)
-				
-				# Put label back directly
-				eventbox.add(label)
-				
-				# Clean up references
-				delattr(eventbox, 'alignment')
-				delattr(eventbox, 'inner_box')
+			# Create inner EventBox for label background
+			inner_box = gtk.EventBox()
+			inner_box.add(label)
 			
-			# Apply background color directly
-			if bg_color:
-				eventbox.modify_bg(gtk.STATE_NORMAL, bg_color)
-			else:
-				eventbox.modify_bg(gtk.STATE_NORMAL, None)
+			# Build structure: eventbox (border) -> alignment (spacing) -> inner_box (background) -> label
+			eventbox.add(alignment)
+			alignment.add(inner_box)
+			
+			# Store references
+			eventbox.alignment = alignment
+			eventbox.inner_box = inner_box
 		
+		# Set border color (outer eventbox)
+		eventbox.modify_bg(gtk.STATE_NORMAL, border_color)
+		# Set background color (inner eventbox)
+		eventbox.inner_box.modify_bg(gtk.STATE_NORMAL, bg_color)
 		eventbox.show_all()
-		
+	
 	def on_hide_red_marked(self, widget):
 		"""Uncheck (hide) all fonts that are red-marked"""
 		fonts_to_hide = list(self.red_marked)
@@ -387,8 +379,6 @@ class FontViewer:
 	
 	def on_text_changed(self, widget):
 		"""Handle sample text changes with delay"""
-		self.sample_text = self.text_entry.get_text()
-		
 		# Cancel existing timer if any
 		if self.update_timer:
 			gtk.timeout_remove(self.update_timer)

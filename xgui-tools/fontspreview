@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# TODO red border marks should persist
 # TODO update sample text rendering on the font preview labels asynchronously as well
 # TODO zoom +/- preview font size
 
@@ -17,10 +16,10 @@ Yellow = gtk.gdk.color_parse("#FFFF99")  # Sticker yellow
 Red = gtk.gdk.color_parse("#FF0000")
 
 
-class FontViewer:
+class FontViewer(object):
 	def __init__(self):
 		self.window = gtk.Window(gtk.WINDOW_TOPLEVEL)
-		self.window.set_title("Font Viewer")
+		self.window.set_title("Typeface Preview")
 		self.window.set_default_size(1300, 700)
 		self.window.connect("destroy", gtk.main_quit)
 		
@@ -132,7 +131,6 @@ class FontViewer:
 		text_hbox.pack_start(text_label, False, False, 0)
 		
 		self.text_entry = gtk.Entry()
-		self.sample_text = "The quick brown fox jumps over the lazy dog 0123456789"
 		self.text_entry.connect("changed", self.on_text_changed)
 		text_hbox.pack_start(self.text_entry, True, True, 0)
 		
@@ -201,6 +199,7 @@ class FontViewer:
 		# Create an EventBox to capture clicks
 		eventbox = gtk.EventBox()
 		eventbox.set_visible_window(True)
+		eventbox.connect("realize", lambda w: w.window.set_cursor(gtk.gdk.Cursor(gtk.gdk.HAND2)))
 		
 		# VBox to hold name and sample labels
 		vbox = gtk.VBox(False, 0)
@@ -331,8 +330,6 @@ class FontViewer:
 			if self.font_checked[font_name]:
 				self.font_checked[font_name] = False
 				self.remove_font_preview(font_name)
-				# Remove from red marking since it's now hidden
-				self.red_marked.discard(font_name)
 		
 		# Update the font list to reflect unchecked state
 		self.update_font_list()
@@ -384,7 +381,7 @@ class FontViewer:
 			gtk.timeout_remove(self.update_timer)
 		
 		# Set new timer
-		self.update_timer = gtk.timeout_add(1500, self.delayed_preview_update)
+		self.update_timer = gtk.timeout_add(1000, self.delayed_preview_update)
 	
 	def delayed_preview_update(self):
 		"""Called after delay to update preview text"""
@@ -397,7 +394,8 @@ class FontViewer:
 
 def main():
 	gtk.gdk.threads_init()
-	FontViewer()
+	fv = FontViewer()
+	fv.sample_text = "The quick brown fox jumps over the lazy dog 0123456789"
 	gtk.main()
 
 if __name__ == "__main__":

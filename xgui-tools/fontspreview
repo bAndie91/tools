@@ -32,7 +32,11 @@ class FontViewer:
         self.update_timer = None
         
         # Map to track preview widgets for each font
-        self.font_widgets = {}  # font_name -> (name_label, sample_label, separator)
+        self.font_widgets = {}  # font_name -> (name_label, sample_label, separator, eventbox)
+        
+        # Track selection states
+        self.yellow_marked = set()  # Fonts marked with yellow (for review)
+        self.red_marked = set()     # Fonts marked with red border (to hide)
         
         # Create UI
         self.create_ui()
@@ -61,6 +65,11 @@ class FontViewer:
         uncheck_all_btn = gtk.Button("Uncheck All Displayed")
         uncheck_all_btn.connect("clicked", self.on_uncheck_all)
         controls_hbox.pack_start(uncheck_all_btn, False, False, 0)
+        
+        # Hide red-marked button
+        hide_red_btn = gtk.Button("Hide Red-Marked Fonts")
+        hide_red_btn.connect("clicked", self.on_hide_red_marked)
+        controls_hbox.pack_start(hide_red_btn, False, False, 0)
         
         main_vbox.pack_start(controls_hbox, False, False, 0)
         
@@ -156,42 +165,137 @@ class FontViewer:
             else:
                 break
         
+        # Create an EventBox to capture clicks
+        eventbox = gtk.EventBox()
+        eventbox.set_visible_window(True)
+        
+        # VBox to hold name and sample labels
+        vbox = gtk.VBox(False, 0)
+        
         # Font name label
         name_label = gtk.Label()
         name_label.set_markup("<span foreground=\"grey\">%s</span>" % glib.markup_escape_text(font_name))
         name_label.set_alignment(0, 0.5)
         name_label.set_selectable(True)
-        self.preview_vbox.pack_start(name_label, False, False, 0)
-        self.preview_vbox.reorder_child(name_label, insert_pos)
+        vbox.pack_start(name_label, False, False, 0)
         
         # Sample text in that font
         sample_label = gtk.Label(self.sample_text)
         sample_label.set_alignment(0, 0.5)
         sample_label.modify_font(pango.FontDescription(font_name + " 18"))
-        self.preview_vbox.pack_start(sample_label, False, False, 0)
-        self.preview_vbox.reorder_child(sample_label, insert_pos + 1)
+        vbox.pack_start(sample_label, False, False, 0)
+        
+        eventbox.add(vbox)
+        
+        # Connect click events
+        eventbox.connect("button-press-event", self.on_preview_clicked, font_name)
+        eventbox.set_events(gtk.gdk.BUTTON_PRESS_MASK)
+        
+        # Apply existing marking if any
+        self.update_preview_colors(eventbox, font_name)
+        
+        # Add to preview vbox
+        self.preview_vbox.pack_start(eventbox, False, False, 0)
+        self.preview_vbox.reorder_child(eventbox, insert_pos)
         
         # Separator
         sep = gtk.HSeparator()
         self.preview_vbox.pack_start(sep, False, False, 5)
-        self.preview_vbox.reorder_child(sep, insert_pos + 2)
+        self.preview_vbox.reorder_child(sep, insert_pos + 1)
         
         # Store references to widgets
-        self.font_widgets[font_name] = (name_label, sample_label, sep)
+        self.font_widgets[font_name] = (name_label, sample_label, sep, eventbox)
         
         # Show the new widgets
-        name_label.show()
-        sample_label.show()
+        eventbox.show_all()
         sep.show()
     
     def remove_font_preview(self, font_name):
         """Remove preview widgets for a single font"""
         if font_name in self.font_widgets:
-            name_label, sample_label, sep = self.font_widgets[font_name]
-            self.preview_vbox.remove(name_label)
-            self.preview_vbox.remove(sample_label)
+            name_label, sample_label, sep, eventbox = self.font_widgets[font_name]
+            self.preview_vbox.remove(eventbox)
             self.preview_vbox.remove(sep)
             del self.font_widgets[font_name]
+    
+    def on_preview_clicked(self, widget, event, font_name):
+        """Handle click/ctrl+click on preview labels"""
+        if event.button == 1:  # Left click
+            if event.state & gtk.gdk.CONTROL_MASK:
+                # Ctrl+Click - toggle red marking
+                if font_name in self.red_marked:
+                    self.red_marked.remove(font_name)
+                else:
+                    self.red_marked.add(font_name)
+            else:
+                # Regular click - toggle yellow marking
+                if font_name in self.yellow_marked:
+                    self.yellow_marked.remove(font_name)
+                else:
+                    self.yellow_marked.add(font_name)
+            
+            # Update colors
+            self.update_preview_colors(widget, font_name)
+        
+        return True
+    
+    def update_preview_colors(self, eventbox, font_name):
+        """Update background and border colors based on marking state"""
+        # Determine colors
+        bg_color = None
+        border_width = 0
+        
+        if font_name in self.yellow_marked:
+            bg_color = gtk.gdk.color_parse("#FFFF99")  # Sticker yellow
+        
+        if font_name in self.red_marked:
+            border_width = 3
+        
+        # Apply background color
+        if bg_color:
+            eventbox.modify_bg(gtk.STATE_NORMAL, bg_color)
+        else:
+            eventbox.modify_bg(gtk.STATE_NORMAL, None)
+        
+        # Apply border by setting a frame style
+        if border_width > 0:
+            # Create a red border effect using an inner frame
+            if not hasattr(eventbox, 'frame'):
+                frame = gtk.Frame()
+                frame.set_shadow_type(gtk.SHADOW_NONE)
+                # Remove existing child and re-add through frame
+                child = eventbox.get_child()
+                eventbox.remove(child)
+                frame.add(child)
+                eventbox.add(frame)
+                eventbox.frame = frame
+                eventbox.show_all()
+            
+            # Modify the frame's color to red
+            eventbox.frame.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse("#FF0000"))
+            eventbox.set_border_width(border_width)
+        else:
+            # Remove border
+            if hasattr(eventbox, 'frame'):
+                child = eventbox.frame.get_child()
+                eventbox.frame.remove(child)
+                eventbox.remove(eventbox.frame)
+                eventbox.add(child)
+                delattr(eventbox, 'frame')
+            eventbox.set_border_width(0)
+        
+    def on_hide_red_marked(self, widget):
+        """Uncheck (hide) all fonts that are red-marked"""
+        fonts_to_hide = list(self.red_marked)
+        for font_name in fonts_to_hide:
+            if self.font_checked[font_name]:
+                self.font_checked[font_name] = False
+                self.remove_font_preview(font_name)
+                # Remove from red marking since it's now hidden
+                self.red_marked.discard(font_name)
+        
+        # Update the font list to reflect unchecked state
+        self.update_font_list()
     
     def on_filter_changed(self, widget):
         """Handle filter text changes"""
@@ -247,7 +351,7 @@ class FontViewer:
     def delayed_preview_update(self):
         """Called after delay to update preview text"""
         # Update text in all existing sample labels
-        for font_name, (name_label, sample_label, sep) in self.font_widgets.items():
+        for font_name, (name_label, sample_label, sep, evbox) in self.font_widgets.items():
             sample_label.set_text(self.sample_text)
         
         self.update_timer = None

@@ -1,6 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+# TODO red border marks should persist
+# TODO not-marked labels should have border too to prevent layout shit when getting colored border
+# TODO not-yellow red-marked labels should not be white, but transparent/default bg
+# TODO fix add_font_preview to place separators correctly (include separator as part of the particular font preview label)
+
 import pygtk
 pygtk.require('2.0')
 import gtk
@@ -251,38 +256,67 @@ class FontViewer:
         if font_name in self.red_marked:
             border_width = 3
         
-        # Apply background color
-        if bg_color:
-            eventbox.modify_bg(gtk.STATE_NORMAL, bg_color)
+        # Get the original child (label)
+        if hasattr(eventbox, 'inner_box'):
+            # Already has border structure, get the actual label
+            label = eventbox.inner_box.get_child()
         else:
-            eventbox.modify_bg(gtk.STATE_NORMAL, None)
+            # First time, get the direct child
+            label = eventbox.get_child()
         
-        # Apply border by setting a frame style
+        # Apply border
         if border_width > 0:
-            # Create a red border effect using an inner frame
-            if not hasattr(eventbox, 'frame'):
-                frame = gtk.Frame()
-                frame.set_shadow_type(gtk.SHADOW_NONE)
-                # Remove existing child and re-add through frame
-                child = eventbox.get_child()
-                eventbox.remove(child)
-                frame.add(child)
-                eventbox.add(frame)
-                eventbox.frame = frame
-                eventbox.show_all()
+            # Create border structure if it doesn't exist
+            if not hasattr(eventbox, 'inner_box'):
+                # Remove label from eventbox
+                eventbox.remove(label)
+                
+                # Create alignment for padding (border thickness)
+                alignment = gtk.Alignment(0.5, 0.5, 1, 1)
+                alignment.set_padding(border_width, border_width, border_width, border_width)
+                
+                # Create inner EventBox for label background
+                inner_box = gtk.EventBox()
+                inner_box.add(label)
+                
+                # Build structure: eventbox (border) -> alignment (spacing) -> inner_box (background) -> label
+                eventbox.add(alignment)
+                alignment.add(inner_box)
+                
+                # Store references
+                eventbox.alignment = alignment
+                eventbox.inner_box = inner_box
             
-            # Modify the frame's color to red
-            eventbox.frame.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse("#FF0000"))
-            eventbox.set_border_width(border_width)
+            # Set border color (outer eventbox)
+            eventbox.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse("#FF0000"))
+            
+            # Set background color (inner eventbox)
+            if bg_color:
+                eventbox.inner_box.modify_bg(gtk.STATE_NORMAL, bg_color)
+            else:
+                eventbox.inner_box.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse("#FFFFFF"))
         else:
-            # Remove border
-            if hasattr(eventbox, 'frame'):
-                child = eventbox.frame.get_child()
-                eventbox.frame.remove(child)
-                eventbox.remove(eventbox.frame)
-                eventbox.add(child)
-                delattr(eventbox, 'frame')
-            eventbox.set_border_width(0)
+            # Remove border structure
+            if hasattr(eventbox, 'inner_box'):
+                # Dismantle the structure
+                eventbox.alignment.remove(eventbox.inner_box)
+                eventbox.remove(eventbox.alignment)
+                eventbox.inner_box.remove(label)
+                
+                # Put label back directly
+                eventbox.add(label)
+                
+                # Clean up references
+                delattr(eventbox, 'alignment')
+                delattr(eventbox, 'inner_box')
+            
+            # Apply background color directly
+            if bg_color:
+                eventbox.modify_bg(gtk.STATE_NORMAL, bg_color)
+            else:
+                eventbox.modify_bg(gtk.STATE_NORMAL, None)
+        
+        eventbox.show_all()
         
     def on_hide_red_marked(self, widget):
         """Uncheck (hide) all fonts that are red-marked"""

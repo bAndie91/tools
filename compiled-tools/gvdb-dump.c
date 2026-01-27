@@ -1,3 +1,14 @@
+
+/*
+how to compile?
+---------------
+1. download glib source
+   tested with glib2.0-2.74.6
+   eg. "apt source glib2.0"
+2. cd subprojects/gvdb/gvdb
+3. gcc -g gvdb-dump.c gvdb-reader.c gvdb-builder.c -I../../glib -I../../glib/gio -I../../glib/gvdb `pkg-config --cflags --libs glib-2.0 gio-2.0` -o gvdb-dump
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <gio/gio.h>

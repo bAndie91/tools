@@ -43,6 +43,7 @@ void array_insert(Array** array, array_index_t index, char * item)
 {
 	if(index >= array_p->length)
 	{
+		// TODO fill the gap in between when index > length
 		array_append(array, item);
 		return;
 	}
@@ -140,8 +141,13 @@ void array_empty(Array** array)
 	array_index_t cidx;
 	for(cidx = 0; cidx < array_p->length; cidx++)
 	{
-		free(array_p->item[cidx]);
+		if(array_p->item[cidx] != NULL)
+		{
+			free(array_p->item[cidx]);
+			array_p->item[cidx] = NULL;
+		}
 	}
+	array_p->length = 0;
 }
 
 void array_free(Array** array)

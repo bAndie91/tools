@@ -2,13 +2,15 @@
 #ifndef _INCLUDE_LIBARRAY_H
 #define _INCLUDE_LIBARRAY_H
 
+#include <stdlib.h>
+
 typedef size_t array_index_t;
 typedef size_t array_length_t;
 
 typedef struct {
   char ** item;
   array_index_t size;  // size allocated for 'item'
-  array_length_t length;  // how many items in 'item'
+  array_length_t length;  // how many items in 'item' (both NULL and not NULL)
 } Array;
 
 typedef enum {

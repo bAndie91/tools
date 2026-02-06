@@ -1,5 +1,6 @@
 
 #include <libmallocab.h>
+#include <string.h>
 
 #include "libarray.h"
 

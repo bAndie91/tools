@@ -2,7 +2,9 @@
 #ifndef _INCLUDE_LIBARRAY_H
 #define _INCLUDE_LIBARRAY_H
 
+#include <stddef.h>
 #include <stdlib.h>
+
 
 typedef size_t array_index_t;
 typedef size_t array_length_t;
@@ -19,15 +21,15 @@ typedef enum {
 } array_loop_control;
 
 void array_init(Array**, array_index_t);
-void array_setitem(Array**, array_index_t, char*);
-void array_append(Array**, char*);
-void array_insert(Array**, array_index_t index, char*);
+void array_setitem(Array**, array_index_t, char* /* duplicated; caller keeps ownership */);
+void array_append(Array**, char* /* duplicated; caller keeps ownership */);
+void array_insert(Array**, array_index_t index, char* /* duplicated; caller keeps ownership */);
 #define array_prepend(array, item) array_insert(array, 0, item)
-char* array_getitem(Array**, array_index_t);
+char* array_getitem(Array**, array_index_t) /* returned pointer owned by libarray; caller must NOT free */;
 char** array_getarray(Array**);
 void array_delete(Array**, array_index_t, array_length_t);
-char* array_pick(Array**, array_index_t);
-char* array_pop(Array**);
+char* array_pick(Array**, array_index_t) /* returned pointer's ownership transfered to the caller, thus caller is responsible to free */;
+char* array_pop(Array**) /* returned pointer's ownership transfered to the caller, thus caller is responsible to free */;
 #define array_shift(array) array_pick(array, 0)
 void array_remove(Array**, const char*);
 void array_empty(Array**);

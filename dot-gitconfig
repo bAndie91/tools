@@ -138,6 +138,9 @@
 	status-tracked = status --untracked-files=no
 	conflicting-files = diff --name-only --diff-filter=UXB
 	conflicts = ! "fn(){ git diff --name-only --diff-filter=UXB -z | xargs --null -L 1 sh -c 'f=$1; echo \"\\033[1;37;41m$f\\033[m\"; sed -ne \"/^<<<<<<</,/^>>>>>>>/p\" \"$f\" | sed -e \"s/^[<>=|]\\{7\\}\\( .*\\|$\\)/[1;33m&[m/\"' -- ; }; fn"
+	resolved-conflicts = ! "fn(){ git conflicting-files | foreach multicmd -e -d + git has-no-conflict {} + git add {}; }; fn"
+	has-conflict = ! "fn(){ cd \"$GIT_PREFIX\" && grep -Eq '^([<>=|])\\1{6}' -- \"$@\"; }; fn"
+	has-no-conflict = ! "cd \"$GIT_PREFIX\" && ! git has-conflict"
 	
 	choose-side-whole-files = !"bash -c 'fn(){ set -e; local side=$1; shift; declare -a files; if [ $# = 0 ]; then oIFS=$IFS; local IFS=$'\\''\\n'\\''; files=($(git diff --name-only --diff-filter=UXB)); if [ ${#files[@]} = 0 ]; then echo \"git choose: no conflicting files.\" >&2; return; else echo \"${files[*]}\"; IFS=$oIFS; fi; else files=(\"$@\"); fi; git checkout -m \"${files[@]}\"; git checkout --$side \"${files[@]}\"; git add \"${files[@]}\"; }; fn \"$@\"' --"
 	choose-head-branch-whole-files = choose-side-whole-files ours
@@ -146,9 +149,11 @@
 	choose-offshoot-branch-whole-files = choose-side-whole-files theirs
 	
 	sed-on-conflict-files = !"bash -c 'set -x; fn(){ sed_cmd=$1; shift; if [ $# = 0 ]; then IFS=$'\\n'; f=($(git conflicting-files)); else f=(\"$@\"); fi; sed -e \"$sed_cmd\" -i -s \"${f[@]}\"; }; fn \"$@\"' --"
-	resolve-keep-union = sed-on-conflict-files "/^[<>=|]\\\\{7\\\\}\\\\(\\ \\\\|$\\\\)/d"
-	resolve-keep-head-hunks = sed-on-conflict-files '/^<<<<<<<\\ /d;/^=======/,/^>>>>>>>\\ /d'
+	resolve-keep-union = sed-on-conflict-files "/^\\\\(=======\\\\||||||||\\\\|<<<<<<<\\\\|>>>>>>>\\\\)\\\\(\\ \\\\|$\\\\)/d"
+	resolve-keep-head-hunks = sed-on-conflict-files "/^<<<<<<<\\ /d;/^\\\\(=======\\\\||||||||\\\\)/,/^>>>>>>>\\ /d"
 	resolve-keep-incoming-hunks = sed-on-conflict-files "/^<<<<<<<\\ /,/^=======/d;/^>>>>>>>\\ /d"
+	resolve-keep-left-side = resolve-keep-head-hunks
+	resolve-keep-right-side = resolve-keep-incoming-hunks
 	
 	sum = diff --stat --summary --find-copies --find-renames --ignore-all-space
 	sum-log = log --stat --summary --find-copies --find-renames

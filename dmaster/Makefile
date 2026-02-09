@@ -1,4 +1,5 @@
 
+INSTALL_WRAPPER =
 MANFILE_COMPRESSOR = xz
 MANFILE_EXT = xz
 
@@ -9,16 +10,16 @@ default:
 
 
 .PHONY: install
-install: /sbin/dmaster /sbin/dmaster-signal /sbin/dmaster-dump /sbin/dmaster-reload \
+install: /sbin/dmaster /sbin/dmaster-signal /sbin/dmaster-dump /sbin/dmaster-status /sbin/dmaster-reload \
  /usr/share/man/man8/dmaster.8.$(MANFILE_EXT) /usr/share/man/man8/dmaster-signal.8.$(MANFILE_EXT) /usr/share/man/man5/daemontab.5.$(MANFILE_EXT)
 	$(warning Don't forget to install /sbin/dmaster as a respawn process, eg. put in /etc/inittab, see "man 8 dmaster" for examples.)
 
-/sbin/dmaster /sbin/dmaster-signal /sbin/dmaster-dump /sbin/dmaster-reload: /sbin/%: %
-	install $< $@
+/sbin/dmaster /sbin/dmaster-signal /sbin/dmaster-dump /sbin/dmaster-status /sbin/dmaster-reload: /sbin/%: %
+	$(INSTALL_WRAPPER) install $< $@
 
 define install_manpage
-	pod2man --name="$(3)" --section $(2) --utf8 "$(1)" | $(MANFILE_COMPRESSOR) > "$(4).tmp" &&\
-	mv -f "$(4).tmp" "$(4)"
+	pod2man --name="$(3)" --section $(2) --utf8 "$(1)" | $(MANFILE_COMPRESSOR) | $(INSTALL_WRAPPER) tee "$(4).tmp" >/dev/null &&\
+	$(INSTALL_WRAPPER) mv -f "$(4).tmp" "$(4)"
 endef
 
 /usr/share/man/man8/dmaster.8.$(MANFILE_EXT) /usr/share/man/man8/dmaster-signal.8.$(MANFILE_EXT): /usr/share/man/man8/%.8.$(MANFILE_EXT): %
@@ -34,7 +35,7 @@ README.md: dmaster dmaster-signal
 
 
 define remove
-@[ ! -e $(1) ] || rm -v $(1)
+@[ ! -e $(1) ] || $(INSTALL_WRAPPER) rm -v $(1)
 endef
 
 .PHONY: uninstall-dmaster
@@ -42,6 +43,7 @@ uninstall-dmaster:
 	$(call remove,/sbin/dmaster)
 	$(call remove,/sbin/dmaster-signal)
 	$(call remove,/sbin/dmaster-dump)
+	$(call remove,/sbin/dmaster-status)
 	$(call remove,/usr/share/man/man8/dmaster.8.$(MANFILE_EXT))
 	$(call remove,/usr/share/man/man8/dmaster-signal.8.$(MANFILE_EXT))
 	$(call remove,/usr/share/man/man5/daemontab.5.$(MANFILE_EXT))

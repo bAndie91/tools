@@ -1,0 +1,33 @@
+#!/usr/bin/env perl
+
+use Data::Dumper;
+use Time::Duration;
+require '/usr/lib/tool/perl5/tabdata/common.pl';
+
+$now = time;
+
+open my $pipe, '-|', 'dmaster-dump';
+while(<$pipe>)
+{
+	chomp;
+	my ($key, $val) = split "\t", $_, 2;
+	if(my ($name, $prop) = $key =~ /^daemon\.(.+?)\.(pid|(start|exit)times\.\d+|exit(signal|code))$/)
+	{
+		$prop =~ s/\.\d+$//;
+		$daemon{$name}->{$prop} = $val;
+	}
+}
+
+output_record("DAEMON", "FINISHED", "EXIT STATUS", "STARTED", "PID");
+
+for my $name (sort keys %daemon)
+{
+	my $d = $daemon{$name};
+	my $started = '';
+	$started = ago($now - $d->{starttimes}) if $d->{starttimes};
+	my $finished = '';
+	$finished = ago($now - $d->{exittimes}) if $d->{exittimes};
+	my $exitstatus = $d->{exitcode};
+	$exitstatus = "sig-".$d->{exitsignal} if $d->{exitsignal};
+	output_record($name, $finished, $exitstatus, $started, $d->{pid});
+}

@@ -35,6 +35,27 @@ def add_key_binding(widget, keyname, callback):
 	widget.add_accel_group(accelgroup)
 
 
+def _strip_net_wm_ping(win):
+	gdkwin = win.window  # the underlying GdkWindow
+	# Read what GTK put in WM_PROTOCOLS
+	result = gdkwin.property_get("WM_PROTOCOLS")
+	if result is None:
+		return
+	# result is (type_atom, format, data) — data is a list of atom names
+	_type, _format, atoms = result
+	# Filter out _NET_WM_PING
+	filtered = [a for a in atoms if a != "_NET_WM_PING"]
+	# Write back
+	gdkwin.property_change(
+		gtk.gdk.atom_intern("WM_PROTOCOLS"),
+		gtk.gdk.atom_intern("ATOM"),
+		32,
+		gtk.gdk.PROP_MODE_REPLACE,
+		[gtk.gdk.atom_intern(a) for a in filtered])
+
+def on_realize(widget):
+	_strip_net_wm_ping(win_main)
+
 class StockButton(gtk.Button):
 	def __init__(self, label=None, stock=None, use_underline=True, icon_size=None, tooltip=None):
 		if stock is not None and stock in gtk.stock_list_ids():
@@ -489,6 +510,7 @@ win_main.set_icon_name('alarm-clock')
 
 start_evt = win_main.connect('map-event', lambda w,e: (win_main.disconnect(start_evt), win_main_show()))
 win_main.connect('delete-event', lambda w,e: act_quit())
+win_main.connect('realize', on_realize)
 add_key_binding(win_main, '<Ctrl><Shift>Q', lambda *x: act_quit())
 
 box0.pack_start(ClockUI(), expand=False, fill=True)

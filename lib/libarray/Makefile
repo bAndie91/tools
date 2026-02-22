@@ -2,7 +2,7 @@
 LIBDIR = /usr/lib/tool
 OLDINCLUDEDIR = /usr/include/tool
 
-override CFLAGS += -lmallocab -Wl,-rpath=$(LIBDIR)
+override CFLAGS += -lmallocab -L/usr/lib/tool -Wl,-rpath=$(LIBDIR)
 
 
 libarray.so: libarray.c libarray.h

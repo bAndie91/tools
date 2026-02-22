@@ -1,5 +1,6 @@
 
 #include <libmallocab.h>
+#include <string.h>
 
 #include "libarray.h"
 
@@ -20,7 +21,11 @@ static void _array_setitem(Array** array, array_index_t index, char* item)
 
 void array_setitem(Array** array, array_index_t index, char* item)
 {
-	if(index < array_p->length) _array_setitem(array, index, item);
+	if(index < array_p->length)
+	{
+		if(array_p->item[index] != NULL) free(array_p->item[index]);
+		_array_setitem(array, index, item);
+	}
 }
 
 void array_append(Array** array, char * item)
@@ -39,6 +44,7 @@ void array_insert(Array** array, array_index_t index, char * item)
 {
 	if(index >= array_p->length)
 	{
+		// TODO fill the gap in between when index > length
 		array_append(array, item);
 		return;
 	}
@@ -75,7 +81,7 @@ void array_delete(Array** array, array_index_t index, array_length_t gap)
 	for(cidx = index; cidx < array_p->length - gap; cidx++)
 	{
 		if(cidx - index < gap) free(array_p->item[cidx]);
-		array_p->item[cidx] = array_p->item[cidx + 1];
+		array_p->item[cidx] = array_p->item[cidx + gap];
 	}
 	array_p->length -= gap;
 }
@@ -113,7 +119,7 @@ void array_remove(Array** array, const char * item)
 	array_index_t cidx;
 	for(cidx = 0; cidx < array_p->length; cidx++)
 	{
-		if(strcmp(array_p->item[cidx], item)==0)
+		if(array_p->item[cidx] != NULL && strcmp(array_p->item[cidx], item)==0)
 		{
 			array_delete(array, cidx, 1);
 			break;
@@ -136,8 +142,13 @@ void array_empty(Array** array)
 	array_index_t cidx;
 	for(cidx = 0; cidx < array_p->length; cidx++)
 	{
-		free(array_p->item[cidx]);
+		if(array_p->item[cidx] != NULL)
+		{
+			free(array_p->item[cidx]);
+			array_p->item[cidx] = NULL;
+		}
 	}
+	array_p->length = 0;
 }
 
 void array_free(Array** array)

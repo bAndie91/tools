@@ -1,7 +1,7 @@
 This is a lightweight git server. You can manage each of your
 repositories by control files in the root directory on the special branch
-called "repo-mgmt". Control file '/access': By default each repo is
-private. You can make it public by writing "public" in it. You can delete
+called "repo-mgmt". Control file '/access': by default each repo is
+private; you may make it public by writing "public" in it; you can delete
 the repo by writing "delete" in it. Control file '/default-branch': write
 the branch name in it (eg. "master") you want to be the default when
-cloning this repo.
+cloning this repo. Control file '/description' sets the repo's description.

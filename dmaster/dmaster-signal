@@ -49,6 +49,8 @@ if(not $target_pidfd)
 }
 
 
+# it's safe to use $dmaster_pid because dmaster process is kept running at least until we close the management socket,
+# or we will die below at writeing to socket.
 $flags = 0;
 $! = 0;
 $dmaster_pidfd = syscall SYS_pidfd_open(), int $dmaster_pid, $flags;
@@ -67,13 +69,13 @@ if($pidfd == -1)
 }
 
 
-print {$management_socket} "\n";
+print {$management_socket} "\n" or die "$0: write to dmaster management socket: $!\n";
 close $management_socket;
 
 
 $flags = 0;
 $! = 0;
-# TODO send signal to the process group if PID is a group leader.
+# TODO send signal to the process group if PID is a group leader once ioctl(pidfd, PIDFD_GET_PROCESS_GROUP_LEADER) becomes available.
 $ret = syscall SYS_pidfd_send_signal(), int $pidfd, int $signal_num, undef, $flags;
 if($ret == -1)
 {
@@ -102,6 +104,12 @@ dmaster-signal(1) utilizes PIDFD to reliably send signal to the daemon
 managed by dmaster(1) and specified by I<DAEMON-ID>.
 
 I<SIGNAL> is either numeric or symbolic signal name.
+
+=head1 LIMITATIONS
+
+Even if the daemon is a process group leader, the signal is still sent only to that one process.
+This is contrary to the internal behavior of dmaster(1) which sends signal to the whole process group
+when the daemon process is a process group leader.
 
 =head1 SEE ALSO
 

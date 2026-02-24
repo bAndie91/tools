@@ -383,7 +383,7 @@ sub reload
 	{
 		if($id ~~ [keys %new_daemon])
 		{
-			my $needto_stop = $do_restart_changed_daemons and not lists_are_equal($Daemon{$id}->{'cmd_args'}, $new_daemon{$id}->{'cmd_args'});
+			my $needto_stop = ($do_restart_changed_daemons and not lists_are_equal($Daemon{$id}->{'cmd_args'}, $new_daemon{$id}->{'cmd_args'}));
 			$Daemon{$id}->{'cmd_args'} = $new_daemon{$id}->{'cmd_args'};
 			if($needto_stop)
 			{
@@ -601,6 +601,7 @@ while(1)
 		{
 			$do_reload = 0;
 			reload;
+			$do_restart_changed_daemons = 0;
 		}
 		
 		# check if daemons need respawn

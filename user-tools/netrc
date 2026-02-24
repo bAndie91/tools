@@ -17,6 +17,8 @@ netrc list [I<PROPERTY_NAME> [I<PROPERTY_NAME> [...]]]
 
 netrc set [machine I<MACHINE_NAME> | default] I<PROPERTY_NAME> I<PROPERTY_VALUE> [I<PROPERTY_NAME> I<PROPERTY_VALUE> [...]]
 
+netrc macro [I<MACRO_NAME>]
+
 =head1 DESCRIPTION
 
 Query entries from F<~/.netrc> file.
@@ -38,6 +40,8 @@ While the simple I<MACHINE_NAME> keeps referring to the first occurrance.
 
 Refer to the B<default> entry by an empty machine name.
 
+C<netrc macro> command lists macro names or display the content of the given macro.
+
 =head1 ENVIRONMENT
 
 =over 4
@@ -52,7 +56,7 @@ Alternative path instead of F<~/.netrc>.
 
 File is not locked during read/write.
 
-Does not support B<macdef> token.
+Does not support setting B<macdef> (ftp) macro definitions; macdef blocks are detected and skipped so that tokens inside macro block are not misinterpreted.
 
 =head1 SEE ALSO
 
@@ -69,16 +73,15 @@ sub parse_dotnetrc_file
 	local $/ = undef;
 	local $_ = <$fh>;
 	
-	# ignore comments while keeping file positions
-	s/\x23.*$/" " x length $&/gem;
-	# don't stop parsing at newlines (also keeping positions)
-	s/\n/ /g;
+	# ignore comments while keeping file positions.
+	# just support whole line comments.
+	s/^#.*$/" " x length $&/gem;
 	
 	my $machine_ref = undef;
 	my $offset_token_start = 0;
 	my $offset_token_end = 0;
 	
-	while(s/(.*?)(\S+)//)
+	while(s/(\s*)(\S+)//)
 	{
 		my $token = $2;
 		$offset_token_start = $offset_token_end + length $1;
@@ -100,11 +103,20 @@ sub parse_dotnetrc_file
 		}
 		else
 		{
-			s/(.*?)(\S+)//;
+			s/(\s*)(\S+)//;
 			my $next_token = $2;
 			$offset_token_start = $offset_token_end + length $1;
 			$offset_token_end += length($1) + length($2);
 		
+			if($token eq 'macdef')
+			{
+				# skip macro definition block
+				s/(.*?(\n[^\S\n]*\n))//s;
+				$offset_token_end += length($1);
+				$netrc->{macdef}->{$next_token} = $1;
+				next;
+			}
+
 			if($token eq 'machine')
 			{
 				my $machine = $next_token;
@@ -148,10 +160,9 @@ sub parse_dotnetrc_file
 					}
 				}
 			}
-			
-			# TODO support 'macdef' token
 		}
 	}
+	#warn Dumper $netrc;
 	return $netrc;
 }
 
@@ -187,6 +198,18 @@ if($cmd eq 'list')
 	my @props = @ARGV;
 	@props = ('machine',) if not @props;
 	print list($netrc, @props);
+}
+elsif($cmd eq 'macro')
+{
+	my $macro_name = shift @ARGV;
+	open my $fh, '<', $DotNetRcFile;
+	my $netrc = parse_dotnetrc_file $fh;
+	close $fh;
+	if(not $macro_name)
+	{
+		print join("\n", keys %{$netrc->{macdef}})."\n";
+	}
+	print $netrc->{macdef}->{$macro_name};
 }
 elsif($cmd eq 'set')
 {

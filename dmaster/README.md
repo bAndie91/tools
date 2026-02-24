@@ -93,6 +93,10 @@ Well, it's called foreground in most service's terminology, but they will be as 
         List of the command name and its arguments.
         Each argument as a separate item on the list.
 
+    - **.started\_cmd\_args**
+
+        List of the command name and its arguments at the time of the daemon's last start.
+
     - **.starttimes._N_** and **.exittimes._N_**
 
         List of unix epoch timestamps when the daemon started and exited

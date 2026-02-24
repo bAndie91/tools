@@ -101,6 +101,10 @@ See dmaster-signal(8).
 List of the command name and its arguments.
 Each argument as a separate item on the list.
 
+=item B<.started_cmd_args>
+
+List of the command name and its arguments at the time of the daemon's last start.
+
 =item B<< .starttimes.I<N> >> and B<< .exittimes.I<N> >>
 
 List of unix epoch timestamps when the daemon started and exited
@@ -313,6 +317,7 @@ sub start_daemon
 	else
 	{
 		logger "started $id PID $pid";
+		@{$Daemon{$id}->{'started_cmd_args'}} = @$cmd_args;
 		$Daemon{$id}->{'pid'} = $pid;
 		$Daemon{$id}->{'pidfd'} = Linux::FD::Pid->new($pid) if $pidfd_support;
 		append_fixsizelist \@{$Daemon{$id}->{'starttimes'}}, $respawn_burst_limit, time;
@@ -383,11 +388,11 @@ sub reload
 	{
 		if($id ~~ [keys %new_daemon])
 		{
-			my $needto_stop = ($do_restart_changed_daemons and not lists_are_equal($Daemon{$id}->{'cmd_args'}, $new_daemon{$id}->{'cmd_args'}));
+			my $needto_stop = ($do_restart_changed_daemons and not lists_are_equal($Daemon{$id}->{'started_cmd_args'}, $new_daemon{$id}->{'cmd_args'}));
 			$Daemon{$id}->{'cmd_args'} = $new_daemon{$id}->{'cmd_args'};
 			if($needto_stop)
 			{
-				logger "terminate $id as its command changed";
+				logger "terminate $id as its command changed since last start";
 				stop_daemon $id;
 				# it will respawn with new command arguments in the main loop.
 			}

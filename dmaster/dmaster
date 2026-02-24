@@ -340,9 +340,14 @@ sub parse_cmd_string
 sub read_daemon_inittab
 {
 	my $path = shift;
-	# TODO: lock
 	open my $fh, '<', $path or logger "open $path: $!";
 	return unless $fh;
+	if(not flock($fh, LOCK_EX))
+	{
+		logger "flock $path: $!";
+		close $fh;
+		return;
+	}
 	my %new_daemon = ();
 	my $line = '';
 	while(<$fh>)

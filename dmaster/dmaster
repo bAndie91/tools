@@ -19,7 +19,7 @@ Restart them when ended.
 Re-read the B<daemontab> file on B<HUP> signal,
 stops processes which are no longer in it (or I<ID> changed) with SIGTERM signal,
 and starts new ones.
-Those daemons whose I<COMMAND> I<ARGS> changed, are not restarted automatically.
+Those daemons whose I<COMMAND> I<ARGS> changed, are not restarted automatically (send B<SIGUSR2> to do so).
 
 Automatically respawn a daemon when it exits.
 If a daemon exits too often, suppress it a little while.
@@ -135,15 +135,19 @@ See USR1 signal below.
 
 =over 4
 
-=item USR1
-
-Write internal state into F</var/run/shm/dmaster.state> file.
-
 =item TERM, INT
 
 Terminate managed daemons, always with one B<TERM> signal each,
 wait for all of them to exit, then exit dmaster(1) itself.
 If a daemon is a process group leader (become on its own or started via setpgrp(1)), sends the signal to the whole process group at once.
+
+=item USR1
+
+Write internal state into F</var/run/shm/dmaster.state> file.
+
+=item USR2
+
+Re-read B<daemontab>, just like B<HUP>, but also stop (and restart) daemons whose I<COMMAND> I<ARGS> changed.
 
 =item HUP
 
@@ -357,6 +361,18 @@ sub read_daemon_inittab
 	return %new_daemon;
 }
 
+sub lists_are_equal
+{
+	my $list1 = shift;
+	my $list2 = shift;
+	return 0 if scalar(@$list1) != scalar(@$list2);
+	for my $i (0 .. $#$list1)
+	{
+		return 0 if $list1->[$i] ne $list2->[$i];
+	}
+	return 1;
+}
+
 sub reload
 {
 	my $daemontab = ($ENV{'XDG_CONFIG_HOME'} || '/etc').'/daemontab';
@@ -367,9 +383,19 @@ sub reload
 	{
 		if($id ~~ [keys %new_daemon])
 		{
-			logger "keep $id";
+			my $needto_stop = $do_restart_changed_daemons and not lists_are_equal($Daemon{$id}->{'cmd_args'}, $new_daemon{$id}->{'cmd_args'});
 			$Daemon{$id}->{'cmd_args'} = $new_daemon{$id}->{'cmd_args'};
-			delete $new_daemon{$id};
+			if($needto_stop)
+			{
+				logger "terminate $id as its command changed";
+				stop_daemon $id;
+				# it will respawn with new command arguments in the main loop.
+			}
+			else
+			{
+				logger "keep $id";
+			}
+			delete $new_daemon{$id};  # don't try to start already registered daemons
 		}
 		else
 		{
@@ -379,10 +405,12 @@ sub reload
 		}
 	}
 	
+	# register newly appeared daemon definitions
 	for my $id (keys %new_daemon)
 	{
 		$Daemon{$id}->{'cmd_args'} = $new_daemon{$id}->{'cmd_args'};
 	}
+	# start newly added daemons
 	for my $id (keys %new_daemon)
 	{
 		start_daemon $id;
@@ -503,6 +531,7 @@ sub wakeup_at_most
 
 
 $SIG{'HUP'} = sub { $do_reload = 1 unless $do_shutdown; };
+$SIG{'USR2'} = sub { ($do_reload, $do_restart_changed_daemons) = (1, 1) unless $do_shutdown; };
 $SIG{'CHLD'} = sub { $do_handle_children = 1; };
 $SIG{'TERM'} = sub { $shutdown_signalname = $_[0]; $do_shutdown = 1; };
 $SIG{'INT'} = $SIG{'TERM'};

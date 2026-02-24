@@ -232,6 +232,7 @@ use POSIX ":sys_wait_h";
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 use Socket;
 use Config;
+use Fcntl qw(:flock);
 require 'syscall.ph';
 @signal_names = split ' ', $Config{'sig_name'};
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
@@ -275,6 +276,7 @@ sub stop_daemon
 	my $pid = $Daemon{$did}->{'pid'};
 	if(defined $pid)
 	{
+		my $kid;
 		my $pgid = getpgid($pid);
 		if($pgid == $pid)
 		{

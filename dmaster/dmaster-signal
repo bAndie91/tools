@@ -35,7 +35,7 @@ while(<$management_socket>)
 	}
 	elsif(/^daemon\.(.+)\.pidfd\.fileno\s+(\d+)$/ and $1 eq $daemon_id)
 	{
-		$target_pidfd = $2;
+		$target_pidfd_fileno = $2;
 	}
 }
 
@@ -43,7 +43,7 @@ if(not $dmaster_pid)
 {
 	die "$0: could not find dmaster pid\n";
 }
-if(not $target_pidfd)
+if(not $target_pidfd_fileno)
 {
 	die "$0: could not find daemon's pidfd: $daemon_id\n";
 }
@@ -62,8 +62,8 @@ if($dmaster_pidfd == -1)
 
 $flags = 0;
 $! = 0;
-$pidfd = syscall SYS_pidfd_getfd(), int $dmaster_pidfd, int $target_pidfd, $flags;
-if($pidfd == -1)
+$target_pidfd = syscall SYS_pidfd_getfd(), int $dmaster_pidfd, int $target_pidfd_fileno, $flags;
+if($target_pidfd == -1)
 {
 	die "pidfd_getfd: $!\n";
 }
@@ -72,14 +72,53 @@ if($pidfd == -1)
 print {$management_socket} "\n" or die "$0: write to dmaster management socket: $!\n";
 close $management_socket;
 
-
-$flags = 0;
-$! = 0;
-# TODO send signal to the process group if PID is a group leader once ioctl(pidfd, PIDFD_GET_PROCESS_GROUP_LEADER) becomes available.
-$ret = syscall SYS_pidfd_send_signal(), int $pidfd, int $signal_num, undef, $flags;
-if($ret == -1)
+sub pidfd_to_pid
 {
-	die "pidfd_send_signal: $!\n";
+	# TODO replace with ioctl(pidfd, PIDFD_GET_INFO, &info) when it's available.
+	my $pidfd = shift;
+	my $pid;
+	open my $fdinfo, '<', "/proc/self/fdinfo/$pidfd" or die "open fdinfo $pidfd: $!\n";
+	while(<$fdinfo>)
+	{
+		if(/^Pid:\s*(\d+)/)
+		{
+			$pid = $1;
+			last;
+		}
+	}
+	close $fdinfo;
+	return $pid;
+}
+
+sub getpgid
+{
+	my $pid = shift;
+	return syscall(SYS_getpgid(), int $pid);
+}
+
+# while a PIDFD is open, the pointed PID won't be recycled.
+$target_pid = pidfd_to_pid($target_pidfd);
+$target_pgid = getpgid($target_pid);
+
+if($target_pid == $target_pgid)
+{
+	warn "$0: daemon $daemon_id is a process group leader, sending signal to PGID $target_pgid\n";
+	$! = 0;
+	$ret = kill $signal_num, -$target_pid;
+	if($ret == -1)
+	{
+		die "kill: $!\n";
+	}
+}
+else
+{
+	$flags = 0;
+	$! = 0;
+	$ret = syscall SYS_pidfd_send_signal(), int $target_pidfd, int $signal_num, undef, $flags;
+	if($ret == -1)
+	{
+		die "pidfd_send_signal: $!\n";
+	}
 }
 
 exit 0;
@@ -105,11 +144,7 @@ managed by dmaster(1) and specified by I<DAEMON-ID>.
 
 I<SIGNAL> is either numeric or symbolic signal name.
 
-=head1 LIMITATIONS
-
-Even if the daemon is a process group leader, the signal is still sent only to that one process.
-This is contrary to the internal behavior of dmaster(1) which sends signal to the whole process group
-when the daemon process is a process group leader.
+If the daemon process is a process group leader, the signal will be sent to the whole process group.
 
 =head1 SEE ALSO
 

@@ -1233,7 +1233,7 @@ Show the contents of the file in foreground.
 					}
 					if($extras =~ /marks/)
 					{
-						for my $mark (keys $curfile->{'mark'})
+						for my $mark (keys %{$curfile->{'mark'}})
 						{
 							next if $mark =~ /^(SELECTION-|)(START|END)$/;
 							my $p = $curfile->{'mark'}->{$mark};

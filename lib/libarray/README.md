@@ -14,7 +14,7 @@ This is a C library (link your programm to libarray.so) providing primitive arra
 initial size as argument; leave it 0 if unsure what initial size fits you best,
 libarray will grow the memory area if needed.
 However it does not shrink the freed area when elements are deleted.
-`array_free()` frees up each element and the array itself too and nulls it out.
+`array_free()` frees up each item and the array itself too and nulls it out.
 
 ```
 #include <tool/libarray.h>
@@ -38,27 +38,32 @@ free(item);
 array_append(&my_array, NULL);
 ```
 
-`array_getitem()` returns the element at the given index, or NULL if the index is out of bounds.
+`array_getitem()` returns the item at the given index, or NULL if the index is out of bounds.
 Caller must not free the resulting pointer. `array_pop()` and `array_shift()` return the last and
-the first element respectively; which the caller should free, because it is removed from the array
+the first item respectively; which the caller should free, because it is removed from the array
 and no longer accounted by libarray. The same stands for `array_pick()` too.
 
-Caller may want to check `array_length()` to decided that a NULL returned by one of the pop/shift/pick
-functions is because the array is eaten up or just the picked element is itself NULL.
+Caller may want to check `array_length()` to decided that a NULL,
+returned by one of the `array_pop`/`array_shift`/`array_pick` functions,
+is because the array is eaten up or just the picked item is itself NULL.
 
 Caller can access the inner `char**` which holds the array of pointers to the elements
 by `array_getarray()`, but should not free it (as it is not copied out from libarray) and
-should not reuse it after the array is modified (append/insert/delete/remove/pick/pop/shift/...).
+should not reuse it after the array is modified (`array_append`/`array_insert`/`array_delete`/`array_remove`/`array_pick`/`array_pop`/`array_shift`/...).
 
-`array_foreach()` calls the user-provided callback function `callback` for each element in the array
-with 3 arguments: index, element, and the user-provided callback data.
+`array_insert()` inserts the given item at the given index, and shifts the rest of the items to the right.
+If the index is out of the upper bound, the item is still inserted to the _index_th position,
+and all items between the old top-most item and the inserted item set to NULL.
+
+`array_foreach()` calls the user-provided callback function `callback` for each item in the array
+with 3 arguments: index, item, and the user-provided callback data.
 `callback()` must return `ARRAY_LOOP_STOP` if the array we're iterating on is changed, so the loop
 referencing to just invalidated data may exit.
 
 ```
 array_index_t starting_index = 0;
 void* cb_data = NULL
-array_loop_control callback(array_index_t index, char* element, void* cb_data) {
+array_loop_control callback(array_index_t index, char* item, void* cb_data) {
   if(/* my_array changed ... */) { return ARRAY_LOOP_STOP; }
   return ARRAY_LOOP_CONTINUE;
 }

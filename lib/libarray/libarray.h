@@ -25,14 +25,12 @@ char* array_getitem(Array**, array_index_t) /* returned pointer owned by libarra
 char** array_getarray(Array**);
 array_length_t array_length(Array**);
 void array_setitem(Array**, array_index_t, char* /* duplicated; caller keeps ownership */);
-void array_grow(Array**, array_length_t new_min_size);  /* grow the array's size to at least new_min_size, but maybe larger; keep length unchanged */
 void array_append(Array**, char* /* duplicated; caller keeps ownership */);
 void array_insert(Array**, array_index_t index, char* /* duplicated; caller keeps ownership */);
 #define array_prepend(array, item) array_insert(array, 0, item)
 void array_delete(Array**, array_index_t, array_length_t);
-char* array_pick(Array**, array_index_t) /* returned pointer's ownership transfered to the caller, thus caller is responsible to free */;
-char* array_pop(Array**) /* returned pointer's ownership transfered to the caller, thus caller is responsible to free */;
-#define array_shift(array) array_pick(array, 0)
+char* array_pop(Array**, array_index_t) /* returned pointer's ownership transfered to the caller, thus caller is responsible to free it */;
+#define array_shift(array) array_pop(array, 0)
 void array_remove(Array**, const char*);
 void array_empty(Array**);
 void array_free(Array**);

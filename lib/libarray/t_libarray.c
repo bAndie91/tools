@@ -61,6 +61,8 @@ int main(int argc, char* argv[])
 	array_insert(&arr, 6, "uranus");
 	array_foreach(&arr, 0, pprint, NULL);
 	warnx("");
-	
+
+	// TODO: test grow/halfen functions
+
 	return 0;
 }

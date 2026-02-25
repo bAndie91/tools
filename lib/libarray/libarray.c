@@ -44,7 +44,8 @@ void array_setitem(Array** array, array_index_t index, char* item)
 	}
 }
 
-void array_grow(Array** array, array_length_t new_min_size)
+/* grow the array's size to at least new_min_size, but maybe larger; keep length unchanged */
+void _array_grow(Array** array, array_length_t new_min_size)
 {
 	if(array_p->size < new_min_size)
 	{
@@ -54,9 +55,20 @@ void array_grow(Array** array, array_length_t new_min_size)
 	}
 }
 
+/* shrink the array's preallocated size to half again and again as long as its occupated length allows */
+void _array_halfen(Array** array)
+{
+	while(array_p->size / 2 > array_p->length)
+	{
+		array_p->size /= 2;
+		array_p->item = reallocab(array_p->item, array_p->size * sizeof(array_p->item));
+	}
+}
+
+
 void array_append(Array** array, char * item)
 {
-	array_grow(array, array_p->length + 1);
+	_array_grow(array, array_p->length + 1);
 	_array_setitem(array, array_p->length, item);
 	array_p->length ++;
 }
@@ -68,7 +80,7 @@ void array_insert(Array** array, array_index_t index, char * item)
 	array_index_t cidx;
 
 	// Fill up the top of the array with NULLs if index is greater than the current length
-	array_grow(array, index + 1);
+	_array_grow(array, index + 1);
 	for(cidx = array_p->length; cidx < index; cidx++)
 	{
 		_array_setitem(array, cidx, NULL);
@@ -95,12 +107,12 @@ void array_delete(Array** array, array_index_t index, array_length_t gap)
 		array_p->item[cidx] = array_p->item[cidx + gap];
 	}
 	array_p->length -= gap;
-	// TODO array_shrink
+	_array_halfen(array);
 }
 
-/* remove 1 item from 'index' and returning it */
+/* remove 1 item from 'index', shifting the rest, and returning that item to the caller */
 /* the caller should free it */
-char* array_pick(Array** array, array_index_t index)
+char* array_pop(Array** array, array_index_t index)
 {
 	array_index_t cidx;
 	char * item;
@@ -116,17 +128,12 @@ char* array_pick(Array** array, array_index_t index)
 		}
 		
 		array_p->length -= 1;
-		// TODO array_shrink
+		_array_halfen(array);
 	}
 	return item;
 }
 
-char* array_pop(Array** array)
-{
-	return array_pick(array, array_p->length == 0 ? 0 : array_p->length - 1);
-}
-
-/* remove an item which matches to the given 'item' */
+/* remove the first item which matches (string equals) to the given 'item' */
 void array_remove(Array** array, const char * item)
 {
 	array_index_t cidx;
@@ -162,7 +169,7 @@ void array_empty(Array** array)
 		}
 	}
 	array_p->length = 0;
-	// TODO array_shrink
+	_array_halfen(array);
 }
 
 void array_free(Array** array)

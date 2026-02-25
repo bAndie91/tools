@@ -3,7 +3,7 @@ LIBDIR = /usr/lib/tool
 OLDINCLUDEDIR = /usr/include
 
 libmallocab.so: libmallocab.c libmallocab.h
-	$(CC) $(CCFLAGS) -o $@ -shared libmallocab.c
+	$(CC) $< $(CFLAGS) -I. -o $@ -shared
 
 $(LIBDIR)/libmallocab.so: libmallocab.so
 	install -m 0644 $(notdir $@) $(LIBDIR)/

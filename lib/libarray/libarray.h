@@ -21,12 +21,14 @@ typedef enum {
 } array_loop_control;
 
 void array_init(Array**, array_index_t);
+char* array_getitem(Array**, array_index_t) /* returned pointer owned by libarray; caller must NOT free */;
+char** array_getarray(Array**);
+array_length_t array_length(Array**);
 void array_setitem(Array**, array_index_t, char* /* duplicated; caller keeps ownership */);
+void array_grow(Array**, array_length_t new_min_size);  /* grow the array's size to at least new_min_size, but maybe larger; keep length unchanged */
 void array_append(Array**, char* /* duplicated; caller keeps ownership */);
 void array_insert(Array**, array_index_t index, char* /* duplicated; caller keeps ownership */);
 #define array_prepend(array, item) array_insert(array, 0, item)
-char* array_getitem(Array**, array_index_t) /* returned pointer owned by libarray; caller must NOT free */;
-char** array_getarray(Array**);
 void array_delete(Array**, array_index_t, array_length_t);
 char* array_pick(Array**, array_index_t) /* returned pointer's ownership transfered to the caller, thus caller is responsible to free */;
 char* array_pop(Array**) /* returned pointer's ownership transfered to the caller, thus caller is responsible to free */;
@@ -35,6 +37,5 @@ void array_remove(Array**, const char*);
 void array_empty(Array**);
 void array_free(Array**);
 void array_foreach(Array**, array_index_t, array_loop_control (array_index_t, char*, void*), void*);
-array_length_t array_length(Array**);
 
 #endif

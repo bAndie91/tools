@@ -1,7 +1,7 @@
 
 #include <err.h>
 
-#include "libarray.c"
+#include "libarray.h"
 
 array_loop_control
 pprint(size_t index, char * item, void * x)
@@ -23,38 +23,42 @@ int main(int argc, char* argv[])
 	array_foreach(&arr, 0, pprint, NULL);
 	warnx("");
 	
-	warnx("append one");
-	array_append(&arr, "one");
+	// test append function
+
+	warnx("append venus");
+	array_append(&arr, "venus");
 	array_foreach(&arr, 0, pprint, NULL);
 	warnx("");
 	
-	warnx("append two");
-	array_append(&arr, "two");
+	warnx("append mars");
+	array_append(&arr, "mars");
 	array_foreach(&arr, 0, pprint, NULL);
 	warnx("");
 	
-	warnx("insert 0 zero");
-	array_insert(&arr, 0, "zero");
+	// test insert function
+
+	warnx("insert 0 mercury");
+	array_insert(&arr, 0, "mercury");
 	array_foreach(&arr, 0, pprint, NULL);
 	warnx("");
 	
-	warnx("insert 2 half");
-	array_insert(&arr, 2, "half");
+	warnx("insert 2 earth");
+	array_insert(&arr, 2, "earth");
 	array_foreach(&arr, 0, pprint, NULL);
 	warnx("");
 	
-	warnx("insert 1000 OOB");
-	array_insert(&arr, 1000, "OOB");
+	warnx("insert 50 oort");
+	array_insert(&arr, 50, "oort");
 	array_foreach(&arr, 0, pprint, NULL);
 	warnx("");
 	
-	warnx("insert 4 three");
-	array_insert(&arr, 4, "three");
+	warnx("insert 4 jupiter");
+	array_insert(&arr, 4, "jupiter");
 	array_foreach(&arr, 0, pprint, NULL);
 	warnx("");
 	
-	warnx("insert 6 four");
-	array_insert(&arr, 6, "four");
+	warnx("insert 6 uranus");
+	array_insert(&arr, 6, "uranus");
 	array_foreach(&arr, 0, pprint, NULL);
 	warnx("");
 	

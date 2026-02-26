@@ -84,14 +84,16 @@ array_length_t array_condense(Array** array)
 		}
 	}
 	array_p->length = move_to_idx;
+	_array_contract(array);
 	return array_p->length;
 }
 
-void array_append(Array** array, char * item)
+array_index_t array_append(Array** array, char * item)
 {
 	_array_grow(array, array_p->length + 1);
 	_array_setitem(array, array_p->length, item);
 	array_p->length ++;
+	return array_p->length - 1;
 }
 
 void array_insert(Array** array, array_index_t index, char * item)
@@ -149,7 +151,7 @@ char* array_pop(Array** array, array_index_t index)
 	return item;
 }
 
-void array_remove(Array** array, const char * item)
+array_index_t array_remove(Array** array, const char * item)
 {
 	array_index_t cidx;
 	for(cidx = 0; cidx < array_p->length; cidx++)
@@ -160,6 +162,7 @@ void array_remove(Array** array, const char * item)
 			break;
 		}
 	}
+	return cidx;
 }
 
 void array_foreach(Array** array, array_index_t cidx, array_loop_control (*callback) (array_index_t, char*, void*), void * cb_data)

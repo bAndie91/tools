@@ -56,7 +56,7 @@ is NULL due to addressed the array out-of-bounds or just the item is itself NULL
 
 Caller can access the inner `char**` which holds the array of pointers to the elements
 by `array_getarray()`, but should not free it (as it is not copied out from libarray) and
-should not reuse it after the array is modified (by `array_append()`/`array_insert()`/`array_delete()`/`array_remove()`/`array_pop()`/`array_shift()`/...).
+should not reuse it after the array is modified (by `array_append()`/`array_prepend()`/`array_insert()`/`array_delete()`/`array_remove()`/`array_pop()`/`array_shift()`/`array_condense()`...).
 
 `array_insert()` inserts the given item at the given index, and shifts the rest of the items upward.
 If the index is out of the upper bound, the item is still inserted to the `index`th position,

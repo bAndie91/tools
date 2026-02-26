@@ -41,7 +41,8 @@ array_length_t array_length(Array**);
 void array_setitem(Array**, array_index_t index, char* item);
 
 /// @brief Append (a copy of) @p item to the end of the array. The caller keeps ownership of @p item (libarray make a copy of it).
-void array_append(Array**, char* item);
+/// @returns the index of the appended item.
+array_index_t array_append(Array**, char* item);
 
 /// @brief Insert (a copy of) @p item into the @p index position.
 /// @brief @p index can be any non-negative integer. If larger than the current length, the array is extended and filled with NULLs up to @p index.
@@ -61,7 +62,9 @@ char* array_pop(Array**, array_index_t index) /* returned pointer's ownership tr
 #define array_shift(array) array_pop(array, 0)
 
 /// @brief remove the first item which matches (string equals) to the given @p item.
-void array_remove(Array**, const char* item);
+/// @returns the index of the removed item, or an out-of-bounds index if no item matched.
+/// The returned index points to the item that was the next after the removed @p item, or beyond the array if the removed @p item was the last one or no item was removed.
+array_index_t array_remove(Array**, const char* item);
 
 /// @brief remove all NULL items from the array, shifting the non-NULL items to the left as much as possible, and return the new length of the array
 array_length_t array_condense(Array**);

@@ -62,7 +62,5 @@ int main(int argc, char* argv[])
 	array_foreach(&arr, 0, pprint, NULL);
 	warnx("");
 
-	// TODO: test grow/halfen functions
-
 	return 0;
 }

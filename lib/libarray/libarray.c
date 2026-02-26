@@ -37,14 +37,16 @@ static void _array_setitem(Array** array, array_index_t index, char* item)
 
 void array_setitem(Array** array, array_index_t index, char* item)
 {
-	if(index < array_p->length)
+	if(index >= array_p->length)
 	{
-		if(array_p->item[index] != NULL) free(array_p->item[index]);
-		_array_setitem(array, index, item);
+		array_insert(array, index, item);
+		return;
 	}
+	if(array_p->item[index] != NULL) free(array_p->item[index]);
+	_array_setitem(array, index, item);
 }
 
-/* grow the array's size to at least new_min_size, but maybe larger; keep length unchanged */
+/// @brief Grow the array's size to at least @p new_min_size, but maybe larger. Keep length unchanged.
 void _array_grow(Array** array, array_length_t new_min_size)
 {
 	if(array_p->size < new_min_size)
@@ -55,8 +57,8 @@ void _array_grow(Array** array, array_length_t new_min_size)
 	}
 }
 
-/* shrink the array's preallocated size to half again and again as long as its occupated length allows */
-void _array_halfen(Array** array)
+/// @brief Shrink the array's preallocated size to half of its size as many times as its occupated length allows.
+void _array_contract(Array** array)
 {
 	while(array_p->size / 2 > array_p->length)
 	{
@@ -65,6 +67,25 @@ void _array_halfen(Array** array)
 	}
 }
 
+array_length_t array_condense(Array** array)
+{
+	array_index_t cidx;
+	array_index_t move_to_idx;
+	move_to_idx = 0;
+	for(cidx = 0; cidx < array_p->length; cidx++)
+	{
+		if(array_p->item[cidx] != NULL)
+		{
+			if(move_to_idx < cidx)
+			{
+				array_p->item[move_to_idx] = array_p->item[cidx];
+			}
+			move_to_idx++;
+		}
+	}
+	array_p->length = move_to_idx;
+	return array_p->length;
+}
 
 void array_append(Array** array, char * item)
 {
@@ -73,8 +94,6 @@ void array_append(Array** array, char * item)
 	array_p->length ++;
 }
 
-/* insert (a copy of) item into the index-th position */
-/* index can be any non-negative integer; if larger than the current length, the array is grown and filled with NULLs */
 void array_insert(Array** array, array_index_t index, char * item)
 {
 	array_index_t cidx;
@@ -97,7 +116,6 @@ void array_insert(Array** array, array_index_t index, char * item)
 		array_p->length++;
 }
 
-/* remove number of 'gap' items starting from 'index' */
 void array_delete(Array** array, array_index_t index, array_length_t gap)
 {
 	array_index_t cidx;
@@ -107,11 +125,9 @@ void array_delete(Array** array, array_index_t index, array_length_t gap)
 		array_p->item[cidx] = array_p->item[cidx + gap];
 	}
 	array_p->length -= gap;
-	_array_halfen(array);
+	_array_contract(array);
 }
 
-/* remove 1 item from 'index', shifting the rest, and returning that item to the caller */
-/* the caller should free it */
 char* array_pop(Array** array, array_index_t index)
 {
 	array_index_t cidx;
@@ -128,12 +144,11 @@ char* array_pop(Array** array, array_index_t index)
 		}
 		
 		array_p->length -= 1;
-		_array_halfen(array);
+		_array_contract(array);
 	}
 	return item;
 }
 
-/* remove the first item which matches (string equals) to the given 'item' */
 void array_remove(Array** array, const char * item)
 {
 	array_index_t cidx;
@@ -169,7 +184,7 @@ void array_empty(Array** array)
 		}
 	}
 	array_p->length = 0;
-	_array_halfen(array);
+	_array_contract(array);
 }
 
 void array_free(Array** array)

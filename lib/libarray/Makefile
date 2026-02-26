@@ -34,3 +34,7 @@ t_libarray: t_libarray.c libarray.so
 test: t_libarray
 	./t_libarray
 .PHONY: test
+
+unit-tests:
+	$(MAKE) -C ./tests run
+.PHONY: unit-tests

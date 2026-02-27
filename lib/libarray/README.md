@@ -92,10 +92,10 @@ Edge cases are covered too:
   and frees the old element)
 * foreach start offsets and stop control
 
-The tests are built and run with a simple Makefile:
+The tests are built and run with a simple `make` target:
 
 ```sh
-cd lib/libarray/tests && make run
+make unit-tests
 ```
 
 This command compiles the implementation directly into the test binary and then executes all of the assertions.

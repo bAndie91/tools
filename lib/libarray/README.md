@@ -79,4 +79,29 @@ array_foreach(&my_array, starting_index, callback, cb_data);
 
 ## Test coverage
 
-TODO
+A comprehensive C unit test suite lives in `lib/libarray/tests/t_libarray_unit.c`.
+The single‑file runner exercises every public API (init, append, set/insert,
+delete/pop/shift/remove, condense/empty, foreach) and even a couple of
+internal helpers (`_array_grow`/`_array_contract`).
+Edge cases are covered too:
+
+* out‑of‑bounds indices, huge insert/delete gaps, NULL items, repeated
+  appends, and condensing all‑NULL contents
+* behavior when the array grows/contracts under load
+* ownership rules (pop returns a string caller must free, setitem replaces
+  and frees the old element)
+* foreach start offsets and stop control
+
+The tests are built and run with a simple Makefile:
+
+```sh
+cd lib/libarray/tests && make run
+```
+
+This command compiles the implementation directly into the test binary and then executes all of the assertions.
+After changing `libarray.c` you'll want to rerun the tests (or invoke `make` in the tests directory) to ensure nothing regressed.
+The test program exits with a non‑zero status on failure and prints the failing assertion location.
+
+There is room for improvement:
+the runner is minimal and could be replaced with a richer framework (Check, cmocka) to provide fixtures, mocking, and better output.
+For now, basic regression coverage is in place and should catch most logic errors.

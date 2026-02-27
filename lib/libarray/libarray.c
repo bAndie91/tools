@@ -203,3 +203,14 @@ void array_free(Array** array)
 	array_p = NULL;
 }
 
+Array* array_slice(Array** array, array_index_t start_index, array_length_t length)
+{
+	Array* new_array;
+	array_index_t cidx;
+	array_init(&new_array, length);
+	for(cidx = start_index; cidx < start_index + length && cidx < array_p->length; cidx++)
+	{
+		array_setitem(&new_array, cidx - start_index, array_p->item[cidx]);
+	}
+	return new_array;
+}

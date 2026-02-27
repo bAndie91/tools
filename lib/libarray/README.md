@@ -58,6 +58,10 @@ Caller can access the inner `char**` which holds the array of pointers to the el
 by `array_getarray()`, but should not free it (as it is not copied out from libarray) and
 should not reuse it after the array is modified (by `array_append()`/`array_prepend()`/`array_insert()`/`array_delete()`/`array_remove()`/`array_pop()`/`array_shift()`/`array_condense()`...).
 
+`array_slice()` creates and returns a new `Array *` containing
+copies of the items from the source Array from the requested range.
+The caller owns the returned array and its items and should free it by calling `array_free()` when done.
+
 `array_insert()` inserts the given item at the given index, and shifts the rest of the items upward.
 If the index is out of the upper bound, the item is still inserted to the `index`th position,
 and all items between the old top-most item and the inserted item are set to NULL.

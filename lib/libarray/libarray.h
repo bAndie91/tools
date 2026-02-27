@@ -79,4 +79,11 @@ void array_free(Array**);
 /// @brief The loop can be stopped by returning ARRAY_LOOP_STOP from the callback. Return ARRAY_LOOP_CONTINUE to continue the loop. The callback function receives the current index, the item at that index, and the user-provided callback data as arguments.
 void array_foreach(Array**, array_index_t start_index, array_loop_control (*callback)(array_index_t current_index, char* item, void* cb_data), void* cb_data);
 
+/// @brief Create a new array which is a slice of the given array, starting at @p start_index and with the given @p length.
+/// @brief The returned array contains copies of the string items.
+/// @brief The caller should free the returned array (and its items) by calling array_free() when it's no longer needed.
+/// @brief If @p start_index is out of bounds, the returned array will be empty.
+/// @brief If @p length extends beyond the end of the array, the returned array will contain items up to the end of the array.
+Array* array_slice(Array**, array_index_t start_index, array_length_t length);
+
 #endif

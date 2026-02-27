@@ -343,6 +343,44 @@ static void test_condense_all_null()
     array_free(&a);
 }
 
+static void test_array_slice()
+{
+    Array *a = NULL;
+    array_init(&a, 0);
+    array_append(&a, "a");
+    array_append(&a, "b");
+    array_append(&a, "c");
+    array_append(&a, "d");
+    array_append(&a, "e");
+
+    /* normal slice */
+    Array *s = array_slice(&a, 1, 2);
+    ASSERT(array_length(&s) == 2);
+    ASSERT_STR_EQ(array_getitem(&s, 0), "b");
+    ASSERT_STR_EQ(array_getitem(&s, 1), "c");
+    array_free(&s);
+
+    /* slice that extends beyond end */
+    s = array_slice(&a, 2, 10);
+    ASSERT(array_length(&s) == 3);
+    ASSERT_STR_EQ(array_getitem(&s, 0), "c");
+    ASSERT_STR_EQ(array_getitem(&s, 1), "d");
+    ASSERT_STR_EQ(array_getitem(&s, 2), "e");
+    array_free(&s);
+
+    /* start index out of bounds -> empty */
+    s = array_slice(&a, 10, 3);
+    ASSERT(array_length(&s) == 0);
+    array_free(&s);
+
+    /* zero length -> empty */
+    s = array_slice(&a, 0, 0);
+    ASSERT(array_length(&s) == 0);
+    array_free(&s);
+
+    array_free(&a);
+}
+
 int main(void)
 {
     printf("Running libarray unit tests...\n");
@@ -370,6 +408,7 @@ int main(void)
     test_setitem_null();
     test_insert_large_index();
     test_condense_all_null();
+    test_array_slice();
 
     if(tests_failed) {
         fprintf(stderr, "%d tests failed (ran %d assertions)\n", tests_failed, tests_run);

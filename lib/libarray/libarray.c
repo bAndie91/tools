@@ -60,11 +60,9 @@ void _array_grow(Array** array, array_length_t new_min_size)
 /// @brief Shrink the array's preallocated size to half of its size as many times as its occupated length allows.
 void _array_contract(Array** array)
 {
-	while(array_p->size / 2 > array_p->length)
-	{
-		array_p->size /= 2;
-		array_p->item = reallocab(array_p->item, array_p->size * sizeof(array_p->item));
-	}
+	while(array_p->size / 2 > array_p->length && array_p->size > 1) array_p->size /= 2;
+	// smallest size is 1, because realloc(3) with size 0 may free the pointer.
+	array_p->item = reallocab(array_p->item, array_p->size * sizeof(array_p->item));
 }
 
 array_length_t array_condense(Array** array)
@@ -124,6 +122,13 @@ void array_delete(Array** array, array_index_t index, array_length_t gap)
 	for(cidx = index; cidx < array_p->length - gap; cidx++)
 	{
 		if(cidx - index < gap) free(array_p->item[cidx]);
+		// TODO FIXME
+/* 
+#0  0x00007ffff7e28efa in __GI___libc_free (mem=0x71) at ./malloc/malloc.c:3362
+#1  0x0000555555555725 in array_delete (array=0x7fffffffd6f8, index=0, gap=5) at ../libarray.c:124
+#2  0x0000555555557ef6 in test_delete_gap_too_large () at t_libarray_unit.c:299
+#3  0x0000555555558427 in main () at t_libarray_unit.c:368
+*/
 		array_p->item[cidx] = array_p->item[cidx + gap];
 	}
 	array_p->length -= gap;

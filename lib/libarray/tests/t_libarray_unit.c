@@ -135,9 +135,11 @@ static void test_foreach()
     array_init(&a, 0);
     array_append(&a, "one");
     array_append(&a, "two");
+    array_append(&a, "three");
+    array_append(&a, "four");
     int c = 0;
     array_foreach(&a, 0, foreach_cb, &c);
-    ASSERT(c == 2 || c == 2); /* should have counted two before stopping */
+    ASSERT(c == 2); /* should have counted two before stopping */
     array_free(&a);
 }
 
@@ -159,6 +161,188 @@ static void test_growth_and_contract()
     array_free(&a);
 }
 
+static void test_getitem_out_of_bounds()
+{
+    Array *a = NULL;
+    array_init(&a, 0);
+    ASSERT(array_getitem(&a, 0) == NULL);
+    ASSERT(array_getitem(&a, 5) == NULL);
+    array_append(&a, "x");
+    ASSERT(array_getitem(&a, 1) == NULL);
+    array_free(&a);
+}
+
+static void test_insert_far_index()
+{
+    Array *a = NULL;
+    array_init(&a, 0);
+    array_insert(&a, 5, "foo");
+    ASSERT(array_length(&a) == 6);
+    for(size_t i=0;i<5;i++) {
+        ASSERT(array_getitem(&a, i) == NULL);
+    }
+    ASSERT_STR_EQ(array_getitem(&a, 5), "foo");
+    array_free(&a);
+}
+
+static void test_pop_oob()
+{
+    Array *a = NULL;
+    array_init(&a, 0);
+    array_append(&a, "a");
+    char *p = array_pop(&a, 2);
+    ASSERT(p == NULL);
+    ASSERT(array_length(&a) == 1);
+    array_free(&a);
+}
+
+static void test_delete_multiple_and_tail()
+{
+    Array *a = NULL;
+    array_init(&a, 0);
+    array_append(&a, "1");
+    array_append(&a, "2");
+    array_append(&a, "3");
+    array_append(&a, "4");
+    array_append(&a, "5");
+    array_delete(&a, 3, 2);
+    ASSERT(array_length(&a) == 3);
+    ASSERT_STR_EQ(array_getitem(&a, 0), "1");
+    ASSERT_STR_EQ(array_getitem(&a, 1), "2");
+    ASSERT_STR_EQ(array_getitem(&a, 2), "3");
+    array_free(&a);
+}
+
+static void test_remove_not_found()
+{
+    Array *a = NULL;
+    array_init(&a, 0);
+    array_append(&a, "foo");
+    array_remove(&a, "bar");
+    ASSERT(array_length(&a) == 1);
+    ASSERT_STR_EQ(array_getitem(&a, 0), "foo");
+    array_free(&a);
+}
+
+static void test_condense_empty()
+{
+    Array *a = NULL;
+    array_init(&a, 0);
+    ASSERT(array_condense(&a) == 0);
+    array_free(&a);
+}
+
+static void test_empty_empty()
+{
+    Array *a = NULL;
+    array_init(&a, 0);
+    array_empty(&a);
+    ASSERT(array_length(&a) == 0);
+    array_free(&a);
+}
+
+static void test_foreach_start_index()
+{
+    Array *a = NULL;
+    array_init(&a, 0);
+    array_append(&a, "a");
+    array_append(&a, "b");
+    int cnt = 0;
+    array_foreach(&a, 1, foreach_cb, &cnt);
+    ASSERT(cnt == 1);
+    array_free(&a);
+}
+
+static void test_internal_grow_contract()
+{
+    Array *a = NULL;
+    array_init(&a, 1);
+    _array_grow(&a, 10);
+    ASSERT(a->size >= 10);
+    ASSERT(a->length == 0);
+    _array_contract(&a);
+    /* after contracting with len 0, size should be 1 */
+    ASSERT(a->size == 1);
+    array_free(&a);
+}
+
+static void test_setitem_replaces()
+{
+    Array *a = NULL;
+    array_init(&a, 0);
+    array_append(&a, "first");
+    array_setitem(&a, 0, "second");
+    char *new = array_getitem(&a, 0);
+    /* pointer may or may not change; only string equality matters */
+    ASSERT_STR_EQ(new, "second");
+    /* length must not have been changed */
+    ASSERT(array_length(&a) == 1);
+    array_free(&a);
+}
+
+static void test_append_nulls()
+{
+    Array *a = NULL;
+    array_init(&a, 0);
+    for(int i=0;i<10;i++) array_append(&a, NULL);
+    ASSERT(array_length(&a) == 10);
+    array_condense(&a);
+    ASSERT(array_length(&a) == 0);
+    array_free(&a);
+}
+
+static void test_delete_gap_too_large()
+{
+    Array *a = NULL;
+    array_init(&a, 0);
+    array_append(&a, "1");
+    array_delete(&a, 0, 5);
+    ASSERT(array_length(&a) == 0);
+    array_free(&a);
+}
+
+static void test_foreach_oob_start()
+{
+    Array *a = NULL;
+    array_init(&a, 0);
+    array_append(&a, "a");
+    int cnt = 0;
+    array_foreach(&a, 5, foreach_cb, &cnt);
+    ASSERT(cnt == 0);
+    array_free(&a);
+}
+
+static void test_setitem_null()
+{
+    Array *a = NULL;
+    array_init(&a, 0);
+    array_append(&a, "x");
+    array_setitem(&a, 0, NULL);
+    ASSERT(array_getitem(&a, 0) == NULL);
+    array_free(&a);
+}
+
+static void test_insert_large_index()
+{
+    Array *a = NULL;
+    array_init(&a, 1);
+    array_insert(&a, 1000, "big");
+    ASSERT(array_length(&a) == 1001);
+    ASSERT(array_getitem(&a, 1000) && strcmp(array_getitem(&a,1000),"big")==0);
+    array_free(&a);
+}
+
+static void test_condense_all_null()
+{
+    Array *a = NULL;
+    array_init(&a, 5);
+    for(int i=0;i<5;i++) array_append(&a, NULL);
+    ASSERT(array_length(&a) == 5);
+    array_condense(&a);
+    ASSERT(array_length(&a) == 0);
+    array_free(&a);
+}
+
 int main(void)
 {
     printf("Running libarray unit tests...\n");
@@ -170,6 +354,22 @@ int main(void)
     test_condense_and_empty();
     test_foreach();
     test_growth_and_contract();
+    test_getitem_out_of_bounds();
+    test_insert_far_index();
+    test_pop_oob();
+    test_delete_multiple_and_tail();
+    test_remove_not_found();
+    test_condense_empty();
+    test_empty_empty();
+    test_foreach_start_index();
+    test_internal_grow_contract();
+    test_setitem_replaces();
+    test_append_nulls();
+    test_delete_gap_too_large();
+    test_foreach_oob_start();
+    test_setitem_null();
+    test_insert_large_index();
+    test_condense_all_null();
 
     if(tests_failed) {
         fprintf(stderr, "%d tests failed (ran %d assertions)\n", tests_failed, tests_run);

@@ -25,9 +25,9 @@ typedef enum {
 void array_init(Array**, array_length_t init_size);
 
 /// @brief Get the item at the given @p index.
-/// @brief Return NULL if @p index is out of range.
-/// @brief Return NULL also if the item at @p index is itself NULL.
-/// @brief The returned pointer is owned by libarray; caller must NOT free it.
+/// @returns NULL if @p index is out of range.
+/// @returns NULL also if the item at @p index is itself NULL.
+/// The returned pointer is owned by libarray; caller must NOT free it.
 char* array_getitem(Array**, array_index_t index);
 
 /// @brief Get the pointer to the internal array of items. The caller can access items by indexing this array, but should not modify the items or the array itself (e.g. by reallocating it).

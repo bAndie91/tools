@@ -6,6 +6,9 @@
 
 #define array_p (*array)
 
+#define MIN(a,b) ((a)<(b)?(a):(b))
+
+
 void array_init(Array** array, array_index_t initial_size)
 {
 	array_p = mallocab(sizeof(Array));
@@ -119,16 +122,12 @@ void array_insert(Array** array, array_index_t index, char * item)
 void array_delete(Array** array, array_index_t index, array_length_t gap)
 {
 	array_index_t cidx;
-	for(cidx = index; cidx < array_p->length - gap; cidx++)
+	gap = MIN(gap, array_p->length - index);
+	for(cidx = index; cidx < array_p->length; cidx++)
 	{
-		if(cidx - index < gap) free(array_p->item[cidx]);
-		// TODO FIXME
-/* 
-#0  0x00007ffff7e28efa in __GI___libc_free (mem=0x71) at ./malloc/malloc.c:3362
-#1  0x0000555555555725 in array_delete (array=0x7fffffffd6f8, index=0, gap=5) at ../libarray.c:124
-#2  0x0000555555557ef6 in test_delete_gap_too_large () at t_libarray_unit.c:299
-#3  0x0000555555558427 in main () at t_libarray_unit.c:368
-*/
+		if(cidx < index + gap) {
+			if(array_p->item[cidx] != NULL) free(array_p->item[cidx]);
+		}
 		array_p->item[cidx] = array_p->item[cidx + gap];
 	}
 	array_p->length -= gap;

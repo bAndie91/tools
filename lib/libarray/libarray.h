@@ -52,7 +52,7 @@ void array_insert(Array**, array_index_t index, char* item);
 /// @brief Insert @p item into the beginning of the array. The caller keeps ownership of @p item (libarray make a copy of it).
 #define array_prepend(array, item) array_insert(array, 0, item)
 
-/// @brief remove number of @p gap items starting from @p index, shifting the rest of the items to close the gap.
+/// @brief remove number of @p gap items starting from @p index, shifting the rest of the items down to close the gap.
 void array_delete(Array**, array_index_t index, array_length_t gap);
 
 /// @brief remove 1 item from @p index, shifting the rest, and returning that item to the caller; the caller should free the returned item

@@ -18,6 +18,8 @@ typedef struct {
 typedef enum {
   ARRAY_LOOP_CONTINUE = 0,
   ARRAY_LOOP_STOP = 1,
+  ARRAY_LOOP_REWIND = 2,
+  ARRAY_LOOP_REPEAT = 3,
 } array_loop_control;
 
 /// @brief Create and initialize an Array and set the caller's pointer to it.
@@ -87,9 +89,12 @@ void array_empty(Array**);
 void array_free(Array**);
 
 /// @brief Iterate over the array starting at @p start_index, calling @p callback for each element.
-/// The callback may return @p ARRAY_LOOP_STOP to terminate the iteration early; return @p ARRAY_LOOP_CONTINUE to keep iterating.
-/// The callback receives the current index, the (possibly NULL) item pointer, and the user-supplied data pointer.
-void array_foreach(Array**, array_index_t start_index, array_loop_control (*callback)(array_index_t current_index, char* item, void* cb_data), void* cb_data);
+/// The callback receives the @p current_index current index, the (possibly NULL) @p item item pointer, and the user-supplied @p cb_data data pointer.
+/// The callback may return ARRAY_LOOP_STOP to terminate the iteration early;
+/// ARRAY_LOOP_CONTINUE to keep iterating;
+/// ARRAY_LOOP_REWIND to reset the iteration back to index 0 (not @p start_index); or
+/// ARRAY_LOOP_REPEAT to repeat the current index (e.g. after deleting the item at that index).
+void array_foreach(Array**, array_index_t start_index, array_loop_control (*callback)(Array** array, array_index_t current_index, char* item, void* cb_data), void* cb_data);
 
 /// @brief Create a new `Array` containing copies of the string items
 /// from @p start_index for up to @p length elements of the @p source_array.

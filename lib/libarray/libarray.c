@@ -20,7 +20,7 @@ void array_init(Array** array, array_index_t initial_size)
 char* array_getitem(Array** array, array_index_t index)
 {
 	if(index < array_p->length) return array_p->item[index];
-	else return NULL;
+	return NULL;
 }
 
 char** array_getarray(Array** array)
@@ -52,6 +52,8 @@ void array_setitem(Array** array, array_index_t index, char* item)
 /// @brief Grow the array's size to at least @p new_min_size, but maybe larger. Keep length unchanged.
 void _array_grow(Array** array, array_length_t new_min_size)
 {
+	/* Increase capacity to at least new_min_size, doubling until large
+	 * enough. Ensures minimal capacity of 1 so realloc is not called with 0. */
 	if(array_p->size < new_min_size)
 	{
 		if(array_p->size <= 0) array_p->size = 1;
@@ -63,6 +65,8 @@ void _array_grow(Array** array, array_length_t new_min_size)
 /// @brief Shrink the array's preallocated size to half of its size as many times as its occupated length allows.
 void _array_contract(Array** array)
 {
+	/* Reduce capacity when the length is much smaller than allocated size,
+	 * halving until the size is balanced. Keep a minimum capacity of 1. */
 	while(array_p->size / 2 > array_p->length && array_p->size > 1) array_p->size /= 2;
 	// smallest size is 1, because realloc(3) with size 0 may free the pointer.
 	array_p->item = reallocab(array_p->item, array_p->size * sizeof(array_p->item));
@@ -169,13 +173,16 @@ array_index_t array_remove(Array** array, const char * item)
 	return cidx;
 }
 
-void array_foreach(Array** array, array_index_t cidx, array_loop_control (*callback) (array_index_t, char*, void*), void * cb_data)
+void array_foreach(Array** array, array_index_t cidx, array_loop_control (*callback) (Array**, array_index_t, char*, void*), void * cb_data)
 {
 	array_loop_control c;
-	for(; cidx < array_p->length; cidx++)
+	for(; cidx < array_p->length;)
 	{
-		c = callback(cidx, array_p->item[cidx], cb_data);
+		c = callback(array, cidx, array_p->item[cidx], cb_data);
 		if(c == ARRAY_LOOP_STOP) break;
+		cidx++;
+		if(c == ARRAY_LOOP_REWIND) cidx = 0;
+		if(c == ARRAY_LOOP_REPEAT) cidx--;
 	}
 }
 

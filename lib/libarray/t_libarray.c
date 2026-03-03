@@ -4,7 +4,7 @@
 #include "libarray.h"
 
 array_loop_control
-pprint(size_t index, char * item, void * x)
+pprint(Array** array, size_t index, char * item, void * x)
 {
 	warnx("[%d]=%s", index, item);
 	return ARRAY_LOOP_CONTINUE;

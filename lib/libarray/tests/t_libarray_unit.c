@@ -32,6 +32,13 @@ static int tests_failed = 0;
 /* Include implementation to allow testing static/internal helpers */
 #include "../libarray.c"
 
+/* helpers for the foreach/ARRAY_LOOP_REPEAT tests */
+
+typedef struct {
+    int step;
+    const char *seen[10];
+} removal_order_ctx;
+
 /* Tests */
 
 static void test_init_free()
@@ -120,7 +127,7 @@ static void test_condense_and_empty()
     array_free(&a);
 }
 
-static array_loop_control foreach_cb(array_index_t idx, char * item, void * data)
+static array_loop_control foreach_cb(Array** array, array_index_t idx, char * item, void * data)
 {
     (void)idx;
     int *counter = data;
@@ -381,6 +388,63 @@ static void test_array_slice()
     array_free(&a);
 }
 
+static array_loop_control foreach_remove_cb(Array** array, array_index_t idx, char *item, void *data)
+{
+    if(item && strcmp(item, "remove") == 0)
+    {
+        array_delete(array, idx, 1);
+        return ARRAY_LOOP_REPEAT;
+    }
+    return ARRAY_LOOP_CONTINUE;
+}
+
+static void test_foreach_remove()
+{
+    Array *a = NULL;
+    array_init(&a, 0);
+    array_append(&a, "keep");
+    array_append(&a, "remove");
+    array_append(&a, "keep2");
+    array_append(&a, "remove");
+    array_foreach(&a, 0, foreach_remove_cb, NULL);
+    ASSERT(array_length(&a) == 2);
+    ASSERT_STR_EQ(array_getitem(&a, 0), "keep");
+    ASSERT_STR_EQ(array_getitem(&a, 1), "keep2");
+    array_free(&a);
+}
+
+static array_loop_control foreach_removal_order_cb(Array** array, array_index_t idx, char *item, void *data)
+{
+    removal_order_ctx *ctx = data;
+    if(ctx->step < 10) ctx->seen[ctx->step++] = strdupab(item);
+    if(item && strcmp(item, "b") == 0)
+    {
+        array_delete(array, idx, 1);
+        return ARRAY_LOOP_REPEAT;
+    }
+    return ARRAY_LOOP_CONTINUE;
+}
+
+static void test_foreach_remove_order()
+{
+    Array *a = NULL;
+    array_init(&a, 0);
+    array_append(&a, "a");
+    array_append(&a, "b");
+    array_append(&a, "c");
+    removal_order_ctx ctx = {0, {0}};
+    array_foreach(&a, 0, foreach_removal_order_cb, &ctx);
+    /* callback should have seen a, b and then c (c moves into b's slot) */
+    ASSERT(ctx.step == 3);
+    ASSERT_STR_EQ(ctx.seen[0], "a");
+    ASSERT_STR_EQ(ctx.seen[1], "b");
+    ASSERT_STR_EQ(ctx.seen[2], "c");
+    ASSERT(array_length(&a) == 2);
+    ASSERT_STR_EQ(array_getitem(&a, 0), "a");
+    ASSERT_STR_EQ(array_getitem(&a, 1), "c");
+    array_free(&a);
+}
+
 int main(void)
 {
     printf("Running libarray unit tests...\n");
@@ -409,6 +473,8 @@ int main(void)
     test_insert_large_index();
     test_condense_all_null();
     test_array_slice();
+    test_foreach_remove();
+    test_foreach_remove_order();
 
     if(tests_failed) {
         fprintf(stderr, "%d tests failed (ran %d assertions)\n", tests_failed, tests_run);

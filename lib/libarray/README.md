@@ -69,9 +69,9 @@ The caller owns the returned `Array` and its items and must call `array_free()` 
 If `index` is beyond the current length, the array is extended and the gap is filled with `NULL` elements.
 
 `array_foreach()` invokes a user-provided callback for each element, starting at `start_index`.
-The callback receives the current index, the item pointer (which may be `NULL`), and the user-supplied data pointer.
+The callback receives the `Array` pointer currently iterating over, current index, the item pointer (which may be `NULL`), and the user-supplied data pointer.
 Returning `ARRAY_LOOP_STOP` from the callback stops iteration early; return
-`ARRAY_LOOP_CONTINUE` to proceed.
+`ARRAY_LOOP_CONTINUE` to proceed; `ARRAY_LOOP_REWIND` to reset the iteration back to index 0 (not `start_index`); or `ARRAY_LOOP_REPEAT` to repeat the current index (e.g. after deleting the item at that index).
 
 ```
 array_index_t starting_index = 0;

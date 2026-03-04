@@ -137,18 +137,18 @@
 	stt = status -s -b --untracked-files=no
 	status-tracked = status --untracked-files=no
 	conflicting-files = diff --name-only --diff-filter=UXB
-	conflicts = ! "fn(){ git diff --name-only --diff-filter=UXB -z | xargs --null -L 1 sh -c 'f=$1; echo \"\\033[1;37;41m$f\\033[m\"; sed -ne \"/^<<<<<<</,/^>>>>>>>/p\" \"$f\" | sed -e \"s/^[<>=|]\\{7\\}\\( .*\\|$\\)/[1;33m&[m/\"' -- ; }; fn"
-	resolved-conflicts = ! "fn(){ git conflicting-files | foreach multicmd -e -d + git has-no-conflict {} + git add {}; }; fn"
+	conflicts = ! "fn(){ git conflicting-files -z | xargs --null -L 1 sh -c 'f=$1; echo \"\\033[1;37;41m$f\\033[m\"; sed -ne \"/^<<<<<<</,/^>>>>>>>/p\" \"$f\" | sed -e \"s/^[<>=|]\\{7\\}\\( .*\\|$\\)/[1;33m&[m/\"' -- ; }; fn"
+	resolved-conflicts = ! "fn(){ git conflicting-files -z | tr "\\000" "\\n" | foreach multicmd -e -d + git has-no-conflict {} + git add {}; }; fn"
 	has-conflict = ! "fn(){ cd \"$GIT_PREFIX\" && grep -Eq '^([<>=|])\\1{6}' -- \"$@\"; }; fn"
 	has-no-conflict = ! "cd \"$GIT_PREFIX\" && ! git has-conflict"
 	
-	choose-side-whole-files = !"bash -c 'fn(){ set -e; local side=$1; shift; declare -a files; if [ $# = 0 ]; then oIFS=$IFS; local IFS=$'\\''\\n'\\''; files=($(git diff --name-only --diff-filter=UXB)); if [ ${#files[@]} = 0 ]; then echo \"git choose: no conflicting files.\" >&2; return; else echo \"${files[*]}\"; IFS=$oIFS; fi; else files=(\"$@\"); fi; git checkout -m \"${files[@]}\"; git checkout --$side \"${files[@]}\"; git add \"${files[@]}\"; }; fn \"$@\"' --"
+	choose-side-whole-files = !"bash -c 'fn(){ set -e; local side=$1; shift; declare -a files; if [ $# = 0 ]; then oIFS=$IFS; local IFS=$'\\''\\000'\\''; files=($(git conflicting-files -z)); if [ ${#files[@]} = 0 ]; then echo \"git choose: no conflicting files.\" >&2; return; else echo \"${files[*]}\"; IFS=$oIFS; fi; else files=(\"$@\"); fi; git checkout -m \"${files[@]}\"; git checkout --$side \"${files[@]}\"; git add \"${files[@]}\"; }; fn \"$@\"' --"
 	choose-head-branch-whole-files = choose-side-whole-files ours
 	choose-incoming-branch-whole-files = choose-side-whole-files theirs
 	choose-base-branch-whole-files = choose-side-whole-files ours
 	choose-offshoot-branch-whole-files = choose-side-whole-files theirs
 	
-	sed-on-conflict-files = !"bash -c 'set -x; fn(){ sed_cmd=$1; shift; if [ $# = 0 ]; then IFS=$'\\n'; f=($(git conflicting-files)); else f=(\"$@\"); fi; sed -e \"$sed_cmd\" -i -s \"${f[@]}\"; }; fn \"$@\"' --"
+	sed-on-conflict-files = !"bash -c 'set -x; fn(){ sed_cmd=$1; shift; if [ $# = 0 ]; then IFS=$'\\''\\000'\\''; f=($(git conflicting-files -z )); else f=(\"$@\"); fi; sed -e \"$sed_cmd\" -i -s \"${f[@]}\"; }; fn \"$@\"' --"
 	resolve-keep-union = sed-on-conflict-files "/^\\\\(=======\\\\||||||||\\\\|<<<<<<<\\\\|>>>>>>>\\\\)\\\\(\\ \\\\|$\\\\)/d"
 	resolve-keep-head-hunks = sed-on-conflict-files "/^<<<<<<<\\ /d;/^\\\\(=======\\\\||||||||\\\\)/,/^>>>>>>>\\ /d"
 	resolve-keep-incoming-hunks = sed-on-conflict-files "/^<<<<<<<\\ /,/^=======/d;/^>>>>>>>\\ /d"
@@ -163,7 +163,7 @@
 	
 	diff-stage = diff --staged --ignore-all-space
 	diff-commit = ! "fn(){ if [ -n \"$1\" ]; then REV=$1; shift; else REV=HEAD; fi; git show \"$REV~1..$REV\" --irreversible-delete --ignore-all-space \"$@\"; }; fn"
-	diff-head = diff --find-copies --find-renames HEAD --
+	diff-head = diff --find-copies --find-renames HEAD
 	dh = diff-head
 	# --word-diff=color 
 	diff-last = ! "fn(){ git log -g --format=%h | { read h2; read h1; git diff \"$@\" $h1...$h2; }; }; fn"

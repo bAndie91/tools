@@ -23,12 +23,23 @@ sub esc
 
 sub current_xorg_window
 {
-	my ($current_window_id) = $Xorg->GetInputFocus;
+    # Get the active window from EWMH _NET_ACTIVE_WINDOW property
+    my ($current_window_id_raw) = $Xorg->GetProperty(
+        $RootWindow,
+        $Xorg->atom('_NET_ACTIVE_WINDOW'),
+        0, 0, 1
+    );
+	my $current_window_id = $current_window_id_raw ? unpack('L', $current_window_id_raw) : undef;
+    # Fallback to GetInputFocus if _NET_ACTIVE_WINDOW is not available
+    ($current_window_id) = $Xorg->GetInputFocus() unless $current_window_id;
+    
 	my ($classes) = $Xorg->GetProperty($current_window_id, $Xorg->atom('WM_CLASS'), 0, 0, 1024);
 	my ($class, $instance) = split chr(0), $classes;
-	my ($title) = $Xorg->GetProperty($current_window_id, $Xorg->atom('_NET_WM_NAME'), $Xorg->atom('UTF8_STRING'), 0, 1024);
-	($title) = $Xorg->GetProperty($current_window_id, $Xorg->atom('WM_NAME'), 0, 0, 1024) unless $title;
-	return {id=>$current_window_id, class=>"$class.$instance", title=>$title};
+    #my ($class, $instance) = $Xorg->GetProperty($current_window_id, $Xorg->atom('WM_CLASS'), $Xorg->atom('STRING'), 0, 1024);
+    my ($title) = $Xorg->GetProperty($current_window_id, $Xorg->atom('_NET_WM_NAME'), $Xorg->atom('UTF8_STRING'), 0, 1024);
+    ($title) = $Xorg->GetProperty($current_window_id, $Xorg->atom('WM_NAME'), 0, 0, 1024) unless $title;
+    
+    return {id=>$current_window_id, class=>"$class.$instance", title=>$title};
 }
 
 sub extract_url

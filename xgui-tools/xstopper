@@ -38,20 +38,20 @@ def add_key_binding(widget, keyname, callback):
 
 
 # Configuration helpers
-CONFIG_DIR = os.path.join(os.environ.get('XDG_CONFIG_HOME') or os.path.expanduser('~/.config'), 'xstopper')
-CONFIG_FILE = os.path.join(CONFIG_DIR, 'config.json')
+STATE_DIR = os.environ.get('XDG_STATE_HOME') or os.path.expanduser('~/.local/state')
+STATE_FILE = os.path.join(STATE_DIR, 'xstopper.json')
 restoring_phase = False
 
 def ensure_config_dir():
 	try:
-		os.makedirs(CONFIG_DIR, 0o700)
+		os.makedirs(STATE_DIR, 0o700)
 	except OSError as e:
 		if e.errno != errno.EEXIST:
 			raise
 
 def load_state():
 	try:
-		with open(CONFIG_FILE, 'r') as f:
+		with open(STATE_FILE, 'r') as f:
 			return json.load(f)
 	except Exception:
 		return {}
@@ -67,7 +67,7 @@ def save_state():
 		state.update({'class': clock.__class__.__name__})
 		states.append(state)
 	ensure_config_dir()
-	with open(CONFIG_FILE, 'w') as f:
+	with open(STATE_FILE, 'w') as f:
 		json.dump(states, f)
 
 
@@ -173,6 +173,7 @@ class AlarmClock(gtk.HBox, Clock):
 		'turned-on': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
 		'turned-off': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
 		'alarm': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
+		'change': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
 	}
 
 	def __init__(self):
@@ -183,6 +184,7 @@ class AlarmClock(gtk.HBox, Clock):
 		self.pack_start(self.face, expand=False, fill=False)
 		now = datetime.now()
 		self.face.set(now.hour, now.minute, now.second)
+		self.face.connect('user-changed', lambda *X: self.emit('change'))
 		self.set_time = None
 		self._running = False
 		self.show_all()
@@ -198,15 +200,17 @@ class AlarmClock(gtk.HBox, Clock):
 				# if the set time is already passed for today, set it for tomorrow
 				set_datetime += timedelta(days=1)
 			self.set_time = int(set_datetime.strftime('%s'))
-			self.face.lock()
-			self.alarmer = Alarmer()
-			self._running = True
-			self.emit('turned-on')
+		self.face.lock()
+		self.alarmer = Alarmer()
+		self._running = True
+		self.emit('change')
+		self.emit('turned-on')
 
 	def turn_off(self):
 		self.face.format_labels(None, None, None)
 		self.face.unlock()
 		self._running = False
+		self.emit('change')
 		self.emit('turned-off')
 
 	def update_display(self):
@@ -221,7 +225,7 @@ class AlarmClock(gtk.HBox, Clock):
 				self.face.format_labels(None, None, None, foreground='red')
 
 	def to_dict(self):
-		state = {'set_time': self.set_time, 'running': self._running}
+		state = {'set_time': self.set_time, 'running': self.is_running}
 		return state
 
 	@classmethod
@@ -241,6 +245,7 @@ class Stopper(Clock):
 	__gsignals__ = {
 		'started': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
 		'paused': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
+		'change': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
 	}
 
 	def __init__(self):
@@ -258,6 +263,7 @@ class Stopper(Clock):
 			if self._last_paused_time is not None:
 				self._behind_interval += now - self._last_paused_time
 			self._running = True
+			self.emit('change')
 			self.emit('started')
 			self._update()
 
@@ -265,6 +271,7 @@ class Stopper(Clock):
 		if self._running:
 			self._last_paused_time = time.time()
 			self._running = False
+			self.emit('change')
 			self.emit('paused')
 			self._update()
 
@@ -289,13 +296,19 @@ class Stopper(Clock):
 		self.set_markup("<span size='32000'><b>" + face + "</b></span>")
 
 	def to_dict(self):
-		return {'start_time': self._start_time, 'last_paused_time': self._last_paused_time, 'running': self._running}
+		return {
+		  'start_time': self._start_time, 
+		  'last_paused_time': self._last_paused_time, 
+		  'behind_interval': self._behind_interval, 
+		  'running': self.is_running,
+		}
 
 	@classmethod
 	def from_dict(cls, state):
 		instance = cls()
 		instance._start_time = state.get('start_time')
 		instance._last_paused_time = state.get('last_paused_time')
+		instance._behind_interval = state.get('behind_interval')
 		if state.get('running'):
 			instance.run()
 		return instance
@@ -353,15 +366,20 @@ class SpinLabel(gtk.EventBox):
 
 
 class AdjustableClock(gtk.HBox):
+	__gsignals__ = {
+		'user-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
+	}
+
 	def __init__(self, color=None):
 		self.hours = SpinLabel(0)
 		self.minutes = SpinLabel(0)
 		self.seconds = SpinLabel(0)
 		self.format_labels('%d:', '%02d:', '%02d')
 		super(gtk.HBox, self).__init__()
-		self.pack_start(self.hours, expand=False, fill=False)
-		self.pack_start(self.minutes, expand=False, fill=False)
-		self.pack_start(self.seconds, expand=False, fill=False)
+		for comp in self.hours, self.minutes, self.seconds:
+			comp.connect('value-changed', lambda *X: self.emit('user-changed'))
+			self.pack_start(comp, expand=False, fill=False)
+
 	def format_labels(self, fmt_h, fmt_m, fmt_s, **pango_attrs):
 		span_attr = ''.join([" %s='%s'" % (attr.replace('_', '-'), val) for attr, val in pango_attrs.iteritems()])
 		fmt = "<span size='32000'%s><b>%%s</b></span>" % (span_attr,)
@@ -396,10 +414,12 @@ class KitchenTimer(gtk.HBox, Clock):
 		'started': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
 		'stopped': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
 		'due': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
+		'change': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
 	}
 
 	def __init__(self):
 		self.face = AdjustableClock()
+		self.face.connect('user-changed', lambda *X: self.emit('change'))
 		self.alarmer = Alarmer()
 		super(gtk.HBox, self).__init__()
 		super(Clock, self).__init__()
@@ -418,11 +438,13 @@ class KitchenTimer(gtk.HBox, Clock):
 			self.face.lock()
 			self._future_time = time.time() + self.scheduled_time_interval_sec
 			self._running = True
+			self.emit('change')
 			self.emit('started')
 
 	def stop(self):
 		self.face.format_labels(None, None, None)
 		self._running = False
+		self.emit('change')
 		self.emit('stopped')
 
 	def update_display(self):
@@ -437,9 +459,11 @@ class KitchenTimer(gtk.HBox, Clock):
 			self.face.set(abs(display_time) / 3600, abs(display_time) / 60 % 60, abs(display_time) % 60)
 
 	def to_dict(self):
-		state = { 'scheduled_time_interval_sec': self.scheduled_time_interval_sec, 
-           'running': self._running, 
-           'alarm_set_time': self._future_time }
+		state = {
+		  'scheduled_time_interval_sec': self.scheduled_time_interval_sec, 
+          'running': self.is_running, 
+          'alarm_set_time': self._future_time,
+		}
 		return state
 
 	@classmethod
@@ -551,6 +575,11 @@ class AlarmClockUI(gtk.HBox):
 
 
 class MultiClassInstantiatorBox(gtk.HBox):
+	__gsignals__ = {
+		'item-added': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
+		'item-removed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
+	}
+
 	def __init__(self, classes):
 		super(self.__class__, self).__init__(homogeneous=True, spacing=2)
 		self._items = []
@@ -574,6 +603,7 @@ class MultiClassInstantiatorBox(gtk.HBox):
 		removable_box.pack_start(button_remove, expand=False, fill=False)
 		column.pack_start(removable_box, expand=False, fill=False)
 		column.show_all()
+		self.emit('item-added', item)
 
 	@property
 	def items(self):
@@ -586,11 +616,16 @@ class MultiClassInstantiatorBox(gtk.HBox):
 			item.clock.drain()
 			item.destroy()
 			removable_box.destroy()
+			self.emit('item-removed')
 
 
 def running_timers():
 	return [item for item in multibox.items if item.clock.is_running]
 
+
+def on_new_clockui(mbox, clockui):
+	clockui.clock.connect('change', lambda *X: save_state())
+	save_state()
 
 win_main = gtk.Window(gtk.WINDOW_TOPLEVEL)
 box0 = gtk.VBox()
@@ -607,6 +642,8 @@ add_key_binding(win_main, '<Ctrl><Shift>Q', lambda *x: act_quit())
 
 box0.pack_start(WallClock(), expand=False, fill=True)
 multibox = MultiClassInstantiatorBox(classes=(StopperUI, KitchenTimerUI, AlarmClockUI))
+multibox.connect('item-added', on_new_clockui)
+multibox.connect('item-removed', lambda mbox, item: save_state())
 box0.pack_start(multibox, expand=True, fill=True)
 win_main.add(box0)
 win_main.show_all()

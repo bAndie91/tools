@@ -1,6 +1,7 @@
 #!/usr/bin/env python2.7
 # -*- coding: utf-8 -*-
 
+from __future__ import print_function
 import os
 import sys
 import signal
@@ -73,7 +74,6 @@ def save_state():
 	states = []
 	for clockui in multibox.items:
 		clock = clockui.clock
-		print(clock)
 		state = clock.to_dict()
 		state.update({'class': clock.__class__.__name__})
 		states.append(state)
@@ -176,154 +176,6 @@ class Clock(gtk.Label):
 	def drain(self):
 		self._draining = True
 
-
-class AlarmClock(gtk.HBox, Clock):
-	name = "Alarm"
-
-	__gsignals__ = {
-		'turned-on': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
-		'turned-off': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
-		'alarm': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
-		'change': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
-	}
-
-	def __init__(self):
-		self.face = AdjustableClock()
-		self.face.hours.range = (0, 23)
-		super(gtk.HBox, self).__init__()
-		super(Clock, self).__init__()
-		self.pack_start(self.face, expand=False, fill=False)
-		now = datetime.now()
-		self.face.set(now.hour, now.minute, now.second)
-		self.face.connect('user-changed', lambda *X: self.emit('change'))
-		self.set_time = None
-		self._running = False
-		self.show_all()
-
-	def turn_on(self, override_set_time=None):
-		if override_set_time is not None:
-			self.set_time = override_set_time
-		else:
-			now = datetime.now()
-			h, m, s = self.face.components
-			set_datetime = now.replace(hour=h, minute=m, second=s)
-			if set_datetime < now:
-				# if the set time is already passed for today, set it for tomorrow
-				set_datetime += timedelta(days=1)
-			self.set_time = int(set_datetime.strftime('%s'))
-		self.face.lock()
-		self.alarmer = Alarmer()
-		self._running = True
-		self.emit('change')
-		self.emit('turned-on')
-
-	def turn_off(self):
-		self.face.format_labels(None, None, None)
-		self.face.unlock()
-		self._running = False
-		self.emit('change')
-		self.emit('turned-off')
-
-	def update_display(self):
-		if self._running:
-			now = time.time()
-			if self.set_time <= now:
-				if not self.alarmer.alarmed:
-					self.emit('alarm')
-					self.alarmer.text = "It's passed %02d:%02d:%02d !!" % self.face.components
-					self.alarmer.alarm()
-					self.turn_on()
-				self.face.format_labels(None, None, None, foreground='red')
-
-	def to_dict(self):
-		state = {'set_time': self.set_time, 'running': self.is_running}
-		return state
-
-	@classmethod
-	def from_dict(cls, state):
-		instance = cls()
-		if state.get('set_time') is not None:
-			instance.set_time = float(state.get('set_time'))
-			set_datetime = datetime.fromtimestamp(instance.set_time)
-			instance.face.set(set_datetime.hour, set_datetime.minute, set_datetime.second)
-			if state.get('running'):
-				instance.turn_on(instance.set_time)
-		return instance
-		# TODO update buttons state in UI
-
-class Stopper(Clock):
-	name = "Stopper"
-
-	__gsignals__ = {
-		'started': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
-		'paused': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
-		'change': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
-	}
-
-	def __init__(self):
-		self._start_time = None
-		self._behind_interval = 0
-		self._running = False
-		self._last_paused_time = None
-		super(self.__class__, self).__init__()
-
-	def run(self):
-		if not self._running:
-			now = time.time()
-			if self._start_time is None:
-				self._start_time = now
-			if self._last_paused_time is not None:
-				self._behind_interval += now - self._last_paused_time
-			self._running = True
-			self.emit('change')
-			self.emit('started')
-			self._update()
-
-	def pause(self):
-		if self._running:
-			self._last_paused_time = time.time()
-			self._running = False
-			self.emit('change')
-			self.emit('paused')
-			self._update()
-
-	def _next_update_interval_ms(self):
-		return 10
-
-	def update_display(self):
-		if self._start_time > 0:
-			if self._running:
-				display_time = time.time() - self._start_time - self._behind_interval
-			else:
-				display_time = self._last_paused_time - self._start_time - self._behind_interval
-			hours = display_time / 3600
-			face = '%s%02d:%02d.%02d' % (
-				('%dh ' % hours) if hours >= 1 else '',
-				display_time / 60 % 60,
-				display_time % 60,
-				(display_time - int(display_time)) * 100,
-			)
-		else:
-			face = '00:00.00'
-		self.set_markup("<span size='32000'><b>" + face + "</b></span>")
-
-	def to_dict(self):
-		return {
-		  'start_time': self._start_time, 
-		  'last_paused_time': self._last_paused_time, 
-		  'behind_interval': self._behind_interval, 
-		  'running': self.is_running,
-		}
-
-	@classmethod
-	def from_dict(cls, state):
-		instance = cls()
-		instance._start_time = state.get('start_time')
-		instance._last_paused_time = state.get('last_paused_time')
-		instance._behind_interval = state.get('behind_interval')
-		if state.get('running'):
-			instance.run()
-		return instance
 
 class SpinLabel(gtk.EventBox):
 	__gsignals__ = {
@@ -441,6 +293,87 @@ class AdjustableClock(gtk.HBox):
 		self.seconds.value = s % 60
 
 
+class WallClock(Clock):
+	@property
+	def clock(self):
+		return self
+
+
+class Stopper(Clock):
+	name = "Stopper"
+
+	__gsignals__ = {
+		'started': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
+		'paused': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
+		'change': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
+	}
+
+	def __init__(self):
+		self._start_time = None
+		self._behind_interval = 0
+		self._running = False
+		self._last_paused_time = None
+		super(self.__class__, self).__init__()
+
+	def run(self):
+		if not self._running:
+			now = time.time()
+			if self._start_time is None:
+				self._start_time = now
+			if self._last_paused_time is not None:
+				self._behind_interval += now - self._last_paused_time
+			self._running = True
+			self.emit('change')
+			self.emit('started')
+			self._update()
+
+	def pause(self):
+		if self._running:
+			self._last_paused_time = time.time()
+			self._running = False
+			self.emit('change')
+			self.emit('paused')
+			self._update()
+
+	def _next_update_interval_ms(self):
+		return 10
+
+	def update_display(self):
+		if self._start_time > 0:
+			if self._running:
+				display_time = time.time() - self._start_time - self._behind_interval
+			else:
+				display_time = self._last_paused_time - self._start_time - self._behind_interval
+			hours = display_time / 3600
+			face = '%s%02d:%02d.%02d' % (
+				('%dh ' % hours) if hours >= 1 else '',
+				display_time / 60 % 60,
+				display_time % 60,
+				(display_time - int(display_time)) * 100,
+			)
+		else:
+			face = '00:00.00'
+		self.set_markup("<span size='32000'><b>" + face + "</b></span>")
+
+	def to_dict(self):
+		return {
+		  'start_time': self._start_time, 
+		  'last_paused_time': self._last_paused_time, 
+		  'behind_interval': self._behind_interval, 
+		  'running': self.is_running,
+		}
+
+	@classmethod
+	def from_dict(cls, state):
+		instance = cls()
+		instance._start_time = state.get('start_time')
+		instance._last_paused_time = state.get('last_paused_time')
+		instance._behind_interval = state.get('behind_interval')
+		if state.get('running'):
+			instance.run()
+		return instance
+	
+
 class KitchenTimer(gtk.HBox, Clock):
 	name = "Timer"
 
@@ -521,6 +454,85 @@ class KitchenTimer(gtk.HBox, Clock):
 			instance.face.set_seconds(state['scheduled_time_interval_sec'])
 		return instance
 
+class AlarmClock(gtk.HBox, Clock):
+	name = "Alarm"
+
+	__gsignals__ = {
+		'turned-on': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
+		'turned-off': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
+		'turned': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
+		'alarm': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
+		'change': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
+	}
+
+	def __init__(self):
+		self.face = AdjustableClock()
+		self.face.hours.range = (0, 23)
+		super(gtk.HBox, self).__init__()
+		super(Clock, self).__init__()
+		self.pack_start(self.face, expand=False, fill=False)
+		now = datetime.now()
+		self.face.set(now.hour, now.minute, now.second)
+		self.face.connect('user-changed', lambda *X: self.emit('change'))
+		self.set_time = None
+		self._running = False
+		self.show_all()
+
+	def turn_on(self, override_set_time=None):
+		if not self._running:
+			if override_set_time is not None:
+				self.set_time = override_set_time
+			else:
+				now = datetime.now()
+				h, m, s = self.face.components
+				set_datetime = now.replace(hour=h, minute=m, second=s)
+				if set_datetime < now:
+					# if the set time is already passed for today, set it for tomorrow
+					set_datetime += timedelta(days=1)
+				self.set_time = int(set_datetime.strftime('%s'))
+			self.face.lock()
+			self.alarmer = Alarmer()
+			self._running = True
+			self.emit('change')
+			self.emit('turned-on')
+			self.emit('turned')
+
+	def turn_off(self):
+		if self._running:
+			self.face.format_labels(None, None, None)
+			self.face.unlock()
+			self._running = False
+			self.emit('change')
+			self.emit('turned-off')
+			self.emit('turned')
+
+	def update_display(self):
+		if self._running:
+			now = time.time()
+			if self.set_time <= now:
+				if not self.alarmer.alarmed:
+					self.emit('alarm')
+					self.alarmer.text = "It's passed %02d:%02d:%02d !!" % self.face.components
+					self.alarmer.alarm()
+					self.turn_on()
+				self.face.format_labels(None, None, None, foreground='red')
+
+	def to_dict(self):
+		state = {'set_time': self.set_time, 'running': self.is_running}
+		return state
+
+	@classmethod
+	def from_dict(cls, state):
+		instance = cls()
+		if state.get('set_time') is not None:
+			instance.set_time = float(state.get('set_time'))
+			set_datetime = datetime.fromtimestamp(instance.set_time)
+			instance.face.set(set_datetime.hour, set_datetime.minute, set_datetime.second)
+			if state.get('running'):
+				instance.turn_on(instance.set_time)
+		return instance
+
+
 class Alarmer(object):
 	def __init__(self):
 		self.alarmed = False
@@ -542,12 +554,6 @@ class Alarmer(object):
 		win_main.present()
 		dialog.present()
 		self.alarmed = True
-
-
-class WallClock(Clock):
-	@property
-	def clock(self):
-		return self
 
 
 class StopperUI(gtk.HBox):
@@ -621,9 +627,13 @@ class AlarmClockUI(gtk.HBox):
 		img.set_from_icon_name('alarm-clock', size=gtk.ICON_SIZE_BUTTON)
 		self.btn_set.set_image(img)
 		self.btn_set.connect('clicked', lambda event: self.clock.turn_on() if self.btn_set.get_active() else self.clock.turn_off())
+		self.clock.connect('turned', lambda *X: self.manage_button_states())
 		self.pack_start(self.clock, expand=True, fill=True)
 		self.pack_start(self.btn_set, expand=False, fill=False)
 		self.show_all()
+	
+	def manage_button_states(self):
+		self.btn_set.set_active(self.clock.is_running)
 
 
 class MultiClassColumn(gtk.VBox):

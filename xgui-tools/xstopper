@@ -686,21 +686,21 @@ class MultiClassInstantiatorBox(gtk.HBox):
 
 	def __init__(self, classes):
 		super(self.__class__, self).__init__(homogeneous=True, spacing=2)
-		self._columns = []
+		self.columns = []
 		for cls in classes:
 			column = MultiClassColumn(cls)
 			add_widget_button = StockButton(stock=gtk.STOCK_ADD, label=cls.name)
 			add_widget_button.connect('clicked', lambda X, column: column.new_item(None), column)
 			column.pack_start(add_widget_button, expand=False, fill=False)
 			self.pack_start(column, expand=False, fill=False)
-			self._columns.append(column)
+			self.columns.append(column)
 			column.connect('item-added', lambda col, item: self.emit('item-added', item))
 			column.connect('item-removed', lambda col: self.emit('item-removed'))
 		self.show_all()
 	
 	def add_item(self, item):
 		"add the given item to the column corresponding to its type"
-		for col in self._columns:
+		for col in self.columns:
 			if isinstance(item, col.cls):
 				col.new_item(item)
 				return
@@ -708,7 +708,7 @@ class MultiClassInstantiatorBox(gtk.HBox):
 
 	@property
 	def items(self):
-		for col in self._columns:
+		for col in self.columns:
 			for item in col.items:
 				yield item
 
@@ -744,6 +744,6 @@ win_main.add(box0)
 win_main.show_all()
 
 restore_state()
-# TODO add 1 clock in each column if none loaded
+[ col.new_item() if len(col.items) == 0 else None for col in multibox.columns ]
 
 gtk.main()

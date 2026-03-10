@@ -1057,7 +1057,7 @@ entrycompletion_timezone.set_rank_func(timezone_completion)
 
 btn_timezone.connect('clicked', on_click_timezone_btn)
 btn_solartime.connect('clicked', toggle_solartime)
-btn_stopper.connect('clicked', lambda *X: run_detached('xstopper', []))
+btn_stopper.connect('clicked', lambda *X: run_detached('icesh', ['-class', 'xstopper', 'runonce', 'xstopper']))
 btn_close.connect('clicked', act_main_hide)
 label_clock.set_markup(PMU_CLOCK + ':' + PMU_CLOCK_END + '\n' + PMU_TIMEZONE + ' ' + PMU_TIMEZONE_END)
 label_clock.set_padding(18, 0)

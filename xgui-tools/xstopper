@@ -725,6 +725,7 @@ win_main = gtk.Window(gtk.WINDOW_TOPLEVEL)
 box0 = gtk.VBox()
 
 win_main.set_size_request(800, -1)
+win_main.set_wmclass('xstopper', 'xstopper')
 win_main.set_type_hint(gtk.gdk.WINDOW_TYPE_HINT_TOOLBAR)
 win_main.set_keep_above(True)
 win_main.set_icon_name('alarm-clock')

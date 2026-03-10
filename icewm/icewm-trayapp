@@ -1,0 +1,55 @@
+#!/bin/bash
+
+set -e
+set -o pipefail
+set -u
+
+
+wm_class=''
+startMinimized=''
+
+while [ $# != 0 ]
+do
+	case "$1" in
+	(--help)
+		pod2text "$0"
+		exit 0
+		;;
+	(-class|--class)
+		shift
+		wm_class=$1
+		;;
+	(-minimized|--minimized)
+		startMinimized=1
+		;;
+	(--)
+		shift
+		break
+		;;
+	(-*)
+		errx -1 "unknown option: $1"
+		;;
+	(*)
+		break
+		;;
+	esac
+	shift
+done
+
+
+cmd=$1
+shift
+if [ -z "$wm_class" ]
+then
+	wm_class=$cmd
+fi
+
+icesh -class "$wm_class" activate ${startMinimized:+minimize} ||\
+{
+	if [ $startMinimized ]
+	then
+		icewmhint "$wm_class" startMinimized 1
+	fi
+	icewmhint "$wm_class" tray 2
+	"$cmd" "$@"
+}

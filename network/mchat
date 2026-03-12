@@ -308,6 +308,8 @@ GetOptions(
 	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
+$0 = "mchat";
+
 
 sub system_message
 {

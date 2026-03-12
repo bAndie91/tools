@@ -25,7 +25,7 @@ def win_main_show():
 def act_quit():
 	save_state()
 	if len(running_timers()) > 0:
-		pass
+		win_main.iconify()
 	else:
 		gtk.main_quit()
 	return True
@@ -329,6 +329,7 @@ class Stopper(Clock):
 	def pause(self):
 		if self._running:
 			self._last_paused_time = time.time()
+			# TODO dont save start time but account for behind time
 			self._running = False
 			self.emit('change')
 			self.emit('paused')

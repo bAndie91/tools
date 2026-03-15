@@ -329,7 +329,6 @@ class Stopper(Clock):
 	def pause(self):
 		if self._running:
 			self._last_paused_time = time.time()
-			# TODO dont save start time but account for behind time
 			self._running = False
 			self.emit('change')
 			self.emit('paused')
@@ -354,11 +353,12 @@ class Stopper(Clock):
 		else:
 			face = '00:00.00'
 		self.set_markup("<span size='32000'><b>" + face + "</b></span>")
+		self.queue_resize()
 
 	def to_dict(self):
 		return {
 		  'start_time': self._start_time, 
-		  'last_paused_time': self._last_paused_time, 
+		  'last_paused_time': self._last_paused_time,
 		  'behind_interval': self._behind_interval, 
 		  'running': self.is_running,
 		}
@@ -367,10 +367,12 @@ class Stopper(Clock):
 	def from_dict(cls, state):
 		instance = cls()
 		instance._start_time = state.get('start_time')
-		instance._last_paused_time = state.get('last_paused_time')
 		instance._behind_interval = state.get('behind_interval')
 		if state.get('running'):
+			instance._last_paused_time = None
 			instance.run()
+		else:
+			instance._last_paused_time = state.get('last_paused_time')
 		return instance
 	
 

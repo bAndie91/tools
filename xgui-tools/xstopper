@@ -695,8 +695,8 @@ class MultiClassInstantiatorBox(gtk.HBox):
 	}
 
 	def __init__(self, classes):
-		super(self.__class__, self).__init__(homogeneous=False, spacing=20)
-		self.set_border_width(20)
+		super(self.__class__, self).__init__(homogeneous=False, spacing=5)
+		self.set_border_width(10)
 		self.columns = []
 		for cls in classes:
 			column = MultiClassColumn(cls)

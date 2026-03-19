@@ -15,7 +15,7 @@ Restart them when ended.
 Re-read the **daemontab** file on **HUP** signal,
 stops processes which are no longer in it (or _ID_ changed) with SIGTERM signal,
 and starts new ones.
-Those daemons whose _COMMAND_ _ARGS_ changed, are not restarted automatically.
+Those daemons whose _COMMAND_ _ARGS_ changed, are not restarted automatically (send **SIGUSR2** to do so).
 
 Automatically respawn a daemon when it exits.
 If a daemon exits too often, suppress it a little while.
@@ -93,6 +93,10 @@ Well, it's called foreground in most service's terminology, but they will be as 
         List of the command name and its arguments.
         Each argument as a separate item on the list.
 
+    - **.started\_cmd\_args**
+
+        List of the command name and its arguments at the time of the daemon's last start.
+
     - **.starttimes._N_** and **.exittimes._N_**
 
         List of unix epoch timestamps when the daemon started and exited
@@ -121,15 +125,19 @@ Well, it's called foreground in most service's terminology, but they will be as 
 
 ## SIGNALS
 
-- USR1
-
-    Write internal state into `/var/run/shm/dmaster.state` file.
-
 - TERM, INT
 
     Terminate managed daemons, always with one **TERM** signal each,
     wait for all of them to exit, then exit dmaster(1) itself.
     If a daemon is a process group leader (become on its own or started via setpgrp(1)), sends the signal to the whole process group at once.
+
+- USR1
+
+    Write internal state into `/var/run/shm/dmaster.state` file.
+
+- USR2
+
+    Re-read **daemontab**, just like **HUP**, but also stop (and restart) daemons whose _COMMAND_ _ARGS_ changed.
 
 - HUP
 

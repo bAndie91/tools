@@ -1,0 +1,17 @@
+#!/bin/bash
+
+tmpfile=`mktemp -t output-XXXXXX`
+trap 'rm "$tmpfile"' EXIT
+
+stdmux -o "[STDOUT] " -e "[STDERR] " -- "$@" >"$tmpfile" 2>&1
+
+err=$?
+if [ $err != 0 ]
+then
+	echo "---" >&2
+	echo "command: ${@@Q}" >&2
+	echo "exit status: $err" >&2
+	echo "---" >&2
+	cat "$tmpfile"
+fi
+exit $err

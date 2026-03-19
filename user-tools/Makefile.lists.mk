@@ -61,6 +61,7 @@ TOOLS ?= \
   g_filename_to_uri \
   getcvt \
   git-checkout-sparse \
+  git-contributor-stats \
   git-mirrors \
   gitconfigexec \
   git_diff \

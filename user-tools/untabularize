@@ -34,6 +34,11 @@ Strip leading whitespace in column names to learn each column's left margin.
 Don't remove trailing (or leading, in case of right-aligned cells) space,
 which is often just a filler.
 
+=item -c, --trim-column-names
+
+Trim left and right whitespace from column names after determined the cell borders.
+This is often useful for center-aligned header cells.
+
 =back
 
 =head1 LIMITATIONS
@@ -65,6 +70,7 @@ $OptNoPipeInHeader = 0;
 $OptAllowWhitespace = undef;
 $OptPadding = undef;
 $OptTrimFiller = 1;
+$OptTrimColumnNames = 0;
 
 GetOptions(
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
@@ -72,6 +78,7 @@ GetOptions(
 	'w|allow-whitespace!' => \$OptAllowWhitespace,
 	'p|padding=i' => \$OptPadding,
 	'F|no-trim-filler!' => sub { $OptTrimFiller = 0; },
+	'c|trim-column-names!' => \$OptTrimColumnNames,
 	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
@@ -80,6 +87,8 @@ if(defined $OptAllowWhitespace and defined $OptPadding)
 	die "$0: options --allow-whitespace and --padding are mutually exclusive.\n";
 }
 
+
+$header_sent = 0;
 
 while(<STDIN>)
 {
@@ -151,6 +160,13 @@ while(<STDIN>)
 			@cells = map { s/\s+$// or s/^\s+//; $_ } @cells;
 		}
 		
+		if($OptTrimColumnNames and not $header_sent)
+		{
+			@cells = map { s/^\s*//; s/\s*$//; $_ } @cells;
+		}
+		
 		print join("\t", @cells) . "\n";
+		
+		$header_sent = 1 unless $header_sent;
 	}
 }

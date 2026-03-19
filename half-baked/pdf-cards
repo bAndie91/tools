@@ -1,0 +1,250 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+tile_duplex.py — Tile front+back pages on A4, duplex-aligned, with cut marks.
+
+Place as many copies of a (front, back) pair as fit on an A4 sheet.
+When printed duplex (flip on long edge), each copy is perfectly registered —
+cut out the stack and you get individual double-sided cards/sheets.
+
+Usage:
+    # Two separate PDFs (front and back):
+    python3 tile_duplex.py --front front.pdf --back back.pdf --output output.pdf
+
+    # Single PDF: page 1 = front, page 2 = back:
+    python3 tile_duplex.py --input card.pdf --output output.pdf
+
+Options:
+    --margin MM       Margin around the A4 page edge in mm (default: 10)
+    --gap MM          Gap between tiles in mm (default: 5)
+    --mark-len MM     Length of cut-mark lines in mm (default: 5)
+    --flip-back       Rotate back page 180° (for vertical flip reading)
+"""
+
+import argparse
+import math
+import sys
+from pypdf import PdfReader, PdfWriter, PageObject, Transformation
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import mm
+import io
+
+# A4 in points
+A4_W = 595.276
+A4_H = 841.890
+
+
+def mm2pt(x):
+    return x * mm
+
+
+def make_cut_marks(page_w_pt, page_h_pt, cols, rows,
+                   origin_x, origin_y, col_step, row_step,
+                   mark_len_pt, line_width=0.25):
+    """
+    Return a PDF page (bytes) containing only cut-mark lines on an A4 canvas.
+    """
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=(A4_W, A4_H))
+    c.setLineWidth(line_width)
+    c.setStrokeColorRGB(0, 0, 0)
+
+    def tick_h(cx, cy, inward=True):
+        """Horizontal tick (for top/bottom edges)."""
+        dx = mark_len_pt if inward else -mark_len_pt
+        # small gap so mark doesn't overlap content
+        gap = 1
+        c.line(cx, cy + gap if inward else cy - gap,
+               cx, cy + gap + dx if inward else cy - gap + dx)
+
+    def tick_v(cx, cy, inward=True):
+        """Vertical tick (for left/right edges)."""
+        dy = mark_len_pt if inward else -mark_len_pt
+        gap = 1
+        c.line(cx + gap if inward else cx - gap, cy,
+               cx + gap + dy if inward else cx - gap + dy, cy)
+
+    for row in range(rows):
+        for col in range(cols):
+            x0 = origin_x + col * col_step
+            y0 = origin_y + row * row_step
+            x1 = x0 + page_w_pt
+            y1 = y0 + page_h_pt
+
+            corners = [(x0, y0), (x1, y0), (x0, y1), (x1, y1)]
+            for cx, cy in corners:
+                # vertical mark
+                c.line(cx - mark_len_pt - 1, cy, cx - 1, cy) if cx == x0 else None
+                c.line(cx + 1, cy, cx + mark_len_pt + 1, cy) if cx == x1 else None
+                # horizontal mark
+                c.line(cx, cy - mark_len_pt - 1, cx, cy - 1) if cy == y0 else None
+                c.line(cx, cy + 1, cx, cy + mark_len_pt + 1) if cy == y1 else None
+
+            # Draw all 4 corner ticks properly
+            # Bottom-left
+            c.line(x0 - mark_len_pt - 1, y0, x0 - 1, y0)
+            c.line(x0, y0 - mark_len_pt - 1, x0, y0 - 1)
+            # Bottom-right
+            c.line(x1 + 1, y0, x1 + mark_len_pt + 1, y0)
+            c.line(x1, y0 - mark_len_pt - 1, x1, y0 - 1)
+            # Top-left
+            c.line(x0 - mark_len_pt - 1, y1, x0 - 1, y1)
+            c.line(x0, y1 + 1, x0, y1 + mark_len_pt + 1)
+            # Top-right
+            c.line(x1 + 1, y1, x1 + mark_len_pt + 1, y1)
+            c.line(x1, y1 + 1, x1, y1 + mark_len_pt + 1)
+
+    c.save()
+    buf.seek(0)
+    return buf
+
+
+def build_tiled_page(src_page, cols, rows,
+                     origin_x, origin_y, col_step, row_step,
+                     rotate_tiles=False, flip_180=False):
+    """
+    Build one A4 PageObject with src_page tiled cols×rows times.
+    rotate_tiles=True rotates each tile 90° clockwise.
+    flip_180=True rotates each tile 180°.
+    """
+    a4 = PageObject.create_blank_page(width=A4_W, height=A4_H)
+
+    for row in range(rows):
+        for col in range(cols):
+            x = origin_x + col * col_step
+            y = origin_y + row * row_step
+            pw = float(src_page.mediabox.width)
+            ph = float(src_page.mediabox.height)
+            
+            if rotate_tiles and flip_180:
+                # Rotate 90° clockwise + 180° = 270° total (or -90°)
+                t = Transformation().rotate(90).translate(tx=x + ph, ty=y)
+            elif flip_180:
+                # Rotate 180°: flip upside down
+                t = Transformation().rotate(180).translate(tx=x + pw, ty=y + ph)
+            elif rotate_tiles:
+                # Rotate 90° clockwise
+                t = Transformation().rotate(-90).translate(tx=x, ty=y + pw)
+            else:
+                t = Transformation().translate(tx=x, ty=y)
+            a4.merge_transformed_page(src_page, t)
+
+    return a4
+
+
+def overlay_marks(base_page, marks_bytes):
+    """Merge a cut-marks PDF (bytes) onto base_page."""
+    marks_reader = PdfReader(io.BytesIO(marks_bytes.read()))
+    marks_page = marks_reader.pages[0]
+    base_page.merge_page(marks_page)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Tile front+back pages on A4 for duplex cut-out printing.")
+    src = parser.add_mutually_exclusive_group(required=True)
+    src.add_argument("--input", help="Single PDF: page 1=front, page 2=back")
+    src.add_argument("--front", help="Front side PDF")
+    parser.add_argument("--back", help="Back side PDF (required with --front)")
+    parser.add_argument("--output", required=True, help="Output PDF path")
+    parser.add_argument("--margin", type=float, default=10, help="Page margin in mm (default: 10)")
+    parser.add_argument("--gap", type=float, default=5, help="Gap between tiles in mm (default: 5)")
+    parser.add_argument("--mark-len", type=float, default=5, help="Cut mark length in mm (default: 5)")
+    parser.add_argument("--flip-back", action="store_true", help="Rotate back page 180° (for vertical flip reading)")
+    args = parser.parse_args()
+
+    margin = mm2pt(args.margin)
+    gap = mm2pt(args.gap)
+    mark_len = mm2pt(args.mark_len)
+
+    # Load source pages
+    if args.input:
+        r = PdfReader(args.input)
+        if len(r.pages) < 2:
+            print("ERROR: --input needs at least 2 pages (front + back).", file=sys.stderr)
+            sys.exit(1)
+        front_page = r.pages[0]
+        back_page = r.pages[1]
+    else:
+        if not args.back:
+            print("ERROR: --back is required when using --front.", file=sys.stderr)
+            sys.exit(1)
+        front_page = PdfReader(args.front).pages[0]
+        back_page = PdfReader(args.back).pages[0]
+
+    # Page dimensions
+    pw = float(front_page.mediabox.width)
+    ph = float(front_page.mediabox.height)
+
+    # Calculate copies for both orientations
+    usable_w = A4_W - 2 * margin
+    usable_h = A4_H - 2 * margin
+    cols_normal = max(1, math.floor((usable_w + gap) / (pw + gap)))
+    rows_normal = max(1, math.floor((usable_h + gap) / (ph + gap)))
+    total_normal = cols_normal * rows_normal
+
+    cols_rotated = max(1, math.floor((usable_w + gap) / (ph + gap)))
+    rows_rotated = max(1, math.floor((usable_h + gap) / (pw + gap)))
+    total_rotated = cols_rotated * rows_rotated
+
+    # Choose orientation that yields more copies per A4 sheet
+    rotate_tiles = False
+    if total_rotated > total_normal:
+        pw, ph = ph, pw
+        cols, rows, total = cols_rotated, rows_rotated, total_rotated
+        rotate_tiles = True
+        print(f"  Rotated input 90° to fit {total_rotated} pages instead of {total_normal}.")
+    else:
+        cols, rows, total = cols_normal, rows_normal, total_normal
+
+    print(f"  Tile size:    {pw:.1f} × {ph:.1f} pt  "
+          f"({pw/mm:.1f} × {ph/mm:.1f} mm)")
+    print(f"  A4 usable:    {usable_w:.1f} × {usable_h:.1f} pt")
+    print(f"  Grid:         {cols} cols × {rows} rows = {total} copies per side")
+
+    # Centering: distribute leftover space equally
+    total_grid_w = cols * pw + (cols - 1) * gap
+    total_grid_h = rows * ph + (rows - 1) * gap
+    origin_x = (A4_W - total_grid_w) / 2
+    origin_y = (A4_H - total_grid_h) / 2
+    col_step = pw + gap
+    row_step = ph + gap
+
+    # Build cut marks (same for both sides)
+    marks_buf = make_cut_marks(pw, ph, cols, rows,
+                               origin_x, origin_y, col_step, row_step,
+                               mark_len)
+
+    # Build front page
+    front_a4 = build_tiled_page(front_page, cols, rows,
+                                origin_x, origin_y, col_step, row_step,
+                                rotate_tiles=rotate_tiles)
+    marks_buf.seek(0)
+    overlay_marks(front_a4, marks_buf)
+
+    # Build back page
+    back_a4 = build_tiled_page(back_page, cols, rows,
+                               origin_x, origin_y, col_step, row_step,
+                               rotate_tiles=rotate_tiles, flip_180=args.flip_back)
+    marks_buf.seek(0)
+    overlay_marks(back_a4, marks_buf)
+
+    # Write output
+    writer = PdfWriter()
+    writer.add_page(front_a4)
+    writer.add_page(back_a4)
+    with open(args.output, "wb") as f:
+        writer.write(f)
+
+    print(f"  Written: '{args.output}'  (2 pages: front + back)")
+    print()
+    print("  Printing instructions:")
+    print("    • Print DUPLEX, flip on LONG EDGE (portrait duplex).")
+    if args.flip_back:
+        print("    • Cut and flip cards vertically to read back side.")
+    else:
+        print("    • Cut along the marks — each copy is double-sided.")
+
+
+if __name__ == "__main__":
+    main()

@@ -8,7 +8,7 @@ TOOLS = \
   icewm-menuhelper-parent-dirs \
   icewm-menu-startup-progs \
   icewm-menu-ssh-sessions \
-  icewm-switchkey-creds \
+  icewm-trayapp \
   
 
 

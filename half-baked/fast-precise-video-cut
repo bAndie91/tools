@@ -116,11 +116,17 @@ echo B-C : $ts_b -- $ts_c
 echo C-D : $ts_c1 -- $ts_d
 
 
-# TODO make the input and output codecs match
 
-ffmpeg -nostdin -ss $ts_a	-to $ts_b0	-i "$input"		-y ffcutp_$ts_a-$ts_b.$ext
-ffmpeg -nostdin -ss $ts_b	-to $ts_c	-i "$input"	-c copy	-y ffcutp_$ts_b-$ts_c.$ext
-ffmpeg -nostdin -ss $ts_c1	-to $ts_d	-i "$input"		-y ffcutp_$ts_c-$ts_d.$ext
+# Get input video and audio codec and pixel format
+vcodec=$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=nw=1:nk=1 "$input")
+acodec=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of default=nw=1:nk=1 "$input" || echo copy)
+pix_fmt=$(ffprobe -v error -select_streams v:0 -show_entries stream=pix_fmt -of default=nw=1:nk=1 "$input")
+
+ffmpeg -nostdin -ss $ts_a -to $ts_b0 -i "$input" -c:v $vcodec -c:a $acodec -pix_fmt $pix_fmt -y ffcutp_$ts_a-$ts_b.$ext
+ffmpeg -nostdin -ss $ts_b -to $ts_c -i "$input" -c copy -y ffcutp_$ts_b-$ts_c.$ext
+ffmpeg -nostdin -ss $ts_c1 -to $ts_d -i "$input" -c:v $vcodec -c:a $acodec -pix_fmt $pix_fmt -y ffcutp_$ts_c-$ts_d.$ext
+
+# TODO test if the 1st and 3rd segments codec matches to the 2nd segment.
 
 ffmpeg -nostdin -f concat -safe 0 -i <(gen_filelist) -c copy -y ffcutp_$ts_a-$ts_d.$ext
 

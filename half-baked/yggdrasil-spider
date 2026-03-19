@@ -1,0 +1,98 @@
+#!/bin/bash
+
+set -e
+set -o pipefail
+set -u
+
+warn()
+{
+	echo "$*" >&2
+}
+
+process_input_keys()
+{
+	local key
+	while read key
+	do
+		process_key "$key"
+	done
+}
+
+process_key()
+{
+	local key=$1
+	if ! cached "$key"
+	then
+		local data=`yggdrasilctl -json debug_remotegetpeers key=$key`
+		local err=$?
+		if [ $err = 0 -a ${#data} != 0 ]
+		then
+			if jq -r 'to_entries | .[] | .key, .value.keys[]' <<< "$data" |\
+			{
+				local ip
+				read ip
+				warn "$key $ip"
+				local path=`mkcachepath "$key"`
+				cat > "$path/$key.peers"
+				cache $key $ip
+			}
+			then
+				keys_processed=$[keys_processed+1]
+			else
+				warn "error at key $key: $data"
+			fi
+		else
+			warn "error at key $key: $data"
+		fi
+	fi
+}
+
+cache()
+{
+	local key=$1
+	local ip=$2
+	local path=`mkcachepath "$key"`
+	echo $ip > "$path/$key.addr"
+}
+
+cached()
+{
+	local key=$1
+	local path=`cachepath "$key"`
+	[ -s "$path/$key.addr" ]
+}
+
+cachepath()
+{
+	local key=$1
+	echo ${key:0:2}/${key:2:2}/${key:4:2}/${key:6:2}
+}
+
+mkcachepath()
+{
+	local path=`cachepath "$1"`
+	mkdir -p "$path"
+	echo "$path"
+}
+
+
+declare -g keys_processed=0
+
+
+yggdrasilctl -json getself | jq -r '.key, .address' | {
+	read key
+	read ip
+	cache $key $ip
+}
+
+yggdrasilctl -json getpeers | jq -r '.peers[].key' | process_input_keys
+
+while true
+do
+	keys_processed=0
+	find ??/ -name '*.peers' -type f | xargs cat | process_input_keys
+	if [ $keys_processed = 0 ]
+	then
+		break
+	fi
+done

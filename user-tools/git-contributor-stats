@@ -1,0 +1,39 @@
+#!/usr/bin/env perl
+
+use IPC::Run qw/run/;
+
+run ['git', 'log', '--shortstat', '--format=author %ae %an%ncommitter %ce %cn'], \undef, \$output;
+die if $?;
+
+open my $fh, '<', \$output;
+while(<$fh>)
+{
+  if (/^(author|committer) (\S+) (.*)/) {
+    $email{$1} = $2;
+    $names{$2}->{$3} = 1;
+  }
+  elsif (/^\s/) {
+    for my $contrib_type (qw/author committer/) {
+      my $email = $email{$contrib_type};
+      $stats{$email}->{$contrib_type}->{"contribs"}++;
+      $stats{$email}->{$contrib_type}->{"files"} += $1 if /(\d+) file/;
+      $stats{$email}->{$contrib_type}->{"add"} += $1 if /(\d+) insert/;
+      $stats{$email}->{$contrib_type}->{"del"} += $1 if /(\d+) delet/;
+    }
+  }
+}
+
+END {
+  $\ = "\n";
+  print join "\t", qw/EMAIL COMMITS LINES+ LINES- FILES AUTHORINGS ALINES+ ALINES- AFILES NAMES/;
+  for my $email (sort keys %stats) {
+    my $stat = $stats{$email};
+    my $astat = $stat->{"author"};
+    my $cstat = $stat->{"committer"};
+
+    print join "\t", $email, 
+      $cstat->{"contribs"}, $cstat->{"add"}, $cstat->{"del"}, $cstat->{"files"},
+      $astat->{"contribs"}, $astat->{"add"}, $astat->{"del"}, $astat->{"files"},
+      join("; ", keys %{$names{$email}});
+  }
+}

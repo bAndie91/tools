@@ -92,7 +92,15 @@ $cred_site = undef;
 if(defined $url and $url ne '')
 {
 	unless(eval {
-		my $hostname = URI->new($url)->ihost;
+		my $hostname;
+		unless(eval {
+			$hostname = URI->new($url)->ihost;
+			1;
+		})
+		{
+			push @gmenu_items, GmenuHeader(esc("URL: $url"));
+			die $@;
+		}
 		my $hostname_attempt = 0;
 		while($hostname ne '')
 		{

@@ -1,0 +1,37 @@
+#!/usr/bin/env -S perl -p
+
+=pod
+
+=head1 NAME
+
+numoff - numbering offsets of a text file
+
+=head1 SYNOPSIS
+
+numoff < I<FILE>
+
+=head1 DESCRIPTION
+
+Number the start of line offsets.
+
+=head1 EXAMPLE
+
+ cat /etc/motd | numoff 
+      0  
+      1  The programs included with the Devuan GNU/Linux system are free software;
+     75  the exact distribution terms for each program are described in the
+    142  individual files in /usr/share/doc/*/copyright.
+    190  
+    191  Devuan GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+    257  permitted by applicable law.
+
+=head1 SEE ALSO
+
+nl(1)
+
+=cut
+
+
+$len = length;
+$_ = sprintf("%6d\t", $cum_len).$_;
+$cum_len += $len;

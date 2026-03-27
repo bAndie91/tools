@@ -33,29 +33,23 @@ no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 
-sub outp
-{
-	local $_ = shift;
-	$_ = escape_tabdata($_) if $OptEscape;
-	print $_ . $RS;
-}
-
 $n = 0;
-while(<STDIN>)
+@record = ();
+while(not eof STDIN)
 {
+	$_ = <STDIN>;
 	chomp;
-	$output .= $FS if defined $output;
-	$output .= $_;
+	push @record, $OptEscape ? escape_tabdata($_) : $_;
 	$n++;
 	if($n == $OptNup)
 	{
-		outp($output);
-		undef $output;
+		output_record(@record);
 		$n = 0;
+		@record = ();
 	}
 }
 
-if(defined $output)
+if(@record)
 {
-	outp($output);
+	output_record(@record);
 }

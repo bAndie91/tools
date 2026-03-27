@@ -128,9 +128,11 @@ TOOLS ?= \
   notashell \
   nsjoin \
   nthash.py \
+  numoff \
   ocspverify \
   organizebydate \
   organizebydate-conflict-resolve-filename-version \
+  output-only-if-error \
   palemoon-current-urls \
   pararun \
   parsel \

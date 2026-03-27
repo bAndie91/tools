@@ -102,7 +102,7 @@ if(defined $url and $url ne '')
 			die $@;
 		}
 		my $hostname_attempt = 0;
-		while($hostname ne '')
+		while($hostname =~ /\./)
 		{
 			$hostname_attempt++;
 			push @gmenu_items, GmenuSeparator("-") if $hostname_attempt > 1;

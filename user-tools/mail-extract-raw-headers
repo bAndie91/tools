@@ -28,6 +28,13 @@ Join header contents of the same header by C<, > (comma, space)
 when there are multiple instances of the given header,
 eg. B<Received>, B<Delivered-To>, ...
 
+=item -s, --sort-content
+
+Sort header contents alphabetically of the same header.
+Default is to keep raw email's order.
+This is useful on headers with multiple instances.
+Works both with and without B<-j> option.
+
 =back
 
 =cut
@@ -41,11 +48,13 @@ no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 $OptKeepLF = 0;
 $OptNames = 0;
 $OptJoinSame = 0;
+$OptSortContent = 0;
 
 GetOptions(
 	'k|keep-newlines|keep-linefeeds' => \$OptKeepLF,
 	'n|header-names' => \$OptNames,
 	'j|join' => \$OptJoinSame,
+	's|sort-content' => \$OptSortContent,
 	'help|?' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
@@ -104,6 +113,11 @@ for my $asked_header (@asked_headers)
 {
 	my @found_headers = @{$found_headers{$asked_header}};
 	next unless @found_headers;
+	
+	if($OptSortContent)
+	{
+		@found_headers = sort {$a->{'content'} cmp $b->{'content'}} @found_headers;
+	}
 	
 	if($OptJoinSame)
 	{

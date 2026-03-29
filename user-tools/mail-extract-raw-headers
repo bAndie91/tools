@@ -22,6 +22,12 @@ Keep linefeeds in multiline text.
 
 Output the header name(s) too, not only the contents.
 
+=item -j, --join
+
+Join header contents of the same header by C<, > (comma, space)
+when there are multiple instances of the given header,
+eg. B<Received>, B<Delivered-To>, ...
+
 =back
 
 =cut
@@ -34,10 +40,12 @@ no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 $OptKeepLF = 0;
 $OptNames = 0;
+$OptJoinSame = 0;
 
 GetOptions(
 	'k|keep-newlines|keep-linefeeds' => \$OptKeepLF,
 	'n|header-names' => \$OptNames,
+	'j|join' => \$OptJoinSame,
 	'help|?' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
@@ -48,21 +56,6 @@ if(not @ARGV)
 
 @asked_headers = map {lc} @ARGV;
 
-
-sub getheaders($)
-{
-	my $hname = lc shift;
-	my @return;
-	
-	for my $header_ref (@Headers)
-	{
-		if(lc $header_ref->{"name"} eq $hname)
-		{
-			push @return, $header_ref->{"content"};
-		}
-	}
-	return @return;
-}
 
 %found_headers = ();
 
@@ -109,7 +102,17 @@ while(<STDIN>)
 
 for my $asked_header (@asked_headers)
 {
-	for my $header (@{$found_headers{$asked_header}})
+	my @found_headers = @{$found_headers{$asked_header}};
+	next unless @found_headers;
+	
+	if($OptJoinSame)
+	{
+		my $contents = join ', ', map { $_->{'content'} } @found_headers;
+		@found_headers = ($found_headers[0],);
+		$found_headers[0]->{'content'} = $contents;
+	}
+	
+	for my $header (@found_headers)
 	{
 		# avoid non-whitespace character at the beginning of lines in the header content,
 		# so header names can not be spoofed.

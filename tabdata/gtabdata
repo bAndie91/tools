@@ -265,6 +265,7 @@ class TreeView(gtk.TreeView):
 
 	def _on_button_click(self, widget, event):
 		if event.button == 3:
+			# TODO highlight clicked row
 			x, y = int(event.x), int(event.y)
 			t = self.get_path_at_pos(x, y)
 			if t is not None:
@@ -610,7 +611,7 @@ class GTabData(object):
 		self.main_win = Window({'name': 'window.main', 'gtk-args': []})
 		self.main_win.title = args.title
 		self.main_win.set_icon_from_any(args.icon)
-		self.main_win.connect('delete-event', lambda *X: gtk.main_quit())
+		self.main_win.connect('delete-event', lambda *X: self.on_exit())
 		self.startup_event = self.main_win.connect('map-event', lambda w, e: (w.disconnect(self.startup_event), self.on_startup()))
 
 		self.main_table = TreeView(None)
@@ -642,6 +643,12 @@ class GTabData(object):
 			data_model = self.main_table.get_model()
 			for row in db_result:
 				data_model.append(None, row)
+		
+		# elif args.input_file: TODO
+		
+	def on_exit(self):
+		self.proppersist.active = False
+		gtk.main_quit()
 
 
 GTabData().run()

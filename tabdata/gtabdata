@@ -243,12 +243,12 @@ class TreeView(gtk.TreeView):
 	__gsignals__ = {
 		'menu-popup': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT)),
 		'header-menu-popup': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT)),
-		'column-width-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)), # TODO implement
-		'column-sort-order-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)), # TODO implement
-		'columns-order-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()), # TODO implement
+		'column-width-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT, int)),
+		'column-sort-order-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
 	}
 	def __init__(self, model):
 		super(self.__class__, self).__init__(model)
+		self._stored_column_width = {}
 		self.set_reorderable(True)
 		self.set_headers_clickable(True)
 		self.connect('button-press-event', self._on_button_click)
@@ -256,11 +256,13 @@ class TreeView(gtk.TreeView):
 		self.connect('columns-changed', self._on_columns_changed)
 		self.connect('key-release-event', self._on_key_release)
 		self.connect('header-menu-popup', self._on_header_menu_popup)
+
 	def _on_key_release(self, widget, event):
 		if event.keyval == gtk.gdk.keyval_from_name('space'):
 			iterpath, tv_col = self.get_cursor()
 			cr = tv_col.get_cell_renderers()[0]
 			cr.on_start_editing(event, widget, ','.join(map(str, iterpath)), self.get_background_area(iterpath, tv_col), self.get_cell_area(iterpath, tv_col), 0)
+
 	def _on_button_click(self, widget, event):
 		if event.button == 3:
 			x, y = int(event.x), int(event.y)
@@ -276,13 +278,15 @@ class TreeView(gtk.TreeView):
 					popup_menu.show_all()
 					popup_menu.popup(None, None, None, event.button, event.time)
 			return True
+
 	def _on_realize(self, widget):
 		for tvc in self.get_columns():
 			self._column_setup_events(tvc)
+
 	def _on_columns_changed(self, widget):
 		# clear 'layoutstash', it is needed for CellRendererTextOverflow
 		self.set_data('layoutstash', {})
-		self.emit('columns-order-changed')
+
 	def add_columns(self, columns):
 		for col_name, col_title, col_attr, col_num in columns:
 			tvc = TreeViewColumn()
@@ -300,24 +304,31 @@ class TreeView(gtk.TreeView):
 			tvc.add_attribute(cr_txt, col_attr, col_num)
 			
 			self.append_column(tvc)
-			# TODO width = Props['layout/column/%s/width' % col_name]
-			width = None
+			width = None  # TODO emit column-added → hook on to set stored width
 			if width is not None:
 				tvc.set_fixed_width(int(width))
 			else:
 				tvc.set_fixed_width(100)
 			tvc.connect('notify::width', self._on_column_width_change)
+			tvc.connect('notify::visible', lambda col, gparam: self.emit('columns-changed'))
+
 	def _on_column_width_change(self, col, gparam):
-		self.emit('column-width-changed', col)
+		w = col.get_width()
+		if w != self._stored_column_width.get(col.name):
+			self.emit('column-width-changed', col, w)
+		self._stored_column_width[col.name] = w
+
 	def append_column(self, tvc):
 		super(self.__class__, self).append_column(tvc)
 		self._column_setup_events(tvc)
+
 	def _column_setup_events(self, tvc):
 		if hasattr(tvc, 'setup_events'):
 			tvc.setup_events()
 			if not tvc.get_data('treeview-connect-done'):
 				tvc.connect('button-press-event', self._on_column_click)
 				tvc.set_data('treeview-connect-done', True)
+
 	def _on_column_click(self, col_widget, event):
 		if event.button == 3:
 			popup_menu = gtk.Menu()
@@ -325,18 +336,23 @@ class TreeView(gtk.TreeView):
 				popup_menu.show_all()
 				popup_menu.popup(None, None, None, event.button, event.time)
 			return True
+		elif event.button == 1:
+			self.emit('column-sort-order-changed', col_widget)
+
 	@staticmethod
 	class ColumnNotFoundException(Exception):
 		pass
+
 	def get_column_by_name(self, colname):
 		for col in self.get_columns():
-			if col.get_name() == colname:
+			if col.name == colname:
 				return col
 		raise TreeView.ColumnNotFoundException(colname)
+	
 	def _on_header_menu_popup(self, tv, popup_menu, tv_col):
 		for col in self.get_columns():
 			markup = glib.markup_escape_text(col.title)
-			if tv_col.get_name() == col.get_name():
+			if tv_col.name == col.name:
 				markup = '<b>' + markup + '</b>'
 			mi = CheckMenuItem(markup=markup)
 			mi.set_active(col.get_visible())
@@ -347,6 +363,9 @@ class TreeViewColumn(gtk.TreeViewColumn):
 	__gsignals__ = {
 		'button-press-event': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
 	}
+	@property
+	def name(self):
+		return self.get_name()
 	@property
 	def title(self):
 		return self.get_widget().get_text()
@@ -430,7 +449,6 @@ class CellRendererTextOverflow(gtk.GenericCellRenderer):
 		text = self.get_property('text')
 		
 		tvc = self.get_data('treeviewcolumn')
-		tvc_name = tvc.get_name()
 		tv = tvc.get_tree_view()
 		model = tv.get_model()
 		cellinfo = tv.get_path_at_pos(cell_area.x, cell_area.y)
@@ -447,10 +465,10 @@ class CellRendererTextOverflow(gtk.GenericCellRenderer):
 		next_col = self.get_next_column()
 		next_col_names = []
 		while next_col is not None:
-			next_col_content = model[treepath][next_col.get_name()]
+			next_col_content = model[treepath][next_col.name]
 			if next_col_content is None or next_col_content == '':
 				overflow_width += next_col.get_width()
-				next_col_names.append(next_col.get_name())
+				next_col_names.append(next_col.name)
 				next_col = self.get_next_column(next_col)
 			else:
 				break
@@ -472,18 +490,18 @@ class CellRendererTextOverflow(gtk.GenericCellRenderer):
 				if not layoutstash.has_key(treepath):
 					layoutstash[treepath] = {}
 				for colname in layoutstash[treepath].keys():
-					if layoutstash[treepath][colname].has_key(tvc_name):
-						del layoutstash[treepath][colname][tvc_name]
+					if layoutstash[treepath][colname].has_key(tvc.name):
+						del layoutstash[treepath][colname][tvc.name]
 				for colname in next_col_names:
 					if not layoutstash[treepath].has_key(colname):
 						layoutstash[treepath][colname] = {}
-					layoutstash[treepath][colname][tvc_name] = (window, widget, draw_area, layout, flags)
+					layoutstash[treepath][colname][tvc.name] = (window, widget, draw_area, layout, flags)
 		else:
 			# this cell's text does not flow over, so delete earlier layouts, if any
 			for colname in layoutstash.get(treepath, {}).keys():
-				if layoutstash[treepath][colname].has_key(tvc_name):
-					del layoutstash[treepath][colname][tvc_name]
-		layout_overflowcells = layoutstash.get(treepath, {}).get(tvc_name, {})
+				if layoutstash[treepath][colname].has_key(tvc.name):
+					del layoutstash[treepath][colname][tvc.name]
+		layout_overflowcells = layoutstash.get(treepath, {}).get(tvc.name, {})
 		if not markup and not text:
 			# current cell is empty, but redraw those cells which flow over to this one
 			for layout_args in layout_overflowcells.values():
@@ -491,7 +509,7 @@ class CellRendererTextOverflow(gtk.GenericCellRenderer):
 		else:
 			if layout_overflowcells:
 				# current cell is not empty so delete those layouts which would be drawn on it, if any
-				del layoutstash[treepath][tvc_name]
+				del layoutstash[treepath][tvc.name]
 			self.cr_txt.render(window, widget, background_area, cell_area, expose_area, flags)
 	def on_activate(self, event, widget, path, background_area, cell_area, flags):
 		return self.cr_txt.activate(event, widget, path, background_area, cell_area, flags)
@@ -547,22 +565,6 @@ def load_columns(treeview, columns):
 	treeview.set_model(model)
 	treeview.add_columns([(col[0], col[0], 'text', idx) for idx, col in enumerate(columns)])
 
-def load_data():
-	if args.db_query:
-		db_engine = sqlalchemy.create_engine(args.db_connection)
-		db_conn = db_engine.connect()
-		db_result = db_conn.execute(args.db_query)
-
-		columns = []
-		for col in db_result.keys():
-			columns.append((col, unicode))
-		load_columns(main_table, columns)
-		data_model = main_table.get_model()
-		for row in db_result:
-			data_model.append(None, row)
-
-def on_startup():
-	load_data()
 
 def populate_row_context_menu(menu, items, row_data):
 	for definition in items:
@@ -577,9 +579,10 @@ def populate_row_context_menu(menu, items, row_data):
 	menu.show_all()
 
 def on_table_row_context_menu(treeview, popup_menu, c_treepath, tv_col, cell_x, cell_y):
-	row_data = {}
-	row_data['row'] = treeview.get_model()[c_treepath].as_dict()
-	row_data['col'] = tv_col.get_name()
+	row_data = {
+		'row': treeview.get_model()[c_treepath].as_dict(),
+		'col': tv_col.name,
+	}
 	populate_row_context_menu(popup_menu, args.context_menu, row_data)
 	return False
 
@@ -602,18 +605,44 @@ args = parser.parse_args()
 
 APPNAME = args.appname
 
-main_win = Window({'name': 'window.main', 'gtk-args': []})
-main_win.title = args.title
-main_win.set_icon_from_any(args.icon)
-main_win.connect('delete-event', lambda *X: gtk.main_quit())
-startup_event = main_win.connect('map-event', lambda w, e: (w.disconnect(startup_event), on_startup()))
+class GTabData(object):
+	def run(self):
+		self.main_win = Window({'name': 'window.main', 'gtk-args': []})
+		self.main_win.title = args.title
+		self.main_win.set_icon_from_any(args.icon)
+		self.main_win.connect('delete-event', lambda *X: gtk.main_quit())
+		self.startup_event = self.main_win.connect('map-event', lambda w, e: (w.disconnect(self.startup_event), self.on_startup()))
 
-main_table = TreeView(None)
-main_win.add(Scrollable(main_table))
-#main_table.connect('columns-layout-changed', ) TODO
-main_table.connect('menu-popup', on_table_row_context_menu)
+		self.main_table = TreeView(None)
+		self.main_win.add(Scrollable(self.main_table))
+		self.main_table.connect('menu-popup', on_table_row_context_menu)
+
+		self.proppersist = PropertyPersistor(self.main_table, 'main_table', [
+			('columns',      'columns-changed',           lambda tv: [col.name for col in tv.get_columns() if col.get_visible()], None),
+			('column-width', 'column-width-changed',      lambda tv, tvc, w: dict([(col.name, col.get_width()) for col in tv.get_columns()]), None),
+			('sort-column',  'column-sort-order-changed', lambda tv, tvc: tvc.name, None),
+			('sort-order',   'column-sort-order-changed', lambda tv, tvc: tvc.get_sort_order().value_nick, None),
+		])
+
+		self.main_win.show_all()
+
+	def on_startup(self):
+		self.load_data()
+
+	def load_data(self):
+		if args.db_query:
+			db_engine = sqlalchemy.create_engine(args.db_connection)
+			db_conn = db_engine.connect()
+			db_result = db_conn.execute(args.db_query)
+
+			columns = []
+			for col in db_result.keys():
+				columns.append((col, unicode))
+			load_columns(self.main_table, columns)
+			data_model = self.main_table.get_model()
+			for row in db_result:
+				data_model.append(None, row)
 
 
-main_win.show_all()
-
+GTabData().run()
 gtk.main()

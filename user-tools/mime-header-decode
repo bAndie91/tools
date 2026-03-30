@@ -6,7 +6,30 @@
 
 mime-header-decode - Decode MIME-encoded stream on stdin line-by-line
 
+=head1 OPTIONS
+
+=over 4
+
+=item --strip-lf, --strip-linefeed
+
+Remove linefeed (0x10) char from header content.
+It's often meaningless but confuse parsers.
+
+=back
+
 =cut
+
+use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat/;
+use Pod::Usage;
+use Data::Dumper;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+
+$OptStripLF = 0;
+
+GetOptions(
+	'strip-lf|strip-linefeed' => \$OptStripLF,
+	'help|?' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+) or pod2usage(-exitval=>2, -verbose=>99);
 
 
 use Encode;
@@ -14,10 +37,17 @@ while(<STDIN>)
 {
 	chomp;
 	my $header = decode("MIME-Header", $_);
-	# avoid non-whitespace character at the beginning of lines in the header content,
-	# so header names can not be spoofed.
-	$safe_header = $header =~ s/\n(?![\t ])/\n  /gr;
-	# all-whitespace lines are not always taken correctly by downstream programs,
+	if($OptStripLF)
+	{
+		$safe_header = $header =~ s/\n/ /gr;
+	}
+	else
+	{
+		# avoid non-whitespace character at the beginning of lines in the header content,
+		# so header names can not be spoofed.
+		$safe_header = $header =~ s/\n(?![\t ])/\n  /gr;
+	}
+	# all-whitespace lines are not always parsed correctly by downstream programs,
 	# and should not have meaning in themself, so remove.
 	$safe_header =~ s/^\s*\n//gm;
 	chomp $safe_header;

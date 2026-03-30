@@ -6,19 +6,17 @@ import gtk
 import glib
 import pango
 import gobject
-import time
 import re
-import sys
 import os
-import xdg.BaseDirectory
+import subprocess
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-import errno
 import traceback
 from hband_tools.gui import *
 import threading
 gtk.gdk.threads_init()
 import sqlalchemy
+from io import StringIO
 
 
 def add_key_binding(widget, keyname, callback):
@@ -84,6 +82,8 @@ class TreeModelRow(object):
 		self.real_treemodelrow[item] = value
 	def __len__(self):
 		return self.real_treemodelrow.__len__()
+	def as_dict(self):
+		return dict([(col_name, self[col_name]) for col_name in self.upstream_treemodel.column.keys()])
 
 class TreeModelProxy(object):
 	@staticmethod
@@ -520,6 +520,27 @@ class CellRendererTextOverflow(gtk.GenericCellRenderer):
 gobject.type_register(CellRendererTextOverflow)
 
 
+class ImageMenuItem(gtk.ImageMenuItem):
+	def set_icon(self, icon):
+		if not icon: return
+		img = gtk.Image()
+		if os.path.isfile(icon):
+			width_px, height_px = gtk.icon_size_lookup(gtk.ICON_SIZE_MENU)[:]
+			pixbuf = get_pixbuf_from_file_at_size(icon, width_px, height_px)
+			img.from_pixbuf(pixbuf)
+		elif icon in gtk.stock_list_ids():
+			img.set_from_stock(icon, gtk.ICON_SIZE_MENU)
+		elif gtk.icon_theme_get_default().lookup_icon(icon, gtk.ICON_SIZE_MENU, 0) is not None:
+			img.set_from_icon_name(icon, gtk.ICON_SIZE_MENU)
+		else:
+			width_px, height_px = gtk.icon_size_lookup(gtk.ICON_SIZE_MENU)[:]
+			iconfile = find_icon_file(icon, width_px)
+			if iconfile is None: return
+			pixbuf = get_pixbuf_from_file_at_size(iconfile, width_px, height_px)
+			img.set_from_pixbuf(pixbuf)
+		self.set_image(img)
+
+
 
 def load_columns(treeview, columns):
 	model = TreeStore(*columns)
@@ -543,13 +564,40 @@ def load_data():
 def on_startup():
 	load_data()
 
+def populate_row_context_menu(menu, items, row_data):
+	for definition in items:
+		icon, label, command = [field.replace('\\:', ':') for field in re.split(r'(?<!\\):', definition, maxsplit=2)]
+		mi = ImageMenuItem()
+		mi.set_icon(icon)
+		mi.set_label(label)
+		mi.set_data('command', command)
+		mi.connect('activate', on_context_menu_item_activate, menu)
+		menu.append(mi)
+	menu.set_data('row', row_data)
+	menu.show_all()
+
+def on_table_row_context_menu(treeview, popup_menu, c_treepath, tv_col, cell_x, cell_y):
+	row_data = {}
+	row_data['row'] = treeview.get_model()[c_treepath].as_dict()
+	row_data['col'] = tv_col.get_name()
+	populate_row_context_menu(popup_menu, args.context_menu, row_data)
+	return False
+
+def on_context_menu_item_activate(mi, menu):
+	command = mi.get_data('command')
+	row_data = menu.get_data('row')
+	proc = subprocess.Popen([command], shell=False, stdin=subprocess.PIPE)
+	proc.stdin.write(json.dumps(row_data))
+	proc.stdin.close()
+
 
 parser = argparse.ArgumentParser(description='gTabData - GTK Tabular Data viewer')
 parser.add_argument('--title', type=str, default='gTabData', help='Window title text')
 parser.add_argument('--appname', type=str, default='gtabdata')
 parser.add_argument('--icon', type=str, default='text-spreadsheet', help='Window icon file name or symbolic name')
-parser.add_argument('--db-connection', type=str, help='Database connection DSN. See "dataset" python module.')
+parser.add_argument('--db-connection', type=str, help='Database connection string, for supported DSN see "sqlalchemy" python module.')
 parser.add_argument('--db-query', type=str, help='Database query to load data from')
+parser.add_argument('--context-menu', nargs='+', type=str, help='Menu item definition for rows context menu in "ICON:LABEL:COMMAND ARGS" format')
 args = parser.parse_args()
 
 APPNAME = args.appname
@@ -563,6 +611,7 @@ startup_event = main_win.connect('map-event', lambda w, e: (w.disconnect(startup
 main_table = TreeView(None)
 main_win.add(Scrollable(main_table))
 #main_table.connect('columns-layout-changed', ) TODO
+main_table.connect('menu-popup', on_table_row_context_menu)
 
 
 main_win.show_all()

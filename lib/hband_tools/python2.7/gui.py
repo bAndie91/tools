@@ -134,6 +134,17 @@ class Window(gtk.Window):
 	@title.setter
 	def title(self, title):
 		self.set_title(title)
+	
+	def set_icon_from_any(self, icon):
+		if icon is None:
+			self.set_icon(None)
+		else:
+			icon_size = gtk.icon_size_lookup(gtk.ICON_SIZE_LARGE_TOOLBAR)[0]
+			iconfile = find_icon_file(icon, icon_size)
+			if iconfile is None:
+				self.set_icon(None)
+			else:
+				self.set_icon(gtk.gdk.pixbuf_new_from_file(iconfile))
 
 class Scrollable(gtk.ScrolledWindow):
 	def __init__(self, child = None):

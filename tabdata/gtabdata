@@ -1,0 +1,570 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import argparse
+import gtk
+import glib
+import pango
+import gobject
+import time
+import re
+import sys
+import os
+import xdg.BaseDirectory
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
+import errno
+import traceback
+from hband_tools.gui import *
+import threading
+gtk.gdk.threads_init()
+import sqlalchemy
+
+
+def add_key_binding(widget, keyname, callback):
+	accelgroup = gtk.AccelGroup()
+	key, modifier = gtk.accelerator_parse(keyname)
+	accelgroup.connect_group(key, modifier, gtk.ACCEL_VISIBLE, callback)
+	widget.add_accel_group(accelgroup)
+
+def successor_iter(model, predecessor):
+	"""return the next "heir" in line of succession metaphorically speaking.
+	i.e. the first child of the node if there is any, otherwise its next sibling node,
+	otherwise its parent node's next sibling."""
+	if model.iter_has_child(predecessor):
+		return model.iter_nth_child(predecessor, 0)
+	else:
+		successor = model.iter_next(predecessor)
+		if successor is None:
+			while True:
+				parent = model.iter_parent(predecessor)
+				if parent is None: return None
+				uncle = model.iter_next(parent)
+				if uncle is not None: return uncle
+				predecessor = parent
+			return None
+		return successor
+
+class CheckMenuItem(gtk.CheckMenuItem):
+	def __init__(self, label=None, markup=None, use_underline=False):
+		super(self.__class__, self).__init__(label=label, use_underline=use_underline)
+		if markup is not None:
+			def find_label(w):
+				if isinstance(w, gtk.Label):
+					return w
+				if hasattr(w, 'get_children'):
+					for w in w.get_children():
+						w = find_label(w)
+						if w is not None:
+							return w
+			self.set_label('.')
+			l = find_label(self)
+			l.set_markup(markup)
+
+class TreeModelRow(object):
+	"""proxy class for inextensible gtk.TreeModelRow"""
+	def __init__(self, treemodelrow, upstream_treemodel):
+		self.real_treemodelrow = treemodelrow
+		self.upstream_treemodel = upstream_treemodel
+	@property
+	def path(self):
+		return self.real_treemodelrow.path
+	@property
+	def iter(self):
+		return self.real_treemodelrow.iter
+	@property
+	def model(self):
+		return self.real_treemodelrow.model
+	def __getitem__(self, item):
+		item = self.upstream_treemodel.get_column_num(item)
+		answer = gtk.TreeModel.get(self.model, self.iter, item)[0]
+		return self.upstream_treemodel.convert_cell(item, answer)
+	def __setitem__(self, item, value):
+		item = self.upstream_treemodel.get_column_num(item)
+		self.real_treemodelrow[item] = value
+	def __len__(self):
+		return self.real_treemodelrow.__len__()
+
+class TreeModelProxy(object):
+	@staticmethod
+	def _proxy_foreach(model, treepath, treeiter, _proxy_userdata):
+		func = _proxy_userdata['func']
+		userdata = _proxy_userdata['userdata']
+		derived_model = _proxy_userdata['derived_model']
+		return func(derived_model, treepath, treeiter, userdata)
+
+class TreeModelFilter(gtk.TreeModelFilter):
+	_proxy_implemented = ['__getitem__', 'foreach', 'get', 'get_value']
+	def __init__(self, upstream_treemodel, treemodel_filter):
+		self._proxy_real_treemodel = treemodel_filter
+		self._proxy_upstream_treemodel = upstream_treemodel
+	def __getitem__(self, item):
+		answer = self._proxy_real_treemodel.__getitem__(item)
+		return TreeModelRow(answer, self._proxy_upstream_treemodel)
+	def foreach(self, func, userdata):
+		_proxy_userdata = {'func': func, 'userdata': userdata, 'derived_model': self}
+		self._proxy_real_treemodel.foreach(TreeModelProxy._proxy_foreach, _proxy_userdata)
+	def get(self, row, *columns):
+		raise(Exception('unimplemented'))
+	def get_value(self, treeiter, column):
+		raise(Exception('unimplemented'))
+	def __len__(self):
+		return len(self._proxy_real_treemodel)
+	def __getattribute__(self, attr):
+		if attr.startswith('_proxy_') or attr in self._proxy_implemented:
+			return object.__getattribute__(self, attr)
+		else:
+			return object.__getattribute__(self._proxy_real_treemodel, attr)
+
+class TreeModelSort(gtk.TreeModelSort):
+	def __init__(self, basemodel):
+		if hasattr(basemodel, '_proxy_upstream_treemodel'):
+			self._proxy_upstream_treemodel = basemodel._proxy_upstream_treemodel
+		else:
+			self._proxy_upstream_treemodel = basemodel
+		if hasattr(basemodel, '_proxy_real_treemodel'):
+			basemodel = basemodel._proxy_real_treemodel
+		super(self.__class__, self).__init__(basemodel)
+	def __getitem__(self, item):
+		answer = super(self.__class__, self).__getitem__(item)
+		return TreeModelRow(answer, self._proxy_upstream_treemodel)
+	def foreach(self, func, userdata):
+		_proxy_userdata = {'func': func, 'userdata': userdata, 'derived_model': self}
+		super(self.__class__, self).foreach(TreeModelProxy._proxy_foreach, _proxy_userdata)
+	def get(self, row, *columns):
+		raise(Exception('unimplemented'))
+	def get_value(self, treeiter, column):
+		raise(Exception('unimplemented'))
+
+class TreeStore(gtk.TreeStore):
+	__gsignals__ = {
+		'changed': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, ()),
+		'set-changed': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, ()),
+	}
+	def __init__(self, *columns):
+		self.column = {}
+		self.reader = {}
+		self.empty = []
+		types = []
+		n = 0
+		for col_name, col_type in columns:
+			empty_value = None
+			if col_type == unicode:
+				col_type = str
+				self.reader[n] = self.to_unicode
+			if col_type == str:
+				empty_value = ''
+			elif col_type in [int, float]:
+				empty_value = 0
+			self.empty.append(empty_value)
+			types.append(col_type)
+			self.column[col_name] = n
+			n += 1
+		super(self.__class__, self).__init__(*types)
+		for event in 'row-changed', 'row-deleted', 'row-inserted':
+			self.connect_after(event, self.emit_signal, 'changed')
+			self.connect_after(event, self.emit_signal, 'set-changed')
+		self.connect_after('rows-reordered', self.emit_signal, 'changed')
+	def emit_signal(self, *args):
+		signal_name = args[-1]
+		self.emit(signal_name)
+	@staticmethod
+	def to_unicode(s):
+		if s is None: return None
+		return unicode(s)
+	def get_column_num(self, col_name):
+		if isinstance(col_name, int): return col_name
+		return self.column[col_name]
+	def get(self, row, *columns):
+		if type(row) == tuple:
+			row = self.get_iter(row)  # tree iterator path was given
+		if len(columns) == 0:
+			return tuple()
+		columns = list(columns)
+		for i, col in enumerate(columns):
+			columns[i] = self.get_column_num(col)
+		answer = super(self.__class__, self).get(row, *columns)
+		answer = list(answer)
+		for i, col_num in enumerate(columns):
+			answer[i] = self.convert_cell(col_num, answer[i])
+		answer = tuple(answer)
+		return answer
+	def get_value(self, treeiter, column):
+		raise Exception('unimplemented')
+	def convert_cell(self, col_num, cell_value):
+		if self.reader.has_key(col_num):
+			return self.reader[col_num](cell_value)
+		return cell_value
+	def __getitem__(self, item):
+		answer = super(self.__class__, self).__getitem__(item)
+		return TreeModelRow(answer, self)
+	def _row_dict_to_list(self, row):
+		if type(row) == dict:
+			cols = row
+			row = self.empty[:]
+			for col_name, value in cols.iteritems():
+				row[self.get_column_num(col_name)] = value
+		return row
+	def append(self, parent, row):
+		return super(self.__class__, self).append(parent, self._row_dict_to_list(row))
+	def insert_after(self, parent, sibling, row):
+		return super(self.__class__, self).insert_after(parent, sibling, self._row_dict_to_list(row))
+	def insert_before(self, parent, sibling, row):
+		return super(self.__class__, self).insert_before(parent, sibling, self._row_dict_to_list(row))
+	def set(self, treeiter, *itempairs):
+		if len(itempairs) == 0: return
+		if type(itempairs[0]) == dict:
+			cols = itempairs[0]
+			itempairs = []
+			for col_name, value in cols.iteritems():
+				itempairs.extend([self.get_column_num(col_name), value])
+		super(self.__class__, self).set(treeiter, *itempairs)
+	def get_cells_by_column(self, col_name):
+		treeiter = self.get_iter_root()
+		while treeiter is not None:
+			yield self[treeiter][col_name]
+			treeiter = successor_iter(self, treeiter)
+	def walk_columns(self, *columns):
+		"""yields a sequence of [TreeModelRow, depth, value-1, value-2, ..., value-n] lists
+		for depth being the row's level on the tree and value-1 to value-n being the 
+		content of cells in the requested columns in each row"""
+		treeiter = self.get_iter_root()
+		while treeiter is not None:
+			row = self[treeiter]
+			answer = [row]
+			answer.extend(self.get(treeiter, *columns))
+			yield answer
+			treeiter = successor_iter(self, row.iter)
+	def filter_new(self, root=None):
+		treemodelfilter = super(self.__class__, self).filter_new(root=root)
+		return TreeModelFilter(self, treemodelfilter)
+
+class TreeView(gtk.TreeView):
+	__gsignals__ = {
+		'menu-popup': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT)),
+		'header-menu-popup': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT)),
+		'column-width-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)), # TODO implement
+		'column-sort-order-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)), # TODO implement
+		'columns-order-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()), # TODO implement
+	}
+	def __init__(self, model):
+		super(self.__class__, self).__init__(model)
+		self.set_reorderable(True)
+		self.set_headers_clickable(True)
+		self.connect('button-press-event', self._on_button_click)
+		self.connect('realize', self._on_realize)
+		self.connect('columns-changed', self._on_columns_changed)
+		self.connect('key-release-event', self._on_key_release)
+		self.connect('header-menu-popup', self._on_header_menu_popup)
+	def _on_key_release(self, widget, event):
+		if event.keyval == gtk.gdk.keyval_from_name('space'):
+			iterpath, tv_col = self.get_cursor()
+			cr = tv_col.get_cell_renderers()[0]
+			cr.on_start_editing(event, widget, ','.join(map(str, iterpath)), self.get_background_area(iterpath, tv_col), self.get_cell_area(iterpath, tv_col), 0)
+	def _on_button_click(self, widget, event):
+		if event.button == 3:
+			x, y = int(event.x), int(event.y)
+			t = self.get_path_at_pos(x, y)
+			if t is not None:
+				treepath, tv_col, cell_x, cell_y = t
+			else:
+				treepath, tv_col, cell_x, cell_y = None, None, None, None
+			popup_menu = gtk.Menu()
+			if not self.emit('menu-popup', popup_menu, treepath, tv_col, cell_x, cell_y):
+				# event is not handled by any handlers, so do it ourself
+				if popup_menu.get_children():
+					popup_menu.show_all()
+					popup_menu.popup(None, None, None, event.button, event.time)
+			return True
+	def _on_realize(self, widget):
+		for tvc in self.get_columns():
+			self._column_setup_events(tvc)
+	def _on_columns_changed(self, widget):
+		# clear 'layoutstash', it is needed for CellRendererTextOverflow
+		self.set_data('layoutstash', {})
+		self.emit('columns-order-changed')
+	def add_columns(self, columns):
+		for col_name, col_title, col_attr, col_num in columns:
+			tvc = TreeViewColumn()
+			tvc.set_name(col_name)
+			tvc.title = col_title
+			tvc.set_sort_indicator(True)
+			tvc.set_sort_column_id(col_num)
+			tvc.set_resizable(True)
+			tvc.set_sizing(gtk.TREE_VIEW_COLUMN_FIXED)
+			tvc.set_reorderable(True)
+			
+			cr_txt = CellRendererTextOverflow()
+			cr_txt.set_data('treeviewcolumn', tvc)
+			tvc.pack_start(cr_txt, True)
+			tvc.add_attribute(cr_txt, col_attr, col_num)
+			
+			self.append_column(tvc)
+			# TODO width = Props['layout/column/%s/width' % col_name]
+			width = None
+			if width is not None:
+				tvc.set_fixed_width(int(width))
+			else:
+				tvc.set_fixed_width(100)
+			tvc.connect('notify::width', self._on_column_width_change)
+	def _on_column_width_change(self, col, gparam):
+		self.emit('column-width-changed', col)
+	def append_column(self, tvc):
+		super(self.__class__, self).append_column(tvc)
+		self._column_setup_events(tvc)
+	def _column_setup_events(self, tvc):
+		if hasattr(tvc, 'setup_events'):
+			tvc.setup_events()
+			if not tvc.get_data('treeview-connect-done'):
+				tvc.connect('button-press-event', self._on_column_click)
+				tvc.set_data('treeview-connect-done', True)
+	def _on_column_click(self, col_widget, event):
+		if event.button == 3:
+			popup_menu = gtk.Menu()
+			if not self.emit('header-menu-popup', popup_menu, col_widget):
+				popup_menu.show_all()
+				popup_menu.popup(None, None, None, event.button, event.time)
+			return True
+	@staticmethod
+	class ColumnNotFoundException(Exception):
+		pass
+	def get_column_by_name(self, colname):
+		for col in self.get_columns():
+			if col.get_name() == colname:
+				return col
+		raise TreeView.ColumnNotFoundException(colname)
+	def _on_header_menu_popup(self, tv, popup_menu, tv_col):
+		for col in self.get_columns():
+			markup = glib.markup_escape_text(col.title)
+			if tv_col.get_name() == col.get_name():
+				markup = '<b>' + markup + '</b>'
+			mi = CheckMenuItem(markup=markup)
+			mi.set_active(col.get_visible())
+			mi.connect('activate', lambda mi, col: col.set_visible(not col.get_visible()), col)
+			popup_menu.append(mi)
+
+class TreeViewColumn(gtk.TreeViewColumn):
+	__gsignals__ = {
+		'button-press-event': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
+	}
+	@property
+	def title(self):
+		return self.get_widget().get_text()
+	@title.setter
+	def title(self, title):
+		tvc_label = gtk.Label(title)
+		tvc_label.show()
+		self.set_widget(tvc_label)
+	def setup_events(self, *X):
+		# this method should be called when the TreeView is realized.
+		if not self.get_data('setup-events-done'):
+			# find the button representing the treeview column header
+			# and propagate up events.
+			w = self.get_widget()
+			while not isinstance(w, gtk.Button):
+				w = w.get_parent()
+			if w is not None:
+				w.connect('button-press-event', lambda widget, event: self.emit('button-press-event', event))
+			self.set_data('setup-events-done', True)
+
+class CellRendererTextOverflow(gtk.GenericCellRenderer):
+	"""
+	This class implements a CellRenderer which renders (markup) text just like
+	CellRendererText, but allows the text content to flow over to adjacent empty cells.
+	"""
+	__gproperties__ = {
+		'text': (gobject.TYPE_STRING, 'Text', 'Text', None, gobject.PARAM_READWRITE),
+		'markup': (gobject.TYPE_STRING, 'Markup', 'Markup', None, gobject.PARAM_READWRITE),
+		'editable': (gobject.TYPE_BOOLEAN, 'Editable', 'Editable', False, gobject.PARAM_READWRITE),
+	}
+	def __init__(self):
+		super(self.__class__, self).__init__()
+		self.__gobject_init__()
+		self.cr_txt = gtk.CellRendererText()
+		self.the_props = {'markup': None}
+	def connect(self, *args):
+		self.cr_txt.connect(*args)
+	def do_set_property(self, pspec, val):
+		if pspec.name == 'markup':
+			self.the_props[pspec.name] = val
+		self.cr_txt.set_property(pspec.name, val)
+	def do_get_property(self, pspec):
+		if pspec.name == 'markup':
+			# CellRendererText can not read 'markup' property back, so we do
+			return self.the_props[pspec.name]
+		return self.cr_txt.get_property(pspec.name)
+	def set_property(self, prop, val):
+		return self.cr_txt.set_property(prop, val)
+	def on_get_size(self, widget, cell_area):
+		x, y, w, h = self.cr_txt.get_size(widget, cell_area)
+		return x, y, w, h
+	def get_next_column(self, current_column=None):
+		"""Return the column at the right side of 'current_column'
+		or, if 'current_column' is None, of the column which this CellRenderer is in."""
+		tvc = self.get_data('treeviewcolumn')
+		tv = tvc.get_tree_view()
+		columns = tv.get_columns()
+		if current_column is None:
+			current_column = tvc
+		for num, col in enumerate(columns):
+			if col is current_column:
+				if num+1 < len(columns):
+					return columns[num+1]
+				return None
+		return None
+	def draw_layout(self, window, widget, cell_area, layout, flags):
+		base_grctx = widget.style.black_gc
+		if (flags & gtk.CELL_RENDERER_SELECTED) != 0: base_grctx = widget.style.white_gc
+		window.draw_layout(base_grctx, cell_area.x, cell_area.y, layout)
+		return False
+	def on_render(self, window, widget, background_area, cell_area, expose_area, flags):
+		"""Find out how much empty area we have horizontally
+		by sum the width of empty cells on right of the current cell.
+		Then render the (markup) text on a pango Layout.
+		Save the data neccessary to draw the Layout into 'layoutstash' for each cells 
+		which are found empty. Cells are identified by TreeModel path and TreeViewColumn name.
+		When an actual empty cell is encountered, then recall the saved Layout (if any) and
+		redraw it. It assumes that the controller routine requests us to
+		render the cells from left to right in sequence and row-by-row."""
+		markup = self.get_property('markup')
+		text = self.get_property('text')
+		
+		tvc = self.get_data('treeviewcolumn')
+		tvc_name = tvc.get_name()
+		tv = tvc.get_tree_view()
+		model = tv.get_model()
+		cellinfo = tv.get_path_at_pos(cell_area.x, cell_area.y)
+		if cellinfo is None:
+			cellinfo = tv.get_path_at_pos(cell_area.x + cell_area.width, cell_area.y + cell_area.height)
+		treepath = cellinfo[0]
+		
+		if tv.get_data('last-drawn-row-treepath') != treepath or tv.get_data('layoutstash') is None:
+			tv.set_data('layoutstash', {})
+		tv.set_data('last-drawn-row-treepath', treepath)
+		layoutstash = tv.get_data('layoutstash')
+		
+		overflow_width = cell_area.width
+		next_col = self.get_next_column()
+		next_col_names = []
+		while next_col is not None:
+			next_col_content = model[treepath][next_col.get_name()]
+			if next_col_content is None or next_col_content == '':
+				overflow_width += next_col.get_width()
+				next_col_names.append(next_col.get_name())
+				next_col = self.get_next_column(next_col)
+			else:
+				break
+		if overflow_width != cell_area.width:
+			context = widget.get_pango_context()
+			layout = pango.Layout(context)
+			if markup:
+				layout.set_markup(markup)
+			elif text:
+				layout.set_text(text)
+			if markup or text:
+				layout.set_width(overflow_width * pango.SCALE)
+				layout.set_wrap(pango.WRAP_CHAR)
+				layout.set_ellipsize(pango.ELLIPSIZE_END)
+				xpad, ypad = self.cr_txt.get_padding()
+				draw_area = cell_area.copy()
+				draw_area.x += xpad
+				draw_area.y += ypad
+				if not layoutstash.has_key(treepath):
+					layoutstash[treepath] = {}
+				for colname in layoutstash[treepath].keys():
+					if layoutstash[treepath][colname].has_key(tvc_name):
+						del layoutstash[treepath][colname][tvc_name]
+				for colname in next_col_names:
+					if not layoutstash[treepath].has_key(colname):
+						layoutstash[treepath][colname] = {}
+					layoutstash[treepath][colname][tvc_name] = (window, widget, draw_area, layout, flags)
+		else:
+			# this cell's text does not flow over, so delete earlier layouts, if any
+			for colname in layoutstash.get(treepath, {}).keys():
+				if layoutstash[treepath][colname].has_key(tvc_name):
+					del layoutstash[treepath][colname][tvc_name]
+		layout_overflowcells = layoutstash.get(treepath, {}).get(tvc_name, {})
+		if not markup and not text:
+			# current cell is empty, but redraw those cells which flow over to this one
+			for layout_args in layout_overflowcells.values():
+				self.draw_layout(*layout_args)
+		else:
+			if layout_overflowcells:
+				# current cell is not empty so delete those layouts which would be drawn on it, if any
+				del layoutstash[treepath][tvc_name]
+			self.cr_txt.render(window, widget, background_area, cell_area, expose_area, flags)
+	def on_activate(self, event, widget, path, background_area, cell_area, flags):
+		return self.cr_txt.activate(event, widget, path, background_area, cell_area, flags)
+	def on_start_editing(self, event, widget, path, background_area, cell_area, flags):
+		ce = self.cr_txt.start_editing(event, widget, path, background_area, cell_area, flags)
+		w = gtk.Window(gtk.WINDOW_TOPLEVEL)
+		w.set_keep_above(True)
+		w.set_modal(True)
+		w.set_skip_taskbar_hint(True)
+		w.set_transient_for(main_win)
+		w.set_decorated(False)
+		frame = gtk.Frame(label = "Enter new value")
+		frame.set_border_width(24)
+		frame.set_shadow_type(gtk.SHADOW_IN)
+		frame_inner = gtk.Frame()
+		frame_inner.set_border_width(16)
+		w.add(frame)
+		frame.add(frame_inner)
+		frame_inner.add(ce)
+		w.show_all()
+		add_key_binding(w, 'Escape', lambda *X: w.destroy())
+		w.connect('destroy', lambda *X: w.destroy())
+		ce.connect('remove-widget', lambda *X: w.destroy())
+		ce.start_editing(event)
+
+gobject.type_register(CellRendererTextOverflow)
+
+
+
+def load_columns(treeview, columns):
+	model = TreeStore(*columns)
+	treeview.set_model(model)
+	treeview.add_columns([(col[0], col[0], 'text', idx) for idx, col in enumerate(columns)])
+
+def load_data():
+	if args.db_query:
+		db_engine = sqlalchemy.create_engine(args.db_connection)
+		db_conn = db_engine.connect()
+		db_result = db_conn.execute(args.db_query)
+
+		columns = []
+		for col in db_result.keys():
+			columns.append((col, unicode))
+		load_columns(main_table, columns)
+		data_model = main_table.get_model()
+		for row in db_result:
+			data_model.append(None, row)
+
+def on_startup():
+	load_data()
+
+
+parser = argparse.ArgumentParser(description='gTabData - GTK Tabular Data viewer')
+parser.add_argument('--title', type=str, default='gTabData', help='Window title text')
+parser.add_argument('--appname', type=str, default='gtabdata')
+parser.add_argument('--icon', type=str, default='text-spreadsheet', help='Window icon file name or symbolic name')
+parser.add_argument('--db-connection', type=str, help='Database connection DSN. See "dataset" python module.')
+parser.add_argument('--db-query', type=str, help='Database query to load data from')
+args = parser.parse_args()
+
+APPNAME = args.appname
+
+main_win = Window({'name': 'window.main', 'gtk-args': []})
+main_win.title = args.title
+main_win.set_icon_from_any(args.icon)
+main_win.connect('delete-event', lambda *X: gtk.main_quit())
+startup_event = main_win.connect('map-event', lambda w, e: (w.disconnect(startup_event), on_startup()))
+
+main_table = TreeView(None)
+main_win.add(Scrollable(main_table))
+#main_table.connect('columns-layout-changed', ) TODO
+
+
+main_win.show_all()
+
+gtk.main()

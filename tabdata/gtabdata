@@ -270,17 +270,17 @@ class TreeView(gtk.TreeView):
 
 	def _on_button_click(self, widget, event):
 		if event.button == 3:
-			# TODO highlight/select clicked row
 			x, y = int(event.x), int(event.y)
-			t = self.get_path_at_pos(x, y)
-			if t is not None:
-				treepath, tv_col, cell_x, cell_y = t
+			event_target_info = self.get_path_at_pos(x, y)
+			if event_target_info is not None:
+				treepath, tv_col, cell_x, cell_y = event_target_info
 			else:
 				treepath, tv_col, cell_x, cell_y = None, None, None, None
 			popup_menu = gtk.Menu()
 			if not self.emit('menu-popup', popup_menu, treepath, tv_col, cell_x, cell_y):
 				# event is not handled by any handlers, so do it ourself
 				if popup_menu.get_children():
+					self.get_selection().select_path(treepath)
 					popup_menu.show_all()
 					popup_menu.popup(None, None, None, event.button, event.time)
 			return True
@@ -536,7 +536,7 @@ class CellRendererTextOverflow(gtk.GenericCellRenderer):
 		w.set_keep_above(True)
 		w.set_modal(True)
 		w.set_skip_taskbar_hint(True)
-		w.set_transient_for(self.get_ancestor(gtk.Window))
+		w.set_transient_for(widget.get_ancestor(gtk.Window))
 		w.set_decorated(False)
 		frame = gtk.Frame(label = "Enter new value")
 		frame.set_border_width(24)
@@ -588,7 +588,7 @@ def load_columns(treeview, columns):
 def split_command_args(cmd_str):
 	return re.split(r'\s+', cmd_str)
 
-def populate_row_context_menu(menu, items, row_data):
+def populate_row_context_menu(menu, items):
 	# TODO support submenus
 	for definition in items:
 		icon, label, command = [field.replace('\\:', ':') for field in re.split(r'(?<!\\):', definition, maxsplit=2)]
@@ -598,21 +598,19 @@ def populate_row_context_menu(menu, items, row_data):
 		mi.set_data('command_args', split_command_args(command))
 		mi.connect('activate', on_context_menu_item_activate, menu)
 		menu.append(mi)
-	menu.set_data('row', row_data)
 	menu.show_all()
-
-def on_table_row_activated(treeview, c_treepath, tv_col):
-	run_system_command(split_command_args(args.activate_command), make_row_data(treeview, c_treepath, tv_col))
 
 def make_row_data(treeview, c_treepath, tv_col):
 	return {
-		'row': {} if c_treepath is None else treeview.get_model()[c_treepath].as_dict(),
 		'col': None if tv_col is None else tv_col.name,
+		'row': {} if c_treepath is None else treeview.get_model()[c_treepath].as_dict(),
 	}
 
 def on_table_row_context_menu(treeview, popup_menu, c_treepath, tv_col, cell_x, cell_y):
 	# add user-defined menu items
-	populate_row_context_menu(popup_menu, args.context_menu, make_row_data(treeview, c_treepath, tv_col))
+	populate_row_context_menu(popup_menu, args.context_menu)
+	popup_menu.set_data('row', make_row_data(treeview, c_treepath, tv_col))
+	popup_menu.set_data('treeview', treeview)
 	# add gtabdata-specific menu items
 	if popup_menu.get_children():
 		popup_menu.append(gtk.SeparatorMenuItem())
@@ -623,16 +621,23 @@ def on_table_row_context_menu(treeview, popup_menu, c_treepath, tv_col, cell_x, 
 	popup_menu.append(mi)
 	return False
 
-def on_refresh_requested(mi):
-	pass  # TODO implement
-
 def on_context_menu_item_activate(mi, menu):
-	run_system_command(mi.get_data('command_args'), menu.get_data('row'))
+	row_data = menu.get_data('row')
+	treeview = menu.get_data('treeview')
+	row_data['selected_rows'] = [treeview.get_model()[treepath].as_dict() for treepath in treeview.get_selection().get_selected_rows()[1]]
+	run_system_command(mi.get_data('command_args'), row_data)
+
+def on_table_row_activated(treeview, c_treepath, tv_col):
+	run_system_command(split_command_args(args.activate_command), make_row_data(treeview, c_treepath, tv_col))
 
 def run_system_command(command_args, row_data):
 	proc = subprocess.Popen(command_args, shell=False, stdin=subprocess.PIPE)
 	proc.stdin.write(json.dumps(row_data))
 	proc.stdin.close()
+
+
+def on_refresh_requested(mi):
+	pass  # TODO implement
 
 
 def tabdata(rawline):

@@ -5,6 +5,16 @@ use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat no_auto_abb
 use Pod::Usage;
 use IPC::Run qw/start finish/;
 use Data::Dumper;
+use Config;
+@signal_names = split ' ', $Config{'sig_name'};
+
+sub errstr
+{
+	my $errno = shift;
+	local $! = $errno;
+	return $^E;
+}
+
 
 $0 = "reportcmdstatus";
 
@@ -48,16 +58,18 @@ if(WIFSIGNALED($status))
 {
 	$end_mode = "terminated by signal";
 	$end_code = WTERMSIG($status);
+	$code_name = 'SIG' . $signal_names[$end_code];
 	$mystatus = 128 + WTERMSIG($status);
 }
 else
 {
 	$end_mode = "exited with status";
 	$end_code = WEXITSTATUS($status);
+	$code_name = errstr($end_code) || 'none';
 	$mystatus = WEXITSTATUS($status);
 }
 
-printf STDERR "command (pid %d) %s: %d%s\n", $COMMAND_PID, $end_mode, $end_code, $opt_wait_end ? ", waiting for the user to press Enter." : "";
+printf STDERR "command (pid %d) %s: %d (%s)%s\n", $COMMAND_PID, $end_mode, $end_code, $code_name, $opt_wait_end ? ", waiting for the user to press Enter." : "";
 
 if($opt_wait_end)
 {

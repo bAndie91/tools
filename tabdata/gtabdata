@@ -265,7 +265,7 @@ class TreeView(gtk.TreeView):
 
 	def _on_button_click(self, widget, event):
 		if event.button == 3:
-			# TODO highlight clicked row
+			# TODO highlight/select clicked row
 			x, y = int(event.x), int(event.y)
 			t = self.get_path_at_pos(x, y)
 			if t is not None:
@@ -359,6 +359,10 @@ class TreeView(gtk.TreeView):
 			mi.set_active(col.get_visible())
 			mi.connect('activate', lambda mi, col: col.set_visible(not col.get_visible()), col)
 			popup_menu.append(mi)
+		popup_menu.append(gtk.SeparatorMenuItem())
+		mi = gtk.MenuItem(label="reset columns order")
+		#mi.connect('activate', TODO
+		popup_menu.append(mi)
 
 class TreeViewColumn(gtk.TreeViewColumn):
 	__gsignals__ = {
@@ -547,6 +551,8 @@ class ImageMenuItem(gtk.ImageMenuItem):
 			width_px, height_px = gtk.icon_size_lookup(gtk.ICON_SIZE_MENU)[:]
 			pixbuf = get_pixbuf_from_file_at_size(icon, width_px, height_px)
 			img.from_pixbuf(pixbuf)
+		elif icon.startswith('STOCK_'):
+			img.set_from_stock(getattr(gtk, icon), gtk.ICON_SIZE_MENU)
 		elif icon in gtk.stock_list_ids():
 			img.set_from_stock(icon, gtk.ICON_SIZE_MENU)
 		elif gtk.icon_theme_get_default().lookup_icon(icon, gtk.ICON_SIZE_MENU, 0) is not None:
@@ -567,42 +573,53 @@ def load_columns(treeview, columns):
 	treeview.add_columns([(col[0], col[0], 'text', idx) for idx, col in enumerate(columns)])
 
 
+def split_command_args(cmd_str):
+	return re.split(r'\s+', cmd_str)
+
 def populate_row_context_menu(menu, items, row_data):
 	for definition in items:
 		icon, label, command = [field.replace('\\:', ':') for field in re.split(r'(?<!\\):', definition, maxsplit=2)]
 		mi = ImageMenuItem()
 		mi.set_icon(icon)
 		mi.set_label(label)
-		mi.set_data('command', command)
+		mi.set_data('command_args', split_command_args(command))
 		mi.connect('activate', on_context_menu_item_activate, menu)
 		menu.append(mi)
 	menu.set_data('row', row_data)
 	menu.show_all()
 
-def on_table_row_context_menu(treeview, popup_menu, c_treepath, tv_col, cell_x, cell_y):
-	row_data = {
+def on_table_row_activated(treeview, c_treepath, tv_col):
+	run_system_command(split_command_args(args.activate_command), make_row_data(treeview, c_treepath, tv_col))
+
+def make_row_data(treeview, c_treepath, tv_col):
+	return {
 		'row': treeview.get_model()[c_treepath].as_dict(),
 		'col': tv_col.name,
 	}
-	populate_row_context_menu(popup_menu, args.context_menu, row_data)
+
+def on_table_row_context_menu(treeview, popup_menu, c_treepath, tv_col, cell_x, cell_y):
+	populate_row_context_menu(popup_menu, args.context_menu, make_row_data(treeview, c_treepath, tv_col))
 	return False
 
 def on_context_menu_item_activate(mi, menu):
-	command = mi.get_data('command')
-	row_data = menu.get_data('row')
-	proc = subprocess.Popen([command], shell=False, stdin=subprocess.PIPE)
+	run_system_command(mi.get_data('command_args'), menu.get_data('row'))
+
+def run_system_command(command_args, row_data):
+	proc = subprocess.Popen(command_args, shell=False, stdin=subprocess.PIPE)
 	proc.stdin.write(json.dumps(row_data))
 	proc.stdin.close()
 
 
 parser = argparse.ArgumentParser(description='gTabData - GTK Tabular Data viewer')
 parser.add_argument('--title', type=str, default='gTabData', help='Window title text')
-parser.add_argument('--appname', type=str, default='gtabdata')
-parser.add_argument('--icon', type=str, default='text-spreadsheet', help='Window icon file name or symbolic name')
+parser.add_argument('--appname', type=str, default='gtabdata', help='Custom application name to operate as')
+parser.add_argument('--icon', type=str, default='text-spreadsheet', help='Window icon file or symbolic name')
 parser.add_argument('--db-connection', type=str, help='Database connection string, for supported DSN see "sqlalchemy" python module.')
 parser.add_argument('--db-query', type=str, help='Database query to load data from')
-parser.add_argument('--context-menu', nargs='+', type=str, help='Menu item definition for rows context menu in "ICON:LABEL:COMMAND ARGS" format')
+parser.add_argument('--activate-command', type=str, metavar='COMMAND', help='System command to run when double clicked on a row. Option parameter is split by whitespaces into command and arguments, no quoting or escaping is supported. Then the command is run as a system command, not in shell.')
+parser.add_argument('--context-menu', action='append', default=[], type=str, metavar='ICON:LABEL:COMMAND', help='Menu item definitions for rows context menu. Command-argument splitting is the same as for --activate-command.')
 args = parser.parse_args()
+
 
 APPNAME = args.appname
 
@@ -616,6 +633,7 @@ class GTabData(object):
 
 		self.main_table = TreeView(None)
 		self.main_win.add(Scrollable(self.main_table))
+		self.main_table.connect('row-activated', on_table_row_activated)
 		self.main_table.connect('menu-popup', on_table_row_context_menu)
 
 		self.proppersist = PropertyPersistor(self.main_table, 'main_table', [

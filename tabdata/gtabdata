@@ -254,6 +254,8 @@ class TreeView(gtk.TreeView):
 		self._stored_column_width = {}
 		self.set_reorderable(True)
 		self.set_headers_clickable(True)
+		self.set_rubber_banding(True)
+		self.get_selection().set_mode(gtk.SELECTION_MULTIPLE)
 		self.connect('button-press-event', self._on_button_click)
 		self.connect('realize', self._on_realize)
 		self.connect('columns-changed', self._on_columns_changed)
@@ -341,6 +343,7 @@ class TreeView(gtk.TreeView):
 				popup_menu.popup(None, None, None, event.button, event.time)
 			return True
 		elif event.button == 1:
+			self.set_search_column(self.get_column_number_by_name(col_widget.name))
 			self.emit('column-sort-order-changed', col_widget)
 
 	@staticmethod
@@ -351,6 +354,12 @@ class TreeView(gtk.TreeView):
 		for col in self.get_columns():
 			if col.name == colname:
 				return col
+		raise TreeView.ColumnNotFoundException(colname)
+	
+	def get_column_number_by_name(self, colname):
+		for num, col in enumerate(self.get_columns()):
+			if col.name == colname:
+				return num
 		raise TreeView.ColumnNotFoundException(colname)
 	
 	def _on_header_menu_popup(self, tv, popup_menu, tv_col):
@@ -708,9 +717,6 @@ class GTabData(object):
 		self.proppersist.active = False
 		gtk.main_quit()
 
-
-# TODO support reload/refresh data
-# TODO quick search do search in the current sort column
 
 GTabData().run()
 gtk.main()

@@ -17,6 +17,8 @@ from hband_tools.gui import *
 import threading
 gtk.gdk.threads_init()
 import json
+from jinja2 import Template
+
 
 
 unicode = unicode  # just to keep python language server happy
@@ -276,11 +278,11 @@ class TreeView(gtk.TreeView):
 				treepath, tv_col, cell_x, cell_y = event_target_info
 			else:
 				treepath, tv_col, cell_x, cell_y = None, None, None, None
+			self.get_selection().select_path(treepath)
 			popup_menu = gtk.Menu()
 			if not self.emit('menu-popup', popup_menu, treepath, tv_col, cell_x, cell_y):
 				# event is not handled by any handlers, so do it ourself
 				if popup_menu.get_children():
-					self.get_selection().select_path(treepath)
 					popup_menu.show_all()
 					popup_menu.popup(None, None, None, event.button, event.time)
 			return True
@@ -588,13 +590,13 @@ def load_columns(treeview, columns):
 def split_command_args(cmd_str):
 	return re.split(r'\s+', cmd_str)
 
-def populate_row_context_menu(menu, items):
+def populate_row_context_menu(menu, items, macros):
 	# TODO support submenus
 	for definition in items:
 		icon, label, command = [field.replace('\\:', ':') for field in re.split(r'(?<!\\):', definition, maxsplit=2)]
 		mi = ImageMenuItem()
 		mi.set_icon(icon)
-		mi.set_label(label)
+		mi.set_label(Template(label).render(**macros))
 		mi.set_data('command_args', split_command_args(command))
 		mi.connect('activate', on_context_menu_item_activate, menu)
 		menu.append(mi)
@@ -608,7 +610,10 @@ def make_row_data(treeview, c_treepath, tv_col):
 
 def on_table_row_context_menu(treeview, popup_menu, c_treepath, tv_col, cell_x, cell_y):
 	# add user-defined menu items
-	populate_row_context_menu(popup_menu, args.context_menu)
+	macros = {
+		'n_selected': len(treeview.get_selection().get_selected_rows()[1]),
+	}
+	populate_row_context_menu(popup_menu, args.context_menu, macros)
 	popup_menu.set_data('row', make_row_data(treeview, c_treepath, tv_col))
 	popup_menu.set_data('treeview', treeview)
 	# add gtabdata-specific menu items
@@ -648,15 +653,31 @@ def tabdata(rawline):
 	return [re.sub(r'\\[tnre\\]', lambda match: unescape_td_sequence(match.group(0)), cell) for cell in rawline.rstrip('\n').split('\t')]
 
 
-parser = argparse.ArgumentParser(description='gTabData - GTK Tabular Data viewer')
+parser = argparse.ArgumentParser(description='gTabData - GTK Tabular Data viewer', formatter_class=argparse.RawDescriptionHelpFormatter)
 parser.add_argument('--title', type=str, default='gTabData', help='Window title text')
 parser.add_argument('--appname', type=str, default='gtabdata', help='Custom application name to operate as')
 parser.add_argument('--icon', type=str, default='text-spreadsheet', help='Window icon file or symbolic name')
 parser.add_argument('--data-command', type=str, metavar='COMMAND', help='The command which produces the tabular data to be shown')
 parser.add_argument('--db-connection', type=str, help='Database connection string, for supported DSN see "sqlalchemy" python module.')
 parser.add_argument('--db-query', type=str, help='Database query to load data from')
-parser.add_argument('--activate-command', type=str, metavar='COMMAND', help='System command to run when double clicked on a row. Option parameter is split by whitespaces into command and arguments, no quoting or escaping is supported. Then the command is run as a system command, not in shell.')
-parser.add_argument('--context-menu', action='append', default=[], type=str, metavar='ICON:LABEL:COMMAND', help='Menu item definitions for rows context menu. Command-argument splitting is the same as for --activate-command.')
+parser.add_argument('--activate-command', type=str, metavar='COMMAND', help='System command to run when double clicked on a row.')
+parser.add_argument('--context-menu', action='append', default=[], type=str, metavar='ICON:LABEL:COMMAND', help='Menu item definitions for rows context menu.')
+parser.epilog = '''
+COMMAND
+	The COMMAND option parameter is split by whitespaces into command and arguments, no quoting or escaping is supported.
+	Then the command is run as a system command, not in shell.
+	A JSON object is passed to the command's STDIN with these keys:
+	- row: an object itself containing all fields (as object keys) and cells (as values) of the activated row
+	- col: column's name which the context menu is opened in
+	- selected_rows: list of all the selected rows' fields
+ICON is one of these:
+	- image file path
+	- Gtk stock icon constant, starting with "STOCK_"
+	- icon name as defined in the current Gtk icon theme
+	- basename of an image file in the common system icon directories
+LABEL is a jinja2 template rendered to the menu item label, supporting these variables:
+	- n_selected: number of selected rows
+'''
 args = parser.parse_args()
 
 

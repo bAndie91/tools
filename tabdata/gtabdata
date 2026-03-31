@@ -15,8 +15,6 @@ import traceback
 from hband_tools.gui import *
 import threading
 gtk.gdk.threads_init()
-import sqlalchemy
-from io import StringIO
 
 
 def add_key_binding(widget, keyname, callback):
@@ -593,8 +591,8 @@ def on_table_row_activated(treeview, c_treepath, tv_col):
 
 def make_row_data(treeview, c_treepath, tv_col):
 	return {
-		'row': treeview.get_model()[c_treepath].as_dict(),
-		'col': tv_col.name,
+		'row': {} if c_treepath is None else treeview.get_model()[c_treepath].as_dict(),
+		'col': None if tv_col is None else tv_col.name,
 	}
 
 def on_table_row_context_menu(treeview, popup_menu, c_treepath, tv_col, cell_x, cell_y):
@@ -610,10 +608,19 @@ def run_system_command(command_args, row_data):
 	proc.stdin.close()
 
 
+def tabdata(rawline):
+	def unescape_td_sequence(s):
+		"""only meant for backslash-t, backslash-n, backslash-r, backslash-e and double-blackslash inputs."""
+		if s == '\\e': return '\x1B'
+		else: return eval('"'+s+'"')
+	return [re.sub(r'\\[tnre\\]', lambda match: unescape_td_sequence(match.group(0)), cell) for cell in rawline.rstrip('\n').split('\t')]
+
+
 parser = argparse.ArgumentParser(description='gTabData - GTK Tabular Data viewer')
 parser.add_argument('--title', type=str, default='gTabData', help='Window title text')
 parser.add_argument('--appname', type=str, default='gtabdata', help='Custom application name to operate as')
 parser.add_argument('--icon', type=str, default='text-spreadsheet', help='Window icon file or symbolic name')
+parser.add_argument('--data-command', type=str, metavar='COMMAND', help='The command which produces the tabular data to be shown')
 parser.add_argument('--db-connection', type=str, help='Database connection string, for supported DSN see "sqlalchemy" python module.')
 parser.add_argument('--db-query', type=str, help='Database query to load data from')
 parser.add_argument('--activate-command', type=str, metavar='COMMAND', help='System command to run when double clicked on a row. Option parameter is split by whitespaces into command and arguments, no quoting or escaping is supported. Then the command is run as a system command, not in shell.')
@@ -650,6 +657,8 @@ class GTabData(object):
 
 	def load_data(self):
 		if args.db_query:
+			import sqlalchemy
+
 			db_engine = sqlalchemy.create_engine(args.db_connection)
 			db_conn = db_engine.connect()
 			db_result = db_conn.execute(args.db_query)
@@ -658,11 +667,24 @@ class GTabData(object):
 			for col in db_result.keys():
 				columns.append((col, unicode))
 			load_columns(self.main_table, columns)
+			
 			data_model = self.main_table.get_model()
 			for row in db_result:
 				data_model.append(None, row)
 		
-		# elif args.input_file: TODO
+		elif args.data_command:
+			proc = subprocess.Popen(split_command_args(args.data_command), stdin=open(os.devnull, 'r'), stdout=subprocess.PIPE, stderr=None, close_fds=True)
+			td_header = tabdata(proc.stdout.readline())
+			columns = [(col, unicode) for col in td_header]
+			load_columns(self.main_table, columns)
+
+			data_model = self.main_table.get_model()
+			for line in iter(proc.stdout.readline, ''):
+				data_model.append(None, tabdata(line))
+			proc.stdout.close()
+			proc.wait()
+			# TODO respect exit code/signal
+
 		
 	def on_exit(self):
 		self.proppersist.active = False

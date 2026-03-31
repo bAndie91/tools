@@ -319,6 +319,7 @@ class TreeView(gtk.TreeView):
 				tvc.set_fixed_width(100)
 			tvc.connect('notify::width', self._on_column_width_change)
 			tvc.connect('notify::visible', lambda col, gparam: self.emit('columns-changed'))
+			tvc.connect('notify::sort-order', lambda col, gparam: self.emit('column-sort-order-changed', col))
 
 	def _on_column_width_change(self, col, gparam):
 		w = col.get_width()
@@ -695,19 +696,21 @@ class GTabData(object):
 		self.main_win.add(Scrollable(self.main_table))
 		self.main_table.connect('row-activated', on_table_row_activated)
 		self.main_table.connect('menu-popup', on_table_row_context_menu)
+		self.main_table.connect('columns-changed', self.on_table_columns_changed)
 
 		self.proppersist = PropertyPersistor(self.main_table, 'main_table', [
 			('columns',      'columns-changed',           lambda tv: [col.name for col in tv.get_columns() if col.get_visible()], None),
 			('column-width', 'column-width-changed',      lambda tv, tvc, w: dict([(col.name, col.get_width()) for col in tv.get_columns()]), None),
 			('sort-column',  'column-sort-order-changed', lambda tv, tvc: tvc.name, None),
 			('sort-order',   'column-sort-order-changed', lambda tv, tvc: tvc.get_sort_order().value_nick, None),
+			# TODO remember selected row
 		])
 
 		self.main_win.show_all()
 
 	def on_startup(self):
 		self.load_data()
-
+	
 	def load_data(self):
 		if args.db_query:
 			import sqlalchemy
@@ -738,6 +741,27 @@ class GTabData(object):
 			proc.wait()
 			# TODO respect exit code/signal
 
+	def on_table_columns_changed(self, treeview):
+		proppersist_state = self.proppersist.active
+		self.proppersist.active = False
+		for col in self.main_table.get_columns():
+			width = self.proppersist.props.get('column-width', {}).get(col.name)
+			if width: col.set_fixed_width(width)
+			saved_columns = self.proppersist.props.get('columns')
+			#if saved_columns: col.set_visible(col.name in saved_columns) FIXME
+		sort_column_name = self.proppersist.props.get('sort-column')
+		if sort_column_name:
+			try:
+				sort_column = self.main_table.get_column_by_name(sort_column_name)
+			except TreeView.ColumnNotFoundException:
+				pass
+			else:
+				if sort_column:
+					sort_column.clicked()
+					sort_order = self.proppersist.props.get('sort-order')
+					if sort_order: sort_column.set_sort_order(getattr(gtk, 'SORT_'+sort_order.upper()))
+					# TODO ensure the right sort order
+		self.proppersist.active = proppersist_state
 		
 	def on_exit(self):
 		self.proppersist.active = False

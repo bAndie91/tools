@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from __future__ import print_function
 import argparse
 import gtk
 import glib
@@ -15,6 +16,10 @@ import traceback
 from hband_tools.gui import *
 import threading
 gtk.gdk.threads_init()
+import json
+
+
+unicode = unicode  # just to keep python language server happy
 
 
 def add_key_binding(widget, keyname, callback):
@@ -522,7 +527,7 @@ class CellRendererTextOverflow(gtk.GenericCellRenderer):
 		w.set_keep_above(True)
 		w.set_modal(True)
 		w.set_skip_taskbar_hint(True)
-		w.set_transient_for(main_win)
+		w.set_transient_for(self.get_ancestor(gtk.Window))
 		w.set_decorated(False)
 		frame = gtk.Frame(label = "Enter new value")
 		frame.set_border_width(24)
@@ -575,6 +580,7 @@ def split_command_args(cmd_str):
 	return re.split(r'\s+', cmd_str)
 
 def populate_row_context_menu(menu, items, row_data):
+	# TODO support submenus
 	for definition in items:
 		icon, label, command = [field.replace('\\:', ':') for field in re.split(r'(?<!\\):', definition, maxsplit=2)]
 		mi = ImageMenuItem()
@@ -596,8 +602,20 @@ def make_row_data(treeview, c_treepath, tv_col):
 	}
 
 def on_table_row_context_menu(treeview, popup_menu, c_treepath, tv_col, cell_x, cell_y):
+	# add user-defined menu items
 	populate_row_context_menu(popup_menu, args.context_menu, make_row_data(treeview, c_treepath, tv_col))
+	# add gtabdata-specific menu items
+	if popup_menu.get_children():
+		popup_menu.append(gtk.SeparatorMenuItem())
+	mi = ImageMenuItem()
+	mi.set_icon(gtk.STOCK_REFRESH)
+	mi.set_label("Refresh table data")
+	mi.connect('activate', on_refresh_requested)
+	popup_menu.append(mi)
 	return False
+
+def on_refresh_requested(mi):
+	pass  # TODO implement
 
 def on_context_menu_item_activate(mi, menu):
 	run_system_command(mi.get_data('command_args'), menu.get_data('row'))
@@ -690,6 +708,9 @@ class GTabData(object):
 		self.proppersist.active = False
 		gtk.main_quit()
 
+
+# TODO support reload/refresh data
+# TODO quick search do search in the current sort column
 
 GTabData().run()
 gtk.main()

@@ -105,7 +105,7 @@ class IniFileSection(dict):
 	def __setitem__(self, key, value, type=None):
 		if not self.inifile.cp.has_section(self.section):
 			self.inifile.cp.add_section(self.section)
-		self.inifile.cp.set(self.section, str(key), json.dumps(value))
+		self.inifile.cp.set(self.section, str(key), json.dumps(value, sort_keys=True))
 	def update(self, dictionary):
 		for key, value in dictionary.iteritems():
 			self[key] = value

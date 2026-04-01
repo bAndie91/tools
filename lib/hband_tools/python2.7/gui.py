@@ -163,6 +163,7 @@ class PropertyPersistor(object):
 		self.triggers = {}
 		self.applicators = {}
 		self.active = True
+		self.currently_applicating = False
 		self.add_properties(property_descriptors)
 	
 	def add_properties(self, property_descriptors):
@@ -176,6 +177,7 @@ class PropertyPersistor(object):
 	
 	def on_trigger(self, widget, *cb_args):
 		if not self.active: return
+		if self.currently_applicating: return
 		signal_args = cb_args[0:-1]
 		trigger_signal = cb_args[-1]
 		changed_props = {}
@@ -215,9 +217,11 @@ class PropertyPersistor(object):
 		# TODO combine ini files with less specific appname to fall back to the app's base instance properties if this app instance does not have a certain prop
 	
 	def apply_saved_properties(self):
+		self.currently_applicating = True
 		for prop_name, value in self.props.iteritems():
 			if prop_name in self.applicators:
 				try:
 					self.applicators[prop_name](self.obj, value)
 				except:
 					traceback.print_exc()
+		self.currently_applicating = False

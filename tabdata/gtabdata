@@ -18,6 +18,7 @@ import threading
 gtk.gdk.threads_init()
 import json
 from jinja2 import Template
+import difflib
 
 
 
@@ -177,9 +178,22 @@ class TreeStore(gtk.TreeStore):
 	def to_unicode(s):
 		if s is None: return None
 		return unicode(s)
-	def get_column_num(self, col_name):
-		if isinstance(col_name, int): return col_name
-		return self.column[col_name]
+	@staticmethod
+	class ColumnNotFoundException(Exception):
+		pass
+	def get_column_num(self, col_ref):
+		if isinstance(col_ref, int):
+			if col_ref not in self.columm.values():
+				raise self.__class__.ColumnNotFoundException(col_ref)
+			return col_ref
+		if col_ref not in self.column:
+			raise self.__class__.ColumnNotFoundException(col_ref)
+		return self.column[col_ref]
+	def get_column_name(self, col_num):
+		for name, num in self.column.iteritems():
+			if num == col_num:
+				return name
+		raise self.__class__.ColumnNotFoundException(col_num)
 	def get(self, row, *columns):
 		if type(row) == tuple:
 			row = self.get_iter(row)  # tree iterator path was given
@@ -248,12 +262,17 @@ class TreeView(gtk.TreeView):
 	__gsignals__ = {
 		'menu-popup': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT)),
 		'header-menu-popup': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT)),
+		'column-added': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
 		'column-width-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT, int)),
+		'sort-by-column-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
 		'column-sort-order-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
+		'column-visibility-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
 	}
 	def __init__(self, model):
 		super(self.__class__, self).__init__(model)
 		self._stored_column_width = {}
+		self._sortby_column_name = None
+		self._resorting = False
 		self.set_reorderable(True)
 		self.set_headers_clickable(True)
 		self.set_rubber_banding(True)
@@ -295,6 +314,10 @@ class TreeView(gtk.TreeView):
 		# clear 'layoutstash', it is needed for CellRendererTextOverflow
 		self.set_data('layoutstash', {})
 
+	def set_columns(self, columns):
+		for col in self.get_columns(): self.remove_column(col)
+		return self.add_columns(columns)
+	
 	def add_columns(self, columns):
 		for col_name, col_title, col_attr, col_num in columns:
 			tvc = TreeViewColumn()
@@ -312,14 +335,6 @@ class TreeView(gtk.TreeView):
 			tvc.add_attribute(cr_txt, col_attr, col_num)
 			
 			self.append_column(tvc)
-			width = None  # TODO emit column-added → hook on to set stored width
-			if width is not None:
-				tvc.set_fixed_width(int(width))
-			else:
-				tvc.set_fixed_width(100)
-			tvc.connect('notify::width', self._on_column_width_change)
-			tvc.connect('notify::visible', lambda col, gparam: self.emit('columns-changed'))
-			tvc.connect('notify::sort-order', lambda col, gparam: self.emit('column-sort-order-changed', col))
 
 	def _on_column_width_change(self, col, gparam):
 		w = col.get_width()
@@ -330,6 +345,7 @@ class TreeView(gtk.TreeView):
 	def append_column(self, tvc):
 		super(self.__class__, self).append_column(tvc)
 		self._column_setup_events(tvc)
+		self.emit('column-added', tvc)
 
 	def _column_setup_events(self, tvc):
 		if hasattr(tvc, 'setup_events'):
@@ -337,6 +353,9 @@ class TreeView(gtk.TreeView):
 			if not tvc.get_data('treeview-connect-done'):
 				tvc.connect('button-press-event', self._on_column_click)
 				tvc.set_data('treeview-connect-done', True)
+		tvc.connect('notify::width', self._on_column_width_change)
+		tvc.connect('notify::visible', self._on_column_visibility_changed)
+		tvc.connect('notify::sort-order', self._on_column_sort_order_changed)
 
 	def _on_column_click(self, col_widget, event):
 		if event.button == 3:
@@ -346,8 +365,46 @@ class TreeView(gtk.TreeView):
 				popup_menu.popup(None, None, None, event.button, event.time)
 			return True
 		elif event.button == 1:
-			self.set_search_column(self.get_column_number_by_name(col_widget.name))
-			self.emit('column-sort-order-changed', col_widget)
+			self._set_sortby_column(col_widget)
+			self.set_search_column_by_name(col_widget.name)
+
+	def set_search_column_by_name(self, colname):
+		model_col_num = self.get_model().get_column_num(colname)
+		self.set_search_column(model_col_num)
+
+	def set_sortby_column_by_name(self, colname):
+		sort_column = self.get_column_by_name(colname)
+		sort_order = sort_column.get_sort_order()
+		sort_column.clicked()
+		self._set_sortby_column(sort_column)
+		sort_column.set_sort_order(sort_order)
+		self.set_search_column_by_name(colname)
+
+	def _set_sortby_column(self, col):
+		self._sortby_column_name = col.name
+		if not self._resorting:
+			self.emit('sort-by-column-changed', col)
+			self.emit('column-sort-order-changed', col)
+	
+	def get_sortby_column(self):
+		return self.get_column_by_name(self._sortby_column_name)
+
+	def _on_column_sort_order_changed(self, tvc, gparam):
+		if not self._resorting:
+			self.emit('column-sort-order-changed', tvc)
+
+	def _on_column_visibility_changed(self, tvc, gparam):
+		self.emit('column-visibility-changed', tvc)
+	
+	def resort(self):
+		"apply the current sort column to the model"
+		self._resorting = True
+		try:
+			self.set_sortby_column_by_name(self._sortby_column_name)
+		except:
+			pass
+		finally:
+			self._resorting = False
 
 	@staticmethod
 	class ColumnNotFoundException(Exception):
@@ -357,13 +414,13 @@ class TreeView(gtk.TreeView):
 		for col in self.get_columns():
 			if col.name == colname:
 				return col
-		raise TreeView.ColumnNotFoundException(colname)
+		raise self.__class__.ColumnNotFoundException(colname)
 	
 	def get_column_number_by_name(self, colname):
 		for num, col in enumerate(self.get_columns()):
 			if col.name == colname:
 				return num
-		raise TreeView.ColumnNotFoundException(colname)
+		raise self.__class__.ColumnNotFoundException(colname)
 	
 	def _on_header_menu_popup(self, tv, popup_menu, tv_col):
 		for col in self.get_columns():
@@ -394,6 +451,8 @@ class TreeViewColumn(gtk.TreeViewColumn):
 		tvc_label = gtk.Label(title)
 		tvc_label.show()
 		self.set_widget(tvc_label)
+	def __repr__(self):
+		return '<%s name="%s">' % (self.__class__.__name__, self.name)
 	def setup_events(self, *X):
 		# this method should be called when the TreeView is realized.
 		if not self.get_data('setup-events-done'):
@@ -581,11 +640,35 @@ class ImageMenuItem(gtk.ImageMenuItem):
 		self.set_image(img)
 
 
+class TemporaryProperty(object):
+	"""Context manager to temporarily set an object property and restore it on exit."""
+	def __init__(self, getter, setter, tempval):
+		assert callable(getter) or len(getter)==2
+		assert callable(setter) or setter is () or len(setter)==2
+		self.getter = getter
+		self.setter = setter
+		self.tempval = tempval
+		self.original = None
+	
+	def _set(self, x):
+		if callable(self.setter):
+			self.setter(x)
+		elif self.setter is ():
+			setattr(self.getter[0], self.getter[1], x)
+		else:
+			setattr(self.setter[0], self.setter[1], x)
 
-def load_columns(treeview, columns):
-	model = TreeStore(*columns)
-	treeview.set_model(model)
-	treeview.add_columns([(col[0], col[0], 'text', idx) for idx, col in enumerate(columns)])
+	def __enter__(self):
+		if callable(self.getter):
+			self.original = self.getter()
+		else:
+			self.original = getattr(self.getter[0], self.getter[1])
+		self._set(self.tempval)
+		return self
+	
+	def __exit__(self, exc_type, exc_val, exc_tb):
+		self._set(self.original)
+
 
 
 def split_command_args(cmd_str):
@@ -654,6 +737,15 @@ def tabdata(rawline):
 	return [re.sub(r'\\[tnre\\]', lambda match: unescape_td_sequence(match.group(0)), cell) for cell in rawline.rstrip('\n').split('\t')]
 
 
+def merge_ordering(old_items, new_items):
+	result = []
+	for patchline in difflib.ndiff(old_items, new_items):
+		op, item = patchline[0], patchline[2:]
+		if op in ('+', ' ') or (op == '-' and item not in new_items):
+			result.append(item)
+	return result
+
+
 parser = argparse.ArgumentParser(description='gTabData - GTK Tabular Data viewer', formatter_class=argparse.RawDescriptionHelpFormatter)
 parser.add_argument('--title', type=str, default='gTabData', help='Window title text')
 parser.add_argument('--appname', type=str, default='gtabdata', help='Custom application name to operate as')
@@ -661,8 +753,10 @@ parser.add_argument('--icon', type=str, default='text-spreadsheet', help='Window
 parser.add_argument('--data-command', type=str, metavar='COMMAND', help='The command which produces the tabular data to be shown')
 parser.add_argument('--db-connection', type=str, help='Database connection string, for supported DSN see "sqlalchemy" python module.')
 parser.add_argument('--db-query', type=str, help='Database query to load data from')
+parser.add_argument('--key-field', type=str, metavar='COLUMN')
 parser.add_argument('--activate-command', type=str, metavar='COMMAND', help='System command to run when double clicked on a row.')
 parser.add_argument('--context-menu', action='append', default=[], type=str, metavar='ICON:LABEL:COMMAND', help='Menu item definitions for rows context menu.')
+parser.add_argument('--auto-refresh-interval', type=float, metavar='SEC')
 parser.epilog = '''
 COMMAND
 	The COMMAND option parameter is split by whitespaces into command and arguments, no quoting or escaping is supported.
@@ -696,13 +790,13 @@ class GTabData(object):
 		self.main_win.add(Scrollable(self.main_table))
 		self.main_table.connect('row-activated', on_table_row_activated)
 		self.main_table.connect('menu-popup', on_table_row_context_menu)
-		self.main_table.connect('columns-changed', self.on_table_columns_changed)
 
 		self.proppersist = PropertyPersistor(self.main_table, 'main_table', [
-			('columns',      'columns-changed',           lambda tv: [col.name for col in tv.get_columns() if col.get_visible()], None),
-			('column-width', 'column-width-changed',      lambda tv, tvc, w: dict([(col.name, col.get_width()) for col in tv.get_columns()]), None),
-			('sort-column',  'column-sort-order-changed', lambda tv, tvc: tvc.name, None),
-			('sort-order',   'column-sort-order-changed', lambda tv, tvc: tvc.get_sort_order().value_nick, None),
+			('columns-order',  'columns-changed',           lambda tv: merge_ordering(self.proppersist.props.get('columns-order') or [], [col.name for col in tv.get_columns()]), self.restore_columns_order),
+			('hidden-columns', 'column-visibility-changed', lambda tv, tvc: [col.name for col in tv.get_columns() if not col.get_visible()], self.restore_hidden_columns),
+			('column-width',   'column-width-changed',      lambda tv, tvc, tvc_width: dict([(col.name, col.get_width()) for col in tv.get_columns()]), self.restore_columns_width),
+			('sort-column',    'sort-by-column-changed',    lambda tv, tvc: tvc.name, self.restore_sortby_column),
+			('sort-order',     'column-sort-order-changed', lambda tv, tvc: tvc.get_sort_order().value_nick, None),
 			# TODO remember selected row
 		])
 
@@ -719,50 +813,72 @@ class GTabData(object):
 			db_conn = db_engine.connect()
 			db_result = db_conn.execute(args.db_query)
 
-			columns = []
-			for col in db_result.keys():
-				columns.append((col, unicode))
-			load_columns(self.main_table, columns)
+			columns = [(col, unicode) for col in db_result.keys()]
+			self.load_columns(columns)
 			
 			data_model = self.main_table.get_model()
 			for row in db_result:
 				data_model.append(None, row)
+				# TODO load async, let gui remain responsive
 		
 		elif args.data_command:
 			proc = subprocess.Popen(split_command_args(args.data_command), stdin=open(os.devnull, 'r'), stdout=subprocess.PIPE, stderr=None, close_fds=True)
 			td_header = tabdata(proc.stdout.readline())
 			columns = [(col, unicode) for col in td_header]
-			load_columns(self.main_table, columns)
+			self.load_columns(columns)
 
 			data_model = self.main_table.get_model()
 			for line in iter(proc.stdout.readline, ''):
 				data_model.append(None, tabdata(line))
+				# TODO load async, let gui remain responsive
 			proc.stdout.close()
 			proc.wait()
 			# TODO respect exit code/signal
 
-	def on_table_columns_changed(self, treeview):
-		proppersist_state = self.proppersist.active
-		self.proppersist.active = False
-		for col in self.main_table.get_columns():
-			width = self.proppersist.props.get('column-width', {}).get(col.name)
-			if width: col.set_fixed_width(width)
-			saved_columns = self.proppersist.props.get('columns')
-			#if saved_columns: col.set_visible(col.name in saved_columns) FIXME
-		sort_column_name = self.proppersist.props.get('sort-column')
-		if sort_column_name:
+			self.main_table.resort()
+
+	def load_columns(self, columns):
+		with TemporaryProperty((self.proppersist, 'active'), (), False):
+			model = TreeStore(*columns)
+			self.main_table.set_model(model)
+			self.main_table.set_columns([(col[0], col[0], 'text', idx) for idx, col in enumerate(columns)])
+		self.proppersist.apply_saved_properties()
+
+	def restore_columns_width(self, tv, cols_width):
+		for colname, width in cols_width.iteritems():
+			if width:
+				try:
+					tv.get_column_by_name(colname).set_fixed_width(width)
+				except TreeView.ColumnNotFoundException:
+					pass
+	
+	def restore_sortby_column(self, tv, colname):
+		try:
+			tv.set_sortby_column_by_name(colname)
+		except TreeView.ColumnNotFoundException:
+			pass
+		else:
+			sort_order = self.proppersist.props.get('sort-order')
+			if sort_order: tv.get_sortby_column().set_sort_order(getattr(gtk, 'SORT_'+sort_order.upper()))
+		
+	def restore_hidden_columns(self, tv, columns):
+		for colname in columns:
 			try:
-				sort_column = self.main_table.get_column_by_name(sort_column_name)
+				tv.get_column_by_name(colname).set_visible(False)
+			except TreeView.ColumnNotFoundException:
+				pass
+
+	def restore_columns_order(self, tv, columns):
+		preceding_col = None
+		for colname in columns:
+			try:
+				col = tv.get_column_by_name(colname)
 			except TreeView.ColumnNotFoundException:
 				pass
 			else:
-				if sort_column:
-					sort_column.clicked()
-					sort_order = self.proppersist.props.get('sort-order')
-					if sort_order: sort_column.set_sort_order(getattr(gtk, 'SORT_'+sort_order.upper()))
-					# TODO ensure the right sort order
-		self.proppersist.active = proppersist_state
-		
+				tv.move_column_after(col, preceding_col)
+				preceding_col = col
+	
 	def on_exit(self):
 		self.proppersist.active = False
 		gtk.main_quit()

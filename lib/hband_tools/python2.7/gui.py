@@ -171,7 +171,8 @@ class PropertyPersistor(object):
 				self.triggers[trigger_signal] = []
 				self.obj.connect(trigger_signal, self.on_trigger, trigger_signal)
 			self.triggers[trigger_signal].append((prop_name, getter))
-			self.applicators[prop_name] = applicator
+			if applicator is not None:
+				self.applicators[prop_name] = applicator
 	
 	def on_trigger(self, widget, *cb_args):
 		if not self.active: return

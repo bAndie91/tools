@@ -451,7 +451,8 @@ class TreeView(gtk.TreeView):
 		mi = gtk.MenuItem(label="set optimal widths")
 		mi.connect('activate', lambda mi: self.columns_autosize())
 		popup_menu.append(mi)
-		mi = gtk.MenuItem(label="reset columns order")
+		mi = ImageMenuItem(label="reset columns order")
+		mi.set_icon(gtk.STOCK_REVERT_TO_SAVED)
 		#mi.connect('activate', TODO
 		popup_menu.append(mi)
 
@@ -793,6 +794,7 @@ parser.add_argument('--data-command', type=str, metavar='COMMAND', help='The com
 parser.add_argument('--db-connection', type=str, help='Database connection string, for supported DSN see "sqlalchemy" python module.')
 parser.add_argument('--db-query', type=str, help='Database query to load data from')
 parser.add_argument('--key-field', type=str, default=None, metavar='COLUMN', help='Defauly key field is the first column in the input data.')
+parser.add_argument('--no-key', action='store_true')
 parser.add_argument('--activate-command', type=str, metavar='COMMAND', help='System command to run when double clicked on a row.')
 parser.add_argument('--context-menu', action='append', default=[], type=str, metavar='ICON:LABEL:COMMAND', help='Menu item definitions for rows context menu.')
 parser.add_argument('--auto-refresh-interval', type=float, metavar='SEC')
@@ -825,8 +827,7 @@ class GTabData(object):
 		self.main_win.connect('delete-event', lambda *X: self.on_exit())
 		self.startup_event = self.main_win.connect('map-event', lambda w, e: (w.disconnect(self.startup_event), self.on_startup()))
 
-		if cliargs.key_field is not None:
-			self.tabdata_key_field = cliargs.key_field
+		self.tabdata_key_field = cliargs.key_field
 
 		self.main_table = TreeView(None)
 		self.main_win.add(Scrollable(self.main_table))
@@ -834,14 +835,16 @@ class GTabData(object):
 		self.main_table.connect('menu-popup', on_table_row_context_menu)
 		self.main_table.connect('column-added', self.on_column_added)
 
-		self.proppersist = PropertyPersistor(self.main_table, 'main_table', [
+		persisted_props = [
 			('columns-order',  'columns-changed',           lambda tv: merge_ordering(self.proppersist.props.get('columns-order') or [], [col.name for col in tv.get_columns()]), self.restore_columns_order),
 			('hidden-columns', 'column-visibility-changed', lambda tv, tvc: [col.name for col in tv.get_columns() if not col.get_visible()], self.restore_hidden_columns),
 			('column-width',   'column-width-changed',      lambda tv, tvc, tvc_width: dict([(col.name, col.get_width()) for col in tv.get_columns()]), self.restore_columns_width),
 			('sort-column',    'sort-by-column-changed',    lambda tv, tvc: tvc.name, self.restore_sortby_column),
 			('sort-order',     'column-sort-order-changed', lambda tv, tvc: tvc.get_sort_order().value_nick, None),
-			('selected-rows',  'selection-change',          lambda tv, sel_rows: [row[self.tabdata_key_field] for row in sel_rows], self.restore_selection)
-		])
+		]
+		if not cliargs.no_key:
+			persisted_props.append(('selected-rows', 'selection-change', lambda tv, sel_rows: [row[self.tabdata_key_field] for row in sel_rows], self.restore_selection))
+		self.proppersist = PropertyPersistor(self.main_table, 'main_table', persisted_props)
 
 		add_key_binding(self.main_win, 'F5', lambda *X: self.load_table_async())
 
@@ -881,11 +884,12 @@ class GTabData(object):
 				self.main_table.resort()
 
 	def load_columns(self, columns):
-		if cliargs.key_field is None:
+		if cliargs.key_field is None and not cliargs.no_key:
 			self.tabdata_key_field = columns[0][0]
 		with GtkThreadContext():
 			with TemporaryProperty((self.proppersist, 'active'), (), False):
 				self.main_table.set_model(TreeStore(*columns))
+				# TODO less disruptive: dont reset model is the columns are the same
 				self.main_table.set_columns([(col[0], col[0], 'text', idx) for idx, col in enumerate(columns)])
 
 	def load_data(self, iterator):
@@ -895,6 +899,7 @@ class GTabData(object):
 		
 		for treepath, row in iterator:
 			with GtkThreadContext():
+				# TODO less disruptive: insert or update unless no_key
 				self.main_table.get_model().append(treepath, row)
 
 		with GtkThreadContext():

@@ -433,7 +433,7 @@ class TreeView(gtk.TreeView):
 			popup_menu.append(mi)
 		popup_menu.append(gtk.SeparatorMenuItem())
 		mi = gtk.MenuItem(label="optimal widths")
-		#mi.connect('activate', TODO
+		mi.connect('activate', lambda mi: tv.columns_autosize())
 		popup_menu.append(mi)
 		mi = gtk.MenuItem(label="reset columns order")
 		#mi.connect('activate', TODO
@@ -803,6 +803,7 @@ class GTabData(object):
 		self.main_win.add(Scrollable(self.main_table))
 		self.main_table.connect('row-activated', on_table_row_activated)
 		self.main_table.connect('menu-popup', on_table_row_context_menu)
+		self.main_table.connect('column-added', self.on_column_added)
 
 		self.proppersist = PropertyPersistor(self.main_table, 'main_table', [
 			('columns-order',  'columns-changed',           lambda tv: merge_ordering(self.proppersist.props.get('columns-order') or [], [col.name for col in tv.get_columns()]), self.restore_columns_order),
@@ -831,14 +832,14 @@ class GTabData(object):
 
 			columns = [(col, unicode) for col in db_result.keys()]
 			self.load_columns(columns)
-			self.load_data([(None, row) for row in db_result])
+			self.load_data(iter([(None, row) for row in db_result]))
 		
 		elif args.data_command:
 			proc = subprocess.Popen(split_command_args(args.data_command), stdin=open(os.devnull, 'r'), stdout=subprocess.PIPE, stderr=None, close_fds=True)
 			td_header = tabdata(proc.stdout.readline())
 			columns = [(col, unicode) for col in td_header]
 			self.load_columns(columns)
-			self.load_data([(None, tabdata(line)) for line in iter(proc.stdout.readline, '')])
+			self.load_data(iter([(None, tabdata(line)) for line in iter(proc.stdout.readline, '')]))
 			proc.stdout.close()
 			proc.wait()
 			# TODO respect exit code/signal
@@ -855,25 +856,27 @@ class GTabData(object):
 				self.main_table.set_columns([(col[0], col[0], 'text', idx) for idx, col in enumerate(columns)])
 
 	def load_data(self, iterator):
-		# TODO load async, let gui remain responsive
-		# TODO set loading indicator (hourglass cursor, window title)
 		with GtkThreadContext():
 			gdkwin = self.main_win.window
 			gdkwin.set_cursor(gtk.gdk.Cursor(gdkwin.get_display(), gtk.gdk.WATCH))
 		
-		with GtkThreadContext():
-			for treepath, row in iterator:
+		for treepath, row in iterator:
+			with GtkThreadContext():
 				self.main_table.get_model().append(treepath, row)
 
-		# 	with TemporaryProperty((gdkwin, 'get_cursor'), (None, 'set_cursor'), gtk.gdk.Cursor(gdkwin.get_display(), gtk.gdk.WATCH)):
-		# 		with NoGtkThreadContext():
-		# 			for treepath, row in iterator:
-		# 				with GtkThreadContext():
-		# 					self.main_table.get_model().append(treepath, row)
+		with GtkThreadContext():
+			gdkwin.set_cursor(None)
+
+	def on_column_added(self, tv, tvc):
+		width = self.proppersist.props.get('column-width', {}).get(tvc.name, None)
+		if width > 1:
+			tvc.set_fixed_width(width)
+		if tvc.name in self.proppersist.props.get('hidden-columns', []):
+			tvc.set_visible(False)
 
 	def restore_columns_width(self, tv, cols_width):
 		for colname, width in cols_width.iteritems():
-			if width:
+			if width > 1:
 				try:
 					tv.get_column_by_name(colname).set_fixed_width(width)
 				except TreeView.ColumnNotFoundException:

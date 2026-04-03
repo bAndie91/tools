@@ -134,6 +134,17 @@ class Window(gtk.Window):
 	@title.setter
 	def title(self, title):
 		self.set_title(title)
+	
+	def set_icon_from_any(self, icon):
+		if icon is None:
+			self.set_icon(None)
+		else:
+			icon_size = gtk.icon_size_lookup(gtk.ICON_SIZE_LARGE_TOOLBAR)[0]
+			iconfile = find_icon_file(icon, icon_size)
+			if iconfile is None:
+				self.set_icon(None)
+			else:
+				self.set_icon(gtk.gdk.pixbuf_new_from_file(iconfile))
 
 class Scrollable(gtk.ScrolledWindow):
 	def __init__(self, child = None):
@@ -151,6 +162,8 @@ class PropertyPersistor(object):
 		self._inifile = None
 		self.triggers = {}
 		self.applicators = {}
+		self.active = True
+		self.currently_applicating = False
 		self.add_properties(property_descriptors)
 	
 	def add_properties(self, property_descriptors):
@@ -159,9 +172,12 @@ class PropertyPersistor(object):
 				self.triggers[trigger_signal] = []
 				self.obj.connect(trigger_signal, self.on_trigger, trigger_signal)
 			self.triggers[trigger_signal].append((prop_name, getter))
-			self.applicators[prop_name] = applicator
+			if applicator is not None:
+				self.applicators[prop_name] = applicator
 	
 	def on_trigger(self, widget, *cb_args):
+		if not self.active: return
+		if self.currently_applicating: return
 		signal_args = cb_args[0:-1]
 		trigger_signal = cb_args[-1]
 		changed_props = {}
@@ -201,9 +217,11 @@ class PropertyPersistor(object):
 		# TODO combine ini files with less specific appname to fall back to the app's base instance properties if this app instance does not have a certain prop
 	
 	def apply_saved_properties(self):
+		self.currently_applicating = True
 		for prop_name, value in self.props.iteritems():
 			if prop_name in self.applicators:
 				try:
 					self.applicators[prop_name](self.obj, value)
 				except:
 					traceback.print_exc()
+		self.currently_applicating = False

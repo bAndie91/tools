@@ -65,6 +65,7 @@ class CheckMenuItem(gtk.CheckMenuItem):
 			l = find_label(self)
 			l.set_markup(markup)
 
+
 class TreeModelRow(object):
 	"""proxy class for inextensible gtk.TreeModelRow"""
 	def __init__(self, treemodelrow, upstream_treemodel):
@@ -267,6 +268,7 @@ class TreeView(gtk.TreeView):
 		'sort-by-column-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
 		'column-sort-order-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
 		'column-visibility-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
+		'selection-change': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
 	}
 	def __init__(self, model):
 		super(self.__class__, self).__init__(model)
@@ -277,6 +279,7 @@ class TreeView(gtk.TreeView):
 		self.set_headers_clickable(True)
 		self.set_rubber_banding(True)
 		self.get_selection().set_mode(gtk.SELECTION_MULTIPLE)
+		self.get_selection().connect('changed', self._on_selection_changed)
 		self.connect('button-press-event', self._on_button_click)
 		self.connect('realize', self._on_realize)
 		self.connect('columns-changed', self._on_columns_changed)
@@ -422,6 +425,19 @@ class TreeView(gtk.TreeView):
 				return num
 		raise self.__class__.ColumnNotFoundException(colname)
 	
+	def columns_autosize(self):
+		for tvc in self.get_columns():
+			tvc.set_sizing(gtk.TREE_VIEW_COLUMN_AUTOSIZE)
+		gtk.TreeView.columns_autosize(self)
+		glib.idle_add(self.columns_autosize_restore_resizable, priority=glib.PRIORITY_DEFAULT_IDLE)
+	def columns_autosize_restore_resizable(self):
+		for tvc in self.get_columns():
+			width = tvc.get_width()
+			tvc.set_sizing(gtk.TREE_VIEW_COLUMN_FIXED)
+			if width > 1:
+				tvc.set_fixed_width(width)
+			tvc.set_resizable(True)
+
 	def _on_header_menu_popup(self, tv, popup_menu, tv_col):
 		for col in self.get_columns():
 			markup = glib.markup_escape_text(col.title)
@@ -432,12 +448,16 @@ class TreeView(gtk.TreeView):
 			mi.connect('activate', lambda mi, col: col.set_visible(not col.get_visible()), col)
 			popup_menu.append(mi)
 		popup_menu.append(gtk.SeparatorMenuItem())
-		mi = gtk.MenuItem(label="optimal widths")
-		mi.connect('activate', lambda mi: tv.columns_autosize())
+		mi = gtk.MenuItem(label="set optimal widths")
+		mi.connect('activate', lambda mi: self.columns_autosize())
 		popup_menu.append(mi)
 		mi = gtk.MenuItem(label="reset columns order")
 		#mi.connect('activate', TODO
 		popup_menu.append(mi)
+
+	def _on_selection_changed(self, selection):
+		model, paths = selection.get_selected_rows()[:]
+		self.emit('selection-change', [model[treepath] for treepath in paths])
 
 class TreeViewColumn(gtk.TreeViewColumn):
 	__gsignals__ = {
@@ -714,7 +734,7 @@ def on_table_row_context_menu(treeview, popup_menu, c_treepath, tv_col, cell_x, 
 	macros = {
 		'n_selected': len(treeview.get_selection().get_selected_rows()[1]),
 	}
-	populate_row_context_menu(popup_menu, args.context_menu, macros)
+	populate_row_context_menu(popup_menu, cliargs.context_menu, macros)
 	popup_menu.set_data('row', make_row_data(treeview, c_treepath, tv_col))
 	popup_menu.set_data('treeview', treeview)
 	# add gtabdata-specific menu items
@@ -734,7 +754,7 @@ def on_context_menu_item_activate(mi, menu):
 	run_system_command(mi.get_data('command_args'), row_data)
 
 def on_table_row_activated(treeview, c_treepath, tv_col):
-	run_system_command(split_command_args(args.activate_command), make_row_data(treeview, c_treepath, tv_col))
+	run_system_command(split_command_args(cliargs.activate_command), make_row_data(treeview, c_treepath, tv_col))
 
 def run_system_command(command_args, row_data):
 	proc = subprocess.Popen(command_args, shell=False, stdin=subprocess.PIPE)
@@ -758,6 +778,12 @@ def merge_ordering(old_items, new_items):
 			result.append(item)
 	return result
 
+def treemodel_find_row(model, treepath, treeiter, cb_data):
+	if model[treepath][cb_data['column-name']] == cb_data['value']:
+		cb_data['treepath'] = treepath
+		return True
+
+
 
 parser = argparse.ArgumentParser(description='gTabData - GTK Tabular Data viewer', formatter_class=argparse.RawDescriptionHelpFormatter)
 parser.add_argument('--title', type=str, default='gTabData', help='Window title text')
@@ -766,7 +792,7 @@ parser.add_argument('--icon', type=str, default='text-spreadsheet', help='Window
 parser.add_argument('--data-command', type=str, metavar='COMMAND', help='The command which produces the tabular data to be shown')
 parser.add_argument('--db-connection', type=str, help='Database connection string, for supported DSN see "sqlalchemy" python module.')
 parser.add_argument('--db-query', type=str, help='Database query to load data from')
-parser.add_argument('--key-field', type=str, metavar='COLUMN')
+parser.add_argument('--key-field', type=str, default=None, metavar='COLUMN', help='Defauly key field is the first column in the input data.')
 parser.add_argument('--activate-command', type=str, metavar='COMMAND', help='System command to run when double clicked on a row.')
 parser.add_argument('--context-menu', action='append', default=[], type=str, metavar='ICON:LABEL:COMMAND', help='Menu item definitions for rows context menu.')
 parser.add_argument('--auto-refresh-interval', type=float, metavar='SEC')
@@ -786,18 +812,21 @@ ICON is one of these:
 LABEL is a jinja2 template rendered to the menu item label, supporting these variables:
 	- n_selected: number of selected rows
 '''
-args = parser.parse_args()
+cliargs = parser.parse_args()
 
 
-APPNAME = args.appname
+APPNAME = cliargs.appname
 
 class GTabData(object):
 	def run(self):
-		self.main_win = Window({'name': 'window.main', 'gtk-args': []})
-		self.main_win.title = args.title
-		self.main_win.set_icon_from_any(args.icon)
+		self.main_win = Window({'name': 'window.main', 'gtk-cliargs': []})
+		self.main_win.title = cliargs.title
+		self.main_win.set_icon_from_any(cliargs.icon)
 		self.main_win.connect('delete-event', lambda *X: self.on_exit())
 		self.startup_event = self.main_win.connect('map-event', lambda w, e: (w.disconnect(self.startup_event), self.on_startup()))
+
+		if cliargs.key_field is not None:
+			self.tabdata_key_field = cliargs.key_field
 
 		self.main_table = TreeView(None)
 		self.main_win.add(Scrollable(self.main_table))
@@ -811,8 +840,10 @@ class GTabData(object):
 			('column-width',   'column-width-changed',      lambda tv, tvc, tvc_width: dict([(col.name, col.get_width()) for col in tv.get_columns()]), self.restore_columns_width),
 			('sort-column',    'sort-by-column-changed',    lambda tv, tvc: tvc.name, self.restore_sortby_column),
 			('sort-order',     'column-sort-order-changed', lambda tv, tvc: tvc.get_sort_order().value_nick, None),
-			# TODO remember selected row
+			('selected-rows',  'selection-change',          lambda tv, sel_rows: [row[self.tabdata_key_field] for row in sel_rows], self.restore_selection)
 		])
+
+		add_key_binding(self.main_win, 'F5', lambda *X: self.load_table_async())
 
 		self.main_win.show_all()
 
@@ -823,19 +854,19 @@ class GTabData(object):
 		threading.Thread(target=self.load_table).start()
 	
 	def load_table(self):
-		if args.db_query:
+		if cliargs.db_query:
 			import sqlalchemy
 
-			db_engine = sqlalchemy.create_engine(args.db_connection)
+			db_engine = sqlalchemy.create_engine(cliargs.db_connection)
 			db_conn = db_engine.connect()
-			db_result = db_conn.execute(args.db_query)
+			db_result = db_conn.execute(cliargs.db_query)
 
 			columns = [(col, unicode) for col in db_result.keys()]
 			self.load_columns(columns)
 			self.load_data(iter([(None, row) for row in db_result]))
 		
-		elif args.data_command:
-			proc = subprocess.Popen(split_command_args(args.data_command), stdin=open(os.devnull, 'r'), stdout=subprocess.PIPE, stderr=None, close_fds=True)
+		elif cliargs.data_command:
+			proc = subprocess.Popen(split_command_args(cliargs.data_command), stdin=open(os.devnull, 'r'), stdout=subprocess.PIPE, stderr=None, close_fds=True)
 			td_header = tabdata(proc.stdout.readline())
 			columns = [(col, unicode) for col in td_header]
 			self.load_columns(columns)
@@ -850,6 +881,8 @@ class GTabData(object):
 				self.main_table.resort()
 
 	def load_columns(self, columns):
+		if cliargs.key_field is None:
+			self.tabdata_key_field = columns[0][0]
 		with GtkThreadContext():
 			with TemporaryProperty((self.proppersist, 'active'), (), False):
 				self.main_table.set_model(TreeStore(*columns))
@@ -909,6 +942,17 @@ class GTabData(object):
 				tv.move_column_after(col, preceding_col)
 				preceding_col = col
 	
+	def restore_selection(self, tv, record_keys):
+		last_treepath = None
+		for key in record_keys:
+			search_data = {'column-name': self.tabdata_key_field, 'value': key, 'treepath': None}
+			tv.get_model().foreach(treemodel_find_row, search_data)
+			if search_data['treepath'] is not None:
+				tv.get_selection().select_path(search_data['treepath'])
+				last_treepath = search_data['treepath']
+		if last_treepath is not None:
+			tv.scroll_to_cell(last_treepath)
+
 	def on_exit(self):
 		self.proppersist.active = False
 		gtk.main_quit()

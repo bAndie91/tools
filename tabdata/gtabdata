@@ -426,7 +426,9 @@ class TreeView(gtk.TreeView):
 		raise self.__class__.ColumnNotFoundException(colname)
 	
 	def columns_autosize(self):
+		self.previous_widths = {}
 		for tvc in self.get_columns():
+			self.previous_widths[tvc.name] = tvc.get_fixed_width()
 			tvc.set_sizing(gtk.TREE_VIEW_COLUMN_AUTOSIZE)
 		gtk.TreeView.columns_autosize(self)
 		glib.idle_add(self.columns_autosize_restore_resizable, priority=glib.PRIORITY_DEFAULT_IDLE)
@@ -437,6 +439,9 @@ class TreeView(gtk.TreeView):
 			if width > 1:
 				tvc.set_fixed_width(width)
 			tvc.set_resizable(True)
+	def restore_previous_widths(self):
+		for tvc in self.get_columns():
+			tvc.set_fixed_width(self.previous_widths[tvc.name])
 
 	def _on_header_menu_popup(self, tv, popup_menu, tv_col):
 		for col in self.get_columns():
@@ -451,8 +456,14 @@ class TreeView(gtk.TreeView):
 		mi = gtk.MenuItem(label="set optimal widths")
 		mi.connect('activate', lambda mi: self.columns_autosize())
 		popup_menu.append(mi)
-		mi = ImageMenuItem(label="reset columns order")
+		mi = ImageMenuItem()
+		mi.set_icon(gtk.STOCK_UNDO)
+		mi.set_label("undo optimal widths")
+		mi.connect('activate', lambda mi: self.restore_previous_widths())
+		popup_menu.append(mi)
+		mi = ImageMenuItem()
 		mi.set_icon(gtk.STOCK_REVERT_TO_SAVED)
+		mi.set_label("reset columns order")
 		#mi.connect('activate', TODO
 		popup_menu.append(mi)
 

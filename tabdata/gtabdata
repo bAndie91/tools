@@ -49,22 +49,6 @@ def successor_iter(model, predecessor):
 			return None
 		return successor
 
-class CheckMenuItem(gtk.CheckMenuItem):
-	def __init__(self, label=None, markup=None, use_underline=False):
-		super(self.__class__, self).__init__(label=label, use_underline=use_underline)
-		if markup is not None:
-			def find_label(w):
-				if isinstance(w, gtk.Label):
-					return w
-				if hasattr(w, 'get_children'):
-					for w in w.get_children():
-						w = find_label(w)
-						if w is not None:
-							return w
-			self.set_label('.')
-			l = find_label(self)
-			l.set_markup(markup)
-
 
 class TreeModelRow(object):
 	"""proxy class for inextensible gtk.TreeModelRow"""
@@ -425,9 +409,9 @@ class TreeView(gtk.TreeView):
 				return num
 		raise self.__class__.ColumnNotFoundException(colname)
 	
-	def columns_autosize(self):
+	def columns_autosize(self, cols=None):
 		self.previous_widths = {}
-		for tvc in self.get_columns():
+		for tvc in self.get_columns() if cols is None else cols:
 			self.previous_widths[tvc.name] = tvc.get_fixed_width()
 			tvc.set_sizing(gtk.TREE_VIEW_COLUMN_AUTOSIZE)
 		gtk.TreeView.columns_autosize(self)
@@ -439,8 +423,8 @@ class TreeView(gtk.TreeView):
 			if width > 1:
 				tvc.set_fixed_width(width)
 			tvc.set_resizable(True)
-	def restore_previous_widths(self):
-		for tvc in self.get_columns():
+	def restore_previous_widths(self, cols=None):
+		for tvc in self.get_columns() if cols is None else cols:
 			tvc.set_fixed_width(self.previous_widths[tvc.name])
 
 	def _on_header_menu_popup(self, tv, popup_menu, tv_col):
@@ -452,18 +436,21 @@ class TreeView(gtk.TreeView):
 			mi.set_active(col.get_visible())
 			mi.connect('activate', lambda mi, col: col.set_visible(not col.get_visible()), col)
 			popup_menu.append(mi)
+			if tv_col.name == col.name:
+				mi = ImageMenuItem(markup=markup+": set optimal width", icon=gtk.STOCK_FULLSCREEN)
+				mi.connect('activate', lambda mi, tv_col: self.columns_autosize([tv_col]), tv_col)
+				popup_menu.append(mi)
+				mi = ImageMenuItem(markup=markup+": undo width", icon=gtk.STOCK_UNDO)
+				mi.connect('activate', lambda mi, tv_col: self.restore_previous_widths([tv_col]), tv_col)
+				popup_menu.append(mi)
 		popup_menu.append(gtk.SeparatorMenuItem())
 		mi = gtk.MenuItem(label="set optimal widths")
 		mi.connect('activate', lambda mi: self.columns_autosize())
 		popup_menu.append(mi)
-		mi = ImageMenuItem()
-		mi.set_icon(gtk.STOCK_UNDO)
-		mi.set_label("undo optimal widths")
+		mi = ImageMenuItem(label="undo widths", icon=gtk.STOCK_UNDO)
 		mi.connect('activate', lambda mi: self.restore_previous_widths())
 		popup_menu.append(mi)
-		mi = ImageMenuItem()
-		mi.set_icon(gtk.STOCK_REVERT_TO_SAVED)
-		mi.set_label("reset columns order")
+		mi = ImageMenuItem(label="reset columns order", icon=gtk.STOCK_REVERT_TO_SAVED)
 		#mi.connect('activate', TODO
 		popup_menu.append(mi)
 
@@ -652,7 +639,45 @@ class CellRendererTextOverflow(gtk.GenericCellRenderer):
 gobject.type_register(CellRendererTextOverflow)
 
 
-class ImageMenuItem(gtk.ImageMenuItem):
+
+def gtk_walk_descendant_widgets(w, cb, cb_data):
+	stop = cb(w, cb_data)
+	if stop:
+		return
+	if hasattr(w, 'get_children'):
+		for child in w.get_children():
+			gtk_walk_descendant_widgets(child, cb, cb_data)
+
+class MenuItem(gtk.MenuItem):
+	def get_label_widget(self):
+		cb_data = {'label-widget': None}
+		def cb(widget, cb_data):
+			if isinstance(widget, gtk.Label):
+				cb_data['label-widget'] = widget
+				return True
+		gtk_walk_descendant_widgets(self, cb, cb_data)
+		return cb_data['label-widget']
+		
+	def set_markup(self, markup):
+		self.set_label('.')
+		self.get_label_widget().set_markup(markup)
+
+class CheckMenuItem(gtk.CheckMenuItem, MenuItem):
+	def __init__(self, label=None, markup=None, use_underline=False):
+		super(self.__class__, self).__init__(label=label, use_underline=use_underline)
+		if markup is not None:
+			self.set_markup(markup)
+
+class ImageMenuItem(gtk.ImageMenuItem, MenuItem):
+	def __init__(self, stock_id=None, accel_group=None, label=None, markup=None, icon=None):
+		assert not(label is not None and markup is not None), "label and markup arguments are mutually exclusive"
+		super(self.__class__, self).__init__(stock_id=stock_id, accel_group=accel_group)
+		if label is not None:
+			self.set_label(label)
+		if markup is not None:
+			self.set_markup(markup)
+		if icon is not None:
+			self.set_icon(icon)
 	def set_icon(self, icon):
 		if not icon: return
 		img = gtk.Image()
@@ -727,9 +752,7 @@ def populate_row_context_menu(menu, items, macros):
 	# TODO support submenus
 	for definition in items:
 		icon, label, command = [field.replace('\\:', ':') for field in re.split(r'(?<!\\):', definition, maxsplit=2)]
-		mi = ImageMenuItem()
-		mi.set_icon(icon)
-		mi.set_label(Template(label).render(**macros))
+		mi = ImageMenuItem(label=Template(label).render(**macros), icon=icon)
 		mi.set_data('command_args', split_command_args(command))
 		mi.connect('activate', on_context_menu_item_activate, menu)
 		menu.append(mi)
@@ -752,9 +775,7 @@ def on_table_row_context_menu(treeview, popup_menu, c_treepath, tv_col, cell_x, 
 	# add gtabdata-specific menu items
 	if popup_menu.get_children():
 		popup_menu.append(gtk.SeparatorMenuItem())
-	mi = ImageMenuItem()
-	mi.set_icon(gtk.STOCK_REFRESH)
-	mi.set_label("Refresh table data")
+	mi = ImageMenuItem(label="Refresh table data", icon=gtk.STOCK_REFRESH)
 	mi.connect('activate', lambda mi: main_app.load_table_async())
 	popup_menu.append(mi)
 	return False

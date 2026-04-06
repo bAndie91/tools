@@ -87,7 +87,7 @@ class IniFileSection(dict):
 					if raw is None: return None
 					return json.loads(raw)
 		else:
-			return None
+			raise KeyError(key)
 	def get(self, key, default=None, type=None):
 		try:
 			return self.__getitem__(key, type)

@@ -4,6 +4,7 @@ import re
 import glob
 import glib
 import gtk
+import gobject
 import xdg.BaseDirectory
 import fcntl
 import traceback
@@ -68,6 +69,16 @@ def configured_object(obj, configsteps):
 			method(*args)
 	return obj
 
+
+class Label(gtk.Label):
+	def __init__(self, *pargs, **kwargs):
+		gtk_kwargs = {}
+		if 'str' in kwargs: gtk_kwargs['str'] = kwargs['str']
+		super(Label, self).__init__(*pargs, **gtk_kwargs)
+		if 'markup' in kwargs:
+			self.set_markup(kwargs['markup'])
+			self.set_use_markup(True)
+		self.set_alignment(0, 0)
 
 class Image(gtk.Image):
 	def __init__(self, *pargs, **kwargs):
@@ -151,7 +162,10 @@ class Scrollable(gtk.ScrolledWindow):
 		super(Scrollable, self).__init__()
 		self.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
 		if child is not None:
-			self.add(child)
+			if gobject.signal_lookup('set-scroll-adjustments', type(child)):
+				self.add(child)
+			else:
+				self.add_with_viewport(child)
 
 class PropertyPersistor(object):
 	def __init__(self, obj, obj_name, property_descriptors):

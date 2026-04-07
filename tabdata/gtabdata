@@ -8,6 +8,7 @@ import glib
 import pango
 import gobject
 import re
+import sys
 import os
 import subprocess
 from datetime import datetime
@@ -852,10 +853,8 @@ cliargs = parser.parse_args()
 APPNAME = cliargs.appname
 
 class GTabData(object):
-	def run(self):
+	def configure(self):
 		self.main_win = Window({'name': 'window.main', 'gtk-cliargs': []})
-		self.main_win.title = cliargs.title
-		self.main_win.set_icon_from_any(cliargs.icon)
 		self.main_win.connect('delete-event', lambda *X: self.on_exit())
 		self.startup_event = self.main_win.connect('map-event', lambda w, e: (w.disconnect(self.startup_event), self.on_startup()))
 
@@ -880,6 +879,7 @@ class GTabData(object):
 
 		add_key_binding(self.main_win, 'F5', lambda *X: self.load_table_async())
 
+	def run(self):
 		self.main_win.show_all()
 
 	def on_startup(self):
@@ -996,5 +996,8 @@ class GTabData(object):
 
 
 main_app = GTabData()
+main_app.configure()
+main_app.main_win.title = Template(cliargs.title).render({'env': os.environ})
+main_app.main_win.set_icon_from_any(cliargs.icon)
 main_app.run()
 gtk.main()

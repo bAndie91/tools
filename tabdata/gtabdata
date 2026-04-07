@@ -75,7 +75,7 @@ class TreeModelRow(object):
 	def __len__(self):
 		return self.real_treemodelrow.__len__()
 	def as_dict(self):
-		return dict([(col_name, self[col_name]) for col_name in self.upstream_treemodel.column.keys()])
+		return dict([(col_name, self[col_name]) for col_name in self.upstream_treemodel.column_name])
 
 class TreeModelProxy(object):
 	@staticmethod
@@ -134,10 +134,10 @@ class TreeStore(gtk.TreeStore):
 		'set-changed': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, ()),
 	}
 	def __init__(self, *columns):
-		self.column = {}
+		self.column_name = []
 		self.reader = {}
 		self.empty = []
-		types = []
+		self.types = []
 		n = 0
 		for col_name, col_type in columns:
 			empty_value = None
@@ -149,10 +149,10 @@ class TreeStore(gtk.TreeStore):
 			elif col_type in [int, float]:
 				empty_value = 0
 			self.empty.append(empty_value)
-			types.append(col_type)
-			self.column[col_name] = n
+			self.types.append(col_type)
+			self.column_name.append(col_name)
 			n += 1
-		super(self.__class__, self).__init__(*types)
+		super(self.__class__, self).__init__(*self.types)
 		for event in 'row-changed', 'row-deleted', 'row-inserted':
 			self.connect_after(event, self.emit_signal, 'changed')
 			self.connect_after(event, self.emit_signal, 'set-changed')
@@ -167,19 +167,22 @@ class TreeStore(gtk.TreeStore):
 	@staticmethod
 	class ColumnNotFoundException(Exception):
 		pass
+	def get_columns(self):
+		return zip(self.column_name, self.types)
 	def get_column_num(self, col_ref):
 		if isinstance(col_ref, int):
-			if col_ref not in self.columm.values():
+			if col_ref < 0 or col_ref >= len(self.column_name):
 				raise self.__class__.ColumnNotFoundException(col_ref)
 			return col_ref
-		if col_ref not in self.column:
+		try:
+			return self.column_name.index(col_ref)
+		except ValueError:
 			raise self.__class__.ColumnNotFoundException(col_ref)
-		return self.column[col_ref]
 	def get_column_name(self, col_num):
-		for name, num in self.column.iteritems():
-			if num == col_num:
-				return name
-		raise self.__class__.ColumnNotFoundException(col_num)
+		try:
+			return self.column_name[col_num]
+		except IndexError:
+			raise self.__class__.ColumnNotFoundException(col_num)
 	def get(self, row, *columns):
 		if type(row) == tuple:
 			row = self.get_iter(row)  # tree iterator path was given
@@ -937,11 +940,11 @@ class GTabData(object):
 	def load_columns(self, columns):
 		if cliargs.key_field is None and not cliargs.no_key:
 			self.tabdata_key_field = columns[0][0]
-		with GtkThreadContext():
-			with TemporaryProperty((self.proppersist, 'active'), (), False):
-				self.main_table.set_model(TreeStore(*columns))
-				# TODO less disruptive: dont reset model is the columns are the same
-				self.main_table.set_columns([(col[0], col[0], 'text', idx) for idx, col in enumerate(columns)])
+		if self.main_table.get_model() is None or columns != self.main_table.get_model().get_columns():
+			with GtkThreadContext():
+				with TemporaryProperty((self.proppersist, 'active'), (), False):
+					self.main_table.set_model(TreeStore(*columns))
+					self.main_table.set_columns([(col[0], col[0], 'text', idx) for idx, col in enumerate(columns)])
 
 	def load_data(self, iterator):
 		with GtkThreadContext():

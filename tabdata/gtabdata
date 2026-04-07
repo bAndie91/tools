@@ -278,7 +278,7 @@ class TreeView(gtk.TreeView):
 			cr.on_start_editing(event, widget, ','.join(map(str, iterpath)), self.get_background_area(iterpath, tv_col), self.get_cell_area(iterpath, tv_col), 0)
 
 	def _on_button_click(self, widget, event):
-		if event.button == 3:
+		if event.button == MOUSE_BUTTON_RIGHT:
 			x, y = int(event.x), int(event.y)
 			event_target_info = self.get_path_at_pos(x, y)
 			if event_target_info is not None:
@@ -346,13 +346,13 @@ class TreeView(gtk.TreeView):
 		tvc.connect('notify::sort-order', self._on_column_sort_order_changed)
 
 	def _on_column_click(self, col_widget, event):
-		if event.button == 3:
+		if event.button == MOUSE_BUTTON_RIGHT:
 			popup_menu = gtk.Menu()
 			if not self.emit('header-menu-popup', popup_menu, col_widget):
 				popup_menu.show_all()
 				popup_menu.popup(None, None, None, event.button, event.time)
 			return True
-		elif event.button == 1:
+		elif event.button == MOUSE_BUTTON_LEFT:
 			self._set_sortby_column(col_widget)
 			self.set_search_column_by_name(col_widget.name)
 
@@ -445,7 +445,7 @@ class TreeView(gtk.TreeView):
 				mi.connect('activate', lambda mi, tv_col: self.restore_previous_widths([tv_col]), tv_col)
 				popup_menu.append(mi)
 		popup_menu.append(gtk.SeparatorMenuItem())
-		mi = gtk.MenuItem(label="set optimal widths")
+		mi = ImageMenuItem(label="set optimal widths", icon=gtk.STOCK_FULLSCREEN)
 		mi.connect('activate', lambda mi: self.columns_autosize())
 		popup_menu.append(mi)
 		mi = ImageMenuItem(label="undo widths", icon=gtk.STOCK_UNDO)
@@ -745,6 +745,20 @@ class NoGtkThreadContext(object):
 	def __exit__(self, exc_type, exc_val, exc_tb):
 		gtk.threads_enter()
 
+def ErrorMessage(message_markup, title=None, details=None):
+	dlg = gtk.MessageDialog(parent=main_app.main_win, flags=(gtk.DIALOG_MODAL | gtk.DIALOG_DESTROY_WITH_PARENT), type=gtk.MESSAGE_ERROR, buttons=gtk.BUTTONS_OK)
+	dlg.set_title("Error" if title is None else title)
+	dlg.set_markup(message_markup)
+	if details is not None:
+		dlg.set_resizable(True)
+		carea = dlg.get_content_area()
+		carea.pack_start(Scrollable(Label(markup='<tt>'+glib.markup_escape_text(details)+'</tt>')), True, True)
+	dlg.get_widget_for_response(gtk.RESPONSE_OK).connect('clicked', lambda btn, dlg: dlg.destroy(), dlg)
+	dlg.show_all()
+	dlg.run()
+	return dlg
+
+
 
 def split_command_args(cmd_str):
 	return re.split(r'\s+', cmd_str)
@@ -901,14 +915,19 @@ class GTabData(object):
 			self.load_data(iter([(None, row) for row in db_result]))
 		
 		elif cliargs.data_command:
-			proc = subprocess.Popen(split_command_args(cliargs.data_command), stdin=open(os.devnull, 'r'), stdout=subprocess.PIPE, stderr=None, close_fds=True)
+			proc = subprocess.Popen(split_command_args(cliargs.data_command), stdin=open(os.devnull, 'r'), stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
 			td_header = tabdata(proc.stdout.readline())
 			columns = [(col, unicode) for col in td_header]
 			self.load_columns(columns)
 			self.load_data(iter([(None, tabdata(line)) for line in iter(proc.stdout.readline, '')]))
 			proc.stdout.close()
+			stderr = proc.stderr.read()
+			print(stderr, file=sys.stderr)
+			proc.stderr.close()
 			proc.wait()
-			# TODO respect exit code/signal
+			if proc.returncode != 0:
+				with GtkThreadContext():
+					ErrorMessage("Command exited with %s <tt>%d</tt>.\nError output:" % ("status code" if proc.returncode > 0 else "signal", abs(proc.returncode)), title="gTabData: command failed", details=stderr)
 		
 		with GtkThreadContext():
 			with TemporaryProperty((self.proppersist, 'active'), (), False):

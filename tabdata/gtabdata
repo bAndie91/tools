@@ -811,10 +811,12 @@ def populate_row_context_menu(menu, items, macros):
 	# TODO support submenus
 	for definition in items:
 		icon, label, command = [field.replace('\\:', ':') for field in re.split(r'(?<!\\):', definition, maxsplit=2)]
-		mi = ImageMenuItem(label=Template(label).render(**macros), icon=icon)
-		mi.set_data('command_args', split_command_args(command))
-		mi.connect('activate', on_context_menu_item_activate, menu)
-		menu.append(mi)
+		menuitem_label = Template(label).render(**macros)
+		if menuitem_label != '':
+			mi = ImageMenuItem(label=menuitem_label, icon=icon)
+			mi.set_data('command_args', split_command_args(command))
+			mi.connect('activate', on_context_menu_item_activate, menu)
+			menu.append(mi)
 	menu.show_all()
 
 def serialize_row_data(treeview, c_treepath, tv_col):
@@ -825,8 +827,12 @@ def serialize_row_data(treeview, c_treepath, tv_col):
 
 def on_table_row_context_menu(treeview, popup_menu, c_treepath, tv_col, cell_x, cell_y):
 	# add user-defined menu items
+	row = treeview.get_model()[c_treepath]
 	macros = {
 		'n_selected': len(treeview.get_selection().get_selected_rows()[1]),
+		'column': tv_col.name,
+		'cell': row[tv_col.name],
+		'row': row.as_dict(),
 	}
 	populate_row_context_menu(popup_menu, cliargs.context_menu, macros)
 	popup_menu.set_data('row', serialize_row_data(treeview, c_treepath, tv_col))
@@ -910,6 +916,9 @@ ICON is one of these:
 	- basename of an image file in the common system icon directories
 LABEL is a jinja2 template rendered to the menu item label, supporting these variables:
 	- n_selected: number of selected rows
+	- cell: the cell's text content on which the context menu is opened
+	- column: the column name in which the context menu is opened
+	- row: a dict holding the focused row's fields
 '''
 cliargs = parser.parse_args()
 

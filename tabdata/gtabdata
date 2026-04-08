@@ -11,6 +11,7 @@ import re
 import sys
 import os
 import subprocess
+import time
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import traceback
@@ -736,12 +737,44 @@ class TemporaryProperty(object):
 		self._set(self.original)
 
 
-class GtkThreadContext(object):
+class GtkThreadProtectedContext(object):
+	def __init__(self, parent_context):
+		self.parent_context = parent_context
 	def __enter__(self):
-		gtk.threads_enter()
+		self.parent_context.enter()
 		return self
 	def __exit__(self, exc_type, exc_val, exc_tb):
-		gtk.threads_leave()
+		self.parent_context.leave_maybe()
+		return False
+
+class GtkThreadContext(object):
+	def __init__(self, max_freeze_sec=None):
+		self._entered = False
+		self.max_freeze_sec = max_freeze_sec
+		if self.max_freeze_sec is not None:
+			self._last_enter = 0
+			self.protected = GtkThreadProtectedContext(parent_context=self)
+	def __enter__(self):
+		if self.max_freeze_sec is None:
+			self.do_enter()
+		return self
+	def do_enter(self):
+		if not self._entered:
+			gtk.threads_enter()
+			self._entered = True
+			self._last_enter = time.time()
+	def __exit__(self, exc_type, exc_val, exc_tb):
+		self.do_leave()
+		return False  # don't ignore exceptions
+	def do_leave(self):
+		if self._entered:
+			gtk.threads_leave()
+			self._entered = False
+	def leave_maybe(self):
+		if self._last_enter + self.max_freeze_sec < time.time():
+			self.do_leave()
+	def enter(self):
+		self.do_enter()
 
 class NoGtkThreadContext(object):
 	def __enter__(self):
@@ -1021,20 +1054,21 @@ class GTabData(object):
 				model.clear()
 		
 		existing_records_keys = []
-		for treepath, row in iterator:
-			with GtkThreadContext():
-				record_key = None
-				existing_record_path = None
-				if self.tabdata_key_field is not None:
-					record_key = row[model.get_column_num(self.tabdata_key_field)]
-					existing_record_path = get_path_by_cell(model, self.tabdata_key_field, record_key)
-				if existing_record_path is None:
-					model.append(treepath, row)
-				else:
-					for col_num, col_data in enumerate(row):
-						model[existing_record_path][col_num] = col_data
-				if self.tabdata_key_field is not None:
-					existing_records_keys.append(record_key)
+		with GtkThreadContext(max_freeze_sec=0.2) as gtkcontext:
+			for treepath, row in iterator:
+				with gtkcontext.protected:
+					record_key = None
+					existing_record_path = None
+					if self.tabdata_key_field is not None:
+						record_key = row[model.get_column_num(self.tabdata_key_field)]
+						existing_record_path = get_path_by_cell(model, self.tabdata_key_field, record_key)
+					if existing_record_path is None:
+						model.append(treepath, row)
+					else:
+						for col_num, col_data in enumerate(row):
+							model[existing_record_path][col_num] = col_data
+					if self.tabdata_key_field is not None:
+						existing_records_keys.append(record_key)
 
 		if self.tabdata_key_field is not None:
 			with GtkThreadContext():

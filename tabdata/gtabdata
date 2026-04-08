@@ -421,8 +421,8 @@ class TreeView(gtk.TreeView):
 			self.previous_widths[tvc.name] = tvc.get_fixed_width()
 			tvc.set_sizing(gtk.TREE_VIEW_COLUMN_AUTOSIZE)
 		gtk.TreeView.columns_autosize(self)
-		glib.idle_add(self.columns_autosize_restore_resizable, priority=glib.PRIORITY_DEFAULT_IDLE)
-	def columns_autosize_restore_resizable(self):
+		glib.idle_add(self._columns_autosize_restore_resizable, priority=glib.PRIORITY_DEFAULT_IDLE)
+	def _columns_autosize_restore_resizable(self):
 		for tvc in self.get_columns():
 			width = tvc.get_width()
 			tvc.set_sizing(gtk.TREE_VIEW_COLUMN_FIXED)
@@ -878,12 +878,19 @@ cliargs = parser.parse_args()
 APPNAME = cliargs.appname
 
 class GTabData(object):
-	def configure(self):
-		self.main_win = Window({'name': 'window.main', 'gtk-cliargs': []})
-		self.main_win.connect('delete-event', lambda *X: self.on_exit())
-		self.startup_event = self.main_win.connect('map-event', lambda w, e: (w.disconnect(self.startup_event), self.on_startup()))
+	LOAD_PHASE_NONE = 1
+	LOAD_PHASE_STARTED = 2
+	LOAD_PHASE_FINISHED = 3
 
+	def configure(self):
 		self.tabdata_key_field = None
+		self.table_load_phase = self.LOAD_PHASE_NONE
+
+		self.main_win = Window({'name': 'window.main', 'gtk-args': [], 'default-size': ()})
+		self.main_win.connect('delete-event', lambda *X: self.on_exit())
+		self.window_configure_event = self.main_win.connect('configure-event', self._on_window_configure_event)
+		self.startup_event = self.main_win.connect('map-event', lambda w, e: (w.disconnect(self.startup_event), self._on_startup()))
+		add_key_binding(self.main_win, 'F5', lambda *X: self.load_table_async())
 
 		self.main_table = TreeView(None)
 		self.main_win.add(Scrollable(self.main_table))
@@ -891,46 +898,51 @@ class GTabData(object):
 		self.main_table.connect('menu-popup', on_table_row_context_menu)
 		self.main_table.connect('column-added', self.on_column_added)
 
-		persisted_props = [
-			('columns-order',  'columns-changed',           lambda tv: merge_ordering(self.proppersist.props.get('columns-order') or [], [col.name for col in tv.get_columns()]), self.restore_columns_order),
+		self.proppersist_table = PropertyPersistor(self.main_table, 'main_table', [
+			('columns-order',  'columns-changed',           lambda tv: merge_ordering(self.proppersist_table.props.get('columns-order') or [], [col.name for col in tv.get_columns()]), self.restore_columns_order),
 			('hidden-columns', 'column-visibility-changed', lambda tv, tvc: [col.name for col in tv.get_columns() if not col.get_visible()], self.restore_hidden_columns),
 			('column-width',   'column-width-changed',      lambda tv, tvc, tvc_width: dict([(col.name, col.get_width()) for col in tv.get_columns()]), self.restore_columns_width),
 			('sort-column',    'sort-by-column-changed',    lambda tv, tvc: tvc.name, self.restore_sortby_column),
 			('sort-order',     'column-sort-order-changed', lambda tv, tvc: tvc.get_sort_order().value_nick, None),
-		]
+		])
 		if cliargs.key_field is not None or cliargs.auto_key_field:
-			persisted_props.append(('selected-rows', 'selection-change', lambda tv, sel_rows: [row[self.tabdata_key_field] for row in sel_rows], self.restore_selection))
-		self.proppersist = PropertyPersistor(self.main_table, 'main_table', persisted_props)
-
-		add_key_binding(self.main_win, 'F5', lambda *X: self.load_table_async())
-
+			self.proppersist_table.add_properties([('selected-rows', 'selection-change', lambda tv, sel_rows: [row[self.tabdata_key_field] for row in sel_rows], self.restore_selection)])
+		
 	def run(self):
 		self.main_win.show_all()
 
-	def on_startup(self):
+	def _on_startup(self):
 		self.load_table_async()
 	
+	def _on_window_configure_event(self, widget, event):
+		if self.table_load_phase == self.LOAD_PHASE_FINISHED:
+			self.main_win.set_data('user-resized', True)
+
 	def load_table_async(self):
 		threading.Thread(target=self.load_table).start()
 	
 	def load_table(self):
+		self.table_load_phase = self.LOAD_PHASE_STARTED
+
 		if cliargs.db_query:
 			import sqlalchemy
 
-			db_engine = sqlalchemy.create_engine(cliargs.db_connection)
+			db_engine = sqlalchemy.create_engine(cliargs.db_connection, execution_options={'stream_results':True})
 			db_conn = db_engine.connect()
 			db_result = db_conn.execute(cliargs.db_query)
 
 			columns = [(col, unicode) for col in db_result.keys()]
 			self.load_columns(columns)
-			self.load_data(iter([(None, row) for row in db_result]))
+			data_generator = ((None, row) for row in db_result)
+			self.load_data(data_generator)
 		
 		elif cliargs.data_command:
 			proc = subprocess.Popen(split_command_args(cliargs.data_command), stdin=open(os.devnull, 'r'), stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
 			td_header = tabdata(proc.stdout.readline())
 			columns = [(col, unicode) for col in td_header]
 			self.load_columns(columns)
-			self.load_data(iter([(None, tabdata(line)) for line in iter(proc.stdout.readline, '')]))
+			data_generator = ((None, tabdata(line)) for line in iter(proc.stdout.readline, ''))
+			self.load_data(data_generator)
 			proc.stdout.close()
 			stderr = proc.stderr.read()
 			if stderr: print(stderr, file=sys.stderr)
@@ -940,10 +952,31 @@ class GTabData(object):
 				with GtkThreadContext():
 					ErrorMessage("Command exited with %s <tt>%d</tt>.\nError output:" % ("status code" if proc.returncode > 0 else "signal", abs(proc.returncode)), title="gTabData: command failed", details=stderr)
 		
+		self.table_load_phase = self.LOAD_PHASE_FINISHED
+
 		with GtkThreadContext():
-			with TemporaryProperty((self.proppersist, 'active'), (), False):
-				self.proppersist.apply_saved_properties()
-				self.main_table.resort()
+			self.after_load_table()
+	
+	def after_load_table(self):
+		with TemporaryProperty((self.proppersist_table, 'active'), (), False):
+			self.proppersist_table.apply_saved_properties()
+			# apply saved sorting
+			self.main_table.resort()
+			# auto size newly learned columns
+			self._auto_size_new_columns()
+			# resize the app window if not yet resized by the user
+			gobject.idle_add(self._window_initial_resize)
+	
+	def _window_initial_resize(self):
+		if not self.main_win.get_data('user-resized'):
+			tv_width, tv_height = self.main_table.size_request()
+			scr = self.main_win.get_screen()
+			self.main_win.handler_block_by_func(self._on_window_configure_event)
+			self.main_win.resize(min(tv_width, scr.get_width()), min(tv_height, scr.get_height()))
+			gobject.timeout_add(500, lambda *X: self.main_win.handler_unblock_by_func(self._on_window_configure_event))
+	
+	def _auto_size_new_columns(self):
+		self.main_table.columns_autosize([col for col in self.main_table.get_columns() if not col.get_width() or col.get_width() == 1])
 
 	def load_columns(self, columns):
 		if cliargs.auto_key_field:
@@ -952,7 +985,7 @@ class GTabData(object):
 		
 		if self.main_table.get_model() is None or columns != self.main_table.get_model().get_columns():
 			with GtkThreadContext():
-				with TemporaryProperty((self.proppersist, 'active'), (), False):
+				with TemporaryProperty((self.proppersist_table, 'active'), (), False):
 					self.main_table.set_model(TreeStore(*columns))
 					self.main_table.set_columns([(col[0], col[0], 'text', idx) for idx, col in enumerate(columns)])
 		
@@ -998,10 +1031,10 @@ class GTabData(object):
 			gdkwin.set_cursor(None)
 
 	def on_column_added(self, tv, tvc):
-		width = self.proppersist.props.get('column-width', {}).get(tvc.name, None)
+		width = self.proppersist_table.props.get('column-width', {}).get(tvc.name, None)
 		if width > 1:
 			tvc.set_fixed_width(width)
-		if tvc.name in self.proppersist.props.get('hidden-columns', []):
+		if tvc.name in self.proppersist_table.props.get('hidden-columns', []):
 			tvc.set_visible(False)
 
 	def restore_columns_width(self, tv, cols_width):
@@ -1018,7 +1051,7 @@ class GTabData(object):
 		except TreeView.ColumnNotFoundException:
 			pass
 		else:
-			sort_order = self.proppersist.props.get('sort-order')
+			sort_order = self.proppersist_table.props.get('sort-order')
 			if sort_order: tv.get_sortby_column().set_sort_order(getattr(gtk, 'SORT_'+sort_order.upper()))
 		
 	def restore_hidden_columns(self, tv, columns):
@@ -1051,7 +1084,7 @@ class GTabData(object):
 			tv.scroll_to_cell(last_treepath)
 
 	def on_exit(self):
-		self.proppersist.active = False
+		self.proppersist_table.active = False
 		gtk.main_quit()
 
 

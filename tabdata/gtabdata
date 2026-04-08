@@ -819,40 +819,62 @@ def populate_row_context_menu(menu, items, macros):
 			menu.append(mi)
 	menu.show_all()
 
-def serialize_row_data(treeview, c_treepath, tv_col):
+def gen_row_data(treeview, c_treepath, tv_col):
 	return {
 		'col': None if tv_col is None else tv_col.name,
 		'row': {} if c_treepath is None else treeview.get_model()[c_treepath].as_dict(),
+		'selected_rows': [treeview.get_model()[treepath].as_dict() for treepath in treeview.get_selection().get_selected_rows()[1]],
 	}
 
 def on_table_row_context_menu(treeview, popup_menu, c_treepath, tv_col, cell_x, cell_y):
-	# add user-defined menu items
-	row = treeview.get_model()[c_treepath]
+	row_data = gen_row_data(treeview, c_treepath, tv_col)
+	n_selected = len(row_data['selected_rows'])
+	popup_menu.set_data('row-data', row_data)
 	macros = {
-		'n_selected': len(treeview.get_selection().get_selected_rows()[1]),
-		'column': tv_col.name,
-		'cell': row[tv_col.name],
-		'row': row.as_dict(),
+		'n_selected': n_selected,
+		'column': row_data['col'],
+		'cell': row_data['row'][row_data['col']],
+		'row': row_data['row'],
 	}
+	# add user-defined menu items
 	populate_row_context_menu(popup_menu, cliargs.context_menu, macros)
-	popup_menu.set_data('row', serialize_row_data(treeview, c_treepath, tv_col))
-	popup_menu.set_data('treeview', treeview)
-	# add gtabdata-specific menu items
+	
+	# add gtabdata-specific menu items:
 	if popup_menu.get_children():
 		popup_menu.append(gtk.SeparatorMenuItem())
+	mi = ImageMenuItem(label="Copy cell", icon=gtk.STOCK_COPY)
+	mi.connect('activate', on_context_menu_copy, popup_menu, 'cell')
+	popup_menu.append(mi)
+	mi = ImageMenuItem(label="Copy row as JSON", icon=gtk.STOCK_COPY)
+	mi.connect('activate', on_context_menu_copy, popup_menu, 'row-as-json')
+	popup_menu.append(mi)
+	if n_selected > 1:
+		mi = ImageMenuItem(label="Copy selection as JSON", icon=gtk.STOCK_COPY)
+		mi.connect('activate', on_context_menu_copy, popup_menu, 'selection-as-json')
+		popup_menu.append(mi)
 	mi = ImageMenuItem(label="Refresh table data", icon=gtk.STOCK_REFRESH)
 	mi.connect('activate', lambda mi: main_app.load_table_async())
 	popup_menu.append(mi)
 	return False
 
 def on_context_menu_item_activate(mi, menu):
-	row_data = menu.get_data('row')
-	treeview = menu.get_data('treeview')
-	row_data['selected_rows'] = [treeview.get_model()[treepath].as_dict() for treepath in treeview.get_selection().get_selected_rows()[1]]
+	row_data = menu.get_data('row-data')
 	run_system_command(mi.get_data('command_args'), row_data)
 
+def on_context_menu_copy(mi, menu, what):
+	row_data = menu.get_data('row-data')
+	if what == 'cell':
+		text = row_data['row'][row_data['col']]
+	elif what == 'row-as-json':
+		text = json.dumps(row_data['row'])
+	elif what == 'selection-as-json':
+		text = json.dumps(row_data['selected_rows'])
+	else:
+		raise ValueError()
+	gtk.Clipboard().set_text(text)
+
 def on_table_row_activated(treeview, c_treepath, tv_col):
-	run_system_command(split_command_args(cliargs.activate_command), serialize_row_data(treeview, c_treepath, tv_col))
+	run_system_command(split_command_args(cliargs.activate_command), gen_row_data(treeview, c_treepath, tv_col))
 
 def run_system_command(command_args, row_data):
 	proc = subprocess.Popen(command_args, shell=False, stdin=subprocess.PIPE)

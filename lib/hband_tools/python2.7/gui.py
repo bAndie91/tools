@@ -125,8 +125,8 @@ class Window(gtk.Window):
 		if opt.get('default-size'):
 			self.set_default_size(*opt.get('default-size'))
 		self.property_persistor = PropertyPersistor(self, opt.get('name', self.get_name()), [
-			( 'geometry', 'configure-event', lambda wdg, evt: [evt.width, evt.height], lambda wdg, value: wdg.set_default_size(*value) ),
-			( 'position', 'configure-event', lambda wdg, evt: wdg.get_position()[:],   lambda wdg, value: wdg.move(*value) ),
+			PropertyPersistor.PERSIST_PROPERTY_GEOMETRY,
+			PropertyPersistor.PERSIST_PROPERTY_POSITION,
 		])
 		self.property_persistor.apply_saved_properties()
 	
@@ -168,6 +168,9 @@ class Scrollable(gtk.ScrolledWindow):
 				self.add_with_viewport(child)
 
 class PropertyPersistor(object):
+	PERSIST_PROPERTY_GEOMETRY = ( 'geometry', 'configure-event', lambda wdg, evt: [evt.width, evt.height], lambda wdg, value: wdg.set_default_size(*value) )
+	PERSIST_PROPERTY_POSITION = ( 'position', 'configure-event', lambda wdg, evt: wdg.get_position()[:],   lambda wdg, value: wdg.move(*value) )
+
 	def __init__(self, obj, obj_name, property_descriptors):
 		assert hasattr(__main__, 'APPNAME') and isinstance(__main__.APPNAME, basestring) and __main__.APPNAME, "Set APPNAME global variable."
 		self.obj = obj

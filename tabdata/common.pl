@@ -9,14 +9,15 @@ $RS = $/ = "\n";
 @Header = ();
 %Header = ();
 
-no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 use Getopt::Long qw/:config no_ignore_case bundling pass_through require_order no_getopt_compat no_auto_abbrev/;
 use Pod::Usage;
 use Encode;
+use open ':std', ':utf8';
+use open ':utf8';
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
-binmode STDIN,  ':utf8';
-binmode STDOUT, ':utf8';
-@ARGV = map {Encode::_utf8_on($_); $_} @ARGV;
+# take cli arguments as utf8 strings:
+@ARGV = map {decode('UTF-8', $_, Encode::FB_CROAK)} @ARGV;
 
 
 if(not $TabdataCommonSkipGetopt)

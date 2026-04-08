@@ -888,20 +888,24 @@ def get_path_by_cell(model, search_column, search_content):
 
 
 
-parser = argparse.ArgumentParser(description='gTabData - GTK Tabular Data viewer', formatter_class=argparse.RawDescriptionHelpFormatter)
-parser.add_argument('--title', type=str, default='gTabData', help='Window title text')
-parser.add_argument('--appname', type=str, default='gtabdata', help='Custom application name to operate as')
-parser.add_argument('--icon', type=str, default='text-spreadsheet', help='Window icon file or symbolic name')
-parser.add_argument('--data-command', type=str, metavar='COMMAND', help='The command which produces the tabular data to be shown')
-parser.add_argument('--db-connection', type=str, help='Database connection string, for supported DSN see "sqlalchemy" python module.')
-parser.add_argument('--db-query', type=str, help='Database query to load data from')
-parser.add_argument('--key-field', type=str, default=None, metavar='COLUMN')
-parser.add_argument('--auto-key-field', action='store_true', default=False, help='Default key field is the first column in the input data.')
-parser.add_argument('--activate-command', type=str, metavar='COMMAND', help='System command to run when double clicked on a row.')
-parser.add_argument('--context-menu', action='append', default=[], type=str, metavar='ICON:LABEL:COMMAND', help='Menu item definitions for rows context menu.')
-parser.add_argument('--auto-refresh-interval', type=float, metavar='SEC')
-parser.add_argument('--inotify-refresh', type=str, metavar='FILE', help='')  # TODO
-parser.epilog = '''
+def parse_cli_args():
+	parser = argparse.ArgumentParser(description='gTabData - GTK Tabular Data viewer', formatter_class=argparse.RawDescriptionHelpFormatter)
+	parser.add_argument('--title', type=str, default='gTabData', help='Window title text')
+	parser.add_argument('--appname', type=str, default='gtabdata', help='Custom application name to operate as')
+	parser.add_argument('--icon', type=str, default='text-spreadsheet', help='Window icon file or symbolic name')
+	data_group = parser.add_mutually_exclusive_group()
+	data_group.add_argument('--data-command', type=str, metavar='COMMAND', help='The command which produces the tabular data to be shown')
+	data_group.add_argument('--data-script', type=str, metavar='SCRIPT', help='Shell command(s) to produce tabular data')
+	data_group.add_argument('--db-query', type=str, help='Database query to load data from')
+	parser.add_argument('--db-connection', type=str, help='Database connection string, for supported DSN see "sqlalchemy" python module.')
+	key_group = parser.add_mutually_exclusive_group()
+	key_group.add_argument('--key-field', type=str, default=None, metavar='COLUMN')
+	key_group.add_argument('--auto-key-field', action='store_true', default=False, help='Default key field is the first column in the input data.')
+	parser.add_argument('--activate-command', type=str, metavar='COMMAND', help='System command to run when double clicked on a row.')
+	parser.add_argument('--context-menu', action='append', default=[], type=str, metavar='ICON:LABEL:COMMAND', help='Menu item definitions for rows context menu.')
+	parser.add_argument('--auto-refresh-interval', type=float, metavar='SEC')
+	parser.add_argument('--inotify-refresh', type=str, metavar='FILE', help='')  # TODO
+	parser.epilog = '''
 COMMAND
 	The COMMAND option parameter is split by whitespaces into command and arguments, no quoting or escaping is supported.
 	Then the command is run as a system command, not in shell.
@@ -919,11 +923,14 @@ LABEL is a jinja2 template rendered to the menu item label, supporting these var
 	- cell: the cell's text content on which the context menu is opened
 	- column: the column name in which the context menu is opened
 	- row: a dict holding the focused row's fields
+	Literal ":" must be escaped by backslash in LABEL.
 '''
-cliargs = parser.parse_args()
+	return parser.parse_args()
 
 
+cliargs = parse_cli_args()
 APPNAME = cliargs.appname
+
 
 class GTabData(object):
 	def configure(self):
@@ -978,13 +985,22 @@ class GTabData(object):
 			data_generator = ((None, row) for row in db_result)
 			self.load_data(data_generator)
 		
-		elif cliargs.data_command:
+		elif cliargs.data_command or cliargs.data_script:
 			error_code = None
 			error_type = None
 			error_details = ''
 
+			if cliargs.data_command:
+				command = split_command_args(cliargs.data_command)
+				in_shell = False
+			elif cliargs.data_script:
+				command = cliargs.data_script
+				in_shell = True
+			else:
+				raise ValueError()
+
 			try:
-				proc = subprocess.Popen(split_command_args(cliargs.data_command), stdin=open(os.devnull, 'r'), stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
+				proc = subprocess.Popen(command, shell=in_shell, stdin=open(os.devnull, 'r'), stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
 			except Exception as exc:
 				error_type = "exception"
 				error_code = exc.__class__.__name__

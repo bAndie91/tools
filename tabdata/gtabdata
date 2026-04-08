@@ -884,13 +884,9 @@ cliargs = parser.parse_args()
 APPNAME = cliargs.appname
 
 class GTabData(object):
-	LOAD_PHASE_NONE = 1
-	LOAD_PHASE_STARTED = 2
-	LOAD_PHASE_FINISHED = 3
-
 	def configure(self):
 		self.tabdata_key_field = None
-		self.table_load_phase = self.LOAD_PHASE_NONE
+		self._window_auto_size = (None, None)
 
 		self.main_win = Window({'name': 'window.main', 'gtk-args': [], 'default-size': ()})
 		self.main_win.connect('delete-event', lambda *X: self.on_exit())
@@ -921,15 +917,13 @@ class GTabData(object):
 		self.load_table_async()
 	
 	def _on_window_configure_event(self, widget, event):
-		if self.table_load_phase == self.LOAD_PHASE_FINISHED:
+		if self._window_auto_size[0] is not None and (event.width, event.height) != self._window_auto_size:
 			self.main_win.set_data('user-resized', True)
 
 	def load_table_async(self):
 		threading.Thread(target=self.load_table).start()
 	
 	def load_table(self):
-		self.table_load_phase = self.LOAD_PHASE_STARTED
-
 		if cliargs.db_query:
 			import sqlalchemy
 
@@ -977,8 +971,6 @@ class GTabData(object):
 				with GtkThreadContext():
 					ErrorMessage("Command failed with %s: <tt>%s</tt>\nError output:" % (error_type, error_code), title="gTabData: execution error", details=error_details)
 		
-		self.table_load_phase = self.LOAD_PHASE_FINISHED
-
 		with GtkThreadContext():
 			self.after_load_table()
 	
@@ -996,9 +988,8 @@ class GTabData(object):
 		if not self.main_win.get_data('user-resized'):
 			tv_width, tv_height = self.main_table.size_request()
 			scr = self.main_win.get_screen()
-			self.main_win.handler_block_by_func(self._on_window_configure_event)
-			self.main_win.resize(min(tv_width, scr.get_width()), min(tv_height, scr.get_height()))
-			gobject.timeout_add(500, lambda *X: self.main_win.handler_unblock_by_func(self._on_window_configure_event))
+			self._window_auto_size = (min(tv_width, scr.get_width()), min(tv_height, scr.get_height()))
+			self.main_win.resize(*self._window_auto_size)
 	
 	def _auto_size_new_columns(self):
 		self.main_table.columns_autosize([col for col in self.main_table.get_columns() if not col.get_width() or col.get_width() == 1])

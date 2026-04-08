@@ -759,6 +759,12 @@ def ErrorMessage(message_markup, title=None, details=None):
 		carea = dlg.get_content_area()
 		carea.pack_start(Scrollable(Label(markup='<tt>'+glib.markup_escape_text(details)+'</tt>')), True, True)
 	dlg.get_widget_for_response(gtk.RESPONSE_OK).connect('clicked', lambda btn, dlg: dlg.destroy(), dlg)
+
+	PropertyPersistor(dlg, 'error-dialog', [
+		( 'geometry', 'configure-event', lambda wdg, evt: [evt.width, evt.height], lambda wdg, value: wdg.set_default_size(*value) ),
+		( 'position', 'configure-event', lambda wdg, evt: wdg.get_position()[:],   lambda wdg, value: wdg.move(*value) ),
+	]).apply_saved_properties()
+
 	dlg.show_all()
 	dlg.run()
 	return dlg
@@ -937,20 +943,39 @@ class GTabData(object):
 			self.load_data(data_generator)
 		
 		elif cliargs.data_command:
-			proc = subprocess.Popen(split_command_args(cliargs.data_command), stdin=open(os.devnull, 'r'), stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
-			td_header = tabdata(proc.stdout.readline())
-			columns = [(col, unicode) for col in td_header]
-			self.load_columns(columns)
-			data_generator = ((None, tabdata(line)) for line in iter(proc.stdout.readline, ''))
-			self.load_data(data_generator)
-			proc.stdout.close()
-			stderr = proc.stderr.read()
-			if stderr: print(stderr, file=sys.stderr)
-			proc.stderr.close()
-			proc.wait()
-			if proc.returncode != 0:
+			error_code = None
+			error_type = None
+			error_details = ''
+
+			try:
+				proc = subprocess.Popen(split_command_args(cliargs.data_command), stdin=open(os.devnull, 'r'), stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
+			except Exception as exc:
+				error_type = "exception"
+				error_code = exc.__class__.__name__
+				error_details = traceback.format_exc()
+				if isinstance(exc, OSError):
+					error_type = "status code"
+					error_code = exc.errno
+					error_details = exc.strerror + "\n" + error_details
+					if exc.filename is not None: 
+						error_details = "file: " + exc.filename + "\n" + error_details
+			else:
+				td_header = tabdata(proc.stdout.readline())
+				columns = [(col, unicode) for col in td_header]
+				self.load_columns(columns)
+				data_generator = ((None, tabdata(line)) for line in iter(proc.stdout.readline, ''))
+				self.load_data(data_generator)
+				proc.stdout.close()
+				error_details = proc.stderr.read()
+				if error_details: print(error_details, file=sys.stderr)
+				proc.stderr.close()
+				proc.wait()
+				if proc.returncode != 0:
+					error_type = "status code" if proc.returncode > 0 else "signal"
+					error_code = abs(proc.returncode)
+			if error_type is not None:
 				with GtkThreadContext():
-					ErrorMessage("Command exited with %s <tt>%d</tt>.\nError output:" % ("status code" if proc.returncode > 0 else "signal", abs(proc.returncode)), title="gTabData: command failed", details=stderr)
+					ErrorMessage("Command failed with %s: <tt>%s</tt>\nError output:" % (error_type, error_code), title="gTabData: execution error", details=error_details)
 		
 		self.table_load_phase = self.LOAD_PHASE_FINISHED
 

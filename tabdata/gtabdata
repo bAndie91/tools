@@ -810,10 +810,11 @@ def split_command_args(cmd_str):
 def populate_row_context_menu(menu, items, macros):
 	# TODO support submenus
 	for definition in items:
-		icon, label, command = [field.replace('\\:', ':') for field in re.split(r'(?<!\\):', definition, maxsplit=2)]
-		menuitem_label = Template(label).render(**macros)
+		icon, label_template, command_template = [field.replace('\\:', ':') for field in re.split(r'(?<!\\):', definition, maxsplit=2)]
+		menuitem_label = Template(label_template).render(**macros)
 		if menuitem_label != '':
 			mi = ImageMenuItem(label=menuitem_label, icon=icon)
+			command = Template(command_template).render(**macros)
 			mi.set_data('command_args', split_command_args(command))
 			mi.connect('activate', on_context_menu_item_activate, menu)
 			menu.append(mi)
@@ -826,7 +827,7 @@ def gen_row_data(treeview, c_treepath, tv_col):
 		'selected_rows': [treeview.get_model()[treepath].as_dict() for treepath in treeview.get_selection().get_selected_rows()[1]],
 	}
 
-def on_table_row_context_menu(treeview, popup_menu, c_treepath, tv_col, cell_x, cell_y):
+def on_table_row_context_menu_open(treeview, popup_menu, c_treepath, tv_col, cell_x, cell_y):
 	row_data = gen_row_data(treeview, c_treepath, tv_col)
 	n_selected = len(row_data['selected_rows'])
 	popup_menu.set_data('row-data', row_data)
@@ -874,11 +875,17 @@ def on_context_menu_copy(mi, menu, what):
 	gtk.Clipboard().set_text(text)
 
 def on_table_row_activated(treeview, c_treepath, tv_col):
-	run_system_command(split_command_args(cliargs.activate_command), gen_row_data(treeview, c_treepath, tv_col))
+	if cliargs.activate_command is not None:
+		command_template = cliargs.activate_command
+		macros = {
+			'row': treeview.get_model()[c_treepath].as_dict(),
+		}
+		command = Template(command_template).render(**macros)
+		run_system_command(split_command_args(command), gen_row_data(treeview, c_treepath, tv_col))
 
-def run_system_command(command_args, row_data):
-	proc = subprocess.Popen(command_args, shell=False, stdin=subprocess.PIPE)
-	proc.stdin.write(json.dumps(row_data))
+def run_system_command(command_with_args, input_object):
+	proc = subprocess.Popen(command_with_args, shell=False, stdin=subprocess.PIPE)
+	proc.stdin.write(json.dumps(input_object))
 	proc.stdin.close()
 
 
@@ -929,8 +936,9 @@ def parse_cli_args():
 	parser.add_argument('--inotify-refresh', type=str, metavar='FILE', help='')  # TODO
 	parser.epilog = '''
 COMMAND
-	The COMMAND option parameter is split by whitespaces into command and arguments, no quoting or escaping is supported.
+	The COMMAND option parameter is a jinja2 template, after rendered, split by whitespaces into command and arguments, no quoting or escaping is supported.
 	Then the command is run as a system command, not in shell.
+	For available jinja2 variables, see LABEL paragraph below.
 	A JSON object is passed to the command's STDIN with these keys:
 	- row: an object itself containing all fields (as object keys) and cells (as values) of the activated row
 	- col: column's name which the context menu is opened in
@@ -944,8 +952,8 @@ LABEL is a jinja2 template rendered to the menu item label, supporting these var
 	- n_selected: number of selected rows
 	- cell: the cell's text content on which the context menu is opened
 	- column: the column name in which the context menu is opened
-	- row: a dict holding the focused row's fields
-	Literal ":" must be escaped by backslash in LABEL.
+	- row: a dict holding the focused/activated row's fields
+	Literal ":" should be escaped by backslash.
 '''
 	return parser.parse_args()
 
@@ -967,7 +975,7 @@ class GTabData(object):
 		self.main_table = TreeView(None)
 		self.main_win.add(Scrollable(self.main_table))
 		self.main_table.connect('row-activated', on_table_row_activated)
-		self.main_table.connect('menu-popup', on_table_row_context_menu)
+		self.main_table.connect('menu-popup', on_table_row_context_menu_open)
 		self.main_table.connect('column-added', self.on_column_added)
 
 		self.proppersist_table = PropertyPersistor(self.main_table, 'main_table', [

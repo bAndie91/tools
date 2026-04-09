@@ -957,12 +957,11 @@ APPNAME = cliargs.appname
 class GTabData(object):
 	def configure(self):
 		self.tabdata_key_field = None
-		self._window_auto_size = (None, None)
 
 		self.main_win = Window({'name': 'window.main', 'gtk-args': [], 'default-size': ()})
-		self.main_win.connect('delete-event', lambda *X: self.on_exit())
-		self.window_configure_event = self.main_win.connect('configure-event', self._on_window_configure_event)
-		self.startup_event = self.main_win.connect('map-event', lambda w, e: (w.disconnect(self.startup_event), self._on_startup()))
+		self.window_signalmanager = GSignalHandlerManager(self.main_win)
+		self.window_signalmanager.connect('delete-event', lambda *X: self.on_exit())
+		self.window_signalmanager.connect_once('map-event', lambda w, e: self._on_startup())
 		add_key_binding(self.main_win, 'F5', lambda *X: self.load_table_async())
 
 		self.main_table = TreeView(None)
@@ -987,10 +986,6 @@ class GTabData(object):
 	def _on_startup(self):
 		self.load_table_async()
 	
-	def _on_window_configure_event(self, widget, event):
-		if self._window_auto_size[0] is not None and (event.width, event.height) != self._window_auto_size:
-			self.main_win.set_data('user-resized', True)
-
 	def load_table_async(self):
 		threading.Thread(target=self.load_table).start()
 	
@@ -1065,11 +1060,10 @@ class GTabData(object):
 			gobject.idle_add(self._window_initial_resize)
 	
 	def _window_initial_resize(self):
-		if not self.main_win.get_data('user-resized'):
+		if not self.main_win.property_persistor.props.get('geometry'):
 			tv_width, tv_height = self.main_table.size_request()
 			scr = self.main_win.get_screen()
-			self._window_auto_size = (min(tv_width, scr.get_width()), min(tv_height, scr.get_height()))
-			self.main_win.resize(*self._window_auto_size)
+			self.main_win.resize(min(tv_width, scr.get_width()), min(tv_height, scr.get_height()))
 	
 	def _auto_size_new_columns(self):
 		self.main_table.columns_autosize([col for col in self.main_table.get_columns() if not col.get_width() or col.get_width() == 1])

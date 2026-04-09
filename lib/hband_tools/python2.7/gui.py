@@ -119,25 +119,110 @@ class Image(gtk.Image):
 		self._icon = icon
 		return self
 
+class GSignalHandlerManager(object):
+	def __init__(self, parent):
+		self.parent = parent
+		self.handlers = []
+	def connect_once(self, signalname, handler, *handler_args):
+		return self._connect({
+			'signal': signalname,
+			'repeat': False,
+			'handler': handler,
+			'args': handler_args,
+		})
+	def connect(self, signalname, handler, *handler_args):
+		return self._connect({
+			'signal': signalname,
+			'repeat': True,
+			'handler': handler,
+			'args': handler_args,
+		})
+	def _connect(self, cb_data):
+		cb_data['id'] = self.parent.connect(cb_data['signal'], self._handler, cb_data)
+		self.handlers.append(cb_data)
+		return cb_data['id']
+	def _disconnect(self, cb_data):
+		self.parent.disconnect(cb_data['id'])
+		self.handlers.remove(cb_data)
+	def _handler(self, *gobject_args):
+		cb_data = gobject_args[-1]
+		signal_args = gobject_args[0:-1]
+		if not cb_data['repeat']:
+			self._disconnect(cb_data)
+		return cb_data['handler'](*signal_args+cb_data['args'])
+
 class Window(gtk.Window):
+	__gsignals__ =  {
+		'user-resize': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (int, int)),
+		'user-move': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (int, int)),
+	}
+
 	def __init__(self, opt):
+		self._programmatic_resize = (None, None)
+		self._programmatic_move = (None, None)
+		self._default_position = (None, None)
+		self._last_config = {'size': (None, None), 'position': (None, None)}
+
 		super(Window, self).__init__(*opt.get('gtk-args', []))
 		if opt.get('default-size'):
 			self.set_default_size(*opt.get('default-size'))
-		self.property_persistor = PropertyPersistor(self, opt.get('name', self.get_name()), [
-			PropertyPersistor.PERSIST_PROPERTY_GEOMETRY,
-			PropertyPersistor.PERSIST_PROPERTY_POSITION,
+		
+		self.gsignalhandlermanager = GSignalHandlerManager(self)
+		self.gsignalhandlermanager.connect_once('map-event', self._on_first_map_event)
+		self.gsignalhandlermanager.connect('configure-event', self._on_configure_event)
+
+		self.property_persistor = PropertyPersistor(self, opt.get('name', self.get_name()), [])
+	
+	def _on_first_map_event(self, widget, event):
+		if self._default_position[0] is not None:
+			self.move(*self._default_position)
+		
+		self.property_persistor.add_properties([
+			( 'geometry', 'user-resize', lambda wdg, width, height: [width, height], lambda wdg, value: wdg.set_window_size(*value) ),
+			( 'position', 'user-move',   lambda wdg, pos_x, pos_y: [pos_x, pos_y],   lambda wdg, value: wdg.set_window_position(*value) ),
 		])
 		self.property_persistor.apply_saved_properties()
+
+	def _on_configure_event(self, widget, event):
+		if self.get_mapped():
+			width, height = event.width, event.height
+			if (width, height) != self._programmatic_resize and self._last_config['size'][0] is not None and (width, height) != self._last_config['size']:
+				self.emit('user-resize', width, height)
+			if self._last_config['position'][0] is not None and (event.x, event.y) != self._last_config['position']:
+				#pos_x, pos_y = event.x, event.y  # this accounts for WM decorations too, but Window.move() does not.
+				pos_x, pos_y = self.get_position()[:]
+				if (pos_x, pos_y) != self._programmatic_move:
+					self.emit('user-move', pos_x, pos_y)
+		self._last_config = {
+			'size': (event.width, event.height),
+			'position': (event.x, event.y),
+		}
 	
-	def show(self, show_all=False):
-		pos = self.property_persistor.props.get('position')
-		getattr(super(Window, self), 'show_all' if show_all else 'show')()
-		if pos is not None: self.move(*pos)
+	def set_window_size(self, width, height):
+		if self.get_mapped():
+			self.resize(width, height)
+		else:
+			self.set_default_size(width, height)
 	
-	def show_all(self):
-		self.show(show_all=True)
+	def resize(self, width, height):
+		self._programmatic_resize = (width, height)
+		super(Window, self).resize(width, height)
 	
+	def set_window_position(self, pos_x, pos_y):
+		if self.get_mapped():
+			self.move(pos_x, pos_y)
+		else:
+			self.set_default_position(pos_x, pos_y)
+
+	def move(self, pos_x, pos_y):
+		self._programmatic_move = (pos_x, pos_y)
+		super(Window, self).move(pos_x, pos_y)
+
+	def set_default_position(self, pos_x, pos_y):
+		assert isinstance(pos_x, int)
+		assert isinstance(pos_y, int)
+		self._default_position = (pos_x, pos_y)
+
 	@property
 	def title(self):
 		self.get_title()
@@ -168,9 +253,6 @@ class Scrollable(gtk.ScrolledWindow):
 				self.add_with_viewport(child)
 
 class PropertyPersistor(object):
-	PERSIST_PROPERTY_GEOMETRY = ( 'geometry', 'configure-event', lambda wdg, evt: [evt.width, evt.height], lambda wdg, value: wdg.set_default_size(*value) )
-	PERSIST_PROPERTY_POSITION = ( 'position', 'configure-event', lambda wdg, evt: wdg.get_position()[:],   lambda wdg, value: wdg.move(*value) )
-
 	def __init__(self, obj, obj_name, property_descriptors):
 		assert hasattr(__main__, 'APPNAME') and isinstance(__main__.APPNAME, basestring) and __main__.APPNAME, "Set APPNAME global variable."
 		self.obj = obj

@@ -783,6 +783,51 @@ class NoGtkThreadContext(object):
 	def __exit__(self, exc_type, exc_val, exc_tb):
 		gtk.threads_enter()
 
+class Thread(threading.Thread):
+	def __init__(self, *params, **opts):
+		is_daemon = None
+		if 'daemon' in opts:
+			is_daemon = opts['daemon']
+			del opts['daemon']
+		super(Thread, self).__init__(*params, **opts)
+		if is_daemon:
+			self.setDaemon(is_daemon)
+
+class SubprocessError(Exception):
+	def __init__(self, typ=None, code=None, details=''):
+		super(SubprocessError, self).__init__()
+		self.type = typ
+		self.code = code
+		self.details = details
+
+def spawn_subprocess(*popen_args, **popen_options):
+	err = SubprocessError()
+	try:
+		proc = subprocess.Popen(*popen_args, **popen_options)
+	except Exception as exc:
+		err.type = "exception"
+		err.code = exc.__class__.__name__
+		err.details = traceback.format_exc()
+		if isinstance(exc, OSError):
+			err.type = "status code"
+			err.code = exc.errno
+			err.details = exc.strerror + "\n" + err.details
+			if exc.filename is not None: 
+				err.details = "file: " + exc.filename + "\n" + err.details
+		raise err
+	return proc
+
+def wait_subprocess(proc):
+	err = SubprocessError()
+	err.details = proc.stderr.read()
+	if err.details: print(err.details, file=sys.stderr)
+	proc.stderr.close()
+	proc.wait()
+	if proc.returncode != 0:
+		err.type = "status code" if proc.returncode > 0 else "signal"
+		err.code = abs(proc.returncode)
+		raise err
+
 def ErrorMessage(message_markup, title=None, details=None):
 	dlg = gtk.MessageDialog(parent=main_app.main_win, flags=(gtk.DIALOG_MODAL | gtk.DIALOG_DESTROY_WITH_PARENT), type=gtk.MESSAGE_ERROR, buttons=gtk.BUTTONS_OK)
 	dlg.set_title("Error" if title is None else title)
@@ -860,7 +905,7 @@ def on_table_row_context_menu_open(treeview, popup_menu, c_treepath, tv_col, cel
 
 def on_context_menu_item_activate(mi, menu):
 	row_data = menu.get_data('row-data')
-	run_system_command(mi.get_data('command_args'), row_data)
+	run_system_command_async(mi.get_data('command_args'), row_data)
 
 def on_context_menu_copy(mi, menu, what):
 	row_data = menu.get_data('row-data')
@@ -881,12 +926,20 @@ def on_table_row_activated(treeview, c_treepath, tv_col):
 			'row': treeview.get_model()[c_treepath].as_dict(),
 		}
 		command = Template(command_template).render(**macros)
-		run_system_command(split_command_args(command), gen_row_data(treeview, c_treepath, tv_col))
+		run_system_command_async(split_command_args(command), gen_row_data(treeview, c_treepath, tv_col))
 
-def run_system_command(command_with_args, input_object):
-	proc = subprocess.Popen(command_with_args, shell=False, stdin=subprocess.PIPE)
-	proc.stdin.write(json.dumps(input_object))
-	proc.stdin.close()
+def run_system_command_async(command_with_args, input_object):
+	Thread(target=run_system_command, args=(command_with_args, json.dumps(input_object)), daemon=True).start()
+
+def run_system_command(command_with_args, input_text):
+	try:
+		proc = spawn_subprocess(command_with_args, shell=False, stdin=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
+		proc.stdin.write(input_text)
+		proc.stdin.close()
+		wait_subprocess(proc)
+	except SubprocessError as err:
+		with GtkThreadContext():
+			ErrorMessage("Command failed with %s: <tt>%s</tt>\nError output:" % (err.type, err.code), title="gTabData: execution error", details=err.details)
 
 
 def tabdata(rawline):
@@ -995,7 +1048,7 @@ class GTabData(object):
 		self.load_table_async()
 	
 	def load_table_async(self):
-		threading.Thread(target=self.load_table).start()
+		Thread(target=self.load_table, daemon=True).start()
 	
 	def load_table(self):
 		if cliargs.db_query:
@@ -1011,10 +1064,6 @@ class GTabData(object):
 			self.load_data(data_generator)
 		
 		elif cliargs.data_command or cliargs.data_script:
-			error_code = None
-			error_type = None
-			error_details = ''
-
 			if cliargs.data_command:
 				command = split_command_args(cliargs.data_command)
 				in_shell = False
@@ -1025,34 +1074,17 @@ class GTabData(object):
 				raise ValueError()
 
 			try:
-				proc = subprocess.Popen(command, shell=in_shell, stdin=open(os.devnull, 'r'), stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
-			except Exception as exc:
-				error_type = "exception"
-				error_code = exc.__class__.__name__
-				error_details = traceback.format_exc()
-				if isinstance(exc, OSError):
-					error_type = "status code"
-					error_code = exc.errno
-					error_details = exc.strerror + "\n" + error_details
-					if exc.filename is not None: 
-						error_details = "file: " + exc.filename + "\n" + error_details
-			else:
+				proc = spawn_subprocess(command, shell=in_shell, stdin=open(os.devnull, 'r'), stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
 				td_header = tabdata(proc.stdout.readline())
 				columns = [(col, unicode) for col in td_header]
 				self.load_columns(columns)
 				data_generator = ((None, tabdata(line)) for line in iter(proc.stdout.readline, ''))
 				self.load_data(data_generator)
 				proc.stdout.close()
-				error_details = proc.stderr.read()
-				if error_details: print(error_details, file=sys.stderr)
-				proc.stderr.close()
-				proc.wait()
-				if proc.returncode != 0:
-					error_type = "status code" if proc.returncode > 0 else "signal"
-					error_code = abs(proc.returncode)
-			if error_type is not None:
+				wait_subprocess(proc)
+			except SubprocessError as err:
 				with GtkThreadContext():
-					ErrorMessage("Command failed with %s: <tt>%s</tt>\nError output:" % (error_type, error_code), title="gTabData: execution error", details=error_details)
+					ErrorMessage("Command failed with %s: <tt>%s</tt>\nError output:" % (err.type, err.code), title="gTabData: execution error", details=err.details)
 		
 		with GtkThreadContext():
 			self.after_load_table()

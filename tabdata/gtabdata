@@ -793,10 +793,10 @@ def ErrorMessage(message_markup, title=None, details=None):
 		carea.pack_start(Scrollable(Label(markup='<tt>'+glib.markup_escape_text(details)+'</tt>')), True, True)
 	dlg.get_widget_for_response(gtk.RESPONSE_OK).connect('clicked', lambda btn, dlg: dlg.destroy(), dlg)
 
-	PropertyPersistor(dlg, 'error-dialog', [
-		PropertyPersistor.PERSIST_PROPERTY_GEOMETRY,
-		PropertyPersistor.PERSIST_PROPERTY_POSITION,
-	]).apply_saved_properties()
+	dlg.connect('map-event', lambda *X: PropertyPersistor(dlg, 'error-dialog', [
+		( 'geometry', 'configure-event', lambda wdg, evt: [evt.width, evt.height], lambda wdg, value: wdg.resize(*value) ),
+		( 'position', 'configure-event', lambda wdg, evt: wdg.get_position()[:],   lambda wdg, value: wdg.move(*value) ),
+	]).apply_saved_properties())
 
 	dlg.show_all()
 	dlg.run()

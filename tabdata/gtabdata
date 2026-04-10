@@ -864,8 +864,62 @@ def ErrorMessage(message_markup, title=None, details=None):
 def split_command_args(cmd_str):
 	return re.split(r'\s+', cmd_str)
 
+class MenuHierarchy(object):
+	def __init__(self, separator='/', menu_class=gtk.Menu):
+		self.separator = separator
+		self.menu_class = menu_class
+		self.submenuitem_class = gtk.MenuItem
+		self.root_menu = self.menu_class()
+	def get_submenu(self, path):
+		menu = self.root_menu
+		for label in path:
+			menu = self.get_submenu_by_label(menu, label)
+			if menu is None:
+				return None
+		return menu
+	def get_submenuitem_by_label(self, parent, label):
+		for mi in parent.get_children():
+			if mi.get_label() == label and mi.get_submenu() is not None:
+				return mi
+		return None
+	def get_submenu_by_label(self, parent, label):
+		mi = self.get_submenuitem_by_label(parent, label)
+		if mi is not None:
+			return mi.get_submenu()
+		return None
+	def make_submenu(self, path):
+		menu = self.root_menu
+		for label in path:
+			submenu = self.get_submenu_by_label(menu, label)
+			if submenu is None:
+				submenu = self.menu_class()
+				smi = self.submenuitem_class(label=label)
+				# TODO submenu items to support ImageMenuItem
+				smi.set_submenu(submenu)
+				submenu.parent_menu_item = smi
+				menu.append(smi)
+			menu = submenu
+		return menu
+	def add_menu_item(self, **opt):
+		path = opt['label'].split(self.separator)
+		opt['label'] = path[-1]
+		path = path[0:-1]
+		submenu = self.make_submenu(path)
+		if opt['label'] != '':
+			klass = opt.pop('klass')
+			mi = klass(**opt)
+			submenu.append(mi)
+			return mi
+		else:
+			return submenu.parent_menu_item
+	def append_to_menu(self, recv_menu):
+		for mi in list(self.root_menu.get_children()):
+			self.root_menu.remove(mi)
+			recv_menu.append(mi)
+
 def populate_row_context_menu(menu, items, macros):
 	# TODO support submenus
+	hierarchy = MenuHierarchy(separator='//')
 	for definition in items:
 		icon, label_template, command_template = [field.replace('\\:', ':') for field in re.split(r'(?<!\\):', definition, maxsplit=2)]
 		menuitem_label = Template(label_template).render(**macros)
@@ -874,12 +928,13 @@ def populate_row_context_menu(menu, items, macros):
 			if menuitem_label.startswith(' '):
 				menuitem_label = menuitem_label[1:]
 				enabled = False
-			mi = ImageMenuItem(label=menuitem_label, icon=icon)
+			mi = hierarchy.add_menu_item(klass=ImageMenuItem, label=menuitem_label, icon=icon)
 			mi.set_sensitive(enabled)
 			command = Template(command_template).render(**macros)
-			mi.set_data('command_args', split_command_args(command))
-			mi.connect('activate', on_context_menu_item_activate, menu)
-			menu.append(mi)
+			if command != '':
+				mi.set_data('command_args', split_command_args(command))
+				mi.connect('activate', on_context_menu_item_activate, menu)
+	hierarchy.append_to_menu(menu)
 	menu.show_all()
 
 def gen_row_data(treeview, c_treepath, tv_col):
@@ -995,6 +1050,7 @@ def parse_cli_args():
 	parser = argparse.ArgumentParser(description='gTabData - GTK Tabular Data viewer', formatter_class=argparse.RawDescriptionHelpFormatter)
 	parser.add_argument('--title', type=str, default='gTabData', help='Window title text')
 	parser.add_argument('--appname', type=str, default='gtabdata', help='Custom application name to operate as')
+	parser.add_argument('--appinstance', type=str, default='gtabdata', help='Custom application instance name to operate as')
 	parser.add_argument('--icon', type=str, default='text-spreadsheet', help='Window icon file or symbolic name')
 	data_group = parser.add_mutually_exclusive_group()
 	data_group.add_argument('--data-command', type=str, metavar='COMMAND', help='The command which produces the tabular data to be shown')
@@ -1035,7 +1091,7 @@ LABEL is a jinja2 template rendered to the menu item label, supporting these var
 
 
 cliargs = parse_cli_args()
-APPNAME = cliargs.appname
+APPNAME = cliargs.appname + '.' + cliargs.appinstance
 
 
 class GTabData(object):
@@ -1246,5 +1302,6 @@ main_app = GTabData()
 main_app.configure()
 main_app.main_win.title = Template(cliargs.title).render({'env': os.environ})
 main_app.main_win.set_icon_from_any(cliargs.icon)
+main_app.main_win.set_wmclass(cliargs.appname, cliargs.appinstance)
 main_app.run()
 gtk.main()

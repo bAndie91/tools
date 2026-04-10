@@ -858,7 +858,12 @@ def populate_row_context_menu(menu, items, macros):
 		icon, label_template, command_template = [field.replace('\\:', ':') for field in re.split(r'(?<!\\):', definition, maxsplit=2)]
 		menuitem_label = Template(label_template).render(**macros)
 		if menuitem_label != '':
+			enabled = True
+			if menuitem_label.startswith(' '):
+				menuitem_label = menuitem_label[1:]
+				enabled = False
 			mi = ImageMenuItem(label=menuitem_label, icon=icon)
+			mi.set_sensitive(enabled)
 			command = Template(command_template).render(**macros)
 			mi.set_data('command_args', split_command_args(command))
 			mi.connect('activate', on_context_menu_item_activate, menu)
@@ -905,7 +910,8 @@ def on_table_row_context_menu_open(treeview, popup_menu, c_treepath, tv_col, cel
 
 def on_context_menu_item_activate(mi, menu):
 	row_data = menu.get_data('row-data')
-	run_system_command_async(mi.get_data('command_args'), row_data)
+	command_args = mi.get_data('command_args')
+	run_system_command_async(command_args, row_data)
 
 def on_context_menu_copy(mi, menu, what):
 	row_data = menu.get_data('row-data')
@@ -942,12 +948,15 @@ def run_system_command(command_with_args, input_text):
 			ErrorMessage("Command failed with %s: <tt>%s</tt>\nError output:" % (err.type, err.code), title="gTabData: execution error", details=err.details)
 
 
-def tabdata(rawline):
+def tabdata(rawline, n_fields=0):
 	def unescape_td_sequence(s):
 		"""only meant for backslash-t, backslash-n, backslash-r, backslash-e and double-blackslash inputs."""
 		if s == '\\e': return '\x1B'
 		else: return eval('"'+s+'"')
-	return [re.sub(r'\\[tnre\\]', lambda match: unescape_td_sequence(match.group(0)), cell) for cell in rawline.rstrip('\n').split('\t')]
+	cells = [re.sub(r'\\[tnre\\]', lambda match: unescape_td_sequence(match.group(0)), cell) for cell in rawline.rstrip('\n').split('\t', n_fields-1)]
+	if n_fields > 0:
+		cells = cells + [''] * (n_fields-len(cells))
+	return cells
 
 
 def merge_ordering(old_items, new_items):
@@ -1007,6 +1016,8 @@ LABEL is a jinja2 template rendered to the menu item label, supporting these var
 	- column: the column name in which the context menu is opened
 	- row: a dict holding the focused/activated row's fields
 	Literal ":" should be escaped by backslash.
+	If the rendered LABEL is empty string, the menu item won't be shown.
+	If the rendered LABEL starts with a space, the menu item is shown disabled.
 '''
 	return parser.parse_args()
 
@@ -1078,7 +1089,7 @@ class GTabData(object):
 				td_header = tabdata(proc.stdout.readline())
 				columns = [(col, unicode) for col in td_header]
 				self.load_columns(columns)
-				data_generator = ((None, tabdata(line)) for line in iter(proc.stdout.readline, ''))
+				data_generator = ((None, tabdata(line, n_fields=len(columns))) for line in iter(proc.stdout.readline, ''))
 				self.load_data(data_generator)
 				proc.stdout.close()
 				wait_subprocess(proc)

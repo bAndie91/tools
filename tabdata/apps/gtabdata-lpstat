@@ -1,0 +1,8 @@
+#!/bin/sh
+
+exec gtabdata --appname lpstat --title lpstat --icon printer \
+	--data-command td-lpstat --auto-key-field \
+	--context-menu 'STOCK_CONNECT:{{" " if row.STATUS=="enabled" else ""}}enable:cupsenable {{row.PRINTER}}' \
+	--context-menu 'STOCK_DISCONNECT:{{" " if row.STATUS=="disabled" else ""}}disable:cupsdisable {{row.PRINTER}}' \
+	--context-menu 'STOCK_MEDIA_PLAY:{{" " if row.ACCEPTANCE=="accepting" else ""}}accept jobs:cupsaccept {{row.PRINTER}}' \
+	--context-menu 'STOCK_MEDIA_PAUSE:{{"" if row.ACCEPTANCE=="accepting" else " "}}reject jobs:cupsreject {{row.PRINTER}}'

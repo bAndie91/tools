@@ -1,0 +1,10 @@
+#!/bin/sh
+
+if [ -z "$1" ]
+then
+	set -- --all --numeric-hosts --programs --extend --inet
+fi
+
+exec gtabdata --appinstance netstat --title "netstat $*" \
+	--data-script "netstat $* | sed -e 1d -e '2s/ \(Address\|name\)/_\1/g' | td-trans-fixcol -m 1 | sed -e 's,/,\t,'" \
+	--key-field Inode

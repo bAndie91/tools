@@ -168,15 +168,17 @@ class Window(gtk.Window):
 			self.set_default_size(*opt.get('default-size'))
 		
 		self.gsignalhandlermanager = GSignalHandlerManager(self)
-		self.gsignalhandlermanager.connect_once('map-event', self._on_first_map_event)
 		self.gsignalhandlermanager.connect('configure-event', self._on_configure_event)
+		self.gsignalhandlermanager.connect('map-event', self._on_map_event)
+		self.gsignalhandlermanager.connect_once('map-event', self._on_first_map_event)
 
 		self.property_persistor = PropertyPersistor(self, opt.get('name', self.get_name()), [])
 	
-	def _on_first_map_event(self, widget, event):
+	def _on_map_event(self, widget, event):
 		if self._default_position[0] is not None:
 			self.move(*self._default_position)
-		
+
+	def _on_first_map_event(self, widget, event):
 		self.property_persistor.add_properties([
 			( 'geometry', 'user-resize', lambda wdg, width, height: [width, height], lambda wdg, value: wdg.set_window_size(*value) ),
 			( 'position', 'user-move',   lambda wdg, pos_x, pos_y: [pos_x, pos_y],   lambda wdg, value: wdg.set_window_position(*value) ),
@@ -214,8 +216,9 @@ class Window(gtk.Window):
 		else:
 			self.set_default_position(pos_x, pos_y)
 
-	def move(self, pos_x, pos_y):
-		self._programmatic_move = (pos_x, pos_y)
+	def move(self, pos_x, pos_y, is_programmatic=True):
+		if is_programmatic:
+			self._programmatic_move = (pos_x, pos_y)
 		super(Window, self).move(pos_x, pos_y)
 
 	def set_default_position(self, pos_x, pos_y):

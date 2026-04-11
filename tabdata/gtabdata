@@ -868,7 +868,7 @@ class MenuHierarchy(object):
 	def __init__(self, separator='/', menu_class=gtk.Menu):
 		self.separator = separator
 		self.menu_class = menu_class
-		self.submenuitem_class = gtk.MenuItem
+		self.default_submenuitem_class = gtk.MenuItem
 		self.root_menu = self.menu_class()
 	def get_submenu(self, path):
 		menu = self.root_menu
@@ -887,14 +887,16 @@ class MenuHierarchy(object):
 		if mi is not None:
 			return mi.get_submenu()
 		return None
-	def make_submenu(self, path):
+	def make_submenu(self, path, parent_menu_item_class=None, parent_menu_item_opt={}):
+		if parent_menu_item_class is None:
+			parent_menu_item_class = self.default_submenuitem_class
 		menu = self.root_menu
 		for label in path:
 			submenu = self.get_submenu_by_label(menu, label)
 			if submenu is None:
 				submenu = self.menu_class()
-				smi = self.submenuitem_class(label=label)
-				# TODO submenu items to support ImageMenuItem
+				parent_menu_item_opt['label']=label
+				smi = parent_menu_item_class(**parent_menu_item_opt)
 				smi.set_submenu(submenu)
 				submenu.parent_menu_item = smi
 				menu.append(smi)
@@ -904,13 +906,15 @@ class MenuHierarchy(object):
 		path = opt['label'].split(self.separator)
 		opt['label'] = path[-1]
 		path = path[0:-1]
-		submenu = self.make_submenu(path)
+		klass = opt.pop('klass')
 		if opt['label'] != '':
-			klass = opt.pop('klass')
+			submenu = self.make_submenu(path)
 			mi = klass(**opt)
 			submenu.append(mi)
 			return mi
 		else:
+			self.make_submenu(path[0:-1])
+			submenu = self.make_submenu(path, parent_menu_item_class=klass, parent_menu_item_opt=opt)
 			return submenu.parent_menu_item
 	def append_to_menu(self, recv_menu):
 		for mi in list(self.root_menu.get_children()):
@@ -918,7 +922,6 @@ class MenuHierarchy(object):
 			recv_menu.append(mi)
 
 def populate_row_context_menu(menu, items, macros):
-	# TODO support submenus
 	hierarchy = MenuHierarchy(separator='//')
 	for definition in items:
 		icon, label_template, command_template = [field.replace('\\:', ':') for field in re.split(r'(?<!\\):', definition, maxsplit=2)]
@@ -1086,6 +1089,8 @@ LABEL is a jinja2 template rendered to the menu item label, supporting these var
 	Literal ":" should be escaped by backslash.
 	If the rendered LABEL is empty string, the menu item won't be shown.
 	If the rendered LABEL starts with a space, the menu item is shown disabled.
+	May create nested menus (submenus) by using "//" (couble slash) as a separator in LABEL to describe the path through the menu hierarchy.
+	Parent menus are implicit, but if want to define icon for one, end its LABEL with "//" (double slash).
 '''
 	return parser.parse_args()
 
@@ -1188,7 +1193,7 @@ class GTabData(object):
 		self.main_table.columns_autosize([col for col in self.main_table.get_columns() if not col.get_width() or col.get_width() == 1])
 
 	def load_columns(self, columns):
-		if cliargs.auto_key_field:
+		if cliargs.auto_key_field and self.tabdata_key_field is None:
 			self.tabdata_key_field = columns[0][0]
 			print("info: Taking '%s' as key field." % self.tabdata_key_field, file=sys.stderr)
 		

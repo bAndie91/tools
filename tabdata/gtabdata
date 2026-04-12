@@ -330,6 +330,7 @@ class TreeView(gtk.TreeView):
 			tvc.pack_start(cr_txt, True)
 			tvc.add_attribute(cr_txt, col_attr, col_num)
 			
+			tvc.set_data('original-position', len(self.get_columns()))
 			self.append_column(tvc)
 
 	def _on_column_width_change(self, col, gparam):
@@ -471,8 +472,17 @@ class TreeView(gtk.TreeView):
 		mi.connect('activate', lambda mi: self.restore_previous_widths())
 		popup_menu.append(mi)
 		mi = ImageMenuItem(label="reset columns order", icon=gtk.STOCK_REVERT_TO_SAVED)
-		#mi.connect('activate', TODO
+		mi.connect('activate', lambda mi: self.reset_columns_original_position())
 		popup_menu.append(mi)
+
+	def reset_columns_original_position(self):
+		preceding_col = None
+		for pos in range(len(self.get_columns())):
+			for col in self.get_columns():
+				if col.get_data('original-position') == pos:
+					self.move_column_after(col, preceding_col)
+					preceding_col = col
+					break
 
 	def _on_selection_changed(self, selection):
 		model, paths = selection.get_selected_rows()[:]

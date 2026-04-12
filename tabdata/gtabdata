@@ -167,7 +167,6 @@ class TreeStore(gtk.TreeStore):
 	def to_unicode(s):
 		if s is None: return None
 		return unicode(s)
-	@staticmethod
 	class ColumnNotFoundException(Exception):
 		pass
 	def get_columns(self):
@@ -403,7 +402,6 @@ class TreeView(gtk.TreeView):
 		finally:
 			self._resorting = False
 
-	@staticmethod
 	class ColumnNotFoundException(Exception):
 		pass
 
@@ -1225,8 +1223,9 @@ class GTabData(object):
 
 	def load_columns(self, columns):
 		if cliargs.auto_key_field and self.tabdata_key_field is None:
-			self.tabdata_key_field = columns[0][0]
-			print("info: Taking '%s' as key field." % self.tabdata_key_field, file=sys.stderr)
+			if columns[0][0] != '':
+				self.tabdata_key_field = columns[0][0]
+				print("info: Taking '%s' as key field." % self.tabdata_key_field, file=sys.stderr)
 		
 		if self.main_table.get_model() is None or columns != self.main_table.get_model().get_columns():
 			with GtkThreadContext():

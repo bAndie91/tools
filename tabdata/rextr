@@ -88,7 +88,7 @@ for my $arg (@ARGV)
 		next;
 	}
 	
-	my $arg_esc = $arg =~ s{[$re_boundary\\]}{\$&}gr;
+	my $arg_esc = $arg =~ s{[$re_boundary]}{\$&}gr;
 	my $re = PPIx::Regexp->new($re_boundary . $arg_esc . $re_boundary);
 	if($re->failures)
 	{

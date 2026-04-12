@@ -77,6 +77,8 @@ $OptPrefix = '';
 	'p|prefix=s' => \$OptPrefix,
 );
 
+use Data::Dumper;
+use Encode qw/encode_utf8/;
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 
@@ -93,7 +95,7 @@ while(not eof STDIN)
 	{
 		# this assigment drop extra columns (if a row has more fields than the header)
 		# and undef a given $ENV{FIELDNAME} if there is not that many fields in a certain row.
-		local @ENV{map {$OptPrefix.$_} @Header} = @row;
+		local @ENV{map {$OptPrefix.$_} @Header} = map {encode_utf8($_)} @row;
 		system {$ARGV[0]} @ARGV;
 		$status = $?;
 	}

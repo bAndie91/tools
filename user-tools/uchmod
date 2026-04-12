@@ -59,11 +59,11 @@ fmod=${umask//x/}
 
 if [ $do_dirs ]
 then
-	find "$@" $maxdepth -type d -print0 | xargs --null chmod "${chmod_opt[@]}" "$dmod" --
+	find "$@" $maxdepth -type d -print0 | xargs --null --no-run-if-empty chmod "${chmod_opt[@]}" "$dmod" --
 fi
 if [ $do_files ]
 then
-	find "$@" $maxdepth -type f -print0 | xargs --null chmod "${chmod_opt[@]}" "$fmod" --
+	find "$@" $maxdepth -type f -print0 | xargs --null --no-run-if-empty chmod "${chmod_opt[@]}" "$fmod" --
 fi
 
 

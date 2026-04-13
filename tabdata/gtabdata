@@ -285,14 +285,27 @@ class TreeView(gtk.TreeView):
 	
 	def set_model(self, base_model):
 		self.base_model = base_model
-		super(TreeView, self).set_model(base_model)
 		if base_model is not None:
 			self.filtered_model = base_model.filter_new()
+			self.set_filter_function(self.default_filtering_cb)
+			self.sortable_model = TreeModelSort(self.filtered_model)
+			super(TreeView, self).set_model(self.sortable_model)
 		else:
 			self.filtered_model = None
+			super(TreeView, self).set_model(base_model)
 	
 	def set_filter_function(self, func, user_data=None):
 		self.filtered_model.set_visible_func(func, user_data)
+	
+	def default_filtering_cb(self, model, treeiter, cb_data):
+		all_column_filter_match = True
+		for col in self.get_columns():
+			re_pattern = col.filter_str
+			if re_pattern is not None:
+				if re.search(re_pattern, model[treeiter][col.name]) is None:
+					all_column_filter_match = False
+					break
+		return all_column_filter_match
 	
 	def _on_key_release(self, widget, event):
 		if event.keyval == gtk.gdk.keyval_from_name('space'):
@@ -368,6 +381,7 @@ class TreeView(gtk.TreeView):
 		tvc.connect('notify::width', self._on_column_width_change)
 		tvc.connect('notify::visible', self._on_column_visibility_changed)
 		tvc.connect('notify::sort-order', self._on_column_sort_order_changed)
+		tvc.connect('filter-expression-changed', lambda tvc: self.filtered_model.refilter())
 
 	def _on_column_click(self, col_widget, event):
 		if event.button == MOUSE_BUTTON_RIGHT:
@@ -507,6 +521,7 @@ class TreeView(gtk.TreeView):
 class TreeViewColumn(gtk.TreeViewColumn):
 	__gsignals__ = {
 		'button-press-event': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
+		'filter-expression-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
 	}
 	def __init__(self, **opt):
 		super(TreeViewColumn, self).__init__(**opt)
@@ -516,6 +531,7 @@ class TreeViewColumn(gtk.TreeViewColumn):
 		header_widget.show_all()
 		self.set_widget(header_widget)
 		self.filter_entrybox = gtk.Entry()
+		self.filter_entrybox.connect('changed', lambda editable: self.emit('filter-expression-changed'))
 	def open_filtering(self):
 		self.filter_entrybox.show()
 	def close_filtering(self):
@@ -525,6 +541,15 @@ class TreeViewColumn(gtk.TreeViewColumn):
 	@property
 	def is_filtering_open(self):
 		return self.filter_entrybox.get_visible()
+	@property
+	def filter_str(self):
+		if self.is_filtering_open:
+			return self.filter_entrybox.get_text()
+		return None
+	@filter_str.setter
+	def filter_str(self, s):
+		self.open_filtering()
+		self.filter_entrybox.set_text(s)
 	@property
 	def name(self):
 		return self.get_name()

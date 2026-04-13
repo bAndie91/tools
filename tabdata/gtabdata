@@ -440,10 +440,9 @@ class TreeView(gtk.TreeView):
 				tvc.set_fixed_width(self._previous_widths[tvc.name])
 
 	def _on_header_menu_popup(self, tv, popup_menu, tv_col):
-		mi = ImageMenuItem(label="Filter", icon=gtk.STOCK_FIND)
-		mi.connect('activate', lambda mi: tv_col.filter_entrybox.show())
+		mi = ImageMenuItem(label=("don't filter" if tv_col.is_filtering_open else "filter"), icon=gtk.STOCK_FIND)
+		mi.connect('activate', lambda mi: tv_col.toggle_filtering())
 		# TODO implement
-		# TODO toggle filter/unfilter
 		# TODO widen entry box as wide as the column
 		popup_menu.append(mi)
 
@@ -497,12 +496,19 @@ class TreeViewColumn(gtk.TreeViewColumn):
 		super(TreeViewColumn, self).__init__(**opt)
 		header_widget = gtk.VBox()
 		self.header_label = Label('')
-		header_widget.pack_start(self.header_label, expand=True, fill=True)
-		self.filter_entrybox = gtk.Entry()
-		header_widget.pack_start(self.filter_entrybox, expand=True, fill=True)
+		header_widget.pack_start(self.header_label, expand=False, fill=False)
 		header_widget.show_all()
-		self.filter_entrybox.hide()
 		self.set_widget(header_widget)
+		self.filter_entrybox = gtk.Entry()
+	def open_filtering(self):
+		self.filter_entrybox.show()
+	def close_filtering(self):
+		self.filter_entrybox.hide()
+	def toggle_filtering(self):
+		self.filter_entrybox.set_visible(not self.is_filtering_open)
+	@property
+	def is_filtering_open(self):
+		return self.filter_entrybox.get_visible()
 	@property
 	def name(self):
 		return self.get_name()
@@ -517,15 +523,33 @@ class TreeViewColumn(gtk.TreeViewColumn):
 	def setup_events(self, *X):
 		# this method should be called when the TreeView is realized.
 		if not self.get_data('setup-events-done'):
-			# find the button representing the treeview column header
-			# and propagate up events.
+			# find the button representing the treeview column header:
 			potential_header_button = self.get_widget()
 			while not isinstance(potential_header_button, gtk.Button):
 				potential_header_button = potential_header_button.get_parent()
 			if potential_header_button is not None:
+				# propagate click events upward:
 				potential_header_button.connect('button-press-event', lambda widget, event: self.emit('button-press-event', event))
+				# insert a VBox into the widget hierarchy under the header button:
+				hbox = potential_header_button.get_child()
+				potential_header_button.remove(hbox)
+				vbox = gtk.VBox()
+				potential_header_button.add(vbox)
+				vbox.pack_start(hbox, expand=False, fill=False)
+				vbox.pack_start(self.filter_entrybox, expand=True, fill=False)
+				vbox.show_all()
+				self.filter_entrybox.hide()
 				# lower down the implicite TreeViewColumn header button, so filter_entrybox gets events:
 				potential_header_button.get_event_window().lower()
+			
+			# align column header label to the top vertically:
+			potential_alignment_widget = self.get_widget()
+			while not isinstance(potential_alignment_widget, gtk.Alignment):
+				potential_alignment_widget = potential_alignment_widget.get_parent()
+			if potential_alignment_widget is not None:
+				potential_alignment_widget.props.yalign = 0.0
+				potential_alignment_widget.props.yscale = 0.0
+
 			self.set_data('setup-events-done', True)
 
 class CellRendererTextOverflow(gtk.GenericCellRenderer):

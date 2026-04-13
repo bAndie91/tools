@@ -86,11 +86,12 @@ class TreeModelProxy(object):
 		derived_model = _proxy_userdata['derived_model']
 		return func(derived_model, treepath, treeiter, userdata)
 
-class TreeModelFilter(gtk.TreeModelFilter):
+class TreeModelFilter(gtk.GenericTreeModel):
 	_proxy_implemented = ['__getitem__', 'foreach', 'get', 'get_value']
 	def __init__(self, upstream_treemodel, treemodel_filter):
 		self._proxy_real_treemodel = treemodel_filter
 		self._proxy_upstream_treemodel = upstream_treemodel
+		#super(TreeModelFilter, self).__init__()
 	def __getitem__(self, item):
 		answer = self._proxy_real_treemodel.__getitem__(item)
 		return TreeModelRow(answer, self._proxy_upstream_treemodel)
@@ -117,13 +118,13 @@ class TreeModelSort(gtk.TreeModelSort):
 			self._proxy_upstream_treemodel = basemodel
 		if hasattr(basemodel, '_proxy_real_treemodel'):
 			basemodel = basemodel._proxy_real_treemodel
-		super(self.__class__, self).__init__(basemodel)
+		super(TreeModelSort, self).__init__(basemodel)
 	def __getitem__(self, item):
-		answer = super(self.__class__, self).__getitem__(item)
+		answer = super(TreeModelSort, self).__getitem__(item)
 		return TreeModelRow(answer, self._proxy_upstream_treemodel)
 	def foreach(self, func, userdata):
 		_proxy_userdata = {'func': func, 'userdata': userdata, 'derived_model': self}
-		super(self.__class__, self).foreach(TreeModelProxy._proxy_foreach, _proxy_userdata)
+		super(TreeModelSort, self).foreach(TreeModelProxy._proxy_foreach, _proxy_userdata)
 	def get(self, row, *columns):
 		raise(Exception('unimplemented'))
 	def get_value(self, treeiter, column):
@@ -155,7 +156,7 @@ class TreeStore(gtk.TreeStore):
 			types.append(col_type)
 			self.column_name.append(col_name)
 			n += 1
-		super(self.__class__, self).__init__(*types)
+		super(TreeStore, self).__init__(*types)
 		for event in 'row-changed', 'row-deleted', 'row-inserted':
 			self.connect_after(event, self.emit_signal, 'changed')
 			self.connect_after(event, self.emit_signal, 'set-changed')
@@ -193,7 +194,7 @@ class TreeStore(gtk.TreeStore):
 		columns = list(columns)
 		for i, col in enumerate(columns):
 			columns[i] = self.get_column_num(col)
-		answer = super(self.__class__, self).get(row, *columns)
+		answer = super(TreeStore, self).get(row, *columns)
 		answer = list(answer)
 		for i, col_num in enumerate(columns):
 			answer[i] = self.convert_cell(col_num, answer[i])
@@ -206,7 +207,7 @@ class TreeStore(gtk.TreeStore):
 			return self.reader[col_num](cell_value)
 		return cell_value
 	def __getitem__(self, item):
-		answer = super(self.__class__, self).__getitem__(item)
+		answer = super(TreeStore, self).__getitem__(item)
 		return TreeModelRow(answer, self)
 	def _row_dict_to_list(self, row):
 		if type(row) == dict:
@@ -216,11 +217,11 @@ class TreeStore(gtk.TreeStore):
 				row[self.get_column_num(col_name)] = value
 		return row
 	def append(self, parent, row):
-		return super(self.__class__, self).append(parent, self._row_dict_to_list(row))
+		return super(TreeStore, self).append(parent, self._row_dict_to_list(row))
 	def insert_after(self, parent, sibling, row):
-		return super(self.__class__, self).insert_after(parent, sibling, self._row_dict_to_list(row))
+		return super(TreeStore, self).insert_after(parent, sibling, self._row_dict_to_list(row))
 	def insert_before(self, parent, sibling, row):
-		return super(self.__class__, self).insert_before(parent, sibling, self._row_dict_to_list(row))
+		return super(TreeStore, self).insert_before(parent, sibling, self._row_dict_to_list(row))
 	def set(self, treeiter, *itempairs):
 		if len(itempairs) == 0: return
 		if type(itempairs[0]) == dict:
@@ -228,7 +229,7 @@ class TreeStore(gtk.TreeStore):
 			itempairs = []
 			for col_name, value in cols.iteritems():
 				itempairs.extend([self.get_column_num(col_name), value])
-		super(self.__class__, self).set(treeiter, *itempairs)
+		super(TreeStore, self).set(treeiter, *itempairs)
 	def get_cells_by_column(self, col_name):
 		treeiter = self.get_iter_root()
 		while treeiter is not None:
@@ -245,9 +246,9 @@ class TreeStore(gtk.TreeStore):
 			answer.extend(self.get(treeiter, *columns))
 			yield answer
 			treeiter = successor_iter(self, row.iter)
-	def filter_new(self, root=None):
-		treemodelfilter = super(self.__class__, self).filter_new(root=root)
-		return TreeModelFilter(self, treemodelfilter)
+	#def filter_new(self, root=None):
+	#	treemodelfilter = super(TreeStore, self).filter_new(root=root)
+	#	return TreeModelFilter(self, treemodelfilter)
 
 class TreeView(gtk.TreeView):
 	__gsignals__ = {
@@ -260,8 +261,9 @@ class TreeView(gtk.TreeView):
 		'column-visibility-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
 		'selection-change': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
 	}
-	def __init__(self, model):
-		super(self.__class__, self).__init__(model)
+	def __init__(self, base_model):
+		super(TreeView, self).__init__(None)
+		self.set_model(base_model)
 		self._previous_widths = {}
 		self._previous_previous_widths = {}
 		self._stored_column_width = {}
@@ -278,6 +280,20 @@ class TreeView(gtk.TreeView):
 		self.connect('key-release-event', self._on_key_release)
 		self.connect('header-menu-popup', self._on_header_menu_popup)
 
+	def get_model(self):
+		return self.base_model
+	
+	def set_model(self, base_model):
+		self.base_model = base_model
+		super(TreeView, self).set_model(base_model)
+		if base_model is not None:
+			self.filtered_model = base_model.filter_new()
+		else:
+			self.filtered_model = None
+	
+	def set_filter_function(self, func, user_data=None):
+		self.filtered_model.set_visible_func(func, user_data)
+	
 	def _on_key_release(self, widget, event):
 		if event.keyval == gtk.gdk.keyval_from_name('space'):
 			iterpath, tv_col = self.get_cursor()
@@ -339,7 +355,7 @@ class TreeView(gtk.TreeView):
 		self._stored_column_width[col.name] = w
 
 	def append_column(self, tvc):
-		super(self.__class__, self).append_column(tvc)
+		super(TreeView, self).append_column(tvc)
 		self._column_setup_events(tvc)
 		self.emit('column-added', tvc)
 
@@ -563,7 +579,7 @@ class CellRendererTextOverflow(gtk.GenericCellRenderer):
 		'editable': (gobject.TYPE_BOOLEAN, 'Editable', 'Editable', False, gobject.PARAM_READWRITE),
 	}
 	def __init__(self):
-		super(self.__class__, self).__init__()
+		super(CellRendererTextOverflow, self).__init__()
 		self.__gobject_init__()
 		self.cr_txt = gtk.CellRendererText()
 		self.the_props = {'markup': None}
@@ -737,14 +753,14 @@ class SubmenuMenuItem(MenuItem):
 
 class CheckMenuItem(gtk.CheckMenuItem, MenuItem):
 	def __init__(self, label=None, markup=None, use_underline=False):
-		super(self.__class__, self).__init__(label=label, use_underline=use_underline)
+		super(CheckMenuItem, self).__init__(label=label, use_underline=use_underline)
 		if markup is not None:
 			self.set_markup(markup)
 
 class ImageMenuItem(gtk.ImageMenuItem, MenuItem):
 	def __init__(self, stock_id=None, accel_group=None, label=None, markup=None, icon=None):
 		assert not(label is not None and markup is not None), "label and markup arguments are mutually exclusive"
-		super(self.__class__, self).__init__(stock_id=stock_id, accel_group=accel_group)
+		super(ImageMenuItem, self).__init__(stock_id=stock_id, accel_group=accel_group)
 		if label is not None:
 			self.set_label(label)
 		if markup is not None:

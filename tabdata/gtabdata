@@ -441,7 +441,10 @@ class TreeView(gtk.TreeView):
 
 	def _on_header_menu_popup(self, tv, popup_menu, tv_col):
 		mi = ImageMenuItem(label="Filter", icon=gtk.STOCK_FIND)
-		#mi.connect('activate', lambda mi: )  # TODO
+		mi.connect('activate', lambda mi: tv_col.filter_entrybox.show())
+		# TODO implement
+		# TODO toggle filter/unfilter
+		# TODO widen entry box as wide as the column
 		popup_menu.append(mi)
 
 		mi = ImageMenuItem(label="auto width")
@@ -490,17 +493,25 @@ class TreeViewColumn(gtk.TreeViewColumn):
 	__gsignals__ = {
 		'button-press-event': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
 	}
+	def __init__(self, **opt):
+		super(TreeViewColumn, self).__init__(**opt)
+		header_widget = gtk.VBox()
+		self.header_label = Label('')
+		header_widget.pack_start(self.header_label, expand=True, fill=True)
+		self.filter_entrybox = gtk.Entry()
+		header_widget.pack_start(self.filter_entrybox, expand=True, fill=True)
+		header_widget.show_all()
+		self.filter_entrybox.hide()
+		self.set_widget(header_widget)
 	@property
 	def name(self):
 		return self.get_name()
 	@property
 	def title(self):
-		return self.get_widget().get_text()
+		return self.header_label.get_text()
 	@title.setter
 	def title(self, title):
-		tvc_label = gtk.Label(title)
-		tvc_label.show()
-		self.set_widget(tvc_label)
+		self.header_label.set_text(title)
 	def __repr__(self):
 		return '<%s name="%s">' % (self.__class__.__name__, self.name)
 	def setup_events(self, *X):
@@ -508,11 +519,13 @@ class TreeViewColumn(gtk.TreeViewColumn):
 		if not self.get_data('setup-events-done'):
 			# find the button representing the treeview column header
 			# and propagate up events.
-			w = self.get_widget()
-			while not isinstance(w, gtk.Button):
-				w = w.get_parent()
-			if w is not None:
-				w.connect('button-press-event', lambda widget, event: self.emit('button-press-event', event))
+			potential_header_button = self.get_widget()
+			while not isinstance(potential_header_button, gtk.Button):
+				potential_header_button = potential_header_button.get_parent()
+			if potential_header_button is not None:
+				potential_header_button.connect('button-press-event', lambda widget, event: self.emit('button-press-event', event))
+				# lower down the implicite TreeViewColumn header button, so filter_entrybox gets events:
+				potential_header_button.get_event_window().lower()
 			self.set_data('setup-events-done', True)
 
 class CellRendererTextOverflow(gtk.GenericCellRenderer):

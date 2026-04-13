@@ -531,7 +531,9 @@ class TreeViewColumn(gtk.TreeViewColumn):
 		header_widget.show_all()
 		self.set_widget(header_widget)
 		self.filter_entrybox = gtk.Entry()
-		self.filter_entrybox.connect('changed', lambda editable: self.emit('filter-expression-changed'))
+		self.filter_entrybox.connect('changed', lambda editable: self.filter_expression_changed())
+		self.filter_entrybox.connect('notify::visible', lambda wdg, gparam: self.filter_expression_changed())
+
 	def open_filtering(self):
 		self.filter_entrybox.show()
 	def close_filtering(self):
@@ -550,6 +552,17 @@ class TreeViewColumn(gtk.TreeViewColumn):
 	def filter_str(self, s):
 		self.open_filtering()
 		self.filter_entrybox.set_text(s)
+	def filter_expression_changed(self):
+		try:
+			re.compile(self.filter_str)
+		except Exception as e:
+			self.filter_entrybox.modify_base(gtk.STATE_NORMAL, gtk.gdk.Color('#FFA4A4'))
+			self.filter_entrybox.set_tooltip_text(str(e))
+		else:
+			self.filter_entrybox.modify_base(gtk.STATE_NORMAL, None)
+			self.filter_entrybox.set_tooltip_text(None)
+			self.emit('filter-expression-changed')
+
 	@property
 	def name(self):
 		return self.get_name()

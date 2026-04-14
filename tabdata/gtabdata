@@ -228,7 +228,7 @@ class TreeModelFilterSort(gtk.TreeModelSort):
 		raise NotImplementedError()
 	# proxy methods:
 	def __getattribute__(self, attrname):
-		if attrname in ['get_column_num', 'append', 'clear']:
+		if attrname in ['get_column_num', 'get_columns', 'append', 'clear']:
 			return object.__getattribute__(self.base_model, attrname)
 		elif attrname in ['set_visible_func', 'refilter']:
 			return object.__getattribute__(self.filtering_model, attrname)
@@ -281,7 +281,7 @@ class TreeView(gtk.TreeView):
 	def default_filtering_cb(self, model, treeiter, cb_data):
 		all_column_filter_match = True
 		for col in self.get_columns():
-			re_pattern = col.filter_str
+			re_pattern = col.filter_expr
 			if re_pattern is not None:
 				if re.search(re_pattern, model[treeiter][col.name]) is None:
 					all_column_filter_match = False
@@ -451,10 +451,8 @@ class TreeView(gtk.TreeView):
 				tvc.set_fixed_width(self._previous_widths[tvc.name])
 
 	def _on_header_menu_popup(self, tv, popup_menu, tv_col):
-		mi = ImageMenuItem(label=("don't filter" if tv_col.is_filtering_open else "filter"), icon=gtk.STOCK_FIND)
+		mi = ImageMenuItem(label=("don't filter" if tv_col.is_filtering_open else "regexp filter…"), icon=gtk.STOCK_FIND)
 		mi.connect('activate', lambda mi: tv_col.toggle_filtering())
-		# TODO implement
-		# TODO widen entry box as wide as the column
 		popup_menu.append(mi)
 
 		mi = ImageMenuItem(label="auto width")
@@ -511,6 +509,7 @@ class TreeViewColumn(gtk.TreeViewColumn):
 		header_widget.pack_start(self.header_label, expand=False, fill=False)
 		header_widget.show_all()
 		self.set_widget(header_widget)
+		self._saved_filter_expr = None
 		self.filter_entrybox = gtk.Entry()
 		self.filter_entrybox.set_width_chars(1)  # minimal width so its final width is controlled by the column width
 		self.filter_entrybox.connect('changed', lambda editable: self.filter_expression_changed())
@@ -526,24 +525,29 @@ class TreeViewColumn(gtk.TreeViewColumn):
 	def is_filtering_open(self):
 		return self.filter_entrybox.get_visible()
 	@property
-	def filter_str(self):
+	def filter_expr(self):
 		if self.is_filtering_open:
 			return self.filter_entrybox.get_text()
 		return None
-	@filter_str.setter
-	def filter_str(self, s):
-		self.open_filtering()
+	@filter_expr.setter
+	def filter_expr(self, s):
 		self.filter_entrybox.set_text(s)
+		self.open_filtering()
 	def filter_expression_changed(self):
-		try:
-			re.compile(self.filter_str)
-		except Exception as e:
-			self.filter_entrybox.modify_base(gtk.STATE_NORMAL, gtk.gdk.Color('#FFA4A4'))
-			self.filter_entrybox.set_tooltip_text(str(e))
-		else:
-			self.filter_entrybox.modify_base(gtk.STATE_NORMAL, None)
-			self.filter_entrybox.set_tooltip_text(None)
+		old = self._saved_filter_expr
+		new = self.filter_expr
+		if new is not None:
+			try:
+				re.compile(new)
+			except Exception as e:
+				self.filter_entrybox.modify_base(gtk.STATE_NORMAL, gtk.gdk.Color('#FFA4A4'))
+				self.filter_entrybox.set_tooltip_text(str(e))
+			else:
+				self.filter_entrybox.modify_base(gtk.STATE_NORMAL, None)
+				self.filter_entrybox.set_tooltip_text(None)
+		if old != new:
 			self.emit('filter-expression-changed')
+			self._saved_filter_expr = new
 
 	@property
 	def name(self):

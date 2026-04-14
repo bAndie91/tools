@@ -77,6 +77,8 @@ class TreeModelRow(object):
 		return self.real_treemodelrow.__len__()
 	def as_dict(self):
 		return dict([(col_name, self[col_name]) for col_name in self.upstream_treemodel.column_name])
+	def __repr__(self):
+		return '<%s %s>' % (self.__class__.__name__, self.as_dict())
 
 class TreeModelProxy(object):
 	@staticmethod
@@ -85,50 +87,6 @@ class TreeModelProxy(object):
 		userdata = _proxy_userdata['userdata']
 		derived_model = _proxy_userdata['derived_model']
 		return func(derived_model, treepath, treeiter, userdata)
-
-class TreeModelFilter(gtk.GenericTreeModel):
-	_proxy_implemented = ['__getitem__', 'foreach', 'get', 'get_value']
-	def __init__(self, upstream_treemodel, treemodel_filter):
-		self._proxy_real_treemodel = treemodel_filter
-		self._proxy_upstream_treemodel = upstream_treemodel
-		#super(TreeModelFilter, self).__init__()
-	def __getitem__(self, item):
-		answer = self._proxy_real_treemodel.__getitem__(item)
-		return TreeModelRow(answer, self._proxy_upstream_treemodel)
-	def foreach(self, func, userdata):
-		_proxy_userdata = {'func': func, 'userdata': userdata, 'derived_model': self}
-		self._proxy_real_treemodel.foreach(TreeModelProxy._proxy_foreach, _proxy_userdata)
-	def get(self, row, *columns):
-		raise(Exception('unimplemented'))
-	def get_value(self, treeiter, column):
-		raise(Exception('unimplemented'))
-	def __len__(self):
-		return len(self._proxy_real_treemodel)
-	def __getattribute__(self, attr):
-		if attr.startswith('_proxy_') or attr in self._proxy_implemented:
-			return object.__getattribute__(self, attr)
-		else:
-			return object.__getattribute__(self._proxy_real_treemodel, attr)
-
-class TreeModelSort(gtk.TreeModelSort):
-	def __init__(self, basemodel):
-		if hasattr(basemodel, '_proxy_upstream_treemodel'):
-			self._proxy_upstream_treemodel = basemodel._proxy_upstream_treemodel
-		else:
-			self._proxy_upstream_treemodel = basemodel
-		if hasattr(basemodel, '_proxy_real_treemodel'):
-			basemodel = basemodel._proxy_real_treemodel
-		super(TreeModelSort, self).__init__(basemodel)
-	def __getitem__(self, item):
-		answer = super(TreeModelSort, self).__getitem__(item)
-		return TreeModelRow(answer, self._proxy_upstream_treemodel)
-	def foreach(self, func, userdata):
-		_proxy_userdata = {'func': func, 'userdata': userdata, 'derived_model': self}
-		super(TreeModelSort, self).foreach(TreeModelProxy._proxy_foreach, _proxy_userdata)
-	def get(self, row, *columns):
-		raise(Exception('unimplemented'))
-	def get_value(self, treeiter, column):
-		raise(Exception('unimplemented'))
 
 class TreeStore(gtk.TreeStore):
 	__gsignals__ = {
@@ -201,7 +159,7 @@ class TreeStore(gtk.TreeStore):
 		answer = tuple(answer)
 		return answer
 	def get_value(self, treeiter, column):
-		raise Exception('unimplemented')
+		raise NotImplementedError()
 	def convert_cell(self, col_num, cell_value):
 		if self.reader.has_key(col_num):
 			return self.reader[col_num](cell_value)
@@ -246,9 +204,36 @@ class TreeStore(gtk.TreeStore):
 			answer.extend(self.get(treeiter, *columns))
 			yield answer
 			treeiter = successor_iter(self, row.iter)
-	#def filter_new(self, root=None):
-	#	treemodelfilter = super(TreeStore, self).filter_new(root=root)
-	#	return TreeModelFilter(self, treemodelfilter)
+
+class TreeModelFilterSort(gtk.TreeModelSort):
+	def __init__(self, basemodel):
+		self.base_model = basemodel
+		self.filtering_model = self.base_model.filter_new()
+		super(TreeModelFilterSort, self).__init__(self.filtering_model)
+	def convert_item_to_basemodel_item(self, item):
+		if isinstance(item, gtk.TreeIter):
+			filtering_model_iter = self.convert_iter_to_child_iter(None, item)
+			return self.filtering_model.convert_iter_to_child_iter(None, filtering_model_iter)
+		else:
+			filtering_model_path = self.convert_path_to_child_path(item)
+			return self.filtering_model.convert_path_to_child_path(filtering_model_path)
+	def __getitem__(self, item):
+		return self.base_model[self.convert_item_to_basemodel_item(item)]
+	def foreach(self, func, userdata):
+		_proxy_userdata = {'func': func, 'userdata': userdata, 'derived_model': self}
+		super(TreeModelFilterSort, self).foreach(TreeModelProxy._proxy_foreach, _proxy_userdata)
+	def get(self, row, *columns):
+		raise NotImplementedError()
+	def get_value(self, treeiter, column):
+		raise NotImplementedError()
+	# proxy methods:
+	def __getattribute__(self, attrname):
+		if attrname in ['get_column_num', 'append', 'clear']:
+			return object.__getattribute__(self.base_model, attrname)
+		elif attrname in ['set_visible_func', 'refilter']:
+			return object.__getattribute__(self.filtering_model, attrname)
+		else:
+			return object.__getattribute__(self, attrname)
 
 class TreeView(gtk.TreeView):
 	__gsignals__ = {
@@ -280,22 +265,18 @@ class TreeView(gtk.TreeView):
 		self.connect('key-release-event', self._on_key_release)
 		self.connect('header-menu-popup', self._on_header_menu_popup)
 
-	def get_model(self):
-		return self.base_model
-	
 	def set_model(self, base_model):
 		self.base_model = base_model
 		if base_model is not None:
-			self.filtered_model = base_model.filter_new()
+			self.filtersort_model = TreeModelFilterSort(base_model)
+			super(TreeView, self).set_model(self.filtersort_model)
 			self.set_filter_function(self.default_filtering_cb)
-			self.sortable_model = TreeModelSort(self.filtered_model)
-			super(TreeView, self).set_model(self.sortable_model)
 		else:
-			self.filtered_model = None
+			self.filtersort_model = None
 			super(TreeView, self).set_model(base_model)
 	
 	def set_filter_function(self, func, user_data=None):
-		self.filtered_model.set_visible_func(func, user_data)
+		self.filtersort_model.set_visible_func(func, user_data)
 	
 	def default_filtering_cb(self, model, treeiter, cb_data):
 		all_column_filter_match = True
@@ -381,7 +362,7 @@ class TreeView(gtk.TreeView):
 		tvc.connect('notify::width', self._on_column_width_change)
 		tvc.connect('notify::visible', self._on_column_visibility_changed)
 		tvc.connect('notify::sort-order', self._on_column_sort_order_changed)
-		tvc.connect('filter-expression-changed', lambda tvc: self.filtered_model.refilter())
+		tvc.connect('filter-expression-changed', lambda tvc: self.filtersort_model.refilter())
 
 	def _on_column_click(self, col_widget, event):
 		if event.button == MOUSE_BUTTON_RIGHT:
@@ -531,6 +512,7 @@ class TreeViewColumn(gtk.TreeViewColumn):
 		header_widget.show_all()
 		self.set_widget(header_widget)
 		self.filter_entrybox = gtk.Entry()
+		self.filter_entrybox.set_width_chars(1)  # minimal width so its final width is controlled by the column width
 		self.filter_entrybox.connect('changed', lambda editable: self.filter_expression_changed())
 		self.filter_entrybox.connect('notify::visible', lambda wdg, gparam: self.filter_expression_changed())
 

@@ -1300,10 +1300,14 @@ class GTabData(object):
 			context_menu = gtk.Menu()
 			on_table_row_context_menu_open(tv, context_menu, treepath, col, 0, 0)
 			context_menu.show_all()
-			context_menu.popup(None, None, lambda menu, cb_data: widget_coordinates(tv, gtk.CORNER_TOP_LEFT) + (True,), MOUSE_BUTTON_RIGHT, event.time, {})
-			# TODO position to the focused cell
+			context_menu.popup(None, None, lambda menu, cb_data: self.cell_coordinates(treepath, col, gtk.CORNER_BOTTOM_LEFT) + (True,), MOUSE_BUTTON_RIGHT, event.time, {})
 			return True
 	
+	def cell_coordinates(self, treepath, col, corner):
+		rect = self.main_table.get_cell_area(treepath, col)
+		win_x, win_y = self.main_table.get_bin_window().get_origin()
+		return win_x + rect.x + rect.width * int(corner.value_nick.endswith('right')), win_y + rect.y + rect.height * int(corner.value_nick.startswith('bottom'))
+
 	def _window_initial_resize(self):
 		if not self.main_win.property_persistor.props.get('geometry'):
 			tv_width, tv_height = self.main_table.size_request()

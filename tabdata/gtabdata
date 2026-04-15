@@ -142,7 +142,7 @@ class TreeStore(gtk.TreeStore):
 	def get_column_name(self, col_num):
 		try:
 			return self.column_name[col_num]
-		except IndexError:
+		except (IndexError, TypeError):
 			raise self.__class__.ColumnNotFoundException(col_num)
 	def get(self, row, *columns):
 		if type(row) == tuple:
@@ -226,6 +226,14 @@ class TreeModelFilterSort(gtk.TreeModelSort):
 		raise NotImplementedError()
 	def get_value(self, treeiter, column):
 		raise NotImplementedError()
+	def get_sort_column_name(self):
+		col_num, sort_order = self.get_sort_column_id()
+		if col_num is not None and col_num >= 0:
+			return self.base_model.get_column_name(col_num)
+		return None
+	def set_sort_column_by_name(self, col_name, sort_order):
+		col_num = self.base_model.get_column_num(col_name)
+		self.set_sort_column_id(col_num, sort_order)
 	# proxy methods:
 	def __getattribute__(self, attrname):
 		if attrname in ['get_column_num', 'get_columns', 'append', 'clear']:
@@ -252,8 +260,6 @@ class TreeView(gtk.TreeView):
 		self._previous_widths = {}
 		self._previous_previous_widths = {}
 		self._stored_column_width = {}
-		self._sortby_column_name = None
-		self._resorting = False
 		self.set_reorderable(True)
 		self.set_headers_clickable(True)
 		self.set_rubber_banding(True)
@@ -271,6 +277,8 @@ class TreeView(gtk.TreeView):
 			self.filtersort_model = TreeModelFilterSort(base_model)
 			super(TreeView, self).set_model(self.filtersort_model)
 			self.set_filter_function(self.default_filtering_cb)
+			
+			self.filtersort_model.connect('sort-column-changed', self._on_model_sort_column_changed)
 		else:
 			self.filtersort_model = None
 			super(TreeView, self).set_model(base_model)
@@ -283,9 +291,11 @@ class TreeView(gtk.TreeView):
 		for col in self.get_columns():
 			re_pattern = col.filter_expr
 			if re_pattern is not None:
-				if re.search(re_pattern, model[treeiter][col.name]) is None:
-					all_column_filter_match = False
-					break
+				cell_content = model[treeiter][col.name]
+				if cell_content is not None:
+					if re.search(re_pattern, cell_content) is None:
+						all_column_filter_match = False
+						break
 		return all_column_filter_match
 	
 	def _on_key_release(self, widget, event):
@@ -372,7 +382,6 @@ class TreeView(gtk.TreeView):
 				popup_menu.popup(None, None, None, event.button, event.time)
 			return True
 		elif event.button == MOUSE_BUTTON_LEFT:
-			self._set_sortby_column(col_widget)
 			self.set_search_column_by_name(col_widget.name)
 
 	def set_search_column_by_name(self, colname):
@@ -380,39 +389,28 @@ class TreeView(gtk.TreeView):
 		self.set_search_column(model_col_num)
 
 	def set_sortby_column_by_name(self, colname):
-		sort_column = self.get_column_by_name(colname)
-		sort_order = sort_column.get_sort_order()
-		sort_column.clicked()
-		self._set_sortby_column(sort_column)
-		sort_column.set_sort_order(sort_order)
+		tvc_curr_sort_order = self.get_column_by_name(colname).get_sort_order()
+		self.get_model().set_sort_column_by_name(colname, tvc_curr_sort_order)
 		self.set_search_column_by_name(colname)
 
-	def _set_sortby_column(self, col):
-		self._sortby_column_name = col.name
-		if not self._resorting:
-			self.emit('sort-by-column-changed', col)
-			self.emit('column-sort-order-changed', col)
-	
-	def get_sortby_column(self):
-		return self.get_column_by_name(self._sortby_column_name)
+	def _on_model_sort_column_changed(self, model):
+		col_name = model.get_sort_column_name()
+		if col_name is not None:
+			col = self.get_column_by_name(col_name)
+		else:
+			col = None
+		self.emit('sort-by-column-changed', col)
+		self.emit('column-sort-order-changed', col)
 
 	def _on_column_sort_order_changed(self, tvc, gparam):
-		if not self._resorting:
-			self.emit('column-sort-order-changed', tvc)
+		self.emit('column-sort-order-changed', tvc)
+
+	def get_sortby_column(self):
+		return self.get_column_by_name( self.get_model().get_sort_column_name() )
 
 	def _on_column_visibility_changed(self, tvc, gparam):
 		self.emit('column-visibility-changed', tvc)
 	
-	def resort(self):
-		"apply the current sort column to the model"
-		self._resorting = True
-		try:
-			self.set_sortby_column_by_name(self._sortby_column_name)
-		except:
-			pass
-		finally:
-			self._resorting = False
-
 	class ColumnNotFoundException(Exception):
 		pass
 
@@ -1226,8 +1224,8 @@ class GTabData(object):
 			('columns-order',  'columns-changed',           lambda tv: merge_ordering(self.proppersist_table.props.get('columns-order') or [], [col.name for col in tv.get_columns()]), self.restore_columns_order),
 			('hidden-columns', 'column-visibility-changed', lambda tv, tvc: [col.name for col in tv.get_columns() if not col.get_visible()], self.restore_hidden_columns),
 			('column-width',   'column-width-changed',      lambda tv, tvc, tvc_width: dict([(col.name, col.get_width()) for col in tv.get_columns()]), self.restore_columns_width),
-			('sort-column',    'sort-by-column-changed',    lambda tv, tvc: tvc.name, self.restore_sortby_column),
-			('sort-order',     'column-sort-order-changed', lambda tv, tvc: tvc.get_sort_order().value_nick, None),
+			('sort-column',    'sort-by-column-changed',    lambda tv, tvc: tvc.name if tvc is not None else '', self.restore_sortby_column),
+			('sort-order',     'column-sort-order-changed', lambda tv, tvc: tvc.get_sort_order().value_nick if tvc is not None else '', None),
 		])
 		if cliargs.key_field is not None or cliargs.auto_key_field:
 			self.proppersist_table.add_properties([('selected-rows', 'selection-change', lambda tv, sel_rows: [row[self.tabdata_key_field] for row in sel_rows], self.restore_selection)])
@@ -1283,8 +1281,6 @@ class GTabData(object):
 	def after_load_table(self):
 		with TemporaryProperty((self.proppersist_table, 'active'), (), False):
 			self.proppersist_table.apply_saved_properties()
-			# apply saved sorting
-			self.main_table.resort()
 			# auto size newly learned columns
 			self._auto_size_new_columns()
 			# resize the app window if not yet resized by the user
@@ -1393,7 +1389,8 @@ class GTabData(object):
 			pass
 		else:
 			sort_order = self.proppersist_table.props.get('sort-order')
-			if sort_order: tv.get_sortby_column().set_sort_order(getattr(gtk, 'SORT_'+sort_order.upper()))
+			if sort_order:
+				tv.get_sortby_column().set_sort_order(getattr(gtk, 'SORT_'+sort_order.upper()))
 		
 	def restore_hidden_columns(self, tv, columns):
 		for colname in columns:

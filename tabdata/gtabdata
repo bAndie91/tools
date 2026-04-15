@@ -361,7 +361,7 @@ class TreeView(gtk.TreeView):
 			
 			cr_txt = CellRendererTextOverflow()
 			cr_txt.set_data('treeviewcolumn', tvc)
-			tvc.pack_start(cr_txt, True)
+			tvc.pack_start(cr_txt, expand=True)
 			tvc.add_attribute(cr_txt, col_attr, col_num)
 			
 			tvc.set_data('original-position', len(self.get_columns()))
@@ -468,6 +468,11 @@ class TreeView(gtk.TreeView):
 		mi.connect('activate', lambda mi: tv_col.toggle_filtering())
 		popup_menu.append(mi)
 
+		mi = CheckMenuItem(label="align to right")
+		mi.set_active(tv_col.get_text_alignment() == gtk.JUSTIFY_RIGHT)
+		mi.connect('toggled', lambda mi, col: col.set_text_alignment(gtk.JUSTIFY_RIGHT if mi.get_active() else gtk.JUSTIFY_LEFT), tv_col)
+		popup_menu.append(mi)
+
 		mi = ImageMenuItem(label="auto width")
 		mi.connect('activate', lambda mi, tv_col: self.columns_autosize([tv_col]), tv_col)
 		popup_menu.append(mi)
@@ -522,12 +527,30 @@ class TreeViewColumn(gtk.TreeViewColumn):
 		header_widget.pack_start(self.header_label, expand=False, fill=False)
 		header_widget.show_all()
 		self.set_widget(header_widget)
+		
+		self.attribute_mapping = {}
+		self.cellrenderers_left = []
+		self.cellrenderers_right = []
+
 		self._saved_filter_expr = None
 		self.filter_entrybox = gtk.Entry()
 		self.filter_entrybox.set_width_chars(1)  # minimal width so its final width is controlled by the column width
 		self.filter_entrybox.connect('changed', lambda editable: self.filter_expression_changed())
 		self.filter_entrybox.connect('notify::visible', lambda wdg, gparam: self.filter_expression_changed())
 
+	def add_attribute(self, cellrenderer, attrname, col_num):
+		super(TreeViewColumn, self).add_attribute(cellrenderer, attrname, col_num)
+		if cellrenderer not in self.attribute_mapping: self.attribute_mapping[cellrenderer] = {}
+		self.attribute_mapping[cellrenderer][attrname] = col_num
+	def pack_start(self, cellrenderer, expand=True):
+		super(TreeViewColumn, self).pack_start(cellrenderer, expand)
+		self.cellrenderers_left.append(cellrenderer)
+	def pack_end(self, cellrenderer, expand=True):
+		super(TreeViewColumn, self).pack_end(cellrenderer, expand)
+		self.cellrenderers_right.insert(0, cellrenderer)
+	def get_cell_renderers(self):
+		return self.cellrenderers_left + self.cellrenderers_right
+	
 	def open_filtering(self):
 		self.filter_entrybox.show()
 	def close_filtering(self):
@@ -604,6 +627,12 @@ class TreeViewColumn(gtk.TreeViewColumn):
 				potential_alignment_widget.props.yscale = 0.0
 
 			self.set_data('setup-events-done', True)
+	def set_text_alignment(self, alignment):
+		first_cr = self.get_cell_renderers()[0]
+		first_cr.set_property('xalign', 1.0 if alignment == gtk.JUSTIFY_RIGHT else 0.0)
+	def get_text_alignment(self):
+		first_cr = self.get_cell_renderers()[0]
+		return gtk.JUSTIFY_RIGHT if first_cr.get_property('xalign') >= 1 else gtk.JUSTIFY_LEFT
 
 class CellRendererTextOverflow(gtk.GenericCellRenderer):
 	"""
@@ -614,25 +643,32 @@ class CellRendererTextOverflow(gtk.GenericCellRenderer):
 		'text': (gobject.TYPE_STRING, 'Text', 'Text', None, gobject.PARAM_READWRITE),
 		'markup': (gobject.TYPE_STRING, 'Markup', 'Markup', None, gobject.PARAM_READWRITE),
 		'editable': (gobject.TYPE_BOOLEAN, 'Editable', 'Editable', False, gobject.PARAM_READWRITE),
+		'xalign': (gobject.TYPE_FLOAT, 'Horizontal Alignment', 'Horizontal Alignment', 0.0, 1.0, 0.0, gobject.PARAM_READWRITE),
 	}
 	def __init__(self):
 		super(CellRendererTextOverflow, self).__init__()
 		self.__gobject_init__()
 		self.cr_txt = gtk.CellRendererText()
-		self.the_props = {'markup': None}
+		self.the_props = {'markup': None, 'xalign': 0.0}
 	def connect(self, *args):
 		self.cr_txt.connect(*args)
 	def do_set_property(self, pspec, val):
-		if pspec.name == 'markup':
-			self.the_props[pspec.name] = val
 		self.cr_txt.set_property(pspec.name, val)
+		if pspec.name in self.the_props:
+			self.the_props[pspec.name] = val
 	def do_get_property(self, pspec):
-		if pspec.name == 'markup':
-			# CellRendererText can not read 'markup' property back, so we do
+		if pspec.name in self.the_props:
+			# CellRendererText can not read 'markup', 'xalign' (potentially other) properties back, so we do
 			return self.the_props[pspec.name]
 		return self.cr_txt.get_property(pspec.name)
 	def set_property(self, prop, val):
+		if prop in self.the_props:
+			self.the_props[prop] = val
 		return self.cr_txt.set_property(prop, val)
+	def get_property(self, prop):
+		if prop in self.the_props:
+			return self.the_props[prop]
+		return self.cr_txt.get_property(prop)
 	def on_get_size(self, widget, cell_area):
 		x, y, w, h = self.cr_txt.get_size(widget, cell_area)
 		return x, y, w, h

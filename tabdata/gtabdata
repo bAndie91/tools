@@ -25,6 +25,7 @@ import difflib
 
 
 unicode = unicode  # just to keep python language server happy
+cmp = cmp  # just to keep python language server happy
 
 
 def add_key_binding(widget, keyname, callback):
@@ -205,11 +206,25 @@ class TreeStore(gtk.TreeStore):
 			yield answer
 			treeiter = successor_iter(self, row.iter)
 
+def floatOrNone(s):
+	try:
+		return float(s)
+	except (ValueError, TypeError):
+		return None
+
 class TreeModelFilterSort(gtk.TreeModelSort):
 	def __init__(self, basemodel):
 		self.base_model = basemodel
 		self.filtering_model = self.base_model.filter_new()
 		super(TreeModelFilterSort, self).__init__(self.filtering_model)
+		for colnum in range(self.get_n_columns()):
+			self.set_sort_func(colnum, self.mixdata_sorter, colnum)
+	def mixdata_sorter(self, model, iter1, iter2, colnum):
+		content1 = model[iter1][colnum]
+		content2 = model[iter2][colnum]
+		float1 = floatOrNone(content1)
+		float2 = floatOrNone(content2)
+		return cmp(float1 if float1 is not None else content1, float2 if float2 is not None else content2)
 	def convert_item_to_basemodel_item(self, item):
 		if isinstance(item, gtk.TreeIter):
 			filtering_model_iter = self.convert_iter_to_child_iter(None, item)
@@ -449,7 +464,7 @@ class TreeView(gtk.TreeView):
 				tvc.set_fixed_width(self._previous_widths[tvc.name])
 
 	def _on_header_menu_popup(self, tv, popup_menu, tv_col):
-		mi = ImageMenuItem(label=("don't filter" if tv_col.is_filtering_open else "regexp filter…"), icon=gtk.STOCK_FIND)
+		mi = ImageMenuItem(label=("don't filter" if tv_col.is_filtering_open else "filter (regexp) …"), icon=gtk.STOCK_FIND)
 		mi.connect('activate', lambda mi: tv_col.toggle_filtering())
 		popup_menu.append(mi)
 

@@ -84,7 +84,7 @@ class IniFileSection(dict):
 				if type == self.STRING:
 					return raw
 				else:
-					if raw is None: return None
+					if raw is None or raw == '': return None
 					return json.loads(raw)
 		else:
 			raise KeyError(key)

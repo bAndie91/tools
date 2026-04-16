@@ -134,17 +134,17 @@ class TreeStore(gtk.TreeStore):
 	def get_column_num(self, col_ref):
 		if isinstance(col_ref, int):
 			if col_ref < 0 or col_ref >= len(self.column_name):
-				raise self.__class__.ColumnNotFoundException(col_ref)
+				raise TreeStore.ColumnNotFoundException(col_ref)
 			return col_ref
 		try:
 			return self.column_name.index(col_ref)
 		except ValueError:
-			raise self.__class__.ColumnNotFoundException(col_ref)
+			raise TreeStore.ColumnNotFoundException(col_ref)
 	def get_column_name(self, col_num):
 		try:
 			return self.column_name[col_num]
 		except (IndexError, TypeError):
-			raise self.__class__.ColumnNotFoundException(col_num)
+			raise TreeStore.ColumnNotFoundException(col_num)
 	def get(self, row, *columns):
 		if type(row) == tuple:
 			row = self.get_iter(row)  # tree iterator path was given
@@ -433,13 +433,13 @@ class TreeView(gtk.TreeView):
 		for col in self.get_columns():
 			if col.name == colname:
 				return col
-		raise self.__class__.ColumnNotFoundException(colname)
+		raise TreeView.ColumnNotFoundException(colname)
 	
 	def get_column_number_by_name(self, colname):
 		for num, col in enumerate(self.get_columns()):
 			if col.name == colname:
 				return num
-		raise self.__class__.ColumnNotFoundException(colname)
+		raise TreeView.ColumnNotFoundException(colname)
 	
 	def columns_autosize(self, cols=None):
 		for tvc in self.get_columns() if cols is None else cols:
@@ -652,6 +652,8 @@ class CellRendererTextOverflow(gtk.GenericCellRenderer):
 		self.the_props = {'markup': None, 'xalign': 0.0}
 	def connect(self, *args):
 		self.cr_txt.connect(*args)
+	class TextAlignmentNotSupported(Exception):
+		pass
 	def do_set_property(self, pspec, val):
 		self.cr_txt.set_property(pspec.name, val)
 		if pspec.name in self.the_props:
@@ -659,33 +661,24 @@ class CellRendererTextOverflow(gtk.GenericCellRenderer):
 	def do_get_property(self, pspec):
 		if pspec.name in self.the_props:
 			# CellRendererText can not read 'markup', 'xalign' (potentially other) properties back, so we do
-			return self.the_props[pspec.name]
+			return self.get_property(pspec.name)
 		return self.cr_txt.get_property(pspec.name)
 	def set_property(self, prop, val):
 		if prop in self.the_props:
 			self.the_props[prop] = val
 		return self.cr_txt.set_property(prop, val)
 	def get_property(self, prop):
+		if prop == 'pango-alignment':
+			if self.the_props['xalign'] == 0.5: raise CellRendererTextOverflow.TextAlignmentNotSupported(pango.ALIGN_CENTER)
+			elif self.the_props['xalign'] > 0.5: return pango.ALIGN_RIGHT
+			else: return pango.ALIGN_LEFT
 		if prop in self.the_props:
 			return self.the_props[prop]
 		return self.cr_txt.get_property(prop)
 	def on_get_size(self, widget, cell_area):
 		x, y, w, h = self.cr_txt.get_size(widget, cell_area)
 		return x, y, w, h
-	def get_next_column(self, current_column=None):
-		"""Return the column at the right side of 'current_column'
-		or, if 'current_column' is None, of the column which this CellRenderer is in."""
-		tvc = self.get_data('treeviewcolumn')
-		tv = tvc.get_tree_view()
-		columns = tv.get_columns()
-		if current_column is None:
-			current_column = tvc
-		for num, col in enumerate(columns):
-			if col is current_column:
-				if num+1 < len(columns):
-					return columns[num+1]
-				return None
-		return None
+	
 	def draw_layout(self, window, widget, cell_area, layout, flags):
 		base_grctx = widget.style.black_gc
 		if (flags & gtk.CELL_RENDERER_SELECTED) != 0: base_grctx = widget.style.white_gc
@@ -694,14 +687,17 @@ class CellRendererTextOverflow(gtk.GenericCellRenderer):
 	def on_render(self, window, widget, background_area, cell_area, expose_area, flags):
 		"""Find out how much empty area we have horizontally
 		by sum the width of empty cells on right of the current cell.
-		Then render the (markup) text on a pango Layout.
+		Then render the (possibly markup) text on a pango Layout.
 		Save the data neccessary to draw the Layout into 'layoutstash' for each cells 
 		which are found empty. Cells are identified by TreeModel path and TreeViewColumn name.
 		When an actual empty cell is encountered, then recall the saved Layout (if any) and
 		redraw it. It assumes that the controller routine requests us to
 		render the cells from left to right in sequence and row-by-row."""
+
 		markup = self.get_property('markup')
 		text = self.get_property('text')
+		align_left = self.get_property('pango-alignment') == pango.ALIGN_LEFT
+		align_right = self.get_property('pango-alignment') == pango.ALIGN_RIGHT
 		
 		tvc = self.get_data('treeviewcolumn')
 		tv = tvc.get_tree_view()
@@ -709,6 +705,8 @@ class CellRendererTextOverflow(gtk.GenericCellRenderer):
 		cellinfo = tv.get_path_at_pos(cell_area.x, cell_area.y)
 		if cellinfo is None:
 			cellinfo = tv.get_path_at_pos(cell_area.x + cell_area.width, cell_area.y + cell_area.height)
+		if cellinfo is None:
+			return
 		treepath = cellinfo[0]
 		
 		if tv.get_data('last-drawn-row-treepath') != treepath or tv.get_data('layoutstash') is None:
@@ -716,18 +714,30 @@ class CellRendererTextOverflow(gtk.GenericCellRenderer):
 		tv.set_data('last-drawn-row-treepath', treepath)
 		layoutstash = tv.get_data('layoutstash')
 		
-		overflow_width = cell_area.width
-		next_col = self.get_next_column()
-		next_col_names = []
-		while next_col is not None:
-			next_col_content = model[treepath][next_col.name]
-			if next_col_content is None or next_col_content == '':
-				overflow_width += next_col.get_width()
-				next_col_names.append(next_col.name)
-				next_col = self.get_next_column(next_col)
-			else:
-				break
+		def get_adjacent_columns():
+			cols = tv.get_columns()
+			col_idx = cols.index(tvc)
+			adjacent_cols_names = []
+			adjacent_cols_width = 0
+			col_idx_incr = 1 if align_left else -1
+			while True:
+				col_idx += col_idx_incr
+				if col_idx < 0 or col_idx >= len(cols): break
+				column_text = model[treepath][cols[col_idx].name]
+				if column_text is None or column_text == '':
+					adjacent_cols_width += cols[col_idx].get_width()
+					adjacent_cols_names.append(cols[col_idx].name)
+				else:
+					break
+			return adjacent_cols_names, adjacent_cols_width
+		adjacent_cols_names, adjacent_cols_width = get_adjacent_columns()
+		overflow_width = cell_area.width + adjacent_cols_width
+
 		if overflow_width != cell_area.width:
+			possibly_overflow = True
+		else:
+			possibly_overflow = False
+		if possibly_overflow:
 			context = widget.get_pango_context()
 			layout = pango.Layout(context)
 			if markup:
@@ -737,20 +747,28 @@ class CellRendererTextOverflow(gtk.GenericCellRenderer):
 			if markup or text:
 				layout.set_width(overflow_width * pango.SCALE)
 				layout.set_wrap(pango.WRAP_CHAR)
-				layout.set_ellipsize(pango.ELLIPSIZE_END)
+				layout.set_alignment(self.get_property('pango-alignment'))
+				layout.set_ellipsize(pango.ELLIPSIZE_END if align_left else pango.ELLIPSIZE_START)
 				xpad, ypad = self.cr_txt.get_padding()
 				draw_area = cell_area.copy()
 				draw_area.x += xpad
 				draw_area.y += ypad
-				if not layoutstash.has_key(treepath):
-					layoutstash[treepath] = {}
-				for colname in layoutstash[treepath].keys():
-					if layoutstash[treepath][colname].has_key(tvc.name):
-						del layoutstash[treepath][colname][tvc.name]
-				for colname in next_col_names:
-					if not layoutstash[treepath].has_key(colname):
-						layoutstash[treepath][colname] = {}
-					layoutstash[treepath][colname][tvc.name] = (window, widget, draw_area, layout, flags)
+				if align_right:
+					draw_area.x -= adjacent_cols_width + 2*xpad
+					draw_area.width = overflow_width
+					# draw on the left-hand side empty cells immediately, no need to stash the layout for later use:
+					self.draw_layout(window, widget, draw_area, layout, flags)
+					return True
+				else:
+					if not layoutstash.has_key(treepath):
+						layoutstash[treepath] = {}
+					for colname in layoutstash[treepath].keys():
+						if layoutstash[treepath][colname].has_key(tvc.name):
+							del layoutstash[treepath][colname][tvc.name]
+					for colname in adjacent_cols_names:
+						if not layoutstash[treepath].has_key(colname):
+							layoutstash[treepath][colname] = {}
+						layoutstash[treepath][colname][tvc.name] = (window, widget, draw_area, layout, flags)
 		else:
 			# this cell's text does not flow over, so delete earlier layouts, if any
 			for colname in layoutstash.get(treepath, {}).keys():
@@ -766,6 +784,8 @@ class CellRendererTextOverflow(gtk.GenericCellRenderer):
 				# current cell is not empty so delete those layouts which would be drawn on it, if any
 				del layoutstash[treepath][tvc.name]
 			self.cr_txt.render(window, widget, background_area, cell_area, expose_area, flags)
+		return True
+	
 	def on_activate(self, event, widget, path, background_area, cell_area, flags):
 		return self.cr_txt.activate(event, widget, path, background_area, cell_area, flags)
 	def on_start_editing(self, event, widget, path, background_area, cell_area, flags):

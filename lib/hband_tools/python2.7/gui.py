@@ -327,3 +327,16 @@ class PropertyPersistor(object):
 				except:
 					traceback.print_exc()
 		self.currently_applicating = False
+
+def widget_coordinates(widget, corner):
+	assert isinstance(corner, gtk.CornerType)
+	X, Y = widget.window.get_origin()
+	x, y, w, h = widget.get_allocation()
+	if corner == gtk.CORNER_TOP_LEFT:
+		return (X + x, Y + y)
+	elif corner == gtk.CORNER_TOP_RIGHT:
+		return (X + x + w, Y + y)
+	elif corner == gtk.CORNER_BOTTOM_LEFT:
+		return (X + x, Y + y + h)
+	elif corner == gtk.CORNER_BOTTOM_RIGHT:
+		return (X + x + w, Y + y + h)

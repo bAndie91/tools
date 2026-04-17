@@ -629,7 +629,12 @@ class TreeViewColumn(gtk.TreeViewColumn):
 			self.set_data('setup-events-done', True)
 	def set_text_alignment(self, alignment):
 		first_cr = self.get_cell_renderers()[0]
-		first_cr.set_property('xalign', 1.0 if alignment == gtk.JUSTIFY_RIGHT else 0.0)
+		if alignment == gtk.JUSTIFY_RIGHT:
+			first_cr.set_property('xalign', 1.0)
+			first_cr.set_property('ellipsize', pango.ELLIPSIZE_START)
+		else:
+			first_cr.set_property('xalign', 0.0)
+			first_cr.set_property('ellipsize', pango.ELLIPSIZE_END)
 	def get_text_alignment(self):
 		first_cr = self.get_cell_renderers()[0]
 		return gtk.JUSTIFY_RIGHT if first_cr.get_property('xalign') >= 1 else gtk.JUSTIFY_LEFT
@@ -650,6 +655,7 @@ class CellRendererTextOverflow(gtk.GenericCellRenderer):
 		self.__gobject_init__()
 		self.cr_txt = gtk.CellRendererText()
 		self.the_props = {'markup': None, 'xalign': 0.0}
+		self.set_property('ellipsize', pango.ELLIPSIZE_END)
 	def connect(self, *args):
 		self.cr_txt.connect(*args)
 	class TextAlignmentNotSupported(Exception):

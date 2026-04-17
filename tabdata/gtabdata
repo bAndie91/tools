@@ -468,9 +468,20 @@ class TreeView(gtk.TreeView):
 		mi.connect('activate', lambda mi: tv_col.toggle_filtering())
 		popup_menu.append(mi)
 
-		mi = CheckMenuItem(label="align to right")
-		mi.set_active(tv_col.get_text_alignment() == gtk.JUSTIFY_RIGHT)
-		mi.connect('toggled', lambda mi, col: col.set_text_alignment(gtk.JUSTIFY_RIGHT if mi.get_active() else gtk.JUSTIFY_LEFT), tv_col)
+		if tv_col.get_text_alignment() == gtk.JUSTIFY_RIGHT:
+			mi = ImageMenuItem(label="align to left", icon=gtk.STOCK_JUSTIFY_LEFT)
+			mi.connect('activate', lambda mi, col: col.set_text_alignment(gtk.JUSTIFY_LEFT), tv_col)
+		else:
+			mi = ImageMenuItem(label="align to right", icon=gtk.STOCK_JUSTIFY_RIGHT)
+			mi.connect('activate', lambda mi, col: col.set_text_alignment(gtk.JUSTIFY_RIGHT), tv_col)
+		popup_menu.append(mi)
+
+		if tv_col.get_font_desc().get_family() == 'monospace':
+			mi = ImageMenuItem(label="normal font", icon=gtk.STOCK_SELECT_FONT)
+			mi.connect('activate', lambda mi, col: col.set_font_desc(None), tv_col)
+		else:
+			mi = ImageMenuItem(label="monospace font", icon=gtk.STOCK_SELECT_FONT)
+			mi.connect('activate', lambda mi, col: col.set_font_desc('monospace'), tv_col)
 		popup_menu.append(mi)
 
 		mi = ImageMenuItem(label="auto width")
@@ -638,6 +649,13 @@ class TreeViewColumn(gtk.TreeViewColumn):
 	def get_text_alignment(self):
 		first_cr = self.get_cell_renderers()[0]
 		return gtk.JUSTIFY_RIGHT if first_cr.get_property('xalign') >= 1 else gtk.JUSTIFY_LEFT
+	def set_font_desc(self, font):
+		if not isinstance(font, pango.FontDescription): font = pango.FontDescription(font)
+		first_cr = self.get_cell_renderers()[0]
+		first_cr.set_property('font-desc', font)
+	def get_font_desc(self):
+		first_cr = self.get_cell_renderers()[0]
+		return first_cr.get_property('font-desc')
 
 class CellRendererTextOverflow(gtk.GenericCellRenderer):
 	"""
@@ -755,6 +773,8 @@ class CellRendererTextOverflow(gtk.GenericCellRenderer):
 				layout.set_wrap(pango.WRAP_CHAR)
 				layout.set_alignment(self.get_property('pango-alignment'))
 				layout.set_ellipsize(pango.ELLIPSIZE_END if align_left else pango.ELLIPSIZE_START)
+				layout.set_font_description(self.get_property('font-desc'))
+
 				xpad, ypad = self.cr_txt.get_padding()
 				draw_area = cell_area.copy()
 				draw_area.x += xpad

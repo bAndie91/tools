@@ -24,6 +24,7 @@ import difflib
 
 
 
+basestring = basestring  # just to keep python language server happy
 unicode = unicode  # just to keep python language server happy
 cmp = cmp  # just to keep python language server happy
 
@@ -224,7 +225,8 @@ class TreeModelFilterSort(gtk.TreeModelSort):
 		content2 = model[iter2][colnum]
 		float1 = floatOrNone(content1)
 		float2 = floatOrNone(content2)
-		return cmp(float1 if float1 is not None else content1, float2 if float2 is not None else content2)
+		# sort words case-insensitively, and keep numbers before words:
+		return cmp(*map(lambda x: x.lower() if isinstance(x, basestring) else x, (float1 if float1 is not None else content1, float2 if float2 is not None else content2)))
 	def convert_item_to_basemodel_item(self, item):
 		if isinstance(item, gtk.TreeIter):
 			filtering_model_iter = self.convert_iter_to_child_iter(None, item)
@@ -257,6 +259,10 @@ class TreeModelFilterSort(gtk.TreeModelSort):
 			return object.__getattribute__(self.filtering_model, attrname)
 		else:
 			return object.__getattribute__(self, attrname)
+
+def glib_callback_once(func, *args):
+	func(*args)
+	return False
 
 class TreeView(gtk.TreeView):
 	__gsignals__ = {
@@ -316,8 +322,7 @@ class TreeView(gtk.TreeView):
 	def _on_key_release(self, widget, event):
 		if event.keyval == gtk.gdk.keyval_from_name('space'):
 			iterpath, tv_col = self.get_cursor()
-			cr = tv_col.get_cell_renderers()[0]
-			cr.on_start_editing(event, widget, ','.join(map(str, iterpath)), self.get_background_area(iterpath, tv_col), self.get_cell_area(iterpath, tv_col), 0)
+			tv_col.cell_renderers[0].on_start_editing(event, widget, ','.join(map(str, iterpath)), self.get_background_area(iterpath, tv_col), self.get_cell_area(iterpath, tv_col), 0)
 
 	def _on_button_click(self, widget, event):
 		if event.button == MOUSE_BUTTON_RIGHT:
@@ -442,15 +447,23 @@ class TreeView(gtk.TreeView):
 		raise TreeView.ColumnNotFoundException(colname)
 	
 	def columns_autosize(self, cols=None):
-		for tvc in self.get_columns() if cols is None else cols:
+		if cols is None:
+			cols = self.get_columns()
+		for tvc in cols:
 			if tvc.name in self._previous_widths:
 				self._previous_previous_widths[tvc.name] = self._previous_widths[tvc.name]
-			self._previous_widths[tvc.name] = tvc.get_fixed_width()
+			self._previous_widths[tvc.name] = tvc.get_width()
+			tvc.disable_ellipsize()
+			tvc.clear_width_requirement()
+		glib.idle_add(glib_callback_once, self._columns_autosize_set_autosize, cols, priority=glib.PRIORITY_DEFAULT_IDLE)
+	def _columns_autosize_set_autosize(self, cols):
+		for tvc in cols:
+			tvc.reset_fixed_width()
 			tvc.set_sizing(gtk.TREE_VIEW_COLUMN_AUTOSIZE)
-		gtk.TreeView.columns_autosize(self)
-		glib.idle_add(self._columns_autosize_restore_resizable, cols, priority=glib.PRIORITY_DEFAULT_IDLE)
+		#gtk.TreeView.columns_autosize(self)
+		glib.idle_add(glib_callback_once, self._columns_autosize_restore_resizable, cols, priority=glib.PRIORITY_DEFAULT_IDLE)
 	def _columns_autosize_restore_resizable(self, cols):
-		for tvc in self.get_columns() if cols is None else cols:
+		for tvc in cols:
 			width = tvc.get_width()
 			tvc.set_sizing(gtk.TREE_VIEW_COLUMN_FIXED)
 			if width > 1:
@@ -458,8 +471,11 @@ class TreeView(gtk.TreeView):
 				if width == self._previous_widths[tvc.name]:
 					self._previous_widths[tvc.name] = self._previous_previous_widths.get(tvc.name)
 			tvc.set_resizable(True)
+			tvc.enable_ellipsize()
 	def restore_previous_widths(self, cols=None):
-		for tvc in self.get_columns() if cols is None else cols:
+		if cols is None:
+			cols = self.get_columns()
+		for tvc in cols:
 			if self._previous_widths.get(tvc.name) is not None:
 				tvc.set_fixed_width(self._previous_widths[tvc.name])
 
@@ -506,7 +522,7 @@ class TreeView(gtk.TreeView):
 		mi = MenuItem(label="auto width all columns")
 		mi.connect('activate', lambda mi: self.columns_autosize())
 		popup_menu.append(mi)
-		mi = ImageMenuItem(label="undo auto width all columns", icon=gtk.STOCK_UNDO)
+		mi = ImageMenuItem(label="undo auto width all", icon=gtk.STOCK_UNDO)
 		mi.connect('activate', lambda mi: self.restore_previous_widths())
 		popup_menu.append(mi)
 		mi = ImageMenuItem(label="reset columns order", icon=gtk.STOCK_REVERT_TO_SAVED)
@@ -561,7 +577,17 @@ class TreeViewColumn(gtk.TreeViewColumn):
 		self.cellrenderers_right.insert(0, cellrenderer)
 	def get_cell_renderers(self):
 		return self.cellrenderers_left + self.cellrenderers_right
+	@property
+	def cell_renderers(self):
+		return self.get_cell_renderers()
 	
+	def reset_fixed_width(self):
+		self.set_fixed_width(1)
+	def clear_width_requirement(self):
+		if self.get_visible():
+			self.set_visible(False)
+			self.set_visible(True)
+
 	def open_filtering(self):
 		self.filter_entrybox.show()
 	def close_filtering(self):
@@ -639,23 +665,29 @@ class TreeViewColumn(gtk.TreeViewColumn):
 
 			self.set_data('setup-events-done', True)
 	def set_text_alignment(self, alignment):
-		first_cr = self.get_cell_renderers()[0]
 		if alignment == gtk.JUSTIFY_RIGHT:
-			first_cr.set_property('xalign', 1.0)
-			first_cr.set_property('ellipsize', pango.ELLIPSIZE_START)
+			self.cell_renderers[0].set_property('xalign', 1.0)
 		else:
-			first_cr.set_property('xalign', 0.0)
-			first_cr.set_property('ellipsize', pango.ELLIPSIZE_END)
+			self.cell_renderers[0].set_property('xalign', 0.0)
+		if self.get_ellipsize_enabled():
+			self.enable_ellipsize()
 	def get_text_alignment(self):
-		first_cr = self.get_cell_renderers()[0]
-		return gtk.JUSTIFY_RIGHT if first_cr.get_property('xalign') >= 1 else gtk.JUSTIFY_LEFT
+		return gtk.JUSTIFY_RIGHT if self.cell_renderers[0].get_property('xalign') >= 1 else gtk.JUSTIFY_LEFT
+	def enable_ellipsize(self):
+		text_alignment = self.get_text_alignment()
+		if text_alignment == gtk.JUSTIFY_RIGHT:
+			self.cell_renderers[0].set_property('ellipsize', pango.ELLIPSIZE_START)
+		else:
+			self.cell_renderers[0].set_property('ellipsize', pango.ELLIPSIZE_END)
+	def disable_ellipsize(self):
+		self.cell_renderers[0].set_property('ellipsize', pango.ELLIPSIZE_NONE)
+	def get_ellipsize_enabled(self):
+		return self.cell_renderers[0].get_property('ellipsize') != pango.ELLIPSIZE_NONE
 	def set_font_desc(self, font):
 		if not isinstance(font, pango.FontDescription): font = pango.FontDescription(font)
-		first_cr = self.get_cell_renderers()[0]
-		first_cr.set_property('font-desc', font)
+		self.cell_renderers[0].set_property('font-desc', font)
 	def get_font_desc(self):
-		first_cr = self.get_cell_renderers()[0]
-		return first_cr.get_property('font-desc')
+		return self.cell_renderers[0].get_property('font-desc')
 
 class CellRendererTextOverflow(gtk.GenericCellRenderer):
 	"""
@@ -704,6 +736,7 @@ class CellRendererTextOverflow(gtk.GenericCellRenderer):
 		return x, y, w, h
 	
 	def draw_layout(self, window, widget, cell_area, layout, flags):
+		# TODO indicate selected cell/column
 		base_grctx = widget.style.black_gc
 		if (flags & gtk.CELL_RENDERER_SELECTED) != 0: base_grctx = widget.style.white_gc
 		window.draw_layout(base_grctx, cell_area.x, cell_area.y, layout)
@@ -773,6 +806,7 @@ class CellRendererTextOverflow(gtk.GenericCellRenderer):
 				layout.set_wrap(pango.WRAP_CHAR)
 				layout.set_alignment(self.get_property('pango-alignment'))
 				layout.set_ellipsize(pango.ELLIPSIZE_END if align_left else pango.ELLIPSIZE_START)
+				# TODO disable underlaying self.cr_txt ellipsize row-by-row if it's overdrawn
 				layout.set_font_description(self.get_property('font-desc'))
 
 				xpad, ypad = self.cr_txt.get_padding()
@@ -1381,7 +1415,7 @@ class GTabData(object):
 			# auto size newly learned columns
 			self._auto_size_new_columns()
 			# resize the app window if not yet resized by the user
-			gobject.idle_add(self._window_initial_resize)
+			gobject.idle_add(glib_callback_once, self._window_initial_resize)
 	
 	def on_key_press(self, tv, event):
 		key = gtk.gdk.keyval_name(event.keyval)

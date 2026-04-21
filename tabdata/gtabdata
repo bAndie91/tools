@@ -292,6 +292,29 @@ class TreeView(gtk.TreeView):
 		self.connect('columns-changed', self._on_columns_changed)
 		self.connect('key-release-event', self._on_key_release)
 		self.connect('header-menu-popup', self._on_header_menu_popup)
+		self.connect_after('expose-event', self._on_expose)
+
+	def _on_expose(self, tv, event):
+		self._highlight_focused_cell(event)
+		return False
+	
+	def _highlight_focused_cell(self, event):
+		treepath, column = self.get_cursor()
+		if treepath is None or column is None:
+			return
+		rect = self.get_cell_area(treepath, column)
+		binwindow = self.get_bin_window()
+		if event.window != binwindow:
+			return
+		style = self.get_style()
+		color = style.fg[gtk.STATE_ACTIVE]
+		cr = binwindow.cairo_create()
+		cr.rectangle(event.area.x, event.area.y, event.area.width, event.area.height)
+		cr.clip()
+		cr.rectangle(rect.x, rect.y, rect.width, rect.height)
+		cr.set_source_rgba(color.red / 65535.0, color.green / 65535.0, color.blue / 65535.0, 1.0)
+		cr.set_line_width(1)
+		cr.stroke()
 
 	def set_model(self, base_model):
 		self.base_model = base_model
@@ -851,6 +874,7 @@ class CellRendererTextOverflow(gtk.GenericCellRenderer):
 				# current cell is not empty so delete those layouts which would be drawn on it, if any
 				del layoutstash[treepath][tvc.name]
 			self.cr_txt.render(window, widget, background_area, cell_area, expose_area, flags)
+		
 		return True
 	
 	def on_activate(self, event, widget, path, background_area, cell_area, flags):
@@ -1428,13 +1452,7 @@ class GTabData(object):
 		key = gtk.gdk.keyval_name(event.keyval)
 		treepath, col = tv.get_cursor()
 		if treepath is None: return False
-		if key in ['Left', 'Right']:
-			cols = tv.get_columns()
-			col_idx = cols.index(col) + (1 if key == 'Right' else -1)
-			if col_idx >= 0 and col_idx < len(cols):
-				tv.set_cursor(treepath, cols[col_idx])
-			return True
-		elif key == 'Menu':
+		if key == 'Menu':
 			context_menu = gtk.Menu()
 			on_table_row_context_menu_open(tv, context_menu, treepath, col, 0, 0)
 			context_menu.show_all()

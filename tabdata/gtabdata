@@ -428,7 +428,7 @@ class TreeView(gtk.TreeView):
 		tvc.connect('notify::width', self._on_column_width_change)
 		tvc.connect('notify::visible', self._on_column_visibility_changed)
 		tvc.connect('notify::sort-order', self._on_column_sort_order_changed)
-		tvc.connect('filter-expression-changed', lambda tvc: self.filtersort_model.refilter())
+		tvc.connect('filter-expression-changed', lambda tvc, fexpr: self.filtersort_model.refilter())
 
 	def _on_column_click(self, col_widget, event):
 		if event.button == MOUSE_BUTTON_RIGHT:
@@ -581,7 +581,7 @@ class TreeView(gtk.TreeView):
 class TreeViewColumn(gtk.TreeViewColumn):
 	__gsignals__ = {
 		'button-press-event': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
-		'filter-expression-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
+		'filter-expression-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (str,)),
 		'font-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (str,)),
 		'alignment-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (str,)),
 	}
@@ -647,8 +647,10 @@ class TreeViewColumn(gtk.TreeViewColumn):
 		return None
 	@filter_expr.setter
 	def filter_expr(self, s):
-		self.filter_entrybox.set_text(s)
+		self.set_filter_expr(s)
+	def set_filter_expr(self, s):
 		self.open_filtering()
+		self.filter_entrybox.set_text(s)
 	def filter_expression_changed(self):
 		old = self._saved_filter_expr
 		new = self.filter_expr
@@ -664,7 +666,7 @@ class TreeViewColumn(gtk.TreeViewColumn):
 					self.filter_entrybox.modify_base(gtk.STATE_NORMAL, None)
 					self.filter_entrybox.set_tooltip_text(None)
 			self.filter_regex_pattern = filter_regex_pattern
-			self.emit('filter-expression-changed')
+			self.emit('filter-expression-changed', new)
 			self._saved_filter_expr = new
 
 	@property
@@ -1578,6 +1580,8 @@ class GTabData(object):
 				lambda tvc, font_str: tvc.set_font_desc(font_str)),
 			('alignment', 'alignment-changed', lambda tvc, alignment_str: alignment_str,
 				lambda tvc, alignment_str: tvc.set_text_alignment(getattr(gtk, 'JUSTIFY_'+alignment_str.upper()))),
+			('filter',    'filter-expression-changed', lambda tvc, filter_expr: filter_expr,
+				lambda tvc, filter_expr: tvc.set_filter_expr(filter_expr))
 		])
 		self.proppersist_column[tvc.name].apply_saved_properties()
 		

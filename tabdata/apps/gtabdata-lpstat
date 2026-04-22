@@ -2,7 +2,7 @@
 
 exec gtabdata --appinstance lpstat --title lpstat --icon printer \
 	--data-command td-lpstat --auto-key-field \
-	--context-menu 'STOCK_CONNECT:{{" " if row.STATUS=="enabled" else ""}}enable:cupsenable {{row.PRINTER}}' \
-	--context-menu 'STOCK_DISCONNECT:{{" " if row.STATUS=="disabled" else ""}}disable:cupsdisable {{row.PRINTER}}' \
-	--context-menu 'STOCK_MEDIA_PLAY:{{" " if row.ACCEPTANCE=="accepting" else ""}}accept jobs:cupsaccept {{row.PRINTER}}' \
-	--context-menu 'STOCK_MEDIA_PAUSE:{{"" if row.ACCEPTANCE=="accepting" else " "}}reject jobs:cupsreject {{row.PRINTER}}'
+	--context-menu 'STOCK_CONNECT:{{" " if row.STATUS=="enabled" else ""}}enable:per-each-selected-row:cupsenable {{row.PRINTER}}' \
+	--context-menu 'STOCK_DISCONNECT:{{" " if row.STATUS=="disabled" else ""}}disable:per-each-selected-row:cupsdisable {{row.PRINTER}}' \
+	--context-menu 'STOCK_MEDIA_PLAY:{{" " if row.ACCEPTANCE=="accepting" else ""}}accept jobs:per-each-selected-row:cupsaccept {{row.PRINTER}}' \
+	--context-menu 'STOCK_MEDIA_PAUSE:{{"" if row.ACCEPTANCE=="accepting" else " "}}reject jobs:per-each-selected-row:cupsreject {{row.PRINTER}}'

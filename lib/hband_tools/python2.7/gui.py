@@ -130,6 +130,14 @@ class GSignalHandlerManager(object):
 			'handler': handler,
 			'args': handler_args,
 		})
+	def connect_after_once(self, signalname, handler, *handler_args):
+		return self._connect({
+			'signal': signalname,
+			'after': True,
+			'repeat': False,
+			'handler': handler,
+			'args': handler_args,
+		})
 	def connect(self, signalname, handler, *handler_args):
 		return self._connect({
 			'signal': signalname,
@@ -137,8 +145,18 @@ class GSignalHandlerManager(object):
 			'handler': handler,
 			'args': handler_args,
 		})
+	def connect_after(self, signalname, handler, *handler_args):
+		return self._connect({
+			'signal': signalname,
+			'after': True,
+			'repeat': True,
+			'handler': handler,
+			'args': handler_args,
+		})
 	def _connect(self, cb_data):
-		cb_data['id'] = self.parent.connect(cb_data['signal'], self._handler, cb_data)
+		method = 'connect'
+		if cb_data.get('after'): method = 'connect_after'
+		cb_data['id'] = getattr(self.parent, method)(cb_data['signal'], self._handler, cb_data)
 		self.handlers.append(cb_data)
 		return cb_data['id']
 	def _disconnect(self, cb_data):

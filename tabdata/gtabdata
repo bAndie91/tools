@@ -11,6 +11,7 @@ import re
 import regex
 import sys
 import os
+import errno
 import subprocess
 import time
 from datetime import datetime
@@ -35,6 +36,17 @@ def add_key_binding(widget, keyname, callback):
 	key, modifier = gtk.accelerator_parse(keyname)
 	accelgroup.connect_group(key, modifier, gtk.ACCEL_VISIBLE, callback)
 	widget.add_accel_group(accelgroup)
+
+def parse_options_string(s):
+	ret = {}
+	for opt in s.split(','):
+		if '=' in opt:
+			k, v = opt.split('=', 1)
+		else:
+			k = opt
+			v = True
+		ret[k] = v
+	return ret
 
 def successor_iter(model, predecessor):
 	"""return the next "heir" in line of succession metaphorically speaking.
@@ -355,7 +367,8 @@ class TreeView(gtk.TreeView):
 				treepath, tv_col, cell_x, cell_y = event_target_info
 			else:
 				treepath, tv_col, cell_x, cell_y = None, None, None, None
-			self.get_selection().select_path(treepath)
+			if treepath is not None:
+				self.get_selection().select_path(treepath)
 			popup_menu = gtk.Menu()
 			if not self.emit('menu-popup', popup_menu, treepath, tv_col, cell_x, cell_y):
 				# event is not handled by any handlers, so do it ourself
@@ -766,7 +779,6 @@ class CellRendererTextOverflow(gtk.GenericCellRenderer):
 		return x, y, w, h
 	
 	def draw_layout(self, window, widget, cell_area, layout, flags):
-		# TODO indicate selected cell/column
 		base_grctx = widget.style.black_gc
 		if (flags & gtk.CELL_RENDERER_SELECTED) != 0: base_grctx = widget.style.white_gc
 		window.draw_layout(base_grctx, cell_area.x, cell_area.y, layout)
@@ -1190,7 +1202,8 @@ class MenuHierarchy(object):
 def populate_row_context_menu(menu, items, macros):
 	hierarchy = MenuHierarchy(separator='//')
 	for definition in items:
-		icon, label_template, command_template = [field.replace('\\:', ':') for field in re.split(r'(?<!\\):', definition, maxsplit=2)]
+		icon, label_template, menuitem_options, command_template = [field.replace('\\:', ':') for field in re.split(r'(?<!\\):', definition, maxsplit=3)]
+		menuitem_options = parse_options_string(menuitem_options)
 		menuitem_label = Template(label_template).render(**macros)
 		if menuitem_label != '':
 			enabled = True
@@ -1199,30 +1212,39 @@ def populate_row_context_menu(menu, items, macros):
 				enabled = False
 			mi = hierarchy.add_menu_item(klass=ImageMenuItem, label=menuitem_label, icon=icon)
 			mi.set_sensitive(enabled)
-			command = Template(command_template).render(**macros)
-			if command != '':
-				mi.set_data('command_args', split_command_args(command))
-				mi.connect('activate', on_context_menu_item_activate, menu)
+			
+			commands = []
+			if menuitem_options.get('per-each-selected-row'):
+				for row in macros['selected_rows']:
+					command = Template(command_template).render(row=row, n_selected=macros['n_selected'], column=macros['column'])
+					if command != '':
+						commands.append(split_command_args(command))
+			else:
+				command = Template(command_template).render(**macros)
+				if command != '':
+					commands.append(split_command_args(command))
+			mi.set_data('commands', commands)
+			mi.connect('activate', on_context_menu_item_activate, menu)
 	hierarchy.append_to_menu(menu)
 	menu.show_all()
 
-def gen_row_data(treeview, c_treepath, tv_col):
+def gen_focus_data(treeview, c_treepath, tv_col):
+	row = {} if c_treepath is None else treeview.get_model()[c_treepath].as_dict()
+	column = None if tv_col is None else tv_col.name
+	selected_rows = [treeview.get_model()[treepath].as_dict() for treepath in treeview.get_selection().get_selected_rows()[1]]
 	return {
-		'col': None if tv_col is None else tv_col.name,
-		'row': {} if c_treepath is None else treeview.get_model()[c_treepath].as_dict(),
-		'selected_rows': [treeview.get_model()[treepath].as_dict() for treepath in treeview.get_selection().get_selected_rows()[1]],
+		'row': row,
+		'column': column,
+		'cell': row.get(column),
+		'selected_rows': selected_rows,
 	}
 
 def on_table_row_context_menu_open(treeview, popup_menu, c_treepath, tv_col, cell_x, cell_y):
-	row_data = gen_row_data(treeview, c_treepath, tv_col)
-	n_selected = len(row_data['selected_rows'])
-	popup_menu.set_data('row-data', row_data)
-	macros = {
-		'n_selected': n_selected,
-		'column': row_data['col'],
-		'cell': row_data['row'][row_data['col']],
-		'row': row_data['row'],
-	}
+	focus_data = gen_focus_data(treeview, c_treepath, tv_col)
+	popup_menu.set_data('focus-data', focus_data)
+	n_selected = len(focus_data['selected_rows'])
+	macros = focus_data.copy()
+	macros['n_selected'] = n_selected
 	# add user-defined menu items
 	populate_row_context_menu(popup_menu, cliargs.context_menu, macros)
 	
@@ -1245,18 +1267,19 @@ def on_table_row_context_menu_open(treeview, popup_menu, c_treepath, tv_col, cel
 	return False
 
 def on_context_menu_item_activate(mi, menu):
-	row_data = menu.get_data('row-data')
-	command_args = mi.get_data('command_args')
-	run_system_command_async(command_args, row_data)
+	focus_data = menu.get_data('focus-data')
+	commands = mi.get_data('commands')
+	for command_args in commands:
+		run_system_command_async(command_args, focus_data)
 
 def on_context_menu_copy(mi, menu, what):
-	row_data = menu.get_data('row-data')
+	focus_data = menu.get_data('focus-data')
 	if what == 'cell':
-		text = row_data['row'][row_data['col']]
+		text = focus_data['row'][focus_data['column']]
 	elif what == 'row-as-json':
-		text = json.dumps(row_data['row'])
+		text = json.dumps(focus_data['row'])
 	elif what == 'selection-as-json':
-		text = json.dumps(row_data['selected_rows'])
+		text = json.dumps(focus_data['selected_rows'])
 	else:
 		raise ValueError()
 	gtk.Clipboard().set_text(text)
@@ -1268,7 +1291,7 @@ def on_table_row_activated(treeview, c_treepath, tv_col):
 			'row': treeview.get_model()[c_treepath].as_dict(),
 		}
 		command = Template(command_template).render(**macros)
-		run_system_command_async(split_command_args(command), gen_row_data(treeview, c_treepath, tv_col))
+		run_system_command_async(split_command_args(command), gen_focus_data(treeview, c_treepath, tv_col))
 
 def run_system_command_async(command_with_args, input_object):
 	Thread(target=run_system_command, args=(command_with_args, json.dumps(input_object)), daemon=True).start()
@@ -1276,7 +1299,11 @@ def run_system_command_async(command_with_args, input_object):
 def run_system_command(command_with_args, input_text):
 	try:
 		proc = spawn_subprocess(command_with_args, shell=False, stdin=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
-		proc.stdin.write(input_text)
+		try:
+			proc.stdin.write(input_text)
+		except IOError as e:
+			traceback.print_exc()
+			if e.errno not in [errno.EPIPE]: raise e
 		proc.stdin.close()
 		wait_subprocess(proc)
 	except SubprocessError as err:
@@ -1330,18 +1357,10 @@ def parse_cli_args():
 	key_group.add_argument('--key-field', type=str, default=None, metavar='COLUMN')
 	key_group.add_argument('--auto-key-field', action='store_true', default=False, help='Default key field is the first column in the input data.')
 	parser.add_argument('--activate-command', type=str, metavar='COMMAND', help='System command to run when double clicked on a row.')
-	parser.add_argument('--context-menu', action='append', default=[], type=str, metavar='ICON:LABEL:COMMAND', help='Menu item definitions for rows context menu.')
+	parser.add_argument('--context-menu', action='append', default=[], type=str, metavar='ICON:LABEL:MENUITEM-OPTIONS:COMMAND', help='Menu item definitions for rows context menu.')
 	parser.add_argument('--auto-refresh-interval', type=float, metavar='SEC')
 	parser.add_argument('--inotify-refresh', type=str, metavar='FILE', help='')  # TODO
 	parser.epilog = '''
-COMMAND
-	The COMMAND option parameter is a jinja2 template, after rendered, split by whitespaces into command and arguments, no quoting or escaping is supported.
-	Then the command is run as a system command, not in shell.
-	For available jinja2 variables, see LABEL paragraph below.
-	A JSON object is passed to the command's STDIN with these keys:
-	- row: an object itself containing all fields (as object keys) and cells (as values) of the activated row
-	- col: column's name which the context menu is opened in
-	- selected_rows: list of all the selected rows' fields
 ICON is one of these:
 	- image file path
 	- Gtk stock icon constant, starting with "STOCK_"
@@ -1357,6 +1376,17 @@ LABEL is a jinja2 template rendered to the menu item label, supporting these var
 	If the rendered LABEL starts with a space, the menu item is shown disabled.
 	May create nested menus (submenus) by using "//" (couble slash) as a separator in LABEL to describe the path through the menu hierarchy.
 	Parent menus are implicit, but if want to define icon for one, end its LABEL with "//" (double slash).
+MENUITEM-OPTIONS
+	Comma-delimited list of zero or more options:
+	- per-each-selected-row: run the COMMAND separately on each row. Default is to run COMMAND once (and pass 'selected_rows' in JSON on its STDIN)
+COMMAND
+	The COMMAND option parameter is a jinja2 template, after rendered, split by whitespaces into command and arguments, no quoting or escaping is supported.
+	Then the command is run as a system command, not in shell.
+	For available jinja2 variables, see LABEL paragraph below.
+	A JSON object is passed to the command's STDIN with these keys:
+	- row: an object itself containing all fields (as object keys) and cells (as values) of the activated/focused row.
+	- column: column's name which the context menu is opened on.
+	- selected_rows: list of all the selected rows. Rows are dicts as in the 'row' top-level key.
 '''
 	return parser.parse_args()
 

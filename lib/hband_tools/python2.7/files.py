@@ -84,7 +84,11 @@ class IniFileSection(dict):
 				if type == self.STRING:
 					return raw
 				else:
-					if raw is None or raw == '': return None
+					# ConfigParser does not give back literal pair of double quotes, even in raw mode,
+					# so in-file pair of double quotes and empty value are indistinguishable to us,
+					# ie. can't store literal pair of double quotes as STRING type, only as JSON.
+					# And we need to translate empty string got from ConfigParser to an actual empty string.
+					if raw in [None, '']: return raw
 					return json.loads(raw)
 		else:
 			raise KeyError(key)

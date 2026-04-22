@@ -582,6 +582,8 @@ class TreeViewColumn(gtk.TreeViewColumn):
 	__gsignals__ = {
 		'button-press-event': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
 		'filter-expression-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
+		'font-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (str,)),
+		'alignment-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (str,)),
 	}
 	def __init__(self, **opt):
 		super(TreeViewColumn, self).__init__(**opt)
@@ -707,13 +709,18 @@ class TreeViewColumn(gtk.TreeViewColumn):
 				potential_alignment_widget.props.yscale = 0.0
 
 			self.set_data('setup-events-done', True)
+	class NotSupportedAlignmentError(Exception):
+		pass
 	def set_text_alignment(self, alignment):
-		if alignment == gtk.JUSTIFY_RIGHT:
+		if alignment in [gtk.JUSTIFY_RIGHT, pango.ALIGN_RIGHT]:
 			self.cell_renderers[0].set_property('xalign', 1.0)
-		else:
+		elif alignment in [gtk.JUSTIFY_LEFT, pango.ALIGN_LEFT]:
 			self.cell_renderers[0].set_property('xalign', 0.0)
+		else:
+			raise TreeViewColumn.NotSupportedAlignmentError(aligment)
 		if self.get_ellipsize_enabled():
 			self.enable_ellipsize()
+		self.emit('alignment-changed', alignment.value_nick)
 	def get_text_alignment(self):
 		return gtk.JUSTIFY_RIGHT if self.cell_renderers[0].get_property('xalign') >= 1 else gtk.JUSTIFY_LEFT
 	def enable_ellipsize(self):
@@ -729,6 +736,7 @@ class TreeViewColumn(gtk.TreeViewColumn):
 	def set_font_desc(self, font):
 		if not isinstance(font, pango.FontDescription): font = pango.FontDescription(font)
 		self.cell_renderers[0].set_property('font-desc', font)
+		self.emit('font-changed', font.to_string())
 	def get_font_desc(self):
 		return self.cell_renderers[0].get_property('font-desc')
 
@@ -1421,6 +1429,7 @@ class GTabData(object):
 		])
 		if cliargs.key_field is not None or cliargs.auto_key_field:
 			self.proppersist_table.add_properties([('selected-rows', 'selection-change', lambda tv, sel_rows: [row[self.tabdata_key_field] for row in sel_rows], self.restore_selection)])
+		self.proppersist_column = {}
 		
 	def run(self):
 		self.main_win.show_all()
@@ -1563,6 +1572,15 @@ class GTabData(object):
 			tvc.set_fixed_width(width)
 		if tvc.name in self.proppersist_table.props.get('hidden-columns', []):
 			tvc.set_visible(False)
+		
+		self.proppersist_column[tvc.name] = PropertyPersistor(tvc, 'column.'+tvc.name, [
+			('font',      'font-changed',      lambda tvc, font_str: font_str,
+				lambda tvc, font_str: tvc.set_font_desc(font_str)),
+			('alignment', 'alignment-changed', lambda tvc, alignment_str: alignment_str,
+				lambda tvc, alignment_str: tvc.set_text_alignment(getattr(gtk, 'JUSTIFY_'+alignment_str.upper()))),
+		])
+		self.proppersist_column[tvc.name].apply_saved_properties()
+		
 
 	def restore_columns_width(self, tv, cols_width):
 		for colname, width in cols_width.iteritems():

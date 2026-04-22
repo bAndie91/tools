@@ -649,8 +649,11 @@ class TreeViewColumn(gtk.TreeViewColumn):
 	def filter_expr(self, s):
 		self.set_filter_expr(s)
 	def set_filter_expr(self, s):
-		self.open_filtering()
-		self.filter_entrybox.set_text(s)
+		if s is None:
+			self.close_filtering()
+		else:
+			self.open_filtering()
+			self.filter_entrybox.set_text(s)
 	def filter_expression_changed(self):
 		old = self._saved_filter_expr
 		new = self.filter_expr
@@ -719,7 +722,7 @@ class TreeViewColumn(gtk.TreeViewColumn):
 		elif alignment in [gtk.JUSTIFY_LEFT, pango.ALIGN_LEFT]:
 			self.cell_renderers[0].set_property('xalign', 0.0)
 		else:
-			raise TreeViewColumn.NotSupportedAlignmentError(aligment)
+			raise TreeViewColumn.NotSupportedAlignmentError(alignment)
 		if self.get_ellipsize_enabled():
 			self.enable_ellipsize()
 		self.emit('alignment-changed', alignment.value_nick)

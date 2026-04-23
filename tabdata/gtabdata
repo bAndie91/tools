@@ -1252,33 +1252,6 @@ def gen_focus_data(treeview, c_treepath, tv_col):
 		'selected_rows': selected_rows,
 	}
 
-def on_table_row_context_menu_open(treeview, popup_menu, c_treepath, tv_col, cell_x, cell_y):
-	focus_data = gen_focus_data(treeview, c_treepath, tv_col)
-	popup_menu.set_data('focus-data', focus_data)
-	n_selected = len(focus_data['selected_rows'])
-	macros = focus_data.copy()
-	macros['n_selected'] = n_selected
-	# add user-defined menu items
-	populate_row_context_menu(popup_menu, cliargs.context_menu, macros)
-	
-	# add gtabdata-specific menu items:
-	if popup_menu.get_children():
-		popup_menu.append(gtk.SeparatorMenuItem())
-	mi = ImageMenuItem(label="Copy cell", icon=gtk.STOCK_COPY)
-	mi.connect('activate', on_context_menu_copy, popup_menu, 'cell')
-	popup_menu.append(mi)
-	mi = ImageMenuItem(label="Copy row as JSON", icon=gtk.STOCK_COPY)
-	mi.connect('activate', on_context_menu_copy, popup_menu, 'row-as-json')
-	popup_menu.append(mi)
-	if n_selected > 1:
-		mi = ImageMenuItem(label="Copy selection as JSON", icon=gtk.STOCK_COPY)
-		mi.connect('activate', on_context_menu_copy, popup_menu, 'selection-as-json')
-		popup_menu.append(mi)
-	mi = ImageMenuItem(label="Refresh table data", icon=gtk.STOCK_REFRESH)
-	mi.connect('activate', lambda mi: main_app.load_table_async())
-	popup_menu.append(mi)
-	return False
-
 def on_context_menu_item_activate(mi, menu):
 	focus_data = menu.get_data('focus-data')
 	commands = mi.get_data('commands')
@@ -1409,8 +1382,9 @@ APPNAME = cliargs.appname + '.' + cliargs.appinstance
 
 
 class GTabData(object):
-	def configure(self):
+	def __init__(self):
 		self.tabdata_key_field = None
+		self._load_table_thread_name = 'load_table'
 
 		self.main_win = Window({'name': 'window.main', 'gtk-args': [], 'default-size': ()})
 		self.window_signalmanager = GSignalHandlerManager(self.main_win)
@@ -1421,7 +1395,7 @@ class GTabData(object):
 		self.main_table = TreeView(None)
 		self.main_win.add(Scrollable(self.main_table))
 		self.main_table.connect('row-activated', on_table_row_activated)
-		self.main_table.connect('menu-popup', on_table_row_context_menu_open)
+		self.main_table.connect('menu-popup', self.on_table_row_context_menu_open)
 		self.main_table.connect('column-added', self.on_column_added)
 		self.main_table.connect('key-press-event', self.on_key_press)
 
@@ -1429,8 +1403,8 @@ class GTabData(object):
 			('columns-order',  'columns-changed',           lambda tv: merge_ordering(self.proppersist_table.props.get('columns-order') or [], [col.name for col in tv.get_columns()]), self.restore_columns_order),
 			('hidden-columns', 'column-visibility-changed', lambda tv, tvc: [col.name for col in tv.get_columns() if not col.get_visible()], self.restore_hidden_columns),
 			('column-width',   'column-width-changed',      lambda tv, tvc, tvc_width: dict([(col.name, col.get_width()) for col in tv.get_columns()]), self.restore_columns_width),
-			('sort-column',    'sort-by-column-changed',    lambda tv, tvc: tvc.name if tvc is not None else '', self.restore_sortby_column),
-			('sort-order',     'column-sort-order-changed', lambda tv, tvc: tvc.get_sort_order().value_nick if tvc is not None else '', None),
+			('sort-column',    'sort-by-column-changed',    lambda tv, tvc: tvc.name if tvc is not None else None, self.restore_sortby_column),
+			('sort-order',     'column-sort-order-changed', lambda tv, tvc: tvc.get_sort_order().value_nick if tvc is not None else None, None),
 		])
 		if cliargs.key_field is not None or cliargs.auto_key_field:
 			self.proppersist_table.add_properties([('selected-rows', 'selection-change', lambda tv, sel_rows: [row[self.tabdata_key_field] for row in sel_rows], self.restore_selection)])
@@ -1443,7 +1417,12 @@ class GTabData(object):
 		self.load_table_async()
 	
 	def load_table_async(self):
-		Thread(target=self.load_table, daemon=True).start()
+		if not self.table_is_loading:
+			Thread(target=self.load_table, daemon=True, name=self._load_table_thread_name).start()
+	
+	@property
+	def table_is_loading(self):
+		return self._load_table_thread_name in [thr.name for thr in threading.enumerate()]
 	
 	def load_table(self):
 		if cliargs.db_query:
@@ -1484,39 +1463,6 @@ class GTabData(object):
 		with GtkThreadContext():
 			self.after_load_table()
 	
-	def after_load_table(self):
-		with TemporaryProperty((self.proppersist_table, 'active'), (), False):
-			self.proppersist_table.apply_saved_properties()
-			# auto size newly learned columns
-			self._auto_size_new_columns()
-			# resize the app window if not yet resized by the user
-			gobject.idle_add(glib_callback_once, self._window_initial_resize)
-	
-	def on_key_press(self, tv, event):
-		key = gtk.gdk.keyval_name(event.keyval)
-		treepath, col = tv.get_cursor()
-		if treepath is None: return False
-		if key == 'Menu':
-			context_menu = gtk.Menu()
-			on_table_row_context_menu_open(tv, context_menu, treepath, col, 0, 0)
-			context_menu.show_all()
-			context_menu.popup(None, None, lambda menu, cb_data: self.cell_coordinates(treepath, col, gtk.CORNER_BOTTOM_LEFT) + (True,), MOUSE_BUTTON_RIGHT, event.time, {})
-			return True
-	
-	def cell_coordinates(self, treepath, col, corner):
-		rect = self.main_table.get_cell_area(treepath, col)
-		win_x, win_y = self.main_table.get_bin_window().get_origin()
-		return win_x + rect.x + rect.width * int(corner.value_nick.endswith('right')), win_y + rect.y + rect.height * int(corner.value_nick.startswith('bottom'))
-
-	def _window_initial_resize(self):
-		if not self.main_win.property_persistor.props.get('geometry'):
-			tv_width, tv_height = self.main_table.size_request()
-			scr = self.main_win.get_screen()
-			self.main_win.resize(min(tv_width, scr.get_width()), min(tv_height, scr.get_height()))
-	
-	def _auto_size_new_columns(self):
-		self.main_table.columns_autosize([col for col in self.main_table.get_columns() if not col.get_width() or col.get_width() == 1])
-
 	def load_columns(self, columns):
 		if cliargs.auto_key_field and self.tabdata_key_field is None:
 			if columns[0][0] != '':
@@ -1571,13 +1517,83 @@ class GTabData(object):
 		with GtkThreadContext():
 			gdkwin.set_cursor(None)
 
+	def after_load_table(self):
+		with TemporaryProperty((self.proppersist_table, 'active'), (), False):
+			self.proppersist_table.apply_saved_properties()
+			# auto size newly learned columns
+			self._auto_size_new_columns()
+			# resize the app window if not yet resized by the user
+			gobject.idle_add(glib_callback_once, self._window_initial_resize)
+	
+	def on_key_press(self, tv, event):
+		key = gtk.gdk.keyval_name(event.keyval)
+		treepath, col = tv.get_cursor()
+		if treepath is None: return False
+		if key == 'Menu':
+			context_menu = gtk.Menu()
+			self.on_table_row_context_menu_open(tv, context_menu, treepath, col, 0, 0)
+			context_menu.show_all()
+			context_menu.popup(None, None, lambda menu, cb_data: self.cell_coordinates(treepath, col, gtk.CORNER_BOTTOM_LEFT) + (True,), MOUSE_BUTTON_RIGHT, event.time, {})
+			return True
+	
+	def cell_coordinates(self, treepath, col, corner):
+		rect = self.main_table.get_cell_area(treepath, col)
+		win_x, win_y = self.main_table.get_bin_window().get_origin()
+		return win_x + rect.x + rect.width * int(corner.value_nick.endswith('right')), win_y + rect.y + rect.height * int(corner.value_nick.startswith('bottom'))
+
+	def on_table_row_context_menu_open(self, treeview, popup_menu, c_treepath, tv_col, cell_x, cell_y):
+		focus_data = gen_focus_data(treeview, c_treepath, tv_col)
+		popup_menu.set_data('focus-data', focus_data)
+		n_selected = len(focus_data['selected_rows'])
+		macros = focus_data.copy()
+		macros['n_selected'] = n_selected
+		# add user-defined menu items
+		populate_row_context_menu(popup_menu, cliargs.context_menu, macros)
+		
+		# add gtabdata-specific menu items:
+		if popup_menu.get_children():
+			popup_menu.append(gtk.SeparatorMenuItem())
+		mi = ImageMenuItem(label="Copy cell", icon=gtk.STOCK_COPY)
+		mi.connect('activate', on_context_menu_copy, popup_menu, 'cell')
+		popup_menu.append(mi)
+		mi = ImageMenuItem(label="Copy row as JSON", icon=gtk.STOCK_COPY)
+		mi.connect('activate', on_context_menu_copy, popup_menu, 'row-as-json')
+		popup_menu.append(mi)
+		if n_selected > 1:
+			mi = ImageMenuItem(label="Copy selection as JSON", icon=gtk.STOCK_COPY)
+			mi.connect('activate', on_context_menu_copy, popup_menu, 'selection-as-json')
+			popup_menu.append(mi)
+		mi = ImageMenuItem(label="Refresh table data", icon=gtk.STOCK_REFRESH)
+		mi.set_sensitive(not self.table_is_loading)
+		mi.connect('activate', lambda mi: main_app.load_table_async())
+		popup_menu.append(mi)
+		return False
+
+
+	def _window_initial_resize(self):
+		if not self.main_win.property_persistor.props.get('geometry'):
+			tv_width, tv_height = self.main_table.size_request()
+			scr = self.main_win.get_screen()
+			self.main_win.resize(min(tv_width, scr.get_width()), min(tv_height, scr.get_height()))
+	
+	def _auto_size_new_columns(self):
+		self.main_table.columns_autosize([col for col in self.main_table.get_columns() if not col.get_width() or col.get_width() == 1])
+
 	def on_column_added(self, tv, tvc):
+		# restore width
 		width = self.proppersist_table.props.get('column-width', {}).get(tvc.name, None)
 		if width > 1:
 			tvc.set_fixed_width(width)
+		# restore visibility (hidden or not)
 		if tvc.name in self.proppersist_table.props.get('hidden-columns', []):
 			tvc.set_visible(False)
+		# restore sort-by column
+		if self.proppersist_table.props.get('sort-column') == tvc.name:
+			tv.set_sortby_column_by_name(tvc.name)
+			self.restore_sort_order_on_current_sortby_column
+
 		
+		# column-specific properties
 		self.proppersist_column[tvc.name] = PropertyPersistor(tvc, 'column.'+tvc.name, [
 			('font',      'font-changed',      lambda tvc, font_str: font_str,
 				lambda tvc, font_str: tvc.set_font_desc(font_str)),
@@ -1603,9 +1619,12 @@ class GTabData(object):
 		except TreeView.ColumnNotFoundException:
 			pass
 		else:
-			sort_order = self.proppersist_table.props.get('sort-order')
-			if sort_order:
-				tv.get_sortby_column().set_sort_order(getattr(gtk, 'SORT_'+sort_order.upper()))
+			self.restore_sort_order_on_current_sortby_column()
+	
+	def restore_sort_order_on_current_sortby_column(self):
+		sort_order = self.proppersist_table.props.get('sort-order')
+		if sort_order:
+			self.main_table.get_sortby_column().set_sort_order(getattr(gtk, 'SORT_'+sort_order.upper()))
 		
 	def restore_hidden_columns(self, tv, columns):
 		for colname in columns:
@@ -1642,7 +1661,6 @@ class GTabData(object):
 
 
 main_app = GTabData()
-main_app.configure()
 main_app.main_win.title = Template(cliargs.title).render({'env': os.environ})
 main_app.main_win.set_icon_from_any(cliargs.icon)
 main_app.main_win.set_wmclass(cliargs.appname, cliargs.appinstance)

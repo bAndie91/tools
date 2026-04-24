@@ -12,7 +12,7 @@ argparser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHel
 arggroup_action = argparser.add_mutually_exclusive_group()
 arggroup_action.add_argument('--list', action='store_true', default=True, help="List Recently Used files; this is the default action")
 arggroup_action.add_argument('--add', metavar='FILEPATH', help="Add FILEPATH file to the Recently Used list")
-argparser.add_argument('--no-verify', action='store_true', help="Do not check if FILEPATH exists")
+argparser.add_argument('--no-verify', action='store_true', help="Do not check if FILEPATH exists when --add")
 argparser.add_argument('--mime', metavar='TYPE', default='application/octet-stream', help="Register FILEPATH with this MIME type")
 argparser.add_argument('--label', metavar='LABEL', help="Store FILEPATH with a label as it should be displayed")
 argparser.add_argument('--app', metavar='NAME', default='xdg-open', help="Register FILEPATH to this named application")
@@ -44,6 +44,10 @@ if cliArgs.get('add'):
 	sys.exit(0)
 
 
+def esc(s):
+	return re.sub(r'[\t\n\r\\]', lambda m: '\\'+repr(m.group(0))[2], s).replace(r'\x1B', '\\e')
+
+
 items = rmag.get_items()
 items.sort(cmp=lambda a, b: cmp(a.get_visited(), b.get_visited()))
 dirs = {}
@@ -54,10 +58,14 @@ for item in items:
 	isdir = os.path.isdir(filepath)
 	
 	if item.is_local() and not item.get_private_hint():
-		print "%s\t%s%s\t%s" % (item.get_mime_type(), filepath, os.path.sep if isdir and not filepath.endswith(os.path.sep) else '', item.get_display_name())
+		print "%s\t%s%s\t%s" % tuple(esc(s) for s in (
+			item.get_mime_type(),
+			filepath, os.path.sep if isdir and not filepath.endswith(os.path.sep) else '',
+			item.get_display_name(),
+		))
 		
 		if not isdir:
 			dirpath = os.path.dirname(filepath)
 			if dirpath not in dirs:
 				dirs[dirpath] = True
-				print "inode/directory\t%s/" % (dirpath,)
+				print "inode/directory\t%s/" % (esc(dirpath),)

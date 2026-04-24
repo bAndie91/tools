@@ -81,6 +81,10 @@ do
 		do
 			refspecs+=("refs/heads/$branch:refs/remotes/$thisremotename/$branch")
 		done
+		for tag in `git for-each-ref 'refs/tags/**' --format='%(refname:lstrip=2)'`
+		do
+			refspecs+=("refs/tags/$tag:refs/tags/$tag")
+		done
 		git push --force "$remote" "${refspecs[@]}"
 	)
 done

@@ -1,0 +1,6 @@
+#!/bin/sh
+
+exec gtabdata --appinstance dig --title "dig $*" \
+	--data-script "dig $* | grep -Ev '^(;|\$)' | td-trans -c 5 |
+		td-add-headers NAME TTL CLASS TYPE CONTENT | td-alter NAME_CLASS_TYPE='join _,NAME,CLASS,TYPE'" \
+	--key-field NAME_CLASS_TYPE

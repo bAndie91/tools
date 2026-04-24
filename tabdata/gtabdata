@@ -1089,31 +1089,63 @@ class GDKCursor(object):
 		self.window.set_cursor(self.prev_cursor)
 		return False  # don't ignore exceptions
 
-class FasterTreeViewLoader(object):
-	def __init__(self, treeview, interval):
-		self.treeview = treeview
-		self.interval = interval
+class CompositeContext(object):
+    def __init__(self, *contexts):
+        self.contexts = contexts
+
+    def __enter__(self):
+        return tuple(ctx.__enter__() for ctx in self.contexts)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        suppressed = False
+        for ctx in reversed(self.contexts):
+            try:
+                if ctx.__exit__(exc_type, exc_val, exc_tb):
+                    suppressed = True
+                    exc_type = exc_val = exc_tb = None
+            except Exception:
+                import sys
+                exc_type, exc_val, exc_tb = sys.exc_info()
+                suppressed = False
+        return suppressed
+
+class NoneContext(object):
 	def __enter__(self):
-		self.model = self.treeview.get_model()
-		self.detach()
 		return self
-	def progress(self):
-		if self._last_flush + self.interval < time.time():
-			self.flush()
-	def detach(self):
-		self.treeview.set_model(None)
-		self._last_flush = time.time()
-	def flush(self):
-		self.treeview.set_model(self.model)
-		end = time.time() + 0.1
-		while time.time() < end:
-			print(end)
-			gtk.main_iteration(block=False)
-			if not gtk.events_pending():
-				break   # nothing left to process, no point spinning
-	def __exit__(self, exc_type, exc_val, exc_tb):
-		self.flush()
-		return False  # don't ignore exceptions
+	def __exit__(self, exc_type, exc, tb):
+		return False
+
+class TimedChunkProcessor(object):
+	def __init__(self, chunk_starter, iterator, loop_func, timebox_sec, loop_context=NoneContext(), callback_param=None):
+		self.chunk_starter = chunk_starter
+		self.iterator = iterator
+		self.loop_context = loop_context
+		self.loop_func = loop_func
+		self.callback_param = callback_param
+		self.timebox_sec = timebox_sec
+		self.finish_event = threading.Event()
+	def run(self):
+		self.chunk_starter(self._callback)
+	def _callback(self):
+		continue_processing = True
+		chunk_start = time.time()
+		with self.loop_context as context_handler:
+			while True:
+				try:
+					loop_var = self.iterator.next()
+				except StopIteration:
+					continue_processing = False
+					break
+				else:
+					self.loop_func(loop_var, context_handler, self.callback_param)
+				if chunk_start + self.timebox_sec < time.time():
+					break
+		if continue_processing:
+			self.run()
+		else:
+			self.finish_event.set()
+	def join(self):
+		self.finish_event.wait()
 
 class Thread(threading.Thread):
 	def __init__(self, *params, **opts):
@@ -1522,36 +1554,45 @@ class GTabData(object):
 			else:
 				self.tabdata_key_field = cliargs.key_field
 
-	def load_data(self, iterator):
-		with GtkThreadContext() as gtkthread:
-			with GDKCursor(self.main_win.window, gtk.gdk.WATCH):
-				model = self.main_table.get_model()
-				if self.tabdata_key_field is None:
-					model.clear()
-				
-				with FasterTreeViewLoader(self.main_table, interval=0.4) as loader:
-					existing_records_keys = []
-					for treepath, row in iterator:
-						#print(row)
-						record_key = None
-						existing_record_path = None
-						if self.tabdata_key_field is not None:
-							record_key = row[model.get_column_num(self.tabdata_key_field)]
-							existing_record_path = get_path_by_cell(model, search_column=self.tabdata_key_field, search_content=record_key)
-						if existing_record_path is None:
-							model.append(treepath, row)
-						else:
-							model[existing_record_path].update(row)
-						loader.progress()
-						if self.tabdata_key_field is not None:
-							existing_records_keys.append(record_key)
+	def load_data(self, data_rows_iterator):
+		cb_data = {
+			'existing_records_keys': [],
+			'model': self.main_table.get_model(),
+		}
+		if self.tabdata_key_field is None:
+			with GtkThreadContext():
+				cb_data['model'].clear()
 
-					if self.tabdata_key_field is not None:
-						def remove_invalid_rows(model, treepath, treeiter, cb_data):
-							if model[treepath][cb_data['tabdata_key_field']] not in cb_data['existing_records_keys']:
-								del model[treepath]
-								loader.progress()
-						model.foreach(remove_invalid_rows, {'existing_records_keys': existing_records_keys, 'tabdata_key_field': self.tabdata_key_field})
+		data_processor = TimedChunkProcessor(
+			chunk_starter = lambda func: gobject.idle_add(glib_callback_once, func),
+			iterator = data_rows_iterator,
+			loop_context = CompositeContext(GtkThreadContext(), GDKCursor(self.main_win.window, gtk.gdk.WATCH)),
+			loop_func = self.load_data_row,
+			callback_param = cb_data,
+			timebox_sec = 0.4)
+		data_processor.run()
+		data_processor.join()
+
+		if self.tabdata_key_field is not None:
+			with GtkThreadContext(), GDKCursor(self.main_win.window, gtk.gdk.WATCH):
+				def remove_invalid_rows(model, treepath, treeiter, cb_data):
+					if model[treepath][cb_data['tabdata_key_field']] not in cb_data['existing_records_keys']:
+						del model[treepath]
+				cb_data['model'].foreach(remove_invalid_rows, {'existing_records_keys': cb_data['existing_records_keys'], 'tabdata_key_field': self.tabdata_key_field})
+
+	def load_data_row(self, loop_var, context_handlers, cb_data):
+		treepath, row = loop_var
+		record_key = None
+		existing_record_path = None
+		if self.tabdata_key_field is not None:
+			record_key = row[cb_data['model'].get_column_num(self.tabdata_key_field)]
+			existing_record_path = get_path_by_cell(cb_data['model'], search_column=self.tabdata_key_field, search_content=record_key)
+		if existing_record_path is None:
+			cb_data['model'].append(treepath, row)
+		else:
+			cb_data['model'][existing_record_path].update(row)
+		if self.tabdata_key_field is not None:
+			cb_data['existing_records_keys'].append(record_key)
 
 	def after_load_table(self):
 		with TemporaryProperty((self.proppersist_table, 'active'), (), False):

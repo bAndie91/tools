@@ -107,7 +107,7 @@ class TreeModelProxy(object):
 		derived_model = _proxy_userdata['derived_model']
 		return func(derived_model, treepath, treeiter, userdata)
 
-class TreeStore(gtk.TreeStore):
+class NamedColumnsTreeStore(gtk.TreeStore):
 	__gsignals__ = {
 		'changed': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, ()),
 		'set-changed': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, ()),
@@ -133,7 +133,7 @@ class TreeStore(gtk.TreeStore):
 			types.append(col_type)
 			self.column_name.append(col_name)
 			n += 1
-		super(TreeStore, self).__init__(*types)
+		super(NamedColumnsTreeStore, self).__init__(*types)
 		for event in 'row-changed', 'row-deleted', 'row-inserted':
 			self.connect_after(event, self.emit_signal, 'changed')
 			self.connect_after(event, self.emit_signal, 'set-changed')
@@ -152,17 +152,17 @@ class TreeStore(gtk.TreeStore):
 	def get_column_num(self, col_ref):
 		if isinstance(col_ref, int):
 			if col_ref < 0 or col_ref >= len(self.column_name):
-				raise TreeStore.ColumnNotFoundException(col_ref)
+				raise NamedColumnsTreeStore.ColumnNotFoundException(col_ref)
 			return col_ref
 		try:
 			return self.column_name.index(col_ref)
 		except ValueError:
-			raise TreeStore.ColumnNotFoundException(col_ref)
+			raise NamedColumnsTreeStore.ColumnNotFoundException(col_ref)
 	def get_column_name(self, col_num):
 		try:
 			return self.column_name[col_num]
 		except (IndexError, TypeError):
-			raise TreeStore.ColumnNotFoundException(col_num)
+			raise NamedColumnsTreeStore.ColumnNotFoundException(col_num)
 	def get(self, row, *columns):
 		if type(row) == tuple:
 			row = self.get_iter(row)  # tree iterator path was given
@@ -171,7 +171,7 @@ class TreeStore(gtk.TreeStore):
 		columns = list(columns)
 		for i, col in enumerate(columns):
 			columns[i] = self.get_column_num(col)
-		answer = super(TreeStore, self).get(row, *columns)
+		answer = super(NamedColumnsTreeStore, self).get(row, *columns)
 		answer = list(answer)
 		for i, col_num in enumerate(columns):
 			answer[i] = self.convert_cell(col_num, answer[i])
@@ -184,7 +184,7 @@ class TreeStore(gtk.TreeStore):
 			return self.reader[col_num](cell_value)
 		return cell_value
 	def __getitem__(self, item):
-		answer = super(TreeStore, self).__getitem__(item)
+		answer = super(NamedColumnsTreeStore, self).__getitem__(item)
 		return TreeModelRow(answer, self)
 	def _row_dict_to_list(self, row):
 		if type(row) == dict:
@@ -194,11 +194,11 @@ class TreeStore(gtk.TreeStore):
 				row[self.get_column_num(col_name)] = value
 		return row
 	def append(self, parent, row):
-		return super(TreeStore, self).append(parent, self._row_dict_to_list(row))
+		return super(NamedColumnsTreeStore, self).append(parent, self._row_dict_to_list(row))
 	def insert_after(self, parent, sibling, row):
-		return super(TreeStore, self).insert_after(parent, sibling, self._row_dict_to_list(row))
+		return super(NamedColumnsTreeStore, self).insert_after(parent, sibling, self._row_dict_to_list(row))
 	def insert_before(self, parent, sibling, row):
-		return super(TreeStore, self).insert_before(parent, sibling, self._row_dict_to_list(row))
+		return super(NamedColumnsTreeStore, self).insert_before(parent, sibling, self._row_dict_to_list(row))
 	def set(self, treeiter, *itempairs):
 		if len(itempairs) == 0: return
 		if type(itempairs[0]) == dict:
@@ -206,7 +206,7 @@ class TreeStore(gtk.TreeStore):
 			itempairs = []
 			for col_name, value in cols.iteritems():
 				itempairs.extend([self.get_column_num(col_name), value])
-		super(TreeStore, self).set(treeiter, *itempairs)
+		super(NamedColumnsTreeStore, self).set(treeiter, *itempairs)
 	def get_cells_by_column(self, col_name):
 		treeiter = self.get_iter_root()
 		while treeiter is not None:
@@ -230,11 +230,48 @@ def floatOrNone(s):
 	except (ValueError, TypeError):
 		return None
 
-class TreeModelFilterSort(gtk.TreeModelSort):
+class TreeModelSortIndexed(gtk.TreeModelSort):
+	"""
+	Maintain a dict of dicts in self.index.
+	Keys of self.index are column names.
+	Keys of self.index[column_name] are cell data taken as row_key.
+	Value of self.index[column_name][row_key] is a TreeRowReference to the row of which key column's content is row_key.
+	Assume row_key is unique per row across the TreeStore.
+	Downstream model must be a NamedColumnsTreeStore.
+	"""
+	def __init__(self, model):
+		super(TreeModelSortIndexed, self).__init__(model)
+		while not isinstance(model, NamedColumnsTreeStore):
+			model = model.get_model()
+		model.connect('row-inserted', self._on_row_inserted)
+		model.connect('row-changed', self._on_row_changed)
+		self.index = {}
+	def add_key_column(self, col_name):
+		if col_name not in self.index:
+			self.index[col_name] = {}
+	def _on_row_inserted(self, model, treepath, treeiter):
+		self.index_row(model, treepath)
+	def _on_row_changed(self, model, treepath, treeiter):
+		self.index_row(model, treepath)
+	def index_row(self, model, treepath):
+		for col_name in self.index:
+			key = model[treepath][col_name]
+			self.index[col_name][key] = gtk.TreeRowReference(model, treepath)
+	def get_row_by_key(self, col_name, key):
+		rowref = self.index.get(col_name, {}).get(key)
+		if rowref is None or not rowref.valid():
+			return None
+		row = self[rowref.get_path()]
+		if row[col_name] != key:
+			# row's key field was modified since last added
+			return None
+		return row
+
+class TreeModelFilterSortIndex(TreeModelSortIndexed):
 	def __init__(self, basemodel):
 		self.base_model = basemodel
 		self.filtering_model = self.base_model.filter_new()
-		super(TreeModelFilterSort, self).__init__(self.filtering_model)
+		super(TreeModelFilterSortIndex, self).__init__(self.filtering_model)
 		for colnum in range(self.get_n_columns()):
 			self.set_sort_func(colnum, self.mixdata_sorter, colnum)
 	def mixdata_sorter(self, model, iter1, iter2, colnum):
@@ -255,7 +292,7 @@ class TreeModelFilterSort(gtk.TreeModelSort):
 		return self.base_model[self.convert_item_to_basemodel_item(item)]
 	def foreach(self, func, userdata):
 		_proxy_userdata = {'func': func, 'userdata': userdata, 'derived_model': self}
-		super(TreeModelFilterSort, self).foreach(TreeModelProxy._proxy_foreach, _proxy_userdata)
+		super(TreeModelFilterSortIndex, self).foreach(TreeModelProxy._proxy_foreach, _proxy_userdata)
 	def get(self, row, *columns):
 		raise NotImplementedError()
 	def get_value(self, treeiter, column):
@@ -276,6 +313,7 @@ class TreeModelFilterSort(gtk.TreeModelSort):
 			return object.__getattribute__(self.filtering_model, attrname)
 		else:
 			return object.__getattribute__(self, attrname)
+
 
 def glib_callback_once(func, *args):
 	func(*args)
@@ -333,19 +371,18 @@ class TreeView(gtk.TreeView):
 		cr.stroke()
 
 	def set_model(self, base_model):
-		self.base_model = base_model
 		if base_model is not None:
-			self.filtersort_model = TreeModelFilterSort(base_model)
-			super(TreeView, self).set_model(self.filtersort_model)
+			self.derived_model = TreeModelFilterSortIndex(base_model)
+			super(TreeView, self).set_model(self.derived_model)
 			self.set_filter_function(self.default_filtering_cb)
 			
-			self.filtersort_model.connect('sort-column-changed', self._on_model_sort_column_changed)
+			self.derived_model.connect('sort-column-changed', self._on_model_sort_column_changed)
 		else:
-			self.filtersort_model = None
+			self.derived_model = None
 			super(TreeView, self).set_model(base_model)
 	
 	def set_filter_function(self, func, user_data=None):
-		self.filtersort_model.set_visible_func(func, user_data)
+		self.derived_model.set_visible_func(func, user_data)
 	
 	def default_filtering_cb(self, model, treeiter, cb_data):
 		all_column_filter_match = True
@@ -432,7 +469,7 @@ class TreeView(gtk.TreeView):
 		tvc.connect('notify::width', self._on_column_width_change)
 		tvc.connect('notify::visible', self._on_column_visibility_changed)
 		tvc.connect('notify::sort-order', self._on_column_sort_order_changed)
-		tvc.connect('filter-expression-changed', lambda tvc, fexpr: self.filtersort_model.refilter())
+		tvc.connect('filter-expression-changed', lambda tvc, fexpr: self.derive_model.refilter())
 
 	def _on_column_click(self, col_widget, event):
 		if event.button == MOUSE_BUTTON_RIGHT:
@@ -1520,39 +1557,53 @@ class GTabData(object):
 			else:
 				raise ValueError()
 
-			try:
-				proc = spawn_subprocess(command, shell=in_shell, stdin=open(os.devnull, 'r'), stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
-				td_header = tabdata(proc.stdout.readline())
-				columns = [(col, unicode) for col in td_header]
-				self.load_columns(columns)
-				data_generator = ((None, tabdata(line, n_fields=len(columns))) for line in iter(proc.stdout.readline, ''))
-				self.load_data(data_generator)
-				proc.stdout.close()
-				wait_subprocess(proc)
-			except SubprocessError as err:
+			def execution_error(err):
 				with GtkThreadContext():
 					ErrorMessage("Command failed with %s: <tt>%s</tt>\nDetails:" % (err.type, err.code), title="gTabData: execution error", details=err.details)
+				
+			try:
+				proc = spawn_subprocess(command, shell=in_shell, stdin=open(os.devnull, 'r'), stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
+			except SubprocessError as err:
+				execution_error(err)
+			else:
+				td_header = tabdata(proc.stdout.readline())
+				self.load_columns(td_header)
+				n_fields = len(td_header)
+				data_generator = ((None, tabdata(line, n_fields=n_fields)) for line in iter(proc.stdout.readline, ''))
+				self.load_data(data_generator)
+				proc.stdout.close()
+				try:
+					wait_subprocess(proc)
+				except SubprocessError as err:
+					execution_error(err)
 		
 		with GtkThreadContext():
 			self.after_load_table()
 	
 	def load_columns(self, columns):
-		if cliargs.auto_key_field and self.tabdata_key_field is None:
-			if columns[0][0] != '':
-				self.tabdata_key_field = columns[0][0]
-				print("info: Taking '%s' as key field." % self.tabdata_key_field, file=sys.stderr)
-		
-		if self.main_table.get_model() is None or columns != self.main_table.get_model().get_columns():
+		if len(columns) != len(set(columns)):
 			with GtkThreadContext():
-				with TemporaryProperty((self.proppersist_table, 'active'), (), False):
-					self.main_table.set_model(TreeStore(*columns))
-					self.main_table.set_columns([(col[0], col[0], 'text', idx) for idx, col in enumerate(columns)])
-		
+				ErrorMessage("duplicated column names", title="gTabData: data header error", details="columns:\n"+'\n'.join(["- "+c for c in columns]))
+			raise ValueError("duplicated column names")
+
+		if cliargs.auto_key_field and self.tabdata_key_field is None:
+			if columns[0] != '':
+				self.tabdata_key_field = columns[0]
+				print("info: Taking '%s' as key field." % self.tabdata_key_field, file=sys.stderr)
 		if not cliargs.auto_key_field and cliargs.key_field is not None:
-			if cliargs.key_field not in [col[0] for col in columns]:
+			if cliargs.key_field not in columns:
 				print("warning: Field '%s' is not in the input." % cliargs.key_field, file=sys.stderr)
 			else:
 				self.tabdata_key_field = cliargs.key_field
+		
+		treemodel_columns = [(col_name, unicode) for col_name in columns]
+		if self.main_table.get_model() is None or treemodel_columns != self.main_table.get_model().get_columns():
+			with GtkThreadContext():
+				with TemporaryProperty((self.proppersist_table, 'active'), (), False):
+					self.main_table.set_model(NamedColumnsTreeStore(*treemodel_columns))
+					self.main_table.set_columns([(col_name, col_name, 'text', idx) for idx, col_name in enumerate(columns)])
+					if self.tabdata_key_field is not None:
+						self.main_table.get_model().add_key_column(self.tabdata_key_field)
 
 	def load_data(self, data_rows_iterator):
 		cb_data = {
@@ -1574,6 +1625,7 @@ class GTabData(object):
 		data_processor.join()
 
 		if self.tabdata_key_field is not None:
+			# TODO TimedChunkProcessor
 			with GtkThreadContext(), GDKCursor(self.main_win.window, gtk.gdk.WATCH):
 				def remove_invalid_rows(model, treepath, treeiter, cb_data):
 					if model[treepath][cb_data['tabdata_key_field']] not in cb_data['existing_records_keys']:
@@ -1581,16 +1633,17 @@ class GTabData(object):
 				cb_data['model'].foreach(remove_invalid_rows, {'existing_records_keys': cb_data['existing_records_keys'], 'tabdata_key_field': self.tabdata_key_field})
 
 	def load_data_row(self, loop_var, context_handlers, cb_data):
-		treepath, row = loop_var
+		treepath, row_cells = loop_var
 		record_key = None
-		existing_record_path = None
+		existing_record = None
 		if self.tabdata_key_field is not None:
-			record_key = row[cb_data['model'].get_column_num(self.tabdata_key_field)]
-			existing_record_path = get_path_by_cell(cb_data['model'], search_column=self.tabdata_key_field, search_content=record_key)
-		if existing_record_path is None:
-			cb_data['model'].append(treepath, row)
+			col_idx = cb_data['model'].get_column_num(self.tabdata_key_field)
+			record_key = row_cells[col_idx]
+			existing_record = cb_data['model'].get_row_by_key(self.tabdata_key_field, record_key)
+		if existing_record is None:
+			cb_data['model'].append(treepath, row_cells)
 		else:
-			cb_data['model'][existing_record_path].update(row)
+			existing_record.update(row_cells)
 		if self.tabdata_key_field is not None:
 			cb_data['existing_records_keys'].append(record_key)
 

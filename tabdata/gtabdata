@@ -1586,6 +1586,14 @@ class GTabData(object):
 				ErrorMessage("duplicated column names", title="gTabData: data header error", details="columns:\n"+'\n'.join(["- "+c for c in columns]))
 			raise ValueError("duplicated column names")
 
+		treemodel_columns = [(col_name, unicode) for col_name in columns]
+		if self.main_table.get_model() is None or treemodel_columns != self.main_table.get_model().get_columns():
+			self.tabdata_key_field = None
+			with GtkThreadContext():
+				with TemporaryProperty((self.proppersist_table, 'active'), (), False):
+					self.main_table.set_model(NamedColumnsTreeStore(*treemodel_columns))
+					self.main_table.set_columns([(col_name, col_name, 'text', idx) for idx, col_name in enumerate(columns)])
+		
 		if cliargs.auto_key_field and self.tabdata_key_field is None:
 			if columns[0] != '':
 				self.tabdata_key_field = columns[0]
@@ -1596,14 +1604,9 @@ class GTabData(object):
 			else:
 				self.tabdata_key_field = cliargs.key_field
 		
-		treemodel_columns = [(col_name, unicode) for col_name in columns]
-		if self.main_table.get_model() is None or treemodel_columns != self.main_table.get_model().get_columns():
+		if self.tabdata_key_field is not None:
 			with GtkThreadContext():
-				with TemporaryProperty((self.proppersist_table, 'active'), (), False):
-					self.main_table.set_model(NamedColumnsTreeStore(*treemodel_columns))
-					self.main_table.set_columns([(col_name, col_name, 'text', idx) for idx, col_name in enumerate(columns)])
-					if self.tabdata_key_field is not None:
-						self.main_table.get_model().add_key_column(self.tabdata_key_field)
+				self.main_table.get_model().add_key_column(self.tabdata_key_field)
 
 	def load_data(self, data_rows_iterator):
 		cb_data = {
@@ -1614,6 +1617,7 @@ class GTabData(object):
 			with GtkThreadContext():
 				cb_data['model'].clear()
 
+		print('loading', time.time())
 		data_processor = TimedChunkProcessor(
 			chunk_starter = lambda func: gobject.idle_add(glib_callback_once, func),
 			iterator = data_rows_iterator,
@@ -1623,6 +1627,7 @@ class GTabData(object):
 			timebox_sec = 0.4)
 		data_processor.run()
 		data_processor.join()
+		print('loaded ', time.time())
 
 		if self.tabdata_key_field is not None:
 			# TODO TimedChunkProcessor

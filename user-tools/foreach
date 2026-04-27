@@ -67,6 +67,13 @@ Default is C<$IFS>.
 
 Cut up B<DATA> into fields at TAB chars..
 
+=item --tabdata, --td
+
+Input is tabular data with column names in the header (first line).
+Replace C<< {I<COLUMN>} >> references in I<COMMAND> (and I<ARGS> of course) to the given I<COLUMN>'s cell data.
+Implies B<--tab> option.
+Still substitutes C<{}> and C<{@}> placeholders, but not C<< {I<NUMBER>} >> ones.
+
 =item -P, --no-placeholder
 
 Do not substitute C<{}> with B<DATA>.
@@ -135,6 +142,7 @@ EOF
 FOREACH_MODE=command
 FOREACH_VERBOSE=no
 unset FOREACH_DELIM
+FOREACH_TABDATA=no
 FOREACH_PASS_DATA=maybe
 FOREACH_PASS_FIELDS=no
 FOREACH_REPLACE_PLACEHOLDER=yes
@@ -170,6 +178,15 @@ do
 		FOREACH_DELIM=$1
 		;;
 	(-t|--tab)
+		FOREACH_DELIM=$'\t'
+		;;
+	(--tabdata|--td)
+		if [ -n "$FOREACH_DELIM" -a "$FOREACH_DELIM" != '$\t' ]
+		then
+			echo "foreach: with option --tabdata TAB should be used as field delimiter" >&2
+			exit -1
+		fi
+		FOREACH_TABDATA=yes
 		FOREACH_DELIM=$'\t'
 		;;
 	(-P|--no-placeholder)
@@ -252,6 +269,12 @@ next_data()
 	fi
 }
 
+if [ "$FOREACH_TABDATA" = yes ]
+then
+	next_data
+	IFS=${FOREACH_DELIM+$FOREACH_DELIM}${FOREACH_DELIM-$IFS} read -r -a COLUMN <<< "$DATA"
+fi
+
 while next_data
 do
 	export DATA
@@ -288,15 +311,30 @@ do
 					arg=${arg//$placeholder/"$DATA"}
 					placeholder_found=yes
 				fi
-				for ((idx = 0; idx < 100; idx++))
-				do
-					if [[ $arg =~ \{$idx\} ]]
-					then
-						placeholder="{$idx}"
-						arg=${arg//$placeholder/"${FIELD[$idx]}"}
-						placeholder_found=yes
-					fi
-				done
+				if [ "$FOREACH_TABDATA" = yes ]
+				then
+					col_idx=0
+					for colname in "${COLUMN[@]}"
+					do
+						if [[ $arg =~ \{$colname\} ]]
+						then
+							placeholder_found=yes
+							placeholder="{$colname}"
+							arg=${arg//$placeholder/"${FIELD[$col_idx]}"}
+						fi
+						col_idx=$[col_idx+1]
+					done
+				else
+					for ((idx = 0; idx < 100; idx++))
+					do
+						if [[ $arg =~ \{$idx\} ]]
+						then
+							placeholder="{$idx}"
+							arg=${arg//$placeholder/"${FIELD[$idx]}"}
+							placeholder_found=yes
+						fi
+					done
+				fi
 				cmd_and_args+=("$arg")
 			fi
 		done

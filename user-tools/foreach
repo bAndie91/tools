@@ -18,8 +18,10 @@ Take each input line from stdin as B<DATA>, and run I<COMMAND> with B<DATA> appe
 If C<{}> is there in I<ARGS> then it's substituted with B<DATA> rather than append to the end,
 unless I<--no-placeholder> is given, because then C<{}> is read literally.
 Additionally, foreach(1) parses B<DATA> into fields and add each of them to the end of I<ARGS> if I<--fields> is given.
-Numbered placeholders, like C<{0}>, C<{1}>, ... are substituted with the respective field's value.
-A stand-alone C<{@}> (curly bracket open, at sign, curly bracket close) argument is substituted to all fields as separate arguments.
+Numbered placeholders, like C<{0}>, C<{1}>, ... up to 99, are substituted with the respective field's value.
+If the input data has less fields, further fileds are considered empty string.
+A stand-alone C<{@}> (curly bracket open, at sign, curly bracket close) argument is substituted to all fields of the input,
+into separete arguments, but only if C<{@}> stands as its own separate argument.
 
 So, for example, if you have not specified any I<ARGS> in the command line and type both I<--data> and I<--fields>,
 then B<DATA> goes into argv[1], and the first field goes into argv[2], second to argv[3] and so on.
@@ -289,7 +291,7 @@ do
 	while declare -p F$idx >/dev/null 2>/dev/null
 	do
 		unset F$idx
-		let idx++
+		idx=$[idx+1]
 	done
 	
 	FOREACH_COMMAND_STATUS=0
@@ -308,7 +310,7 @@ do
 				if [[ $arg =~ \{\} ]]
 				then
 					placeholder='{}'
-					arg=${arg//$placeholder/"$DATA"}
+					arg=${arg//"$placeholder"/"$DATA"}
 					placeholder_found=yes
 				fi
 				if [ "$FOREACH_TABDATA" = yes ]
@@ -320,7 +322,7 @@ do
 						then
 							placeholder_found=yes
 							placeholder="{$colname}"
-							arg=${arg//$placeholder/"${FIELD[$col_idx]}"}
+							arg=${arg//"$placeholder"/"${FIELD[$col_idx]}"}
 						fi
 						col_idx=$[col_idx+1]
 					done
@@ -330,7 +332,7 @@ do
 						if [[ $arg =~ \{$idx\} ]]
 						then
 							placeholder="{$idx}"
-							arg=${arg//$placeholder/"${FIELD[$idx]}"}
+							arg=${arg//"$placeholder"/"${FIELD[$idx]}"}
 							placeholder_found=yes
 						fi
 					done

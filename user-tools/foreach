@@ -1,11 +1,10 @@
-#!/bin/bash
+#!/usr/bin/env perl
 
-true <<'EOF'
 =pod
 
 =head1 NAME
 
-foreach - Run an OS or shell command on each input line, similar to xargs(1)
+foreach - Run a command on each input line, similar to xargs(1)
 
 =head1 SYNOPSIS
 
@@ -16,26 +15,26 @@ foreach [I<OPTIONS>] I<COMMAND> [I<ARGS> ...]
 Take each input line from stdin as B<DATA>, and run I<COMMAND> with B<DATA> appended to the end of I<ARGS> as a single argument.
 
 If C<{}> is there in I<ARGS> then it's substituted with B<DATA> rather than append to the end,
-unless I<--no-placeholder> is given, because then C<{}> is read literally.
+unless I<--no-placeholder> is given, because then C<{}> is taken literally.
 Additionally, foreach(1) parses B<DATA> into fields and add each of them to the end of I<ARGS> if I<--fields> is given.
-Numbered placeholders, like C<{0}>, C<{1}>, ... up to 99, are substituted with the respective field's value.
-If the input data has less fields, further fileds are considered empty string.
-A stand-alone C<{@}> (curly bracket open, at sign, curly bracket close) argument is substituted to all fields of the input,
+Numbered placeholders, like C<{0}>, C<{1}>, ... are substituted with the respective field's value.
+If the input data has less fields, higher numbered fields are considered empty string.
+A stand-alone C<{@}> ("at" sign surrounded by curly brackets) argument is substituted to all fields of the input,
 into separete arguments, but only if C<{@}> stands as its own separate argument.
 
 So, for example, if you have not specified any I<ARGS> in the command line and type both I<--data> and I<--fields>,
-then B<DATA> goes into argv[1], and the first field goes into argv[2], second to argv[3] and so on.
+then B<DATA> goes into argv[1], and the first field goes into argv[2], second to argv[3] and so on (argv[0] being the command name iteself). If 1 argument is in I<ARGS>, then the rest is shifted by 1, ie. B<DATA> goes into argv[2], etc.
 If have not given I<--data> nor I<--fields>, then I<--data> is implied.
 
-If called with I<--sh> option, I<COMMAND> is run within a shell context;
-input line goes to C<$DATA>, individual fields go to C<${FIELD[@]}> (0-indexed).
+If called with B<--sh> option, I<COMMAND> is run by the shell.
+Both in B<--sh> mode and system-command mode,
+input line goes to C<DATA>,
+individual fields go to C<F0>, C<F1>, ... environment variables;
+and C<< TD_I<COLUMN1> >>, C<< TD_I<COLUMN2> >>, ... environment variables if I<--tabdata> is given, where I<COLUMN1>, I<COLUMN2>, ... are the column names.
 
-Both in B<command> and B<shell> (I<--sh>) modes, individual fields are available in
-C<$F0>, C<$F1>, ... environment variables.
-
-Set I<-d> B<DELIM> if you want to split B<DATA> not by C<$IFS> but by other delimiter chars,
+Set B<-d> I<DELIM> if you want to split B<DATA> not by the occurrance of TAB and SPACE chars but by other chars,
 eg. B<-d ',:'> for comma and colon.
-There is also C<-t>/C<--tab> option to set delimiter to TAB for your convenience.
+There is also B<--tab> option to set delimiter to TAB for your convenience; but this is implied in B<--tabdata> mode.
 
 =head1 OPTIONS
 
@@ -43,8 +42,7 @@ There is also C<-t>/C<--tab> option to set delimiter to TAB for your convenience
 
 =item -e, --sh
 
-I<COMMAND> is a shell script and for each B<DATA>, it runs in the same shell context,
-so variables are preserved across invocations.
+I<COMMAND> is interpreted as a shell script and run by the shell (determined by the B<SHELL> environment variable).
 
 =item -l, --data
 
@@ -63,7 +61,12 @@ This option is repeatable.
 =item -d, --delimiter I<DELIM>
 
 Cut up B<DATA> into fields at I<DELIM> chars.
-Default is C<$IFS>.
+Default is TAB and SPACE.
+
+=item -D, --delim-regex, --delimiter-regex I<PATTERN>
+
+Cut up B<DATA> into fields by I<PATTERN> (perl) regular expression.
+Default is to split by the occurrance of TAB and SPACE chars.
 
 =item -t, --tab
 
@@ -72,21 +75,22 @@ Cut up B<DATA> into fields at TAB chars..
 =item --tabdata, --td
 
 Input is tabular data with column names in the header (first line).
-Replace C<< {I<COLUMN>} >> references in I<COMMAND> (and I<ARGS> of course) to the given I<COLUMN>'s cell data.
+Replace C<< {I<COLUMN>} >> references in I<ARGS> (and I<COMMAND>) to the given I<COLUMN>'s field value.
+Non-existing columns are considered empty string.
+Column names should not be integers, so they won't conflict with C<< {I<NUMBER>} >> placeholders,
+which are substituted to the respective field's value even in B<--tabdata> mode as well.
 Implies B<--tab> option.
-Still substitutes C<{}> and C<{@}> placeholders, but not C<< {I<NUMBER>} >> ones.
+The C<{}> and C<{@}> placeholders are still substituted in.
 
 =item -P, --no-placeholder
 
-Do not substitute C<{}> with B<DATA>.
+Do not substitute any placeholders (which are in curly braces).
 
 =item -p, --prefix I<TEMPLATE>
 
 Print something before each command execution.
-I<TEMPLATE> is a bash-interpolated string,
-may contain C<$DATA> and C<${FIELD[n]}>.
-Probably need to put in single quotes when passing to foreach(1) by the invoking shell.
-It's designed to be B<eval>uated, so backtick, command substitution, semicolon, and other shell expressions are B<eval>'ed by bash.
+I<TEMPLATE> is interpolated like I<COMMAND> and I<ARGS>,
+so it may contain C<{}> and C<< {I<NUMBER>} >> (and C<< {I<COLUMN>} >> in B<--tabdata> mode).
 
 =item --prefix-add I<TEMPLATE>
 
@@ -117,7 +121,7 @@ Rather exit with the said command's exit status code.
 =head1 EXAMPLES
 
  ls -l --time-style +%FT%T%z | foreach --data --fields sh -c 'echo size: $5, file: $7'
- ls -l --time-style +%FT%T%z | foreach --sh 'echo size: ${FIELD[4]}, file: ${FIELD[6]}'
+ ls -l --time-style +%FT%T%z | foreach --sh 'echo size: $F4, file: $F6'
 
 =head1 LIMITS
 
@@ -136,245 +140,256 @@ xargs(1), xe(1) L<https://github.com/leahneukirchen/xe>, apply(1), xapply(1) L<h
 
 =cut
 
-EOF
+
+use Data::Dumper;
+use utf8;
+use open ':std', ':utf8';  # mark stdio as utf8 but not verify
+use open ':utf8';
+use Errno qw/:POSIX/;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev pass_through permute/;
+use IPC::Run qw/run/;
+use List::MoreUtils qw/all any none/;
+use Pod::Usage;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 
-
-
-FOREACH_MODE=command
-FOREACH_VERBOSE=no
-unset FOREACH_DELIM
-FOREACH_TABDATA=no
-FOREACH_PASS_DATA=maybe
-FOREACH_PASS_FIELDS=no
-FOREACH_REPLACE_PLACEHOLDER=yes
-FOREACH_DRYRUN=no
-FOREACH_ERREXIT=no
-FOREACH_PREFIX_TEMPLATE=''
-FOREACH_INPUT_DATA=()
-FOREACH_INPUT_DATA_INDEX=0
-
-
-while [ $# != 0 ]
-do
-	case "$1" in
-	(--help)
-		pod2text "$0"
-		exit
-		;;
-	(-e|--sh)
-		FOREACH_MODE=sh
-		;;
-	(-l|--data)
-		FOREACH_PASS_DATA=yes
-		;;
-	(-f|--fields)
-		FOREACH_PASS_FIELDS=yes
-		;;
-	(-i|--input)
-		shift
-		FOREACH_INPUT_DATA+=("$1")
-		;;
-	(-d|--delimiter)
-		shift
-		FOREACH_DELIM=$1
-		;;
-	(-t|--tab)
-		FOREACH_DELIM=$'\t'
-		;;
-	(--tabdata|--td)
-		if [ -n "$FOREACH_DELIM" -a "$FOREACH_DELIM" != '$\t' ]
-		then
-			echo "foreach: with option --tabdata TAB should be used as field delimiter" >&2
-			exit -1
-		fi
-		FOREACH_TABDATA=yes
-		FOREACH_DELIM=$'\t'
-		;;
-	(-P|--no-placeholder)
-		FOREACH_REPLACE_PLACEHOLDER=no
-		;;
-	(-p|--prefix)
-		shift
-		FOREACH_PREFIX_TEMPLATE=$1
-		;;
-	(--prefix-add)
-		shift
-		FOREACH_PREFIX_TEMPLATE=${FOREACH_PREFIX_TEMPLATE}"$1"
-		;;
-	(--prefix-add-data)
-		FOREACH_PREFIX_TEMPLATE=${FOREACH_PREFIX_TEMPLATE}'$DATA'
-		;;
-	(--prefix-add-tab)
-		FOREACH_PREFIX_TEMPLATE=${FOREACH_PREFIX_TEMPLATE}$'\t'
-		;;
-	(-v|--verbose)
-		FOREACH_VERBOSE=yes
-		;;
-	(-n|--dry-run)
-		FOREACH_DRYRUN=yes
-		;;
-	(-E|--errexit)
-		FOREACH_ERREXIT=yes
-		;;
-	(--)
-		shift
-		break;;
-	(-*)
-		echo "foreach: unknown option: $1" >&2
-		exit -1
-		;;
-	(*)	break;;
-	esac
-	shift
-done
-
-if [ $# = 0 ]
-then
-	pod2text "$0" >&2
-	exit -1
-fi
-
-if [ $FOREACH_PASS_FIELDS = yes -a $FOREACH_PASS_DATA != yes ]
-then
-	FOREACH_PASS_DATA=no
-fi
-if [ $FOREACH_PASS_FIELDS != yes ]
-then
-	FOREACH_PASS_DATA=yes
-fi
-
-declare -a FOREACH_COMMAND=("$@")
-declare -g DATA
-
-next_data()
+# If the string $S is a well-behaved file name, simply return it.
+# If it contains white space, quotes, etc., quote it, and return the new string.
+sub shell_quote($)
 {
-	if [ ${#FOREACH_INPUT_DATA[@]} -gt 0 ]
-	then
-		if [ $FOREACH_INPUT_DATA_INDEX -ge ${#FOREACH_INPUT_DATA[@]} ]
-		then
-			return 1
-		else
-			DATA=${FOREACH_INPUT_DATA[$FOREACH_INPUT_DATA_INDEX]}
-			FOREACH_INPUT_DATA_INDEX=$[FOREACH_INPUT_DATA_INDEX + 1]
-			return 0
-		fi
-	else
-		local rc
-		read -r DATA
-		rc=$?
-		if [ $rc != 0 -a -z "$DATA" ]
-		then
-			return $rc
-		fi
-		return 0
-	fi
+  my ($s) = @_;
+  if ($s =~ m![^\w+/.,-]!)
+    {
+      # Convert each single quote to '\''
+      $s =~ s/\'/\'\\\'\'/g;
+      # Then single quote the string.
+      $s = "'$s'";
+    }
+  return $s;
 }
 
-if [ "$FOREACH_TABDATA" = yes ]
-then
-	next_data
-	IFS=${FOREACH_DELIM+$FOREACH_DELIM}${FOREACH_DELIM-$IFS} read -r -a COLUMN <<< "$DATA"
-fi
 
-while next_data
-do
-	export DATA
-	declare -a FIELD=()
-	IFS=${FOREACH_DELIM+$FOREACH_DELIM}${FOREACH_DELIM-$IFS} read -r -a FIELD <<< "$DATA"
-	
-	for ((idx = 0; idx < ${#FIELD[@]}; idx++))
-	do
-		export F$idx="${FIELD[$idx]}"
-	done
-	# unset old F$idx variables
-	while declare -p F$idx >/dev/null 2>/dev/null
-	do
-		unset F$idx
-		idx=$[idx+1]
-	done
-	
-	FOREACH_COMMAND_STATUS=0
-	
-	declare -a cmd_and_args=()
-	placeholder_found=no
-	if [ "$FOREACH_REPLACE_PLACEHOLDER" = yes ]
-	then
-		for arg in "${FOREACH_COMMAND[@]}"
-		do
-			if [ "$arg" = '{@}' ]
-			then
-				placeholder_found=yes
-				cmd_and_args+=("${FIELD[@]}")
-			else
-				if [[ $arg =~ \{\} ]]
-				then
-					placeholder='{}'
-					arg=${arg//"$placeholder"/"$DATA"}
-					placeholder_found=yes
-				fi
-				if [ "$FOREACH_TABDATA" = yes ]
-				then
-					col_idx=0
-					for colname in "${COLUMN[@]}"
-					do
-						if [[ $arg =~ \{$colname\} ]]
-						then
-							placeholder_found=yes
-							placeholder="{$colname}"
-							arg=${arg//"$placeholder"/"${FIELD[$col_idx]}"}
-						fi
-						col_idx=$[col_idx+1]
-					done
-				else
-					for ((idx = 0; idx < 100; idx++))
-					do
-						if [[ $arg =~ \{$idx\} ]]
-						then
-							placeholder="{$idx}"
-							arg=${arg//"$placeholder"/"${FIELD[$idx]}"}
-							placeholder_found=yes
-						fi
-					done
-				fi
-				cmd_and_args+=("$arg")
-			fi
-		done
+$OptVerbose = 0;
+$OptMode = 'command';
+$DefaultDelimChars = "\t ";
+$OptDelimChars = undef;
+$OptDelimRegex = undef;
+$OptTabdata = 0;
+$OptPassData = undef;
+$OptPassFields = 0;
+$OptReplacePlaceholder = 1;
+$OptDryRun = 0;
+$OptErrExit = 0;
+$OptPrefixTemplate = '';
+@OptInputData = ();
+
+
+GetOptions(
+	'e|sh!' => sub { $OptMode = 'shell'; },
+	'l|data!' => \$OptPassData,
+	'f|fields!' => \$OptPassFields,
+	'i|input=s@' => \@OptInputData,
+	'd|delimiter=s' => \$OptDelimChars,
+	'D|delim-regex|delimiter-regex=s' => \$OptDelimRegex,
+	't|tab' => sub { $OptDelimChars = '\t'; },
+	'td|tabdata' => sub {
+		if((defined $OptDelimChars and $OptDelimChars ne "\t") or (defined $OptDelimRegex and $OptDelimRegex ne "\t"))
+		{
+			die "foreach: with option --tabdata TAB should be used as field delimiter\n";
+		}
+		$OptTabdata = 1;
+		$OptDelimChars = "\t";
+	},
+	'P|no-placeholder' => sub { $OptReplacePlaceholder = 0; },
+	'p|prefix=s' => \$OptPrefixTemplate,
+	'prefix-add=s' => sub { $OptPrefixTemplate .= $_[1]; },
+	'prefix-add-data' => sub { $OptPrefixTemplate .= '{}'; },
+	'prefix-add-tab' => sub { $OptPrefixTemplate .= "\t"; },
+	'v|verbose!' => \$OptVerbose,
+	'n|dry-run!' => \$OptDryRun,
+	'E|errexit!' => \$OptErrExit,
+	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+	'<>' => sub { unshift @ARGV, $_[0]; die '!FINISH'; },
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+
+if(not defined $OptDelimRegex)
+{
+	if(not defined $OptDelimChars)
+	{
+		$OptDelimChars = $DefaultDelimChars;
+	}
+	$DelimRegex = '[' . quotemeta($OptDelimChars) . ']';
+}
+
+if($OptPassFields and not $OptPassData)
+{
+	$OptPassData = 0;
+}
+if(not $OptPassFields)
+{
+	$OptPassData = 1;
+}
+
+$SHELL = $ENV{'SHELL'} // 'sh';
+@Command = @ARGV;
+$OptInputDataIndex = 0;
+
+sub next_data
+{
+	if(@OptInputData)
+	{
+		if($OptInputDataIndex >= scalar @OptInputData)
+		{
+			return undef;
+		}
+		my $data = $OptInputData[$OptInputDataIndex];
+		$OptInputDataIndex++;
+		return $data;
+	}
 	else
-		cmd_and_args=("${FOREACH_COMMAND[@]}")
-	fi
+	{
+		my $data = <STDIN>;
+		return undef if not defined $data;
+		chomp $data;
+		return $data;
+	}
+}
+
+sub placeholder_replacement
+{
+	my $var = shift;
+	my $data = shift;
+	my $field_ref = shift;
+	my @field = @$field_ref;
+	my $column_ref = shift;
+	my @column = @$column_ref;
+
+	if($var eq '')
+	{
+		return $data;
+	}
+	elsif($var =~ /^\d+$/)
+	{
+		return $field[$var] // '';
+	}
+	elsif($OptTabdata)
+	{
+		my $idx = 0;
+		for my $col (@column)
+		{
+			if($col eq $var)
+			{
+				return $field[$idx] // '';
+			}
+			$idx++;
+		}
+	}
+	return '';
+}
+
+if($OptTabdata)
+{
+	@Column = map { unescape_tabdata($_) } split $DelimRegex, next_data();
+}
+
+while(defined (my $Data = next_data()))
+{
+	my @Field = split $DelimRegex, $Data;
 	
-	if [ "$FOREACH_MODE" = command ]
-	then
-		if [ "$FOREACH_REPLACE_PLACEHOLDER" != yes -o $placeholder_found = no ]
-		then
-			if [ "$FOREACH_PASS_DATA" = yes ]; then cmd_and_args+=("$DATA"); fi
-			if [ "$FOREACH_PASS_FIELDS" = yes ]; then cmd_and_args+=("${FIELD[@]}"); fi
-		fi
-	fi
+	$ENV{'DATA'} = $Data;
+	my $idx;
+	for($idx = 0; $idx <= $#Field; $idx++)
+	{
+		$ENV{"F$idx"} = $Field[$idx] // '';
+	}
+	while(exists $ENV{"F$idx"})
+	{
+		delete $ENV{"F$idx"};
+		$idx++;
+	}
+	undef $idx;
+	if($OptTabdata)
+	{
+		for my $idx (0..$#Column)
+		{
+			$ENV{'TD_' . $Column[$idx]} = $Field[$idx] // '';
+		}
+	}
+
+	my @cmd_args = ();
+	my $placeholder_found = 0;
+
+	if($OptReplacePlaceholder)
+	{
+		my @cmd_template = @Command;
+		for my $arg (@cmd_template)
+		{
+			if($arg eq '{@}')
+			{
+				$placeholder_found = 1;
+				push @cmd_args, @Field;
+			}
+			else
+			{
+				if($arg =~ s/\{(.*?)\}/placeholder_replacement($1, $Data, \@Field, \@Column)/eg)
+				{
+					$placeholder_found = 1;
+				}
+				push @cmd_args, $arg;
+			}
+		}
+	}
+	else
+	{
+		@cmd_args = @Command;
+	}
 	
-	if [ "$FOREACH_VERBOSE" = yes ]
-	then
-		echo "foreach: ${cmd_and_args[*]@Q}" >&2
-	fi
+	if($OptMode eq 'command')
+	{
+		if(not $OptReplacePlaceholder or not $placeholder_found)
+		{
+			if($OptPassData)
+			{
+				push @cmd_args, $Data;
+			}
+			if($OptPassFields)
+			{
+				push @cmd_args, @Field;
+			}
+		}
+	}
 	
-	eval "FOREACH_PREFIX=\"$FOREACH_PREFIX_TEMPLATE\""
-	echo -n "$FOREACH_PREFIX"
+	if($OptMode eq 'shell')
+	{
+		@cmd_args = ($SHELL, '-c', @cmd_args);
+	}
 	
-	if [ "$FOREACH_DRYRUN" = no ]
-	then
-		if [ "$FOREACH_MODE" = command ]
-		then
-			command "${cmd_and_args[@]}"
-			FOREACH_COMMAND_STATUS=$?
-		else
-			eval "${cmd_and_args[@]}"
-			FOREACH_COMMAND_STATUS=$?
-		fi
-	fi
+	if($OptVerbose)
+	{
+		warn "foreach: ".join(' ', map {shell_quote($_)} @cmd_args)."\n";
+	}
 	
-	if [ $FOREACH_ERREXIT = yes -a $FOREACH_COMMAND_STATUS != 0 ]
-	then
-		exit $FOREACH_COMMAND_STATUS
-	fi
-done
+	print $OptPrefixTemplate =~ s/\{(.*?)\}/placeholder_replacement($1, $Data, \@Field, \@Column)/egr;
+
+	my $RunStatus = 0;
+
+	if(not $OptDryRun)
+	{
+		my @stdin_args = ();
+		if(not @OptInputData)
+		{
+			@stdin_args = ('<', \undef);
+		}
+		run [@cmd_args], @stdin_args;
+		$RunStatus = $?;
+	}
+	
+	if($OptErrExit and $RunStatus != 0)
+	{
+		my $exit_error = WEXITSTATUS($RunStatus);
+		$exit_error = 128 + WTERMSIG($RunStatus) if WIFSIGNALED($RunStatus);
+		exit $exit_error;
+	}
+}

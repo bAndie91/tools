@@ -237,7 +237,7 @@ class TreeModelSortIndexed(gtk.TreeModelSort):
 	Keys of self.index[column_name] are cell data taken as row_key.
 	Value of self.index[column_name][row_key] is a TreeRowReference to the row of which key column's content is row_key.
 	Assume row_key is unique per row across the TreeStore.
-	Downstream model must be a NamedColumnsTreeStore.
+	A downstream model must be a NamedColumnsTreeStore.
 	"""
 	def __init__(self, model):
 		super(TreeModelSortIndexed, self).__init__(model)
@@ -261,7 +261,7 @@ class TreeModelSortIndexed(gtk.TreeModelSort):
 		rowref = self.index.get(col_name, {}).get(key)
 		if rowref is None or not rowref.valid():
 			return None
-		row = self[rowref.get_path()]
+		row = rowref.get_model()[rowref.get_path()]
 		if row[col_name] != key:
 			# row's key field was modified since last added
 			return None
@@ -469,7 +469,7 @@ class TreeView(gtk.TreeView):
 		tvc.connect('notify::width', self._on_column_width_change)
 		tvc.connect('notify::visible', self._on_column_visibility_changed)
 		tvc.connect('notify::sort-order', self._on_column_sort_order_changed)
-		tvc.connect('filter-expression-changed', lambda tvc, fexpr: self.derive_model.refilter())
+		tvc.connect('filter-expression-changed', lambda tvc, fexpr: self.derived_model.refilter())
 
 	def _on_column_click(self, col_widget, event):
 		if event.button == MOUSE_BUTTON_RIGHT:

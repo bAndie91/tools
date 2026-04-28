@@ -803,6 +803,7 @@ class CellRendererTextOverflow(gtk.GenericCellRenderer):
 		self.cr_txt = gtk.CellRendererText()
 		self.the_props = {'markup': None, 'xalign': 0.0}
 		self.set_property('ellipsize', pango.ELLIPSIZE_END)
+		self.set_property('yalign', 0.0)
 	def connect(self, *args):
 		self.cr_txt.connect(*args)
 	class TextAlignmentNotSupported(Exception):
@@ -1617,7 +1618,6 @@ class GTabData(object):
 			with GtkThreadContext():
 				cb_data['model'].clear()
 
-		print('loading', time.time())
 		data_processor = TimedChunkProcessor(
 			chunk_starter = lambda func: gobject.idle_add(glib_callback_once, func),
 			iterator = data_rows_iterator,
@@ -1627,7 +1627,6 @@ class GTabData(object):
 			timebox_sec = 0.4)
 		data_processor.run()
 		data_processor.join()
-		print('loaded ', time.time())
 
 		if self.tabdata_key_field is not None:
 			# TODO TimedChunkProcessor

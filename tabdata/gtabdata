@@ -1147,6 +1147,31 @@ class CompositeContext(object):
                 suppressed = False
         return suppressed
 
+class ContextTransitionContext:
+    def __init__(self, cm1, cm2):
+        self.cm1 = cm1
+        self.cm2 = cm2
+
+    def __enter__(self):
+        self.cm1.__enter__()
+        try:
+            handler2 = self.cm2.__enter__()
+        except:
+            self.cm1.__exit__(*sys.exc_info())
+            raise
+        self.cm1.__exit__(None, None, None)
+        return handler2
+
+    def __exit__(self, *exc_info):
+        self.cm1.__enter__()
+        try:
+            is_suppressed = self.cm2.__exit__(*exc_info)
+        except:
+            self.cm1.__exit__(*sys.exc_info())
+            raise
+        self.cm1.__exit__(None, None, None)
+        return is_suppressed
+
 class NoneContext(object):
 	def __enter__(self):
 		return self
@@ -1618,15 +1643,16 @@ class GTabData(object):
 			with GtkThreadContext():
 				cb_data['model'].clear()
 
-		data_processor = TimedChunkProcessor(
-			chunk_starter = lambda func: gobject.idle_add(glib_callback_once, func),
-			iterator = data_rows_iterator,
-			loop_context = CompositeContext(GtkThreadContext(), GDKCursor(self.main_win.window, gtk.gdk.WATCH)),
-			loop_func = self.load_data_row,
-			callback_param = cb_data,
-			timebox_sec = 0.4)
-		data_processor.run()
-		data_processor.join()
+		with ContextTransitionContext(GtkThreadContext(), GDKCursor(self.main_win.window, gtk.gdk.WATCH)):
+			data_processor = TimedChunkProcessor(
+				chunk_starter = lambda func: gobject.idle_add(glib_callback_once, func),
+				iterator = data_rows_iterator,
+				loop_context = CompositeContext(GtkThreadContext(),),
+				loop_func = self.load_data_row,
+				callback_param = cb_data,
+				timebox_sec = 0.4)
+			data_processor.run()
+			data_processor.join()
 
 		if self.tabdata_key_field is not None:
 			# TODO TimedChunkProcessor

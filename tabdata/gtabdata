@@ -1179,6 +1179,39 @@ class NoneContext(object):
 		return False
 
 class TimedChunkProcessor(object):
+	"""
+	Processes an iterator in time-bounded chunks, yielding control between chunks.
+
+	Useful for long-running iterations that must not block the main thread (or a
+	GTK main loop) for more than a fixed wall-clock interval.  After each chunk the
+	work is re-scheduled via ``chunk_starter``, giving other callbacks a chance to
+	run before the next chunk begins.
+
+	Args:
+		chunk_starter (callable): Accepts a single callable and is responsible for
+			scheduling it (e.g. ``gobject.idle_add``).  Called once at startup and
+			again after every chunk that still has items remaining.
+		iterator (iterator): The data source. Should be of python ``iterator`` class.
+		loop_func (callable): Called for every item the ``iterator`` yields with the signature
+			``loop_func(item, context_handler, callback_param)``.
+		timebox_sec (float): Maximum wall-clock seconds to spend inside a single
+			chunk before yielding control back to ``chunk_starter``.
+		loop_context (context manager, optional): Entered with ``with`` at the start
+			of each chunk and exited at the end.  The value bound by ``as`` is passed
+			to ``loop_func`` as ``context_handler``.  Defaults to ``NoneContext()``.
+		callback_param: Arbitrary value forwarded to ``loop_func`` unchanged.
+
+	Usage:
+		processor = TimedChunkProcessor(
+			chunk_starter = gobject.idle_add,
+			iterator = iter(my_list),
+			loop_func = process_item,
+			loop_context = GtkThreadContext(),
+			timebox_sec = 0.5,
+		)
+		processor.run()
+		processor.join()   # block until the iterator is exhausted
+	"""
 	def __init__(self, chunk_starter, iterator, loop_func, timebox_sec, loop_context=NoneContext(), callback_param=None):
 		self.chunk_starter = chunk_starter
 		self.iterator = iterator
@@ -1190,6 +1223,14 @@ class TimedChunkProcessor(object):
 	def run(self):
 		self.chunk_starter(self._callback)
 	def _callback(self):
+		"""
+		Process items until the timebox expires or the iterator is exhausted.
+
+		Should be called by the user-specified ``chunk_starter`` method.
+		Iterates over ``iterator`` and calls ``loop_func`` for each item, and stops as
+		soon as ``timebox_sec`` wall-clock seconds have elapsed.  If items remain,
+		``run()`` is called to schedule the next chunk.
+        """
 		continue_processing = True
 		chunk_start = time.time()
 		with self.loop_context as context_handler:
@@ -1201,13 +1242,17 @@ class TimedChunkProcessor(object):
 					break
 				else:
 					self.loop_func(loop_var, context_handler, self.callback_param)
+				# give back control once the timebox for this chunk has been used up:
 				if chunk_start + self.timebox_sec < time.time():
 					break
 		if continue_processing:
+			# more items remain, thus re-schedule:
 			self.run()
 		else:
+			# iterator exhausted, signal to any pending join()
 			self.finish_event.set()
 	def join(self):
+		"""Block the calling thread until the iterator is fully exhausted."""
 		self.finish_event.wait()
 
 class Thread(threading.Thread):

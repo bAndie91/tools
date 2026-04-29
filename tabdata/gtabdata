@@ -523,6 +523,9 @@ class TreeView(gtk.TreeView):
 				return num
 		raise TreeView.ColumnNotFoundException(colname)
 	
+	def get_column_names(self):
+		return list([tvc.name for tvc in self.get_columns()])
+
 	def columns_autosize(self, cols=None):
 		if cols is None:
 			cols = self.get_columns()
@@ -1478,16 +1481,33 @@ def run_system_command(command_with_args, input_text):
 			ErrorMessage("Command failed with %s: <tt>%s</tt>\nDetails:" % (err.type, err.code), title="gTabData: execution error", details=err.details)
 
 
-def tabdata(rawline, n_fields=0):
-	def unescape_td_sequence(s):
-		"""only meant for backslash-t, backslash-n, backslash-r, backslash-e and double-blackslash inputs."""
-		if s == '\\e': return '\x1B'
-		else: return eval('"'+s+'"')
-	cells = [re.sub(r'\\[tnre\\]', lambda match: unescape_td_sequence(match.group(0)), cell) for cell in rawline.rstrip('\n').split('\t', n_fields-1)]
+# tabular data, tabdata related functions {{{
+
+def unescape_td_sequence(s):
+	"""only meant for backslash-t, backslash-n, backslash-r, backslash-e and double-blackslash inputs."""
+	if s == '\\e': return '\x1B'
+	else: return eval('"'+s+'"')
+
+def escape_td_sequence(s):
+	if s == '\x1B': return '\\e'
+	else: return repr(s)[2]
+
+def tabdata_decode_record(rawline, n_fields=0):
+	cells = [re.sub(r'(\\[tnre\\])', lambda match: unescape_td_sequence(match.group(1)), cell) for cell in rawline.rstrip('\n').split('\t', n_fields-1)]
 	if n_fields > 0:
 		cells = cells + [''] * (n_fields-len(cells))
 	return cells
 
+def tabdata_encode_rows(rows):
+	return ''.join([ tabdata_encode_record(row) + "\n" for row in rows ])
+
+def tabdata_encode_record(row):
+	return '\t'.join([ tabdata_encode_cell(cell) for cell in row ])
+
+def tabdata_encode_cell(s):
+	return re.sub(r'([\t\n\r\x1B\\])', lambda match: escape_td_sequence(match.group(1)), s)
+
+# }}}
 
 def merge_ordering(old_items, new_items):
 	result = []
@@ -1581,7 +1601,7 @@ class GTabData(object):
 		self.main_table.connect('key-press-event', self.on_key_press)
 
 		self.proppersist_table = PropertyPersistor(self.main_table, 'main_table', [
-			('columns-order',  'columns-changed',           lambda tv: merge_ordering(self.proppersist_table.props.get('columns-order') or [], [col.name for col in tv.get_columns()]), self.restore_columns_order),
+			('columns-order',  'columns-changed',           lambda tv: merge_ordering(self.proppersist_table.props.get('columns-order') or [], tv.get_column_names()), self.restore_columns_order),
 			('hidden-columns', 'column-visibility-changed', lambda tv, tvc: [col.name for col in tv.get_columns() if not col.get_visible()], self.restore_hidden_columns),
 			('column-width',   'column-width-changed',      lambda tv, tvc, tvc_width: dict([(col.name, col.get_width()) for col in tv.get_columns()]), self.restore_columns_width),
 			('sort-column',    'sort-by-column-changed',    lambda tv, tvc: tvc.name if tvc is not None else None, self.restore_sortby_column),
@@ -1637,10 +1657,10 @@ class GTabData(object):
 			except SubprocessError as err:
 				execution_error(err)
 			else:
-				td_header = tabdata(proc.stdout.readline())
+				td_header = tabdata_decode_record(proc.stdout.readline())
 				self.load_columns(td_header)
 				n_fields = len(td_header)
-				data_generator = ((None, tabdata(line, n_fields=n_fields)) for line in iter(proc.stdout.readline, ''))
+				data_generator = ((None, tabdata_decode_record(line, n_fields=n_fields)) for line in iter(proc.stdout.readline, ''))
 				self.load_data(data_generator)
 				proc.stdout.close()
 				try:
@@ -1733,14 +1753,28 @@ class GTabData(object):
 	def on_key_press(self, tv, event):
 		key = gtk.gdk.keyval_name(event.keyval)
 		treepath, col = tv.get_cursor()
-		if treepath is None: return False
+		if treepath is None:
+			return False
 		if key == 'Menu':
 			context_menu = gtk.Menu()
 			self.on_table_row_context_menu_open(tv, context_menu, treepath, col, 0, 0)
 			context_menu.show_all()
 			context_menu.popup(None, None, lambda menu, cb_data: self.cell_coordinates(treepath, col, gtk.CORNER_BOTTOM_LEFT) + (True,), MOUSE_BUTTON_RIGHT, event.time, {})
 			return True
-	
+		if key.lower() == 'c' and (event.state & gtk.gdk.CONTROL_MASK):
+			# Ctrl+C pressed, copy selection in tabdata format
+			model, paths = self.main_table.get_selection().get_selected_rows()[:]
+			if (event.state & gtk.gdk.SHIFT_MASK):
+				# copy all columns including hidden ones:
+				columns = self.main_table.get_column_names()
+			else:
+				# copy only visible columns:
+				columns = [tvc.name for tvc in self.main_table.get_columns() if tvc.get_visible()]
+			selected_rows = [[model[treepath][col_name] for col_name in columns] for treepath in paths]
+			tabdata_text = tabdata_encode_rows([columns] + selected_rows)
+			gtk.Clipboard().set_text(tabdata_text)
+			return True
+
 	def cell_coordinates(self, treepath, col, corner):
 		rect = self.main_table.get_cell_area(treepath, col)
 		win_x, win_y = self.main_table.get_bin_window().get_origin()

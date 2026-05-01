@@ -1731,10 +1731,15 @@ class GTabData(object):
 		if self.tabdata_key_field is not None:
 			# TODO TimedChunkProcessor
 			with GtkThreadContext(), GDKCursor(self.main_win.window, gtk.gdk.WATCH):
-				def remove_invalid_rows(model, treepath, treeiter, cb_data):
+				# gather rows no longer in the input data table
+				cb_data = {'existing_records_keys': cb_data['existing_records_keys'], 'tabdata_key_field': self.tabdata_key_field, 'former_rows': []}
+				def gather_former_rows(model, treepath, treeiter, cb_data):
 					if model[treepath][cb_data['tabdata_key_field']] not in cb_data['existing_records_keys']:
-						del model[treepath]
-				cb_data['model'].foreach(remove_invalid_rows, {'existing_records_keys': cb_data['existing_records_keys'], 'tabdata_key_field': self.tabdata_key_field})
+						cb_data['former_rows'].append(gtk.TreeRowReference(model, treepath))
+				self.main_table.get_model().foreach(gather_former_rows, cb_data)
+				# delete no longer existing rows
+				for rowref in cb_data['former_rows']:
+					del self.main_table.get_model()[rowref.get_path()]
 
 	def load_data_row(self, loop_var, context_handlers, cb_data):
 		treepath, row_cells = loop_var

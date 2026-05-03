@@ -1,0 +1,96 @@
+#!/usr/bin/env python2
+
+"""
+xmlinsert - Insert an XML element into a file unless a unique field already exists.
+
+Usage:
+	echo '<item>...</item>' | xmlinsert <base_file> <xpath> <unique_field_name>
+
+Arguments:
+	base_file     Path to the XML file to modify (edited in-place)
+	xpath         XPath to the parent element where the new element is inserted
+	unique_field_name
+				  Child element name whose text value must be unique among siblings
+
+Example:
+	echo '<item><name>Foo</name><id>123</id></item>' | xmlinsert ./base.xml /items id
+"""
+
+import sys
+import os
+import xml.etree.ElementTree as ET
+
+
+def die(msg):
+	sys.stderr.write("xmlinsert: error: " + msg + "\n")
+	sys.exit(2)
+
+
+def usage():
+	sys.stderr.write("usage: echo <XML_STRING> | xmlinsert <base_file> <xpath> <unique_field_name>\n")
+	sys.exit(1)
+
+
+def main():
+	if len(sys.argv) != 4:
+		usage()
+
+	base_file   = sys.argv[1]
+	xpath       = sys.argv[2]
+	unique_field_name = sys.argv[3]
+
+	tree = ET.parse(base_file)
+	root = tree.getroot()
+
+	new_xml_str = sys.stdin.read()
+	new_elem = ET.fromstring(new_xml_str)
+
+	# Resolve xpath - support both absolute (/root/...) and relative forms
+	# ET.find needs path without leading / when searching from root element
+	search_path = xpath.lstrip("/")
+
+	# If the xpath is just the root element name itself, parent is None
+	if search_path == root.tag or xpath == "/" + root.tag or xpath == "/":
+		parent = root
+	else:
+		# Strip leading root tag segment if present, since we search from root
+		parts = search_path.split("/")
+		if parts[0] == root.tag:
+			parts = parts[1:]
+		rel_path = "/".join(parts)
+		parent = root.find(rel_path) if rel_path else root
+
+	if parent is None:
+		die("xpath not found in document: " + xpath)
+
+	# Get unique field value from new element
+	new_key_elem = new_elem.find(unique_field_name)
+	if new_key_elem is None:
+		die("unique field <" + unique_field_name + "> not found in input element")
+	new_key_value = new_key_elem.text
+
+	# Check for existing element with same unique field value
+	for child in parent:
+		existing_key = child.find(unique_field_name)
+		if existing_key is not None and existing_key.text == new_key_value:
+			print("xmlinsert: " + unique_field_name + " = '" + new_key_value + "' already present, skipping.")
+			sys.exit(0)
+
+	# Fix up tail whitespace so inserted element is on its own line
+	# Match the indentation style of existing siblings if any
+	siblings = list(parent)
+	if siblings:
+		last = siblings[-1]
+		new_elem.tail = last.tail  # match trailing newline of last sibling
+	else:
+		new_elem.tail = "\n"
+
+	parent.append(new_elem)
+
+	# Write back - preserve XML declaration
+	tree.write(base_file, encoding="UTF-8", xml_declaration=True)
+	print("xmlinsert: inserted " + unique_field_name + " = '" + new_key_value + "'")
+
+
+if __name__ == "__main__":
+	main()

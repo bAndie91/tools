@@ -1,0 +1,1921 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+from __future__ import print_function
+import argparse
+import gtk
+import glib
+import pango
+import gobject
+import re
+import regex
+import sys
+import os
+import errno
+import subprocess
+import time
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
+import traceback
+from hband_tools.gui import *
+import threading
+gtk.gdk.threads_init()
+import json
+from jinja2 import Template
+import difflib
+
+
+
+basestring = basestring  # just to keep python language server happy
+unicode = unicode  # just to keep python language server happy
+cmp = cmp  # just to keep python language server happy
+
+
+def add_key_binding(widget, keyname, callback):
+	accelgroup = gtk.AccelGroup()
+	key, modifier = gtk.accelerator_parse(keyname)
+	accelgroup.connect_group(key, modifier, gtk.ACCEL_VISIBLE, callback)
+	widget.add_accel_group(accelgroup)
+
+def parse_options_string(s):
+	ret = {}
+	for opt in s.split(','):
+		if '=' in opt:
+			k, v = opt.split('=', 1)
+		else:
+			k = opt
+			v = True
+		ret[k] = v
+	return ret
+
+def successor_iter(model, predecessor):
+	"""return the next "heir" in line of succession metaphorically speaking.
+	i.e. the first child of the node if there is any, otherwise its next sibling node,
+	otherwise its parent node's next sibling."""
+	if model.iter_has_child(predecessor):
+		return model.iter_nth_child(predecessor, 0)
+	else:
+		successor = model.iter_next(predecessor)
+		if successor is None:
+			while True:
+				parent = model.iter_parent(predecessor)
+				if parent is None: return None
+				uncle = model.iter_next(parent)
+				if uncle is not None: return uncle
+				predecessor = parent
+			return None
+		return successor
+
+
+class TreeModelRow(object):
+	"""proxy class for inextensible gtk.TreeModelRow"""
+	def __init__(self, treemodelrow, upstream_treemodel):
+		self.real_treemodelrow = treemodelrow
+		self.upstream_treemodel = upstream_treemodel
+	@property
+	def path(self):
+		return self.real_treemodelrow.path
+	@property
+	def iter(self):
+		return self.real_treemodelrow.iter
+	@property
+	def model(self):
+		return self.real_treemodelrow.model
+	def update(self, row_data):
+		"row_data can be a dict with column names as keys, or just a list of the new cells."
+		for col_ref, col_data in (row_data if isinstance(row_data, dict) else enumerate(row_data)):
+			self[col_ref] = col_data
+	def __getitem__(self, item):
+		item = self.upstream_treemodel.get_column_num(item)
+		answer = gtk.TreeModel.get(self.model, self.iter, item)[0]
+		return self.upstream_treemodel.convert_cell(item, answer)
+	def __setitem__(self, item, value):
+		item = self.upstream_treemodel.get_column_num(item)
+		self.real_treemodelrow[item] = value
+	def __len__(self):
+		return self.real_treemodelrow.__len__()
+	def as_dict(self):
+		return dict([(col_name, self[col_name]) for col_name in self.upstream_treemodel.column_name])
+	def __repr__(self):
+		return '<%s %s>' % (self.__class__.__name__, self.as_dict())
+
+class TreeModelProxy(object):
+	@staticmethod
+	def _proxy_foreach(model, treepath, treeiter, _proxy_userdata):
+		func = _proxy_userdata['func']
+		userdata = _proxy_userdata['userdata']
+		derived_model = _proxy_userdata['derived_model']
+		return func(derived_model, treepath, treeiter, userdata)
+
+class NamedColumnsTreeStore(gtk.TreeStore):
+	__gsignals__ = {
+		'changed': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, ()),
+		'set-changed': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, ()),
+	}
+	def __init__(self, *columns):
+		self.column_name = []
+		self.reader = {}
+		self.empty = []
+		types = []
+		self.input_types = []
+		n = 0
+		for col_name, col_type in columns:
+			self.input_types.append(col_type)
+			empty_value = None
+			if col_type == unicode:
+				col_type = str
+				self.reader[n] = self.to_unicode
+			if col_type == str:
+				empty_value = ''
+			elif col_type in [int, float]:
+				empty_value = 0
+			self.empty.append(empty_value)
+			types.append(col_type)
+			self.column_name.append(col_name)
+			n += 1
+		super(NamedColumnsTreeStore, self).__init__(*types)
+		for event in 'row-changed', 'row-deleted', 'row-inserted':
+			self.connect_after(event, self.emit_signal, 'changed')
+			self.connect_after(event, self.emit_signal, 'set-changed')
+		self.connect_after('rows-reordered', self.emit_signal, 'changed')
+	def emit_signal(self, *args):
+		signal_name = args[-1]
+		self.emit(signal_name)
+	@staticmethod
+	def to_unicode(s):
+		if s is None: return None
+		return unicode(s)
+	class ColumnNotFoundException(Exception):
+		pass
+	def get_columns(self):
+		return zip(self.column_name, self.input_types)
+	def get_column_num(self, col_ref):
+		if isinstance(col_ref, int):
+			if col_ref < 0 or col_ref >= len(self.column_name):
+				raise NamedColumnsTreeStore.ColumnNotFoundException(col_ref)
+			return col_ref
+		try:
+			return self.column_name.index(col_ref)
+		except ValueError:
+			raise NamedColumnsTreeStore.ColumnNotFoundException(col_ref)
+	def get_column_name(self, col_num):
+		try:
+			return self.column_name[col_num]
+		except (IndexError, TypeError):
+			raise NamedColumnsTreeStore.ColumnNotFoundException(col_num)
+	def get(self, row, *columns):
+		if type(row) == tuple:
+			row = self.get_iter(row)  # tree iterator path was given
+		if len(columns) == 0:
+			return tuple()
+		columns = list(columns)
+		for i, col in enumerate(columns):
+			columns[i] = self.get_column_num(col)
+		answer = super(NamedColumnsTreeStore, self).get(row, *columns)
+		answer = list(answer)
+		for i, col_num in enumerate(columns):
+			answer[i] = self.convert_cell(col_num, answer[i])
+		answer = tuple(answer)
+		return answer
+	def get_value(self, treeiter, column):
+		raise NotImplementedError()
+	def convert_cell(self, col_num, cell_value):
+		if self.reader.has_key(col_num):
+			return self.reader[col_num](cell_value)
+		return cell_value
+	def __getitem__(self, item):
+		answer = super(NamedColumnsTreeStore, self).__getitem__(item)
+		return TreeModelRow(answer, self)
+	def _row_dict_to_list(self, row):
+		if type(row) == dict:
+			cols = row
+			row = self.empty[:]
+			for col_name, value in cols.iteritems():
+				row[self.get_column_num(col_name)] = value
+		return row
+	def append(self, parent, row):
+		return super(NamedColumnsTreeStore, self).append(parent, self._row_dict_to_list(row))
+	def insert_after(self, parent, sibling, row):
+		return super(NamedColumnsTreeStore, self).insert_after(parent, sibling, self._row_dict_to_list(row))
+	def insert_before(self, parent, sibling, row):
+		return super(NamedColumnsTreeStore, self).insert_before(parent, sibling, self._row_dict_to_list(row))
+	def set(self, treeiter, *itempairs):
+		if len(itempairs) == 0: return
+		if type(itempairs[0]) == dict:
+			cols = itempairs[0]
+			itempairs = []
+			for col_name, value in cols.iteritems():
+				itempairs.extend([self.get_column_num(col_name), value])
+		super(NamedColumnsTreeStore, self).set(treeiter, *itempairs)
+	def get_cells_by_column(self, col_name):
+		treeiter = self.get_iter_root()
+		while treeiter is not None:
+			yield self[treeiter][col_name]
+			treeiter = successor_iter(self, treeiter)
+	def walk_columns(self, *columns):
+		"""yields a sequence of [TreeModelRow, depth, value-1, value-2, ..., value-n] lists
+		for depth being the row's level on the tree and value-1 to value-n being the 
+		content of cells in the requested columns in each row"""
+		treeiter = self.get_iter_root()
+		while treeiter is not None:
+			row = self[treeiter]
+			answer = [row]
+			answer.extend(self.get(treeiter, *columns))
+			yield answer
+			treeiter = successor_iter(self, row.iter)
+
+def floatOrNone(s):
+	try:
+		return float(s)
+	except (ValueError, TypeError):
+		return None
+
+class TreeModelSortIndexed(gtk.TreeModelSort):
+	"""
+	Maintain a dict of dicts in self.index.
+	Keys of self.index are column names.
+	Keys of self.index[column_name] are cell data taken as row_key.
+	Value of self.index[column_name][row_key] is a TreeRowReference to the row of which key column's content is row_key.
+	Assume row_key is unique per row across the TreeStore.
+	A downstream model must be a NamedColumnsTreeStore.
+	"""
+	def __init__(self, model):
+		super(TreeModelSortIndexed, self).__init__(model)
+		while not isinstance(model, NamedColumnsTreeStore):
+			model = model.get_model()
+		model.connect('row-inserted', self._on_row_inserted)
+		model.connect('row-changed', self._on_row_changed)
+		self.index = {}
+	def add_key_column(self, col_name):
+		if col_name not in self.index:
+			self.index[col_name] = {}
+	def _on_row_inserted(self, model, treepath, treeiter):
+		self.index_row(model, treepath)
+	def _on_row_changed(self, model, treepath, treeiter):
+		self.index_row(model, treepath)
+	def index_row(self, model, treepath):
+		for col_name in self.index:
+			key = model[treepath][col_name]
+			self.index[col_name][key] = gtk.TreeRowReference(model, treepath)
+	def get_row_by_key(self, col_name, key):
+		rowref = self.index.get(col_name, {}).get(key)
+		if rowref is None or not rowref.valid():
+			return None
+		row = rowref.get_model()[rowref.get_path()]
+		if row[col_name] != key:
+			# row's key field was modified since last added
+			return None
+		return row
+
+class TreeModelFilterSortIndex(TreeModelSortIndexed):
+	def __init__(self, basemodel):
+		self.base_model = basemodel
+		self.filtering_model = self.base_model.filter_new()
+		super(TreeModelFilterSortIndex, self).__init__(self.filtering_model)
+		for colnum in range(self.get_n_columns()):
+			self.set_sort_func(colnum, self.mixdata_sorter, colnum)
+	def mixdata_sorter(self, model, iter1, iter2, colnum):
+		content1 = model[iter1][colnum]
+		content2 = model[iter2][colnum]
+		float1 = floatOrNone(content1)
+		float2 = floatOrNone(content2)
+		# sort words case-insensitively, and keep numbers before words:
+		return cmp(*map(lambda x: x.lower() if isinstance(x, basestring) else x, (float1 if float1 is not None else content1, float2 if float2 is not None else content2)))
+	def convert_item_to_basemodel_item(self, item):
+		if isinstance(item, gtk.TreeIter):
+			filtering_model_iter = self.convert_iter_to_child_iter(None, item)
+			return self.filtering_model.convert_iter_to_child_iter(None, filtering_model_iter)
+		else:
+			filtering_model_path = self.convert_path_to_child_path(item)
+			return self.filtering_model.convert_path_to_child_path(filtering_model_path)
+	def __getitem__(self, item):
+		return self.base_model[self.convert_item_to_basemodel_item(item)]
+	def foreach(self, func, userdata):
+		_proxy_userdata = {'func': func, 'userdata': userdata, 'derived_model': self}
+		super(TreeModelFilterSortIndex, self).foreach(TreeModelProxy._proxy_foreach, _proxy_userdata)
+	def get(self, row, *columns):
+		raise NotImplementedError()
+	def get_value(self, treeiter, column):
+		raise NotImplementedError()
+	def get_sort_column_name(self):
+		col_num, sort_order = self.get_sort_column_id()
+		if col_num is not None and col_num >= 0:
+			return self.base_model.get_column_name(col_num)
+		return None
+	def set_sort_column_by_name(self, col_name, sort_order):
+		col_num = self.base_model.get_column_num(col_name)
+		self.set_sort_column_id(col_num, sort_order)
+	# proxy methods:
+	def __getattribute__(self, attrname):
+		if attrname in ['get_column_num', 'get_column_name', 'get_columns', 'append', 'clear']:
+			return object.__getattribute__(self.base_model, attrname)
+		elif attrname in ['set_visible_func', 'refilter']:
+			return object.__getattribute__(self.filtering_model, attrname)
+		else:
+			return object.__getattribute__(self, attrname)
+
+
+def glib_callback_once(func, *args):
+	func(*args)
+	return False
+
+class TreeView(gtk.TreeView):
+	__gsignals__ = {
+		'menu-popup': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT)),
+		'header-menu-popup': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT)),
+		'column-added': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
+		'column-width-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT, int)),
+		'sort-by-column-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
+		'column-sort-order-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
+		'column-visibility-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
+		'selection-change': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
+	}
+	def __init__(self, base_model):
+		super(TreeView, self).__init__(None)
+		self.set_model(base_model)
+		self._previous_widths = {}
+		self._previous_previous_widths = {}
+		self._stored_column_width = {}
+		self.set_reorderable(True)
+		self.set_headers_clickable(True)
+		self.set_rubber_banding(True)
+		self.get_selection().set_mode(gtk.SELECTION_MULTIPLE)
+		self.get_selection().connect('changed', self._on_selection_changed)
+		self.connect('button-press-event', self._on_button_click)
+		self.connect('cursor-changed', self._on_cursor_changed)
+		self.connect('realize', self._on_realize)
+		self.connect('columns-changed', self._on_columns_changed)
+		self.connect('key-release-event', self._on_key_release)
+		self.connect('header-menu-popup', self._on_header_menu_popup)
+		self.connect_after('expose-event', self._on_expose)
+
+	def _on_expose(self, tv, event):
+		self._highlight_focused_cell(event)
+		return False
+	
+	def _highlight_focused_cell(self, event):
+		treepath, column = self.get_cursor()
+		if treepath is None or column is None:
+			return
+		rect = self.get_cell_area(treepath, column)
+		binwindow = self.get_bin_window()
+		if event.window != binwindow:
+			return
+		style = self.get_style()
+		color = style.fg[gtk.STATE_ACTIVE]
+		cr = binwindow.cairo_create()
+		cr.rectangle(event.area.x, event.area.y, event.area.width, event.area.height)
+		cr.clip()
+		cr.rectangle(rect.x, rect.y, rect.width, rect.height)
+		cr.set_source_rgba(color.red / 65535.0, color.green / 65535.0, color.blue / 65535.0, 1.0)
+		cr.set_line_width(1)
+		cr.stroke()
+
+	def set_model(self, base_model):
+		if base_model is not None:
+			self.derived_model = TreeModelFilterSortIndex(base_model)
+			super(TreeView, self).set_model(self.derived_model)
+			self.set_filter_function(self.default_filtering_cb)
+			
+			self.derived_model.connect('sort-column-changed', self._on_model_sort_column_changed)
+		else:
+			self.derived_model = None
+			super(TreeView, self).set_model(base_model)
+	
+	def set_filter_function(self, func, user_data=None):
+		self.derived_model.set_visible_func(func, user_data)
+	
+	def default_filtering_cb(self, model, treeiter, cb_data):
+		all_column_filter_match = True
+		for col in self.get_columns():
+			if col.filter_regex_pattern is not None:
+				cell_content = model[treeiter][col.name]
+				if cell_content is not None:
+					if regex.search(col.filter_regex_pattern, cell_content) is None:
+						all_column_filter_match = False
+						break
+		return all_column_filter_match
+	
+	def _on_key_release(self, widget, event):
+		if event.keyval == gtk.gdk.keyval_from_name('space'):
+			iterpath, tv_col = self.get_cursor()
+			tv_col.cell_renderers[0].on_start_editing(event, widget, ','.join(map(str, iterpath)), self.get_background_area(iterpath, tv_col), self.get_cell_area(iterpath, tv_col), 0)
+		self._on_cursor_changed()
+
+	def _on_button_click(self, widget, event):
+		if event.button == MOUSE_BUTTON_RIGHT:
+			x, y = int(event.x), int(event.y)
+			event_target_info = self.get_path_at_pos(x, y)
+			if event_target_info is not None:
+				treepath, tv_col, cell_x, cell_y = event_target_info
+			else:
+				treepath, tv_col, cell_x, cell_y = None, None, None, None
+			if treepath is not None:
+				self.get_selection().select_path(treepath)
+			popup_menu = gtk.Menu()
+			if not self.emit('menu-popup', popup_menu, treepath, tv_col, cell_x, cell_y):
+				# event is not handled by any handlers, so do it ourself
+				if popup_menu.get_children():
+					popup_menu.show_all()
+					popup_menu.popup(None, None, None, event.button, event.time)
+			return True
+
+	def _on_realize(self, widget):
+		for tvc in self.get_columns():
+			self._column_setup_events(tvc)
+
+	def _on_columns_changed(self, widget):
+		# clear 'layoutstash', it is needed for CellRendererTextOverflow
+		self.set_data('layoutstash', {})
+
+	def set_columns(self, columns):
+		for col in self.get_columns(): self.remove_column(col)
+		return self.add_columns(columns)
+	
+	def add_columns(self, columns):
+		for col_name, col_title, col_attr, col_num in columns:
+			tvc = TreeViewColumn()
+			tvc.set_name(col_name)
+			tvc.title = col_title
+			tvc.set_sort_indicator(True)
+			tvc.set_sort_column_id(col_num)
+			tvc.set_resizable(True)
+			tvc.set_sizing(gtk.TREE_VIEW_COLUMN_FIXED)
+			tvc.set_reorderable(True)
+			
+			cr_txt = CellRendererTextOverflow()
+			cr_txt.set_data('treeviewcolumn', tvc)
+			tvc.pack_start(cr_txt, expand=True)
+			tvc.add_attribute(cr_txt, col_attr, col_num)
+			
+			tvc.set_data('original-position', len(self.get_columns()))
+			self.append_column(tvc)
+
+	def _on_column_width_change(self, col, gparam):
+		w = col.get_width()
+		if w != self._stored_column_width.get(col.name):
+			self.emit('column-width-changed', col, w)
+		self._stored_column_width[col.name] = w
+
+	def append_column(self, tvc):
+		super(TreeView, self).append_column(tvc)
+		self._column_setup_events(tvc)
+		self.emit('column-added', tvc)
+
+	def _column_setup_events(self, tvc):
+		if hasattr(tvc, 'setup_events'):
+			tvc.setup_events()
+			if not tvc.get_data('treeview-connect-done'):
+				tvc.connect('button-press-event', self._on_column_click)
+				tvc.set_data('treeview-connect-done', True)
+		tvc.connect('notify::width', self._on_column_width_change)
+		tvc.connect('notify::visible', self._on_column_visibility_changed)
+		tvc.connect('notify::sort-order', self._on_column_sort_order_changed)
+		tvc.connect('filter-expression-changed', lambda tvc, fexpr: self.derived_model.refilter())
+
+	def _on_column_click(self, col_widget, event):
+		if event.button == MOUSE_BUTTON_RIGHT:
+			popup_menu = gtk.Menu()
+			if not self.emit('header-menu-popup', popup_menu, col_widget):
+				popup_menu.show_all()
+				popup_menu.popup(None, None, None, event.button, event.time)
+			return True
+		self._on_cursor_changed()
+
+	def _on_cursor_changed(self, _tv=None):
+		treepath, column = self.get_cursor()
+		if treepath is None or column is None:
+			return
+		self.set_search_column(column.index)
+
+	def set_search_column_by_name(self, colname):
+		model_col_num = self.get_model().get_column_num(colname)
+		self.set_search_column(model_col_num)
+
+	def set_sortby_column_by_name(self, colname):
+		tvc_curr_sort_order = self.get_column_by_name(colname).get_sort_order()
+		self.get_model().set_sort_column_by_name(colname, tvc_curr_sort_order)
+
+	def _on_model_sort_column_changed(self, model):
+		col_name = model.get_sort_column_name()
+		if col_name is not None:
+			col = self.get_column_by_name(col_name)
+		else:
+			col = None
+		self.emit('sort-by-column-changed', col)
+		self.emit('column-sort-order-changed', col)
+
+	def _on_column_sort_order_changed(self, tvc, gparam):
+		self.emit('column-sort-order-changed', tvc)
+
+	def get_sortby_column(self):
+		return self.get_column_by_name( self.get_model().get_sort_column_name() )
+
+	def _on_column_visibility_changed(self, tvc, gparam):
+		self.emit('column-visibility-changed', tvc)
+	
+	class ColumnNotFoundException(Exception):
+		pass
+
+	def get_column_by_name(self, colname):
+		for col in self.get_columns():
+			if col.name == colname:
+				return col
+		raise TreeView.ColumnNotFoundException(colname)
+	
+	def get_column_number_by_name(self, colname):
+		for num, col in enumerate(self.get_columns()):
+			if col.name == colname:
+				return num
+		raise TreeView.ColumnNotFoundException(colname)
+	
+	def get_column_names(self):
+		return list([tvc.name for tvc in self.get_columns()])
+
+	def columns_autosize(self, cols=None):
+		if cols is None:
+			cols = self.get_columns()
+		for tvc in cols:
+			if tvc.name in self._previous_widths:
+				self._previous_previous_widths[tvc.name] = self._previous_widths[tvc.name]
+			self._previous_widths[tvc.name] = tvc.get_width()
+			tvc.disable_ellipsize()
+			tvc.clear_width_requirement()
+		glib.idle_add(glib_callback_once, self._columns_autosize_set_autosize, cols, priority=glib.PRIORITY_DEFAULT_IDLE)
+	def _columns_autosize_set_autosize(self, cols):
+		for tvc in cols:
+			tvc.reset_fixed_width()
+			tvc.set_sizing(gtk.TREE_VIEW_COLUMN_AUTOSIZE)
+		#gtk.TreeView.columns_autosize(self)
+		glib.idle_add(glib_callback_once, self._columns_autosize_restore_resizable, cols, priority=glib.PRIORITY_DEFAULT_IDLE)
+	def _columns_autosize_restore_resizable(self, cols):
+		for tvc in cols:
+			width = tvc.get_width()
+			tvc.set_sizing(gtk.TREE_VIEW_COLUMN_FIXED)
+			if width > 1:
+				tvc.set_fixed_width(width)
+				if width == self._previous_widths[tvc.name]:
+					self._previous_widths[tvc.name] = self._previous_previous_widths.get(tvc.name)
+			tvc.set_resizable(True)
+			tvc.enable_ellipsize()
+	def restore_previous_widths(self, cols=None):
+		if cols is None:
+			cols = self.get_columns()
+		for tvc in cols:
+			if self._previous_widths.get(tvc.name) is not None:
+				tvc.set_fixed_width(self._previous_widths[tvc.name])
+
+	def _on_header_menu_popup(self, tv, popup_menu, tv_col):
+		mi = ImageMenuItem(label=("don't filter" if tv_col.is_filtering_open else "filter (regexp) …"), icon=gtk.STOCK_FIND)
+		mi.connect('activate', lambda mi: tv_col.toggle_filtering())
+		popup_menu.append(mi)
+
+		if tv_col.get_text_alignment() == gtk.JUSTIFY_RIGHT:
+			mi = ImageMenuItem(label="align to left", icon=gtk.STOCK_JUSTIFY_LEFT)
+			mi.connect('activate', lambda mi, col: col.set_text_alignment(gtk.JUSTIFY_LEFT), tv_col)
+		else:
+			mi = ImageMenuItem(label="align to right", icon=gtk.STOCK_JUSTIFY_RIGHT)
+			mi.connect('activate', lambda mi, col: col.set_text_alignment(gtk.JUSTIFY_RIGHT), tv_col)
+		popup_menu.append(mi)
+
+		if tv_col.get_font_desc().get_family() == 'monospace':
+			mi = ImageMenuItem(label="normal font", icon=gtk.STOCK_SELECT_FONT)
+			mi.connect('activate', lambda mi, col: col.set_font_desc(None), tv_col)
+		else:
+			mi = ImageMenuItem(label="monospace font", icon=gtk.STOCK_SELECT_FONT)
+			mi.connect('activate', lambda mi, col: col.set_font_desc('monospace'), tv_col)
+		popup_menu.append(mi)
+
+		mi = ImageMenuItem(label="auto width")
+		mi.connect('activate', lambda mi, tv_col: self.columns_autosize([tv_col]), tv_col)
+		popup_menu.append(mi)
+		mi = ImageMenuItem(label="undo auto width", icon=gtk.STOCK_UNDO)
+		mi.connect('activate', lambda mi, tv_col: self.restore_previous_widths([tv_col]), tv_col)
+		mi.set_sensitive(tv_col.name in self._previous_widths)
+		popup_menu.append(mi)
+
+		popup_menu.append(gtk.SeparatorMenuItem())
+		columns_submenu = SubmenuMenuItem(label='columns')
+		popup_menu.append(columns_submenu)
+		for col in self.get_columns():
+			markup = glib.markup_escape_text(col.title)
+			if tv_col.name == col.name:
+				markup = '<b>' + markup + '</b>'
+			mi = CheckMenuItem(markup=markup)
+			mi.set_active(col.get_visible())
+			mi.connect('activate', lambda mi, col: col.set_visible(not col.get_visible()), col)
+			columns_submenu.append(mi)
+		mi = MenuItem(label="auto width all columns")
+		mi.connect('activate', lambda mi: self.columns_autosize())
+		popup_menu.append(mi)
+		mi = ImageMenuItem(label="undo auto width all", icon=gtk.STOCK_UNDO)
+		mi.connect('activate', lambda mi: self.restore_previous_widths())
+		popup_menu.append(mi)
+		mi = ImageMenuItem(label="reset columns order", icon=gtk.STOCK_REVERT_TO_SAVED)
+		mi.connect('activate', lambda mi: self.reset_columns_original_position())
+		popup_menu.append(mi)
+
+	def reset_columns_original_position(self):
+		preceding_col = None
+		for pos in range(len(self.get_columns())):
+			for col in self.get_columns():
+				if col.get_data('original-position') == pos:
+					self.move_column_after(col, preceding_col)
+					preceding_col = col
+					break
+
+	def _on_selection_changed(self, selection):
+		model, paths = selection.get_selected_rows()[:]
+		self.emit('selection-change', [model[treepath] for treepath in paths])
+
+class TreeViewColumn(gtk.TreeViewColumn):
+	__gsignals__ = {
+		'button-press-event': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
+		'filter-expression-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (str,)),
+		'font-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (str,)),
+		'alignment-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (str,)),
+	}
+	def __init__(self, **opt):
+		super(TreeViewColumn, self).__init__(**opt)
+		header_widget = gtk.VBox()
+		self.header_label = Label('')
+		header_widget.pack_start(self.header_label, expand=False, fill=False)
+		header_widget.show_all()
+		self.set_widget(header_widget)
+		
+		self.attribute_mapping = {}
+		self.cellrenderers_left = []
+		self.cellrenderers_right = []
+
+		self._saved_filter_expr = None
+		self.filter_regex_pattern = None
+		self.filter_entrybox = gtk.Entry()
+		self.filter_entrybox.set_width_chars(1)  # minimal width so its final width is controlled by the column width
+		self.filter_entrybox.connect('changed', lambda editable: self.filter_expression_changed())
+		self.filter_entrybox.connect('notify::visible', lambda wdg, gparam: self.filter_expression_changed())
+
+	def add_attribute(self, cellrenderer, attrname, col_num):
+		super(TreeViewColumn, self).add_attribute(cellrenderer, attrname, col_num)
+		if cellrenderer not in self.attribute_mapping: self.attribute_mapping[cellrenderer] = {}
+		self.attribute_mapping[cellrenderer][attrname] = col_num
+	def pack_start(self, cellrenderer, expand=True):
+		super(TreeViewColumn, self).pack_start(cellrenderer, expand)
+		self.cellrenderers_left.append(cellrenderer)
+	def pack_end(self, cellrenderer, expand=True):
+		super(TreeViewColumn, self).pack_end(cellrenderer, expand)
+		self.cellrenderers_right.insert(0, cellrenderer)
+	def get_cell_renderers(self):
+		return self.cellrenderers_left + self.cellrenderers_right
+	@property
+	def cell_renderers(self):
+		return self.get_cell_renderers()
+	
+	def reset_fixed_width(self):
+		self.set_fixed_width(1)
+	def clear_width_requirement(self):
+		if self.get_visible():
+			self.set_visible(False)
+			self.set_visible(True)
+
+	def open_filtering(self):
+		self.filter_entrybox.show()
+		self.filter_entrybox.grab_focus()
+	def close_filtering(self):
+		self.filter_entrybox.hide()
+	def toggle_filtering(self):
+		if self.is_filtering_open:
+			self.close_filtering()
+		else:
+			self.open_filtering()
+	@property
+	def is_filtering_open(self):
+		return self.filter_entrybox.get_visible()
+	@property
+	def filter_expr(self):
+		if self.is_filtering_open:
+			return self.filter_entrybox.get_text()
+		return None
+	@filter_expr.setter
+	def filter_expr(self, s):
+		self.set_filter_expr(s)
+	def set_filter_expr(self, s):
+		if s is None:
+			self.close_filtering()
+		else:
+			self.open_filtering()
+			self.filter_entrybox.set_text(s)
+	def filter_expression_changed(self):
+		old = self._saved_filter_expr
+		new = self.filter_expr
+		if old != new:
+			filter_regex_pattern = None
+			if new is not None:
+				try:
+					filter_regex_pattern = regex.compile(new, flags = regex.IGNORECASE | regex.VERSION1)
+				except Exception as e:
+					self.filter_entrybox.modify_base(gtk.STATE_NORMAL, gtk.gdk.Color('#FFA4A4'))
+					self.filter_entrybox.set_tooltip_text(str(e))
+				else:
+					self.filter_entrybox.modify_base(gtk.STATE_NORMAL, None)
+					self.filter_entrybox.set_tooltip_text(None)
+			self.filter_regex_pattern = filter_regex_pattern
+			self.emit('filter-expression-changed', new)
+			self._saved_filter_expr = new
+
+	@property
+	def name(self):
+		return self.get_name()
+	@property
+	def index(self):
+		return self.get_tree_view().get_model().get_column_num(self.name)
+	@property
+	def title(self):
+		return self.header_label.get_text()
+	@title.setter
+	def title(self, title):
+		self.header_label.set_text(title)
+	def __repr__(self):
+		return '<%s name="%s">' % (self.__class__.__name__, self.name)
+	def setup_events(self, *X):
+		# this method should be called when the TreeView is realized.
+		if not self.get_data('setup-events-done'):
+			# find the button representing the treeview column header:
+			potential_header_button = self.get_widget()
+			while not isinstance(potential_header_button, gtk.Button):
+				potential_header_button = potential_header_button.get_parent()
+			if potential_header_button is not None:
+				# propagate click events upward:
+				potential_header_button.connect('button-press-event', lambda widget, event: self.emit('button-press-event', event))
+				# insert a VBox into the widget hierarchy under the header button:
+				hbox = potential_header_button.get_child()
+				potential_header_button.remove(hbox)
+				vbox = gtk.VBox()
+				potential_header_button.add(vbox)
+				vbox.pack_start(hbox, expand=False, fill=False)
+				vbox.pack_start(self.filter_entrybox, expand=True, fill=False)
+				vbox.show_all()
+				self.filter_entrybox.hide()
+				# lower down the implicite TreeViewColumn header button, so filter_entrybox gets events:
+				potential_header_button.get_event_window().lower()
+			
+			# align column header label to the top vertically:
+			potential_alignment_widget = self.get_widget()
+			while not isinstance(potential_alignment_widget, gtk.Alignment):
+				potential_alignment_widget = potential_alignment_widget.get_parent()
+			if potential_alignment_widget is not None:
+				potential_alignment_widget.props.yalign = 0.0
+				potential_alignment_widget.props.yscale = 0.0
+
+			self.set_data('setup-events-done', True)
+	class NotSupportedAlignmentError(Exception):
+		pass
+	def set_text_alignment(self, alignment):
+		if alignment in [gtk.JUSTIFY_RIGHT, pango.ALIGN_RIGHT]:
+			self.cell_renderers[0].set_property('xalign', 1.0)
+		elif alignment in [gtk.JUSTIFY_LEFT, pango.ALIGN_LEFT]:
+			self.cell_renderers[0].set_property('xalign', 0.0)
+		else:
+			raise TreeViewColumn.NotSupportedAlignmentError(alignment)
+		if self.get_ellipsize_enabled():
+			self.enable_ellipsize()
+		self.emit('alignment-changed', alignment.value_nick)
+	def get_text_alignment(self):
+		return gtk.JUSTIFY_RIGHT if self.cell_renderers[0].get_property('xalign') >= 1 else gtk.JUSTIFY_LEFT
+	def enable_ellipsize(self):
+		text_alignment = self.get_text_alignment()
+		if text_alignment == gtk.JUSTIFY_RIGHT:
+			self.cell_renderers[0].set_property('ellipsize', pango.ELLIPSIZE_START)
+		else:
+			self.cell_renderers[0].set_property('ellipsize', pango.ELLIPSIZE_END)
+	def disable_ellipsize(self):
+		self.cell_renderers[0].set_property('ellipsize', pango.ELLIPSIZE_NONE)
+	def get_ellipsize_enabled(self):
+		return self.cell_renderers[0].get_property('ellipsize') != pango.ELLIPSIZE_NONE
+	def set_font_desc(self, font):
+		if not isinstance(font, pango.FontDescription): font = pango.FontDescription(font)
+		self.cell_renderers[0].set_property('font-desc', font)
+		self.emit('font-changed', font.to_string())
+	def get_font_desc(self):
+		return self.cell_renderers[0].get_property('font-desc')
+
+class CellRendererTextOverflow(gtk.GenericCellRenderer):
+	"""
+	This class implements a CellRenderer which renders (markup) text just like
+	CellRendererText, but allows the text content to flow over to adjacent empty cells.
+	"""
+	__gproperties__ = {
+		'text': (gobject.TYPE_STRING, 'Text', 'Text', None, gobject.PARAM_READWRITE),
+		'markup': (gobject.TYPE_STRING, 'Markup', 'Markup', None, gobject.PARAM_READWRITE),
+		'editable': (gobject.TYPE_BOOLEAN, 'Editable', 'Editable', False, gobject.PARAM_READWRITE),
+		'xalign': (gobject.TYPE_FLOAT, 'Horizontal Alignment', 'Horizontal Alignment', 0.0, 1.0, 0.0, gobject.PARAM_READWRITE),
+	}
+	def __init__(self):
+		super(CellRendererTextOverflow, self).__init__()
+		self.__gobject_init__()
+		self.cr_txt = gtk.CellRendererText()
+		self.the_props = {'markup': None, 'xalign': 0.0}
+		self.set_property('ellipsize', pango.ELLIPSIZE_END)
+		self.set_property('yalign', 0.0)
+	def connect(self, *args):
+		self.cr_txt.connect(*args)
+	class TextAlignmentNotSupported(Exception):
+		pass
+	def do_set_property(self, pspec, val):
+		self.cr_txt.set_property(pspec.name, val)
+		if pspec.name in self.the_props:
+			self.the_props[pspec.name] = val
+	def do_get_property(self, pspec):
+		if pspec.name in self.the_props:
+			# CellRendererText can not read 'markup', 'xalign' (potentially other) properties back, so we do
+			return self.get_property(pspec.name)
+		return self.cr_txt.get_property(pspec.name)
+	def set_property(self, prop, val):
+		if prop in self.the_props:
+			self.the_props[prop] = val
+		return self.cr_txt.set_property(prop, val)
+	def get_property(self, prop):
+		if prop == 'pango-alignment':
+			if self.the_props['xalign'] == 0.5: raise CellRendererTextOverflow.TextAlignmentNotSupported(pango.ALIGN_CENTER)
+			elif self.the_props['xalign'] > 0.5: return pango.ALIGN_RIGHT
+			else: return pango.ALIGN_LEFT
+		if prop in self.the_props:
+			return self.the_props[prop]
+		return self.cr_txt.get_property(prop)
+	def on_get_size(self, widget, cell_area):
+		x, y, w, h = self.cr_txt.get_size(widget, cell_area)
+		return x, y, w, h
+	
+	def draw_layout(self, window, widget, cell_area, layout, flags):
+		base_grctx = widget.style.black_gc
+		if (flags & gtk.CELL_RENDERER_SELECTED) != 0: base_grctx = widget.style.white_gc
+		window.draw_layout(base_grctx, cell_area.x, cell_area.y, layout)
+		return False
+	def on_render(self, window, widget, background_area, cell_area, expose_area, flags):
+		"""Find out how much empty area we have horizontally
+		by sum the width of empty cells on right of the current cell.
+		Then render the (possibly markup) text on a pango Layout.
+		Save the data neccessary to draw the Layout into 'layoutstash' for each cells 
+		which are found empty. Cells are identified by TreeModel path and TreeViewColumn name.
+		When an actual empty cell is encountered, then recall the saved Layout (if any) and
+		redraw it. It assumes that the controller routine requests us to
+		render the cells from left to right in sequence and row-by-row."""
+
+		markup = self.get_property('markup')
+		text = self.get_property('text')
+		align_left = self.get_property('pango-alignment') == pango.ALIGN_LEFT
+		align_right = self.get_property('pango-alignment') == pango.ALIGN_RIGHT
+		
+		tvc = self.get_data('treeviewcolumn')
+		tv = tvc.get_tree_view()
+		model = tv.get_model()
+		cellinfo = tv.get_path_at_pos(cell_area.x, cell_area.y)
+		if cellinfo is None:
+			cellinfo = tv.get_path_at_pos(cell_area.x + cell_area.width, cell_area.y + cell_area.height)
+		if cellinfo is None:
+			return
+		treepath = cellinfo[0]
+		
+		if tv.get_data('last-drawn-row-treepath') != treepath or tv.get_data('layoutstash') is None:
+			tv.set_data('layoutstash', {})
+		tv.set_data('last-drawn-row-treepath', treepath)
+		layoutstash = tv.get_data('layoutstash')
+		
+		def get_adjacent_columns():
+			cols = tv.get_columns()
+			col_idx = cols.index(tvc)
+			adjacent_cols_names = []
+			adjacent_cols_width = 0
+			col_idx_incr = 1 if align_left else -1
+			while True:
+				col_idx += col_idx_incr
+				if col_idx < 0 or col_idx >= len(cols): break
+				column_text = model[treepath][cols[col_idx].name]
+				if column_text is None or column_text == '':
+					adjacent_cols_width += cols[col_idx].get_width()
+					adjacent_cols_names.append(cols[col_idx].name)
+				else:
+					break
+			return adjacent_cols_names, adjacent_cols_width
+		adjacent_cols_names, adjacent_cols_width = get_adjacent_columns()
+		overflow_width = cell_area.width + adjacent_cols_width
+
+		if overflow_width != cell_area.width:
+			possibly_overflow = True
+		else:
+			possibly_overflow = False
+		if possibly_overflow:
+			context = widget.get_pango_context()
+			layout = pango.Layout(context)
+			if markup:
+				layout.set_markup(markup)
+			elif text:
+				layout.set_text(text)
+			if markup or text:
+				layout.set_width(overflow_width * pango.SCALE)
+				layout.set_wrap(pango.WRAP_CHAR)
+				layout.set_alignment(self.get_property('pango-alignment'))
+				layout.set_ellipsize(pango.ELLIPSIZE_END if align_left else pango.ELLIPSIZE_START)
+				# TODO disable underlaying self.cr_txt ellipsize row-by-row if it's overdrawn
+				layout.set_font_description(self.get_property('font-desc'))
+
+				xpad, ypad = self.cr_txt.get_padding()
+				draw_area = cell_area.copy()
+				draw_area.x += xpad
+				draw_area.y += ypad
+				if align_right:
+					draw_area.x -= adjacent_cols_width + 2*xpad
+					draw_area.width = overflow_width
+					# draw on the left-hand side empty cells immediately, no need to stash the layout for later use:
+					self.draw_layout(window, widget, draw_area, layout, flags)
+					return True
+				else:
+					if not layoutstash.has_key(treepath):
+						layoutstash[treepath] = {}
+					for colname in layoutstash[treepath].keys():
+						if layoutstash[treepath][colname].has_key(tvc.name):
+							del layoutstash[treepath][colname][tvc.name]
+					for colname in adjacent_cols_names:
+						if not layoutstash[treepath].has_key(colname):
+							layoutstash[treepath][colname] = {}
+						layoutstash[treepath][colname][tvc.name] = (window, widget, draw_area, layout, flags)
+		else:
+			# this cell's text does not flow over, so delete earlier layouts, if any
+			for colname in layoutstash.get(treepath, {}).keys():
+				if layoutstash[treepath][colname].has_key(tvc.name):
+					del layoutstash[treepath][colname][tvc.name]
+		layout_overflowcells = layoutstash.get(treepath, {}).get(tvc.name, {})
+		if not markup and not text:
+			# current cell is empty, but redraw those cells which flow over to this one
+			for layout_args in layout_overflowcells.values():
+				self.draw_layout(*layout_args)
+		else:
+			if layout_overflowcells:
+				# current cell is not empty so delete those layouts which would be drawn on it, if any
+				del layoutstash[treepath][tvc.name]
+			self.cr_txt.render(window, widget, background_area, cell_area, expose_area, flags)
+		
+		return True
+	
+	def on_activate(self, event, widget, path, background_area, cell_area, flags):
+		return self.cr_txt.activate(event, widget, path, background_area, cell_area, flags)
+	def on_start_editing(self, event, widget, path, background_area, cell_area, flags):
+		ce = self.cr_txt.start_editing(event, widget, path, background_area, cell_area, flags)
+		w = gtk.Window(gtk.WINDOW_TOPLEVEL)
+		w.set_keep_above(True)
+		w.set_modal(True)
+		w.set_skip_taskbar_hint(True)
+		w.set_transient_for(widget.get_ancestor(gtk.Window))
+		w.set_decorated(False)
+		frame = gtk.Frame(label = "Enter new value")
+		frame.set_border_width(24)
+		frame.set_shadow_type(gtk.SHADOW_IN)
+		frame_inner = gtk.Frame()
+		frame_inner.set_border_width(16)
+		w.add(frame)
+		frame.add(frame_inner)
+		frame_inner.add(ce)
+		w.show_all()
+		add_key_binding(w, 'Escape', lambda *X: w.destroy())
+		w.connect('destroy', lambda *X: w.destroy())
+		ce.connect('remove-widget', lambda *X: w.destroy())
+		ce.start_editing(event)
+
+gobject.type_register(CellRendererTextOverflow)
+
+
+
+def gtk_walk_descendant_widgets(w, cb, cb_data):
+	stop = cb(w, cb_data)
+	if stop:
+		return
+	if hasattr(w, 'get_children'):
+		for child in w.get_children():
+			gtk_walk_descendant_widgets(child, cb, cb_data)
+
+class MenuItem(gtk.MenuItem):
+	def get_label_widget(self):
+		cb_data = {'label-widget': None}
+		def cb(widget, cb_data):
+			if isinstance(widget, gtk.Label):
+				cb_data['label-widget'] = widget
+				return True
+		gtk_walk_descendant_widgets(self, cb, cb_data)
+		return cb_data['label-widget']
+		
+	def set_markup(self, markup):
+		self.set_label('.')
+		self.get_label_widget().set_markup(markup)
+
+class SubmenuMenuItem(MenuItem):
+	def __init__(self, **opt):
+		super(SubmenuMenuItem, self).__init__(**opt)
+		self.submenu = gtk.Menu()
+		self.set_submenu(self.submenu)
+	def __getattr__(self, name):
+		return getattr(self.submenu, name)
+
+class CheckMenuItem(gtk.CheckMenuItem, MenuItem):
+	def __init__(self, label=None, markup=None, use_underline=False):
+		super(CheckMenuItem, self).__init__(label=label, use_underline=use_underline)
+		if markup is not None:
+			self.set_markup(markup)
+
+class ImageMenuItem(gtk.ImageMenuItem, MenuItem):
+	def __init__(self, stock_id=None, accel_group=None, label=None, markup=None, icon=None):
+		assert not(label is not None and markup is not None), "label and markup arguments are mutually exclusive"
+		super(ImageMenuItem, self).__init__(stock_id=stock_id, accel_group=accel_group)
+		if label is not None:
+			self.set_label(label)
+		if markup is not None:
+			self.set_markup(markup)
+		if icon is not None:
+			self.set_icon(icon)
+	def set_icon(self, icon):
+		if not icon: return
+		img = gtk.Image()
+		if os.path.isfile(icon):
+			width_px, height_px = gtk.icon_size_lookup(gtk.ICON_SIZE_MENU)[:]
+			pixbuf = get_pixbuf_from_file_at_size(icon, width_px, height_px)
+			img.from_pixbuf(pixbuf)
+		elif icon.startswith('STOCK_'):
+			img.set_from_stock(getattr(gtk, icon), gtk.ICON_SIZE_MENU)
+		elif icon in gtk.stock_list_ids():
+			img.set_from_stock(icon, gtk.ICON_SIZE_MENU)
+		elif gtk.icon_theme_get_default().lookup_icon(icon, gtk.ICON_SIZE_MENU, 0) is not None:
+			img.set_from_icon_name(icon, gtk.ICON_SIZE_MENU)
+		else:
+			width_px, height_px = gtk.icon_size_lookup(gtk.ICON_SIZE_MENU)[:]
+			iconfile = find_icon_file(icon, width_px)
+			if iconfile is None: return
+			pixbuf = get_pixbuf_from_file_at_size(iconfile, width_px, height_px)
+			img.set_from_pixbuf(pixbuf)
+		self.set_image(img)
+
+
+class TemporaryProperty(object):
+	"""Context manager to temporarily set an object property and restore it on exit."""
+	def __init__(self, getter, setter, tempval):
+		assert callable(getter) or len(getter)==2
+		assert callable(setter) or setter is () or len(setter)==2
+		self.getter = getter
+		self.setter = setter
+		self.tempval = tempval
+		self.original = None
+	
+	def _set(self, x):
+		if callable(self.setter):
+			self.setter(x)
+		elif self.setter is ():
+			setattr(self.getter[0], self.getter[1], x)
+		else:
+			setattr(self.setter[0] if self.setter[0] is not None else self.getter[0], self.setter[1], x)
+
+	def __enter__(self):
+		if callable(self.getter):
+			self.original = self.getter()
+		else:
+			self.original = getattr(self.getter[0], self.getter[1])
+		self._set(self.tempval)
+		return self
+	
+	def __exit__(self, exc_type, exc_val, exc_tb):
+		self._set(self.original)
+
+
+class GtkThreadProtectedContext(object):
+	def __init__(self, parent_context):
+		self.parent_context = parent_context
+	def __enter__(self):
+		self.parent_context.enter()
+		return self
+	def __exit__(self, exc_type, exc_val, exc_tb):
+		self.parent_context.leave_maybe()
+		return False
+
+class GtkThreadContext(object):
+	def __init__(self, max_freeze_sec=None):
+		self._entered = False
+		self.max_freeze_sec = max_freeze_sec
+		if self.max_freeze_sec is not None:
+			self._last_enter = 0
+			self.protected = GtkThreadProtectedContext(parent_context=self)
+	def __enter__(self):
+		if self.max_freeze_sec is None:
+			self.do_enter()
+		return self
+	def do_enter(self):
+		if not self._entered:
+			gtk.threads_enter()
+			self._entered = True
+			self._last_enter = time.time()
+	def __exit__(self, exc_type, exc_val, exc_tb):
+		self.do_leave()
+		return False  # don't ignore exceptions
+	def do_leave(self):
+		if self._entered:
+			gtk.threads_leave()
+			self._entered = False
+	def leave_maybe(self):
+		if self._last_enter + self.max_freeze_sec < time.time():
+			self.do_leave()
+	def enter(self):
+		self.do_enter()
+
+class NoGtkThreadContext(object):
+	def __enter__(self):
+		gtk.threads_leave()
+		return self
+	def __exit__(self, exc_type, exc_val, exc_tb):
+		gtk.threads_enter()
+
+class GDKCursor(object):
+	def __init__(self, gdk_window, cursor):
+		self.window = gdk_window
+		self.prev_cursor = self.window.get_cursor()
+		self.this_cursor = cursor if isinstance(cursor, gtk.gdk.Cursor) else gtk.gdk.Cursor(self.window.get_display(), cursor)
+	def __enter__(self):
+		return self.window.set_cursor(self.this_cursor)
+	def __exit__(self, exc_type, exc_val, exc_tb):
+		self.window.set_cursor(self.prev_cursor)
+		return False  # don't ignore exceptions
+
+class CompositeContext(object):
+    def __init__(self, *contexts):
+        self.contexts = contexts
+
+    def __enter__(self):
+        return tuple(ctx.__enter__() for ctx in self.contexts)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        suppressed = False
+        for ctx in reversed(self.contexts):
+            try:
+                if ctx.__exit__(exc_type, exc_val, exc_tb):
+                    suppressed = True
+                    exc_type = exc_val = exc_tb = None
+            except Exception:
+                import sys
+                exc_type, exc_val, exc_tb = sys.exc_info()
+                suppressed = False
+        return suppressed
+
+class ContextTransitionContext:
+    def __init__(self, cm1, cm2):
+        self.cm1 = cm1
+        self.cm2 = cm2
+
+    def __enter__(self):
+        self.cm1.__enter__()
+        try:
+            handler2 = self.cm2.__enter__()
+        except:
+            self.cm1.__exit__(*sys.exc_info())
+            raise
+        self.cm1.__exit__(None, None, None)
+        return handler2
+
+    def __exit__(self, *exc_info):
+        self.cm1.__enter__()
+        try:
+            is_suppressed = self.cm2.__exit__(*exc_info)
+        except:
+            self.cm1.__exit__(*sys.exc_info())
+            raise
+        self.cm1.__exit__(None, None, None)
+        return is_suppressed
+
+class NoneContext(object):
+	def __enter__(self):
+		return self
+	def __exit__(self, exc_type, exc, tb):
+		return False
+
+class TimedChunkProcessor(object):
+	"""
+	Processes an iterator in time-bounded chunks, yielding control between chunks.
+
+	Useful for long-running iterations that must not block the main thread (or a
+	GTK main loop) for more than a fixed wall-clock interval.  After each chunk the
+	work is re-scheduled via ``chunk_starter``, giving other callbacks a chance to
+	run before the next chunk begins.
+
+	Args:
+		chunk_starter (callable): Accepts a single callable and is responsible for
+			scheduling it (e.g. ``gobject.idle_add``).  Called once at startup and
+			again after every chunk that still has items remaining.
+		iterator (iterator): The data source. Should be of python ``iterator`` class.
+		loop_func (callable): Called for every item the ``iterator`` yields with the signature
+			``loop_func(item, context_handler, callback_param)``.
+		timebox_sec (float): Maximum wall-clock seconds to spend inside a single
+			chunk before yielding control back to ``chunk_starter``.
+		loop_context (context manager, optional): Entered with ``with`` at the start
+			of each chunk and exited at the end.  The value bound by ``as`` is passed
+			to ``loop_func`` as ``context_handler``.  Defaults to ``NoneContext()``.
+		callback_param: Arbitrary value forwarded to ``loop_func`` unchanged.
+
+	Usage:
+		processor = TimedChunkProcessor(
+			chunk_starter = gobject.idle_add,
+			iterator = iter(my_list),
+			loop_func = process_item,
+			loop_context = GtkThreadContext(),
+			timebox_sec = 0.5,
+		)
+		processor.run()
+		processor.join()   # block until the iterator is exhausted
+	"""
+	def __init__(self, chunk_starter, iterator, loop_func, timebox_sec, loop_context=NoneContext(), callback_param=None):
+		self.chunk_starter = chunk_starter
+		self.iterator = iterator
+		self.loop_context = loop_context
+		self.loop_func = loop_func
+		self.callback_param = callback_param
+		self.timebox_sec = timebox_sec
+		self.finish_event = threading.Event()
+	def run(self):
+		self.chunk_starter(self._callback)
+	def _callback(self):
+		"""
+		Process items until the timebox expires or the iterator is exhausted.
+
+		Should be called by the user-specified ``chunk_starter`` method.
+		Iterates over ``iterator`` and calls ``loop_func`` for each item, and stops as
+		soon as ``timebox_sec`` wall-clock seconds have elapsed.  If items remain,
+		``run()`` is called to schedule the next chunk.
+        """
+		continue_processing = True
+		chunk_start = time.time()
+		with self.loop_context as context_handler:
+			while True:
+				try:
+					loop_var = self.iterator.next()
+				except StopIteration:
+					continue_processing = False
+					break
+				else:
+					self.loop_func(loop_var, context_handler, self.callback_param)
+				# give back control once the timebox for this chunk has been used up:
+				if chunk_start + self.timebox_sec < time.time():
+					break
+		if continue_processing:
+			# more items remain, thus re-schedule:
+			self.run()
+		else:
+			# iterator exhausted, signal to any pending join()
+			self.finish_event.set()
+	def join(self):
+		"""Block the calling thread until the iterator is fully exhausted."""
+		self.finish_event.wait()
+
+class Thread(threading.Thread):
+	def __init__(self, *params, **opts):
+		is_daemon = None
+		if 'daemon' in opts:
+			is_daemon = opts['daemon']
+			del opts['daemon']
+		super(Thread, self).__init__(*params, **opts)
+		if is_daemon:
+			self.setDaemon(is_daemon)
+
+class SubprocessError(Exception):
+	def __init__(self, typ=None, code=None, details=''):
+		super(SubprocessError, self).__init__()
+		self.type = typ
+		self.code = code
+		self.details = details
+
+def spawn_subprocess(command_with_args, *popen_args, **popen_options):
+	err = SubprocessError()
+	command_str = command_with_args if isinstance(command_with_args, basestring) else subprocess.list2cmdline(command_with_args)
+	try:
+		proc = subprocess.Popen(command_with_args, *popen_args, **popen_options)
+	except Exception as exc:
+		err.type = "exception"
+		err.code = exc.__class__.__name__
+		err.details = 'command: '+command_str
+		err.details += "\n" + traceback.format_exc()
+		if isinstance(exc, OSError):
+			err.type = "status code"
+			err.code = exc.errno
+			err.details = exc.strerror + "\n" + err.details
+			if exc.filename is not None: 
+				err.details = "file: " + exc.filename + "\n" + err.details
+		raise err
+	else:
+		proc.command_str = command_str
+	return proc
+
+def wait_subprocess(proc):
+	err = SubprocessError()
+	stderr = proc.stderr.read()
+	if stderr:
+		print(stderr, file=sys.stderr)
+	proc.stderr.close()
+	proc.wait()
+	err.details = 'command: ' + proc.command_str + '\n'
+	err.details += 'subprocess.Popen().returncode: ' + str(proc.returncode) + '\n'
+	if stderr:
+		err.details += 'stderr:\n' + stderr
+	else:
+		err.details += '(no stderr)'
+	if proc.returncode != 0:
+		err.type = "status code" if proc.returncode > 0 else "signal"
+		err.code = abs(proc.returncode)
+		raise err
+	return proc
+
+def ErrorMessage(message_markup, title=None, details=None):
+	dlg = gtk.MessageDialog(parent=main_app.main_win, flags=(gtk.DIALOG_MODAL | gtk.DIALOG_DESTROY_WITH_PARENT), type=gtk.MESSAGE_ERROR, buttons=gtk.BUTTONS_OK)
+	dlg.set_title("Error" if title is None else title)
+	dlg.set_markup(message_markup)
+	if details is not None:
+		dlg.set_resizable(True)
+		carea = dlg.get_content_area()
+		carea.pack_start(Scrollable(Label(markup='<tt>'+glib.markup_escape_text(details)+'</tt>')), True, True)
+	dlg.get_widget_for_response(gtk.RESPONSE_OK).connect('clicked', lambda btn, dlg: dlg.destroy(), dlg)
+
+	dlg.connect('map-event', lambda *X: PropertyPersistor(dlg, 'error-dialog', [
+		( 'geometry', 'configure-event', lambda wdg, evt: [evt.width, evt.height], lambda wdg, value: wdg.resize(*value) ),
+		( 'position', 'configure-event', lambda wdg, evt: wdg.get_position()[:],   lambda wdg, value: wdg.move(*value) ),
+	]).apply_saved_properties())
+
+	dlg.show_all()
+	dlg.run()
+	return dlg
+
+
+
+def split_command_args(cmd_str):
+	return re.split(r'\s+', cmd_str)
+
+class MenuHierarchy(object):
+	def __init__(self, separator='/', menu_class=gtk.Menu):
+		self.separator = separator
+		self.menu_class = menu_class
+		self.default_submenuitem_class = gtk.MenuItem
+		self.root_menu = self.menu_class()
+	def get_submenu(self, path):
+		menu = self.root_menu
+		for label in path:
+			menu = self.get_submenu_by_label(menu, label)
+			if menu is None:
+				return None
+		return menu
+	def get_submenuitem_by_label(self, parent, label):
+		for mi in parent.get_children():
+			if mi.get_label() == label and mi.get_submenu() is not None:
+				return mi
+		return None
+	def get_submenu_by_label(self, parent, label):
+		mi = self.get_submenuitem_by_label(parent, label)
+		if mi is not None:
+			return mi.get_submenu()
+		return None
+	def make_submenu(self, path, parent_menu_item_class=None, parent_menu_item_opt={}):
+		if parent_menu_item_class is None:
+			parent_menu_item_class = self.default_submenuitem_class
+		menu = self.root_menu
+		for label in path:
+			submenu = self.get_submenu_by_label(menu, label)
+			if submenu is None:
+				submenu = self.menu_class()
+				parent_menu_item_opt['label']=label
+				smi = parent_menu_item_class(**parent_menu_item_opt)
+				smi.set_submenu(submenu)
+				submenu.parent_menu_item = smi
+				menu.append(smi)
+			menu = submenu
+		return menu
+	def add_menu_item(self, **opt):
+		path = opt['label'].split(self.separator)
+		opt['label'] = path[-1]
+		path = path[0:-1]
+		klass = opt.pop('klass')
+		if opt['label'] != '':
+			submenu = self.make_submenu(path)
+			mi = klass(**opt)
+			submenu.append(mi)
+			return mi
+		else:
+			self.make_submenu(path[0:-1])
+			submenu = self.make_submenu(path, parent_menu_item_class=klass, parent_menu_item_opt=opt)
+			return submenu.parent_menu_item
+	def append_to_menu(self, recv_menu):
+		for mi in list(self.root_menu.get_children()):
+			self.root_menu.remove(mi)
+			recv_menu.append(mi)
+
+def populate_row_context_menu(menu, items, macros):
+	hierarchy = MenuHierarchy(separator='//')
+	for definition in items:
+		icon, label_template, menuitem_options, command_template = [field.replace('\\:', ':') for field in re.split(r'(?<!\\):', definition, maxsplit=3)]
+		menuitem_options = parse_options_string(menuitem_options)
+		menuitem_label = Template(label_template).render(**macros)
+		if menuitem_label != '':
+			enabled = True
+			if menuitem_label.startswith(' '):
+				menuitem_label = menuitem_label[1:]
+				enabled = False
+			mi = hierarchy.add_menu_item(klass=ImageMenuItem, label=menuitem_label, icon=icon)
+			mi.set_sensitive(enabled)
+			
+			commands = []
+			if menuitem_options.get('per-each-selected-row'):
+				for row in macros['selected_rows']:
+					command = Template(command_template).render(row=row, n_selected=macros['n_selected'], column=macros['column'])
+					if command != '':
+						commands.append(split_command_args(command))
+			else:
+				command = Template(command_template).render(**macros)
+				if command != '':
+					commands.append(split_command_args(command))
+			mi.set_data('commands', commands)
+			mi.connect('activate', on_context_menu_item_activate, menu)
+	hierarchy.append_to_menu(menu)
+	menu.show_all()
+
+def gen_focus_data(treeview, c_treepath, tv_col):
+	row = {} if c_treepath is None else treeview.get_model()[c_treepath].as_dict()
+	column = None if tv_col is None else tv_col.name
+	selected_rows = [treeview.get_model()[treepath].as_dict() for treepath in treeview.get_selection().get_selected_rows()[1]]
+	return {
+		'row': row,
+		'column': column,
+		'cell': row.get(column),
+		'selected_rows': selected_rows,
+	}
+
+def on_context_menu_item_activate(mi, menu):
+	focus_data = menu.get_data('focus-data')
+	commands = mi.get_data('commands')
+	for command_args in commands:
+		run_system_command_async(command_args, focus_data)
+
+def on_context_menu_copy(mi, menu, what):
+	focus_data = menu.get_data('focus-data')
+	if what == 'cell':
+		text = focus_data['row'][focus_data['column']]
+	elif what == 'row-as-json':
+		text = json.dumps(focus_data['row'])
+	elif what == 'selection-as-json':
+		text = json.dumps(focus_data['selected_rows'])
+	else:
+		raise ValueError()
+	gtk.Clipboard().set_text(text)
+
+def on_table_row_activated(treeview, c_treepath, tv_col):
+	if cliargs.activate_command is not None:
+		command_template = cliargs.activate_command
+		macros = {
+			'row': treeview.get_model()[c_treepath].as_dict(),
+		}
+		command = Template(command_template).render(**macros)
+		run_system_command_async(split_command_args(command), gen_focus_data(treeview, c_treepath, tv_col))
+
+def run_system_command_async(command_with_args, input_object):
+	Thread(target=run_system_command, args=(command_with_args, json.dumps(input_object)), daemon=True).start()
+
+def run_system_command(command_with_args, input_text):
+	try:
+		proc = spawn_subprocess(command_with_args, shell=False, stdin=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
+		try:
+			proc.stdin.write(input_text)
+		except IOError as e:
+			traceback.print_exc()
+			if e.errno not in [errno.EPIPE]: raise e
+		proc.stdin.close()
+		wait_subprocess(proc)
+	except SubprocessError as err:
+		with GtkThreadContext():
+			ErrorMessage("Command failed with %s: <tt>%s</tt>\nDetails:" % (err.type, err.code), title="gTabData: execution error", details=err.details)
+
+
+# tabular data, tabdata related functions {{{
+
+def unescape_td_sequence(s):
+	"""only meant for backslash-t, backslash-n, backslash-r, backslash-e and double-blackslash inputs."""
+	if s == '\\e': return '\x1B'
+	else: return eval('"'+s+'"')
+
+def escape_td_sequence(s):
+	if s == '\x1B': return '\\e'
+	else: return repr(s)[2]
+
+def tabdata_decode_record(rawline, n_fields=0):
+	cells = [re.sub(r'(\\[tnre\\])', lambda match: unescape_td_sequence(match.group(1)), cell) for cell in rawline.rstrip('\n').split('\t', n_fields-1)]
+	if n_fields > 0:
+		cells = cells + [''] * (n_fields-len(cells))
+	return cells
+
+def tabdata_encode_rows(rows):
+	return ''.join([ tabdata_encode_record(row) + "\n" for row in rows ])
+
+def tabdata_encode_record(row):
+	return '\t'.join([ tabdata_encode_cell(cell) for cell in row ])
+
+def tabdata_encode_cell(s):
+	return re.sub(r'([\t\n\r\x1B\\])', lambda match: escape_td_sequence(match.group(1)), s)
+
+# }}}
+
+def merge_ordering(old_items, new_items):
+	result = []
+	for patchline in difflib.ndiff(old_items, new_items):
+		op, item = patchline[0], patchline[2:]
+		if op in ('+', ' ') or (op == '-' and item not in new_items):
+			result.append(item)
+	return result
+
+def treemodel_find_row(model, treepath, treeiter, cb_data):
+	if model[treepath][cb_data['column-name']] == cb_data['value']:
+		cb_data['treepath'] = treepath
+		return True
+
+def get_path_by_cell(model, search_column, search_content):
+	search_data = {'column-name': search_column, 'value': search_content, 'treepath': None}
+	model.foreach(treemodel_find_row, search_data)
+	return search_data['treepath']
+
+
+
+def parse_cli_args():
+	parser = argparse.ArgumentParser(description='gTabData - GTK Tabular Data viewer', formatter_class=argparse.RawDescriptionHelpFormatter)
+	parser.add_argument('--title', type=str, default='gTabData', help='Window title text')
+	parser.add_argument('--appname', type=str, default='gtabdata', help='Custom application name to operate as')
+	parser.add_argument('--appinstance', type=str, default='gtabdata', help='Custom application instance name to operate as')
+	parser.add_argument('--icon', type=str, default='text-spreadsheet', help='Window icon file or symbolic name')
+	data_group = parser.add_mutually_exclusive_group()
+	data_group.add_argument('--data-command', type=str, metavar='COMMAND', help='The command which produces the tabular data to be shown')
+	data_group.add_argument('--data-script', type=str, metavar='SCRIPT', help='Shell command(s) to produce tabular data')
+	data_group.add_argument('--db-query', type=str, help='Database query to load data from')
+	parser.add_argument('--db-connection', type=str, help='Database connection string, for supported DSN see "sqlalchemy" python module.')
+	key_group = parser.add_mutually_exclusive_group()
+	key_group.add_argument('--key-field', type=str, default=None, metavar='COLUMN')
+	key_group.add_argument('--auto-key-field', action='store_true', default=False, help='Default key field is the first column in the input data.')
+	parser.add_argument('--activate-command', type=str, metavar='COMMAND', help='System command to run when double clicked on a row.')
+	parser.add_argument('--context-menu', action='append', default=[], type=str, metavar='ICON:LABEL:MENUITEM-OPTIONS:COMMAND', help='Menu item definitions for rows context menu.')
+	parser.add_argument('--auto-refresh-interval', type=float, metavar='SEC')
+	parser.add_argument('--inotify-refresh', type=str, metavar='FILE', help='')  # TODO
+	parser.epilog = '''
+ICON is one of these:
+	- image file path
+	- Gtk stock icon constant, starting with "STOCK_"
+	- icon name as defined in the current Gtk icon theme
+	- basename of an image file in the common system icon directories
+LABEL is a jinja2 template rendered to the menu item label, supporting these variables:
+	- n_selected: number of selected rows
+	- cell: the cell's text content on which the context menu is opened
+	- column: the column name in which the context menu is opened
+	- row: a dict holding the focused/activated row's fields
+	Literal ":" should be escaped by backslash.
+	If the rendered LABEL is empty string, the menu item won't be shown.
+	If the rendered LABEL starts with a space, the menu item is shown disabled.
+	May create nested menus (submenus) by using "//" (couble slash) as a separator in LABEL to describe the path through the menu hierarchy.
+	Parent menus are implicit, but if want to define icon for one, end its LABEL with "//" (double slash).
+MENUITEM-OPTIONS
+	Comma-delimited list of zero or more options:
+	- per-each-selected-row: run the COMMAND separately on each row. Default is to run COMMAND once (and pass 'selected_rows' in JSON on its STDIN)
+COMMAND
+	The COMMAND option parameter is a jinja2 template, after rendered, split by whitespaces into command and arguments, no quoting or escaping is supported.
+	Then the command is run as a system command, not in shell.
+	For available jinja2 variables, see LABEL paragraph below.
+	A JSON object is passed to the command's STDIN with these keys:
+	- row: an object itself containing all fields (as object keys) and cells (as values) of the activated/focused row.
+	- column: column's name which the context menu is opened on.
+	- selected_rows: list of all the selected rows. Rows are dicts as in the 'row' top-level key.
+'''
+	return parser.parse_args()
+
+
+cliargs = parse_cli_args()
+APPNAME = cliargs.appname + '.' + cliargs.appinstance
+
+
+class GTabData(object):
+	def __init__(self):
+		self.tabdata_key_field = None
+		self._load_table_thread_name = 'load_table'
+
+		self.main_win = Window({'name': 'window.main', 'gtk-args': [], 'default-size': ()})
+		self.window_signalmanager = GSignalHandlerManager(self.main_win)
+		self.window_signalmanager.connect('delete-event', lambda *X: self.on_exit())
+		self.window_signalmanager.connect_once('map-event', lambda w, e: self._on_startup())
+		add_key_binding(self.main_win, 'F5', lambda *X: self.load_table_async())
+
+		self.main_table = TreeView(None)
+		self.main_win.add(Scrollable(self.main_table))
+		self.main_table.connect('row-activated', on_table_row_activated)
+		self.main_table.connect('menu-popup', self.on_table_row_context_menu_open)
+		self.main_table.connect('column-added', self.on_column_added)
+		self.main_table.connect('key-press-event', self.on_key_press)
+
+		self.proppersist_table = PropertyPersistor(self.main_table, 'main_table', [
+			('columns-order',  'columns-changed',           lambda tv: merge_ordering(self.proppersist_table.props.get('columns-order') or [], tv.get_column_names()), self.restore_columns_order),
+			('hidden-columns', 'column-visibility-changed', lambda tv, tvc: [col.name for col in tv.get_columns() if not col.get_visible()], self.restore_hidden_columns),
+			('column-width',   'column-width-changed',      lambda tv, tvc, tvc_width: dict([(col.name, col.get_width()) for col in tv.get_columns()]), self.restore_columns_width),
+			('sort-column',    'sort-by-column-changed',    lambda tv, tvc: tvc.name if tvc is not None else None, self.restore_sortby_column),
+			('sort-order',     'column-sort-order-changed', lambda tv, tvc: tvc.get_sort_order().value_nick if tvc is not None else None, None),
+		])
+		if cliargs.key_field is not None or cliargs.auto_key_field:
+			self.proppersist_table.add_properties([('selected-rows', 'selection-change', lambda tv, sel_rows: [row[self.tabdata_key_field] for row in sel_rows], self.restore_selection)])
+		self.proppersist_column = {}
+		
+	def run(self):
+		self.main_win.show_all()
+
+	def _on_startup(self):
+		self.load_table_async()
+	
+	def load_table_async(self):
+		if not self.table_is_loading:
+			Thread(target=self.load_table, daemon=True, name=self._load_table_thread_name).start()
+	
+	@property
+	def table_is_loading(self):
+		return self._load_table_thread_name in [thr.name for thr in threading.enumerate()]
+	
+	def load_table(self):
+		if cliargs.db_query:
+			import sqlalchemy
+
+			db_engine = sqlalchemy.create_engine(cliargs.db_connection, execution_options={'stream_results':True})
+			db_conn = db_engine.connect()
+			db_result = db_conn.execute(cliargs.db_query)
+
+			columns = [(col, unicode) for col in db_result.keys()]
+			self.load_columns(columns)
+			data_generator = ((None, row) for row in db_result)
+			self.load_data(data_generator)
+		
+		elif cliargs.data_command or cliargs.data_script:
+			if cliargs.data_command:
+				command = split_command_args(cliargs.data_command)
+				in_shell = False
+			elif cliargs.data_script:
+				command = cliargs.data_script
+				in_shell = True
+			else:
+				raise ValueError()
+
+			def execution_error(err):
+				with GtkThreadContext():
+					ErrorMessage("Command failed with %s: <tt>%s</tt>\nDetails:" % (err.type, err.code), title="gTabData: execution error", details=err.details)
+				
+			try:
+				proc = spawn_subprocess(command, shell=in_shell, stdin=open(os.devnull, 'r'), stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
+			except SubprocessError as err:
+				execution_error(err)
+			else:
+				td_header = tabdata_decode_record(proc.stdout.readline())
+				self.load_columns(td_header)
+				n_fields = len(td_header)
+				data_generator = ((None, tabdata_decode_record(line, n_fields=n_fields)) for line in iter(proc.stdout.readline, ''))
+				self.load_data(data_generator)
+				proc.stdout.close()
+				try:
+					wait_subprocess(proc)
+				except SubprocessError as err:
+					execution_error(err)
+		
+		with GtkThreadContext():
+			self.after_load_table()
+	
+	def load_columns(self, columns):
+		if len(columns) != len(set(columns)):
+			with GtkThreadContext():
+				ErrorMessage("duplicated column names", title="gTabData: data header error", details="columns:\n"+'\n'.join(["- "+c for c in columns]))
+			raise ValueError("duplicated column names")
+
+		treemodel_columns = [(col_name, unicode) for col_name in columns]
+		if self.main_table.get_model() is None or treemodel_columns != self.main_table.get_model().get_columns():
+			self.tabdata_key_field = None
+			with GtkThreadContext():
+				with TemporaryProperty((self.proppersist_table, 'active'), (), False):
+					self.main_table.set_model(NamedColumnsTreeStore(*treemodel_columns))
+					self.main_table.set_columns([(col_name, col_name, 'text', idx) for idx, col_name in enumerate(columns)])
+		
+		if cliargs.auto_key_field and self.tabdata_key_field is None:
+			if columns[0] != '':
+				self.tabdata_key_field = columns[0]
+				print("info: Taking '%s' as key field." % self.tabdata_key_field, file=sys.stderr)
+		if not cliargs.auto_key_field and cliargs.key_field is not None:
+			if cliargs.key_field not in columns:
+				print("warning: Field '%s' is not in the input." % cliargs.key_field, file=sys.stderr)
+			else:
+				self.tabdata_key_field = cliargs.key_field
+		
+		if self.tabdata_key_field is not None:
+			with GtkThreadContext():
+				self.main_table.get_model().add_key_column(self.tabdata_key_field)
+
+	def load_data(self, data_rows_iterator):
+		cb_data = {
+			'existing_records_keys': [],
+			'model': self.main_table.get_model(),
+		}
+		if self.tabdata_key_field is None:
+			with GtkThreadContext():
+				cb_data['model'].clear()
+
+		with ContextTransitionContext(GtkThreadContext(), GDKCursor(self.main_win.window, gtk.gdk.WATCH)):
+			data_processor = TimedChunkProcessor(
+				chunk_starter = lambda func: gobject.idle_add(glib_callback_once, func),
+				iterator = data_rows_iterator,
+				loop_context = CompositeContext(GtkThreadContext(),),
+				loop_func = self.load_data_row,
+				callback_param = cb_data,
+				timebox_sec = 0.4)
+			data_processor.run()
+			data_processor.join()
+
+		if self.tabdata_key_field is not None:
+			# TODO TimedChunkProcessor
+			with GtkThreadContext(), GDKCursor(self.main_win.window, gtk.gdk.WATCH):
+				# gather rows no longer in the input data table
+				cb_data = {'existing_records_keys': cb_data['existing_records_keys'], 'tabdata_key_field': self.tabdata_key_field, 'former_rows': []}
+				def gather_former_rows(model, treepath, treeiter, cb_data):
+					if model[treepath][cb_data['tabdata_key_field']] not in cb_data['existing_records_keys']:
+						cb_data['former_rows'].append(gtk.TreeRowReference(model, treepath))
+				self.main_table.get_model().foreach(gather_former_rows, cb_data)
+				# delete no longer existing rows
+				for rowref in cb_data['former_rows']:
+					del self.main_table.get_model()[rowref.get_path()]
+
+	def load_data_row(self, loop_var, context_handlers, cb_data):
+		treepath, row_cells = loop_var
+		record_key = None
+		existing_record = None
+		if self.tabdata_key_field is not None:
+			col_idx = cb_data['model'].get_column_num(self.tabdata_key_field)
+			record_key = row_cells[col_idx]
+			existing_record = cb_data['model'].get_row_by_key(self.tabdata_key_field, record_key)
+		if existing_record is None:
+			cb_data['model'].append(treepath, row_cells)
+		else:
+			existing_record.update(row_cells)
+		if self.tabdata_key_field is not None:
+			cb_data['existing_records_keys'].append(record_key)
+
+	def after_load_table(self):
+		with TemporaryProperty((self.proppersist_table, 'active'), (), False):
+			self.proppersist_table.apply_saved_properties()
+			# auto size newly learned columns
+			self._auto_size_new_columns()
+			# resize the app window if not yet resized by the user
+			gobject.idle_add(glib_callback_once, self._window_initial_resize)
+	
+	def on_key_press(self, tv, event):
+		key = gtk.gdk.keyval_name(event.keyval)
+		treepath, col = tv.get_cursor()
+		if treepath is None:
+			return False
+		if key == 'Menu':
+			context_menu = gtk.Menu()
+			self.on_table_row_context_menu_open(tv, context_menu, treepath, col, 0, 0)
+			context_menu.show_all()
+			context_menu.popup(None, None, lambda menu, cb_data: self.cell_coordinates(treepath, col, gtk.CORNER_BOTTOM_LEFT) + (True,), MOUSE_BUTTON_RIGHT, event.time, {})
+			return True
+		if key.lower() == 'c' and (event.state & gtk.gdk.CONTROL_MASK):
+			# Ctrl+C pressed, copy selection in tabdata format
+			model, paths = self.main_table.get_selection().get_selected_rows()[:]
+			if (event.state & gtk.gdk.SHIFT_MASK):
+				# copy all columns including hidden ones:
+				columns = self.main_table.get_column_names()
+			else:
+				# copy only visible columns:
+				columns = [tvc.name for tvc in self.main_table.get_columns() if tvc.get_visible()]
+			selected_rows = [[model[treepath][col_name] for col_name in columns] for treepath in paths]
+			tabdata_text = tabdata_encode_rows([columns] + selected_rows)
+			gtk.Clipboard().set_text(tabdata_text)
+			return True
+
+	def cell_coordinates(self, treepath, col, corner):
+		rect = self.main_table.get_cell_area(treepath, col)
+		win_x, win_y = self.main_table.get_bin_window().get_origin()
+		return win_x + rect.x + rect.width * int(corner.value_nick.endswith('right')), win_y + rect.y + rect.height * int(corner.value_nick.startswith('bottom'))
+
+	def on_table_row_context_menu_open(self, treeview, popup_menu, c_treepath, tv_col, cell_x, cell_y):
+		focus_data = gen_focus_data(treeview, c_treepath, tv_col)
+		popup_menu.set_data('focus-data', focus_data)
+		n_selected = len(focus_data['selected_rows'])
+		macros = focus_data.copy()
+		macros['n_selected'] = n_selected
+		# add user-defined menu items
+		populate_row_context_menu(popup_menu, cliargs.context_menu, macros)
+		
+		# add gtabdata-specific menu items:
+		if popup_menu.get_children():
+			popup_menu.append(gtk.SeparatorMenuItem())
+		mi = ImageMenuItem(label="Copy cell", icon=gtk.STOCK_COPY)
+		mi.connect('activate', on_context_menu_copy, popup_menu, 'cell')
+		popup_menu.append(mi)
+		mi = ImageMenuItem(label="Copy row as JSON", icon=gtk.STOCK_COPY)
+		mi.connect('activate', on_context_menu_copy, popup_menu, 'row-as-json')
+		popup_menu.append(mi)
+		if n_selected > 1:
+			mi = ImageMenuItem(label="Copy selection as JSON", icon=gtk.STOCK_COPY)
+			mi.connect('activate', on_context_menu_copy, popup_menu, 'selection-as-json')
+			popup_menu.append(mi)
+		mi = ImageMenuItem(label="Refresh table data", icon=gtk.STOCK_REFRESH)
+		mi.set_sensitive(not self.table_is_loading)
+		mi.connect('activate', lambda mi: main_app.load_table_async())
+		popup_menu.append(mi)
+		return False
+
+
+	def _window_initial_resize(self):
+		if not self.main_win.property_persistor.props.get('geometry'):
+			tv_width, tv_height = self.main_table.size_request()
+			scr = self.main_win.get_screen()
+			self.main_win.resize(min(tv_width, scr.get_width()), min(tv_height, scr.get_height()))
+	
+	def _auto_size_new_columns(self):
+		self.main_table.columns_autosize([col for col in self.main_table.get_columns() if not col.get_width() or col.get_width() == 1])
+
+	def on_column_added(self, tv, tvc):
+		# restore width
+		width = self.proppersist_table.props.get('column-width', {}).get(tvc.name, None)
+		if width > 1:
+			tvc.set_fixed_width(width)
+		# restore visibility (hidden or not)
+		if tvc.name in self.proppersist_table.props.get('hidden-columns', []):
+			tvc.set_visible(False)
+		# restore sort-by column
+		if self.proppersist_table.props.get('sort-column') == tvc.name:
+			tv.set_sortby_column_by_name(tvc.name)
+			self.restore_sort_order_on_current_sortby_column
+
+		
+		# column-specific properties
+		self.proppersist_column[tvc.name] = PropertyPersistor(tvc, 'column.'+tvc.name, [
+			('font',      'font-changed',      lambda tvc, font_str: font_str,
+				lambda tvc, font_str: tvc.set_font_desc(font_str)),
+			('alignment', 'alignment-changed', lambda tvc, alignment_str: alignment_str,
+				lambda tvc, alignment_str: tvc.set_text_alignment(getattr(gtk, 'JUSTIFY_'+alignment_str.upper()))),
+			('filter',    'filter-expression-changed', lambda tvc, filter_expr: filter_expr,
+				lambda tvc, filter_expr: tvc.set_filter_expr(filter_expr))
+		])
+		self.proppersist_column[tvc.name].apply_saved_properties()
+		
+
+	def restore_columns_width(self, tv, cols_width):
+		for colname, width in cols_width.iteritems():
+			if width > 1:
+				try:
+					tv.get_column_by_name(colname).set_fixed_width(width)
+				except TreeView.ColumnNotFoundException:
+					pass
+	
+	def restore_sortby_column(self, tv, colname):
+		try:
+			tv.set_sortby_column_by_name(colname)
+		except TreeView.ColumnNotFoundException:
+			pass
+		else:
+			self.restore_sort_order_on_current_sortby_column()
+	
+	def restore_sort_order_on_current_sortby_column(self):
+		sort_order = self.proppersist_table.props.get('sort-order')
+		if sort_order:
+			self.main_table.get_sortby_column().set_sort_order(getattr(gtk, 'SORT_'+sort_order.upper()))
+		
+	def restore_hidden_columns(self, tv, columns):
+		for colname in columns:
+			try:
+				tv.get_column_by_name(colname).set_visible(False)
+			except TreeView.ColumnNotFoundException:
+				pass
+
+	def restore_columns_order(self, tv, columns):
+		preceding_col = None
+		for colname in columns:
+			try:
+				col = tv.get_column_by_name(colname)
+			except TreeView.ColumnNotFoundException:
+				pass
+			else:
+				tv.move_column_after(col, preceding_col)
+				preceding_col = col
+	
+	def restore_selection(self, tv, selected_records_keys):
+		last_treepath = None
+		if self.tabdata_key_field is not None:
+			for key in selected_records_keys:
+				treepath = get_path_by_cell(tv.get_model(), search_column=self.tabdata_key_field, search_content=key)
+				if treepath is not None:
+					tv.get_selection().select_path(treepath)
+					last_treepath = treepath
+		if last_treepath is not None:
+			tv.scroll_to_cell(last_treepath)
+
+	def on_exit(self):
+		self.proppersist_table.active = False
+		gtk.main_quit()
+
+
+main_app = GTabData()
+main_app.main_win.title = Template(cliargs.title).render({'env': os.environ})
+main_app.main_win.set_icon_from_any(cliargs.icon)
+main_app.main_win.set_wmclass(cliargs.appname, cliargs.appinstance)
+main_app.run()
+gtk.main()

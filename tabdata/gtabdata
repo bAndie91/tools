@@ -693,7 +693,7 @@ class TreeViewColumn(gtk.TreeViewColumn):
 	@property
 	def filter_expr(self):
 		if self.is_filtering_open:
-			return self.filter_entrybox.get_text()
+			return unicode(self.filter_entrybox.get_text())
 		return None
 	@filter_expr.setter
 	def filter_expr(self, s):

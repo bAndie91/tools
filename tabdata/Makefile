@@ -6,6 +6,7 @@ LIB_DIR = /usr/lib/tool/perl5/tabdata
 
 TOOLS = \
   csv2td \
+  gtabdata \
   ics2td \
   kvpairs2td \
   metalink2td \

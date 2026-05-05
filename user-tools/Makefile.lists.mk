@@ -232,4 +232,5 @@ TOOLS ?= \
   withpidfile \
   xdg-autostart \
   xml2json \
+  xmlinsert
 

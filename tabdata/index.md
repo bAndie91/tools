@@ -1,8 +1,10 @@
 # Tabdata commands
 
 - [csv2td](#csv2td)
+- [gtabdata](#gtabdata)
 - [ics2td](#ics2td)
 - [kvpairs2td](#kvpairs2td)
+- [metalink2td](#metalink2td)
 - [mrkv2td](#mrkv2td)
 - [rextr](#rextr)
 - [td2html](#td2html)
@@ -69,6 +71,10 @@ Why would you go back to ugly CSV when you have nice shiny Tabdata?
 
 [csv2](#csv2)(1), [mrkv2td](#mrkv2td)(1)
 
+# gtabdata
+
+
+
 # ics2td
 
 
@@ -107,6 +113,10 @@ kvpairs2td - Transform lines of key-value pairs to tabular data stream
 
 [td2mrkv](#td2mrkv)(1), [td2kvpairs](#td2kvpairs)(1)
 
+# metalink2td
+
+
+
 # mrkv2td
 
 ## NAME
@@ -128,10 +138,18 @@ and it's usual for all records to have all fields anyways.
     Default is TAB (`\t`).
 
 - -g, --multiline-glue _STRING_
+
+    If a field occurs multiple times in the MRKV input,
+    values will be joined by _STRING_ (**newline** by default) in a single column in the TD output.
+
 - -i, --ignore-non-existing-columns
 - -w, --warn-non-existing-columns
 - -c, --column _NAME_
 
+    Signal ahead that there will be a _NAME_ field in the MRKV input.
+    By default [mrkv2td](#mrkv2td)(1) considers fields which are in the first record only.
+    If your input has fields showing up only in later records, not in the first one,
+    then specify those by **--column**.
     Repeatable option.
 
 ## SEE ALSO
@@ -146,7 +164,7 @@ rextr - Extract string groups from text file matching by Regular Expressions
 
 ## SYNOPSIS
 
-rextr _REGEXP_ \[_REGEXP_ \[...\]\]
+rextr \[_MATCH-OPTS_\] _REGEXP_ \[\[_MATCH-OPTS_\] _REGEXP_ \[...\]\]
 
 ## DESCRIPTION
 
@@ -160,11 +178,20 @@ Note, it is not always equivalent to the regexp capture group number (`$1`, `$2`
 because [rextr](#rextr)(1) takes multiple _REGEXP_es, each with their own first capture group,
 but the counter in field names is ever-increasing.
 
+Outputs only those records which matched at least to one _REGEXP_.
+
+Each _REGEXP_ may be preceeded by zero or more _MATCH-OPTS_ options.
+These are:
+
+- --must
+
+    The following _REGEXP_ must match, otherwise the whole line is ignored.
+
 ## LIMITATIONS
 
 ## SEE ALSO
 
-[pcut](#pcut)(1)
+[pcut](#pcut)(1), [tuc](https://github.com/riquito/tuc)
 
 # td2html
 
@@ -269,7 +296,7 @@ td-alter - Add new columns and fields to tabular data stream, and modify value o
 
 ## USAGE
 
-td-alter _COLUMN_=_EXPR_ \[_COLUMN_=_EXPR_ \[_COLUMN_=_EXPR_ \[...\]\]\]
+td-alter \[-B _PERL_\] _COLUMN_=_EXPR_ \[_COLUMN_=_EXPR_ \[_COLUMN_=_EXPR_ \[...\]\]\]
 
 ## DESCRIPTION
 
@@ -283,7 +310,8 @@ well, enclosed in paretheses like `(COLUMN)` to avoid parsing unambiguity in Per
 It's possible because these column names are set up as subroutines internally.
 
 Topic variable (`$_`) initially is set to the current value of _COLUMN_ in _EXPR_.
-So for example `N='-$_'` makes the field N the negative of itself.
+So for example `N='-$_'` makes the field N the negative of itself;
+`N='s/\s//gr'` removes all whitespace from the field (note the **r** modifier).
 
 You can create new columns simply by referring to a _COLUMN_ name that does not exist yet.
 You can refer to an earlier defined _COLUMN_ in subsequent _EXPR_ expressions.
@@ -300,6 +328,13 @@ Strip sub-seconds and timezone from DATETIME field:
     TIME_STYLE=full-iso ls -l | td-trans-ls | td-alter DATETIME='s/\..*//; $_'
 
 ## OPTIONS
+
+- -B, --begin _PERL_
+
+    Execute _PERL_ Perl script before any _EXPR_ Perl expression.
+    Useful for subroutine definitions and variable initialization.
+    It's running in [td-alter](#td-alter)(1)'s main address space,
+    so don't mess up with its internal state.
 
 - -H, --no--header
 
@@ -621,6 +656,11 @@ You can implement more complex conditions in this way.
 
     do not show warning when a non-numeric r-value is given to a numeric operator
 
+- -d, --collection-delimiter _PATTERN_
+
+    Take _PATTERN_ as item separator in the **one of** (**any of**) operator's r-value.
+    Default is `,` comma.
+
 ## OPERATORS
 
 These operators are supported, semantics are the same as in Perl, see [perlop](#perlop)(1).
@@ -761,6 +801,10 @@ Field names in _TEMPLATE_ are enclosed in curly brackets.
 
     No newline.
 
+## EXAMPLE
+
+    getent passwd | td-trans-passwd | td-format "{LOGIN}'s home is {HOME}"
+
 ## SEE ALSO
 
 # td-gnuplot
@@ -780,10 +824,18 @@ The first column is the X axis, the rest of the columns are data lines.
 
 Default is to output an ascii-art chart to the terminal ("dumb" output in gnuplot).
 
-td-gnuplot guesses the data format from the column names.
+[td-gnuplot](#td-gnuplot)(1) guesses the data format from the column names.
 If the 0th column matches to "date" or "time" (case insensitively) then the X axis will be a time axis.
-If the 0th column matches to "time", then unix epoch timetamp is assumed.
+If the 0th column matches to "time", then unix epoch timestamp is assumed.
 Otherwise specify what date/time format is used by eg. **--timefmt=%Y-%m-%d** option.
+
+Data series plotting options may be included in the column names simply by appending them to the column name,
+like: **income with impulse** - in this case the series is called **income**
+and the plot options are **with impulse**.
+
+It also guesses which column contains the xtics labels for an other column.
+In general a series called _S_ takes its xtics labels from "_S_ **label**" column (space in column name).
+In the above example: **income label**.
 
 Plot data read from STDIN is buffered in a temp file
 (provided by `File::Temp->new(TMPDIR=>1)` and immediately unlinked so no waste product left around),
@@ -1005,7 +1057,7 @@ td-select - Show only the specified columns from the input tabular data stream.
 
 ## USAGE
 
-td-select \[_OPTIONS_\] \[--\] \[-\]_COLUMN_ \[\[-\]_COLUMN_ \[...\]\]
+td-select \[_OPTIONS_\] \[--\] \[-\]\[~\]_COLUMN_ \[\[-\]\[~\]_COLUMN_ \[...\]\]
 
 ## OPTIONS
 
@@ -1047,7 +1099,7 @@ or one of these special keywords:
 
 _COLUMN_ is optionally prefixed with minus (`-`),
 in which case the given column will not be shown,
-ie. removed from the shown columns.
+but removed from the shown columns.
 
 So if you want to show all columns except one or two:
 
@@ -1056,6 +1108,12 @@ So if you want to show all columns except one or two:
 If you want to put a given column (say "KEY") to the first place and left others intact:
 
     td-select KEY +REST
+
+_COLUMN_ is optionally prefixed with tilde (`~`),
+in which case _COLUMN_ is a regexp pattern
+and all columns are to be shown (hidden) which match to the pattern.
+Probably need to escape the tilde char if it's the leading char of an argument
+to avoid user home directory expansion in your shell.
 
 ## EXAMPLE
 
@@ -1118,6 +1176,11 @@ td-trans - Transform whitespace-delimited into TAB-delimited lines ignoring sorr
     Maximum number of columns.
     The _NUM_th column may have any whitespace.
     By default it's the number of fields in the header (first line).
+
+- -c, --columns _NUM_
+
+    There will be exactly this many columns.
+    Equivalent to **-n _NUM_ -x _NUM_**.
 
 # td-trans-fixcol
 

@@ -52,7 +52,7 @@ $OptMultilineGlue = "\n";
 $OptWarnBadColumnNames = 1;
 $OptFailBadColumnNames = 1;
 @OptPredefColumns = ();
-%OptionDefs = (
+%TabdataOptionDefs = (
 	's|separator=s' => \$OptSeparatorRegexp,
 	'g|multiline-glue=s' => \$OptMultilineGlue,
 	'i|ignore-non-existing-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 0; },

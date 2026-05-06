@@ -184,7 +184,7 @@ $OptWarnBadColumnNames = 1;
 $OptFailBadColumnNames = 1;
 $OptWarnNonNumericRValue = 1;
 $OptFailNonNumericRValue = 1;
-%OptionDefs = (
+%TabdataOptionDefs = (
 	'd|collection-delimiter=s' => \$OptDelimiter,
 	'H|no-header' => sub { $OptShowHeader = 0; },
 	'h|header' => sub { $OptShowHeader = 1; },

@@ -41,7 +41,7 @@ Do not add more columns than specified in the command parameters.
 =cut
 
 $OptAddExtraColumns = 1;
-%OptionDefs = (
+%TabdataOptionDefs = (
 	'x|extra-columns' => sub { $OptAddExtraColumns = 1; },
 	'X|no-extra-columns' => sub { $OptAddExtraColumns = 0; },
 );

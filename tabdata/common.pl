@@ -20,11 +20,11 @@ no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 @ARGV = map {decode('UTF-8', $_, Encode::FB_CROAK)} @ARGV;
 
 
-if(not $TabdataCommonSkipGetopt)
+if(defined %TabdataOptionDefs)
 {
 	GetOptions(
 		'help|?' => sub{ pod2usage(-exitval=>0, -verbose=>99); },
-		%OptionDefs,
+		%TabdataOptionDefs,
 	) or pod2usage(-exitval=>2, -verbose=>99);
 	
 	if('--' ~~ @ARGV and $ARGV[0] ne '--')

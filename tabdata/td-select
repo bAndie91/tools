@@ -89,7 +89,7 @@ $OptShowHeader = 1;
 $OptWarnBadColumnNames = 1;
 $OptFailBadColumnNames = 1;
 $OptFailBadNegativeColumnNames = 0;
-%OptionDefs = (
+%TabdataOptionDefs = (
 	'h|header' => sub { $OptShowHeader = 1; },
 	'H|no-header' => sub { $OptShowHeader = 0; },
 	'i|ignore-non-existing-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 0; },

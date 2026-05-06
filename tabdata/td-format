@@ -97,7 +97,7 @@ sub render
 $OptNoFieldBehavior = 'empty';
 $OptNoNewline = 0;
 
-%OptionDefs = (
+%TabdataOptionDefs = (
 	'nofield=s' => \$OptNoFieldBehavior,
 	'n' => \$OptNoNewline,
 );

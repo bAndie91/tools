@@ -129,7 +129,7 @@ $OptDistUniqueField = undef;
 $OptDistColumnNameSeparator = "_";
 $OptKeepSameCells = 0;
 $OptEmptyDistCells = 0;
-%OptionDefs = (
+%TabdataOptionDefs = (
 	'g|glue=s' => \$OptGlue,
 	'u|distribute-unique-field=s' => \$OptDistUniqueField,
 	's|distributed-column-name-separator=s' => \$OptDistColumnNameSeparator,

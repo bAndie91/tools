@@ -72,7 +72,7 @@ $OptMultiValueGlue = "\n";
 $OptWarnBadColumnNames = 1;
 $OptFailBadColumnNames = 1;
 @OptPredefColumns = ();
-%OptionDefs = (
+%TabdataOptionDefs = (
 	'g|multivalue-glue=s' => \$OptMultiValueGlue,
 	'i|ignore-non-existing-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 0; },
 	'w|warn-non-existing-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 1; },

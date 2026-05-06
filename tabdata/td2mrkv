@@ -37,7 +37,7 @@ $OptSeparator = "\t";
 $OptSortKeys = 0;
 $OptSortValues = 0;
 $OptCaseInsensitiveSort = 0;
-%OptionDefs = (
+%TabdataOptionDefs = (
 	's|separator=s' => \$OptSeparator,
 	'K|sort-keys!' => \$OptSortKeys,
 	'V|sort-values!' => \$OptSortValues,

@@ -9,7 +9,7 @@ td-lpstat - lpstat(1) wrapper to output printers status in Tabular Data format
 =cut
 
 
-%OptionDefs = (
+%TabdataOptionDefs = (
 );
 
 use Data::Dumper;

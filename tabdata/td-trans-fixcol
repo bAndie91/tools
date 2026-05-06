@@ -33,7 +33,7 @@ This allows the input data to have column names with single spaces.
 
 $OptShowHeader = 1;
 $OptMinColumnSpacing = 2;
-%OptionDefs = (
+%TabdataOptionDefs = (
 	'h|header' => sub { $OptShowHeader = 1; },
 	'H|no-header' => sub { $OptShowHeader = 0; },
 	'm|min-column-spacing=i' => \$OptMinColumnSpacing,

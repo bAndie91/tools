@@ -24,7 +24,7 @@ thus need to escape tabular data special chars in them.
 
 $OptNup = undef;
 $OptEscape = 1;
-%OptionDefs = (
+%TabdataOptionDefs = (
 	'n=i' => \$OptNup,
 	'E|no-escape' => sub { $OptEscape = 0; },
 );

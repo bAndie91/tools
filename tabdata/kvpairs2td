@@ -79,7 +79,7 @@ $OptFailBadColumnNames = 1;
 @OptPredefColumns = ();
 $OptRestColumnName = "_REST";
 $OptUnknownToRest = 0;
-%OptionDefs = (
+%TabdataOptionDefs = (
 	'i|ignore-non-existing-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 0; },
 	'w|warn-non-existing-columns' => sub { $OptFailBadColumnNames = 0; $OptWarnBadColumnNames = 1; },
 	'c|column=s@' => \@OptPredefColumns,

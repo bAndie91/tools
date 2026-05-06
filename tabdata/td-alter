@@ -70,7 +70,7 @@ But contrary to SQL's ALTER TABLE, td-alter(1) can modify the records too, so ak
 
 $OptShowHeader = 1;
 $OptBegin = '';
-%OptionDefs = (
+%TabdataOptionDefs = (
 	'H|no-header' => sub { $OptShowHeader = 0; },
 	'h|header' => sub { $OptShowHeader = 1; },
 	'B|begin=s' => \$OptBegin,

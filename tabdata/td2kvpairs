@@ -26,7 +26,7 @@ td2mrkv(1), kvpairs2td(1)
 =cut
 
 $OptPrefixField = "_REST";
-%OptionDefs = (
+%TabdataOptionDefs = (
 	'r|prefix-field|prefixfield=s' => \$OptPrefixField,
 );
 

@@ -32,7 +32,7 @@ Equivalent to B<< -n I<NUM> -x I<NUM> >>.
 
 $OptMinColumns = undef;
 $OptMaxColumns = undef;
-%OptionDefs = (
+%TabdataOptionDefs = (
 	'n|min-columns=i' => \$OptMinColumns,
 	'x|max-columns=i' => \$OptMaxColumns,
 	'c|columns|cols=i' => sub { $OptMinColumns = $OptMaxColumns = $_[1]; },

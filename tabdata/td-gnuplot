@@ -91,7 +91,7 @@ no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 $OptOutput = OUTPUT_TERM;
 @gnuplot_commands = ();
 
-%OptionDefs = (
+%TabdataOptionDefs = (
 	'i' => sub { $OptOutput = OUTPUT_IMAGE; },
 	'd' => sub { $OptOutput = OUTPUT_DEFAULT; },
 	'e=s@' => \@gnuplot_commands,

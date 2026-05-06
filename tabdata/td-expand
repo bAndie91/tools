@@ -58,7 +58,7 @@ td-collapse(1) is a kind of inverse to td-expand(1).
 
 $OptFieldName = undef;
 $OptSeparatorRegexp = " ";
-%OptionDefs = (
+%TabdataOptionDefs = (
 	'f|field=s' => \$OptFieldName,
 	's|separator=s' => \$OptSeparatorRegexp,
 );

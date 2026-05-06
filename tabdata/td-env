@@ -72,7 +72,7 @@ no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 $OptErrexit = 0;
 $OptPrefix = '';
-%OptionDefs = (
+%TabdataOptionDefs = (
 	'e|errexit!' => \$OptErrexit,
 	'p|prefix=s' => \$OptPrefix,
 );

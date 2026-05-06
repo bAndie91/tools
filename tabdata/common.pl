@@ -20,7 +20,7 @@ no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 @ARGV = map {decode('UTF-8', $_, Encode::FB_CROAK)} @ARGV;
 
 
-if(defined %TabdataOptionDefs)
+if(%TabdataOptionDefs)
 {
 	GetOptions(
 		'help|?' => sub{ pod2usage(-exitval=>0, -verbose=>99); },

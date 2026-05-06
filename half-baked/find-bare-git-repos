@@ -1,2 +1,2 @@
 #!/bin/sh
-exec find -type d \( -exec test -d {}/refs \; -print -prune \)
+exec find "$@" -type d \( -exec test -d {}/refs \; -print -prune \)

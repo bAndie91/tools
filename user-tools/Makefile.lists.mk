@@ -164,6 +164,7 @@ TOOLS ?= \
   recent-files-gtk \
   redirexec \
   regargwrap \
+  remount \
   renamemanual \
   rename.td \
   repeat \

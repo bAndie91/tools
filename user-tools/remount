@@ -1,0 +1,52 @@
+#!/bin/bash
+
+set -e
+set -o pipefail
+set -u
+
+. /usr/lib/tool/bash-utils
+
+usage_text="Usage: $0 <MOUNTPOINT>"
+
+if [ $# != 1 ]
+then
+	errx -1 "$usage_text"
+fi
+
+mpoint=$1
+mpoints=("$1")
+
+get_mount_source_dir()
+{
+	local msource
+	msource=`cat /etc/fstab | nocomment | awk -v mpoint="$mpoint" '{if($2 == mpoint){print $1; quit}}'`
+	msource=${msource##*:}
+	echo "$msource"
+}
+
+while true
+do
+	msource=`get_mount_source_dir "$mpoint"`
+	if [ -z "$msource" ] \
+	|| [[ $msource =~ ^UUID= ]] \
+	|| [[ $msource =~ ^/dev/ ]]
+	then
+		break
+	fi
+	mpoints+=("$msource")
+	mpoint=$msource
+done
+
+for mp in "${mpoints[@]}"
+do
+	echo "umount $mp" >&2
+	umount "$mp"
+done
+
+array_reverse mpoints
+
+for mp in "${mpoints[@]}"
+do
+	echo "mount $mp" >&2
+	mount "$mp"
+done

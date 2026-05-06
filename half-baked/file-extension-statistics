@@ -1,0 +1,2 @@
+#!/bin/sh
+find "$@" -type f | rev | cut -f1 -d. | rev | sort | uniq -c | sort -n

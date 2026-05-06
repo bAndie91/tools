@@ -58,10 +58,20 @@ set -o pipefail
 description=$(GIT_DIR="$directory" git show repo-mgmt:description)
 if [ -n "$description" ]
 then
-	echo "Updating repo description..." >&2
-	echo "Previous description was:" >&2
-	cat "$directory/description" | perl -pe 's/^\r?\n$//; s/^(.)/  $1/; $last = $_; END { print "\n" unless $last =~ /\n/; }' >&2
-	printf %s "$description" > "$directory/description"
+	prev_description=''
+	if [ -e "$directory/description" ]
+	then
+		prev_description=`cat "$directory/description"`
+	fi
+	if [ "$description" != "$prev_description" ]
+	then
+		echo "Updating repo description..." >&2
+		echo "Previous description was:" >&2
+		printf %s "$prev_description" | perl -pe 's/^\r?\n$//; s/^(.)/  $1/; $last = $_; END { print "\n" unless $last =~ /\n/; }' >&2
+		printf %s "$description" > "$directory/description"
+	else
+		echo "Repo description is not changed." >&2
+	fi
 fi
 )
 

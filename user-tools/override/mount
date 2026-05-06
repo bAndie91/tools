@@ -25,7 +25,7 @@ then
 	then
 		exit 0
 	else
-		echo "trying system fstab" >&2
+		echo "mount: error occured while using ~/.fstab; trying system fstab..." >&2
 	fi
 fi
 

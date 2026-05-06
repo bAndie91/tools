@@ -1,0 +1,65 @@
+#!/bin/bash
+
+set -e
+set -u
+
+declare -a rclone_opts=()
+rclone_mount_read_only=''
+fuse_opts=''
+
+mntname=$1
+shift
+mntpoint=$1
+shift
+
+while [ $# -gt 0 ]
+do
+case "$1" in
+(-o)
+	shift
+	oldIFS=$IFS
+	IFS=,
+	for option in $1
+	do
+		case "$option" in
+		(auto_unmount)
+			fuse_opts=$fuse_opts${fuse_opts:+,}$option
+			;;
+		(daemon)
+			# ignore, always fork to background
+			;;
+		(rw)
+			rclone_mount_read_only=''
+			;;
+		(ro)
+			rclone_mount_read_only=1
+			;;
+		(*)
+			rclone_opts+=("--$option")
+			;;
+		esac
+	done
+	IFS=$oldIFS
+	;;
+(-r|--read-only)
+	rclone_mount_read_only=1
+	;;
+(-w|--rw|--read-write)
+	rclone_mount_read_only=''
+	;;
+(-n|--no-mtab|-s)
+	# ignore no-mtab and "sloppy mount options" options
+	true
+	;;
+(*)
+	echo "Unknown option: $1" >&2
+	exit 255
+	;;
+esac
+shift
+done
+
+set +u
+
+exec rclone mount "$mntname" "$mntpoint" --daemon ${rclone_mount_read_only:+--read-only} "${rclone_opts[@]}" ${fuse_opts:+-o "$fuse_opts"}
+

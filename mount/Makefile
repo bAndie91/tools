@@ -1,20 +1,20 @@
 
-TOOLS = mount.bindfs mount.posixovlfs mount.xattrovlfs mount.fusefile mount.abshelper \
-  mount.restic
+INSTALL_WRAPPER =
 
+TOOLS = mount.bindfs mount.posixovlfs mount.xattrovlfs mount.fusefile mount.abshelper \
+  mount.restic mount.rclone
+
+# TODO: discover usage of /sbin/fs.d and /sbin/fs directories.
 TARGETS = $(foreach name,$(TOOLS),/sbin/$(name))
 
 
+.PHONY: default
 default:
-	@echo may be interested in: install-all
-	false
+	$(error try "make install-all INSTALL_WRAPPER=sudo')
 
-install-all: $(TARGETS)
 .PHONY: install-all
+install-all: $(TARGETS)
 
 $(TARGETS): /sbin/%: %
-	install --compare $< $@
+	$(INSTALL_WRAPPER) install --compare $< $@
 	@echo remove $@ >> uninstall.sh
-
-
-# TODO: discover usage of /sbin/fs.d and /sbin/fs directories.

@@ -1,0 +1,19 @@
+#!/bin/bash
+
+set -u
+set -e
+set -o pipefail
+
+szo=$1
+
+if [ -s ~/.cache/ellentetszotar/"$szo".txt ]
+then
+	cat ~/.cache/ellentetszotar/"$szo".txt
+else
+	mkdir -p ~/.cache/ellentetszotar
+
+	curl -sS --fail https://ellentetszotar.hu/"$szo" |\
+	iconv -f latin2 -t utf8 |\
+	parsel -1 '#content > p::text' |\
+	tee ~/.cache/ellentetszotar/"$szo".txt
+fi

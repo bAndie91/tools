@@ -1,0 +1,22 @@
+#!/bin/sh
+
+clipboard_length=`xclip -selection p -o | wc -c`
+if [ $clipboard_length -gt 1024 ]
+then
+	echo "data on the clipboard too long ($clipboard_length B)" >&2
+	echo -n "!" | xvkbd -xsendevent -utf -file - 2>/dev/null
+	exit 1
+fi
+
+xclip -selection p -o |\
+perl -e '"remove newline from the end of stream";
+	while(<STDIN>) {
+		print $b if defined $b;
+		$b = $_;
+	}
+	$b =~ s/\n//;
+	print $b' |\
+iconv -f utf8 -t utf16le |\
+xvkbd -xsendevent -utf -file - 2>/dev/null
+
+#exec xdotool type --clearmodifiers -- "$(xclip -selection p -o)"

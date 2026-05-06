@@ -1,0 +1,64 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+proctree - Show process tree (wrapper for pstree(1)) colorized
+
+=head1 SYNOPSIS
+
+proctree [I<PID>]
+
+=head1 SEE ALSO
+
+pstree(1)
+
+=cut
+
+
+use Pod::Usage;
+use Data::Dumper;
+
+if('--help' ~~ @ARGV)
+{
+	pod2usage(-exitval=>0, -verbose=>99);
+}
+
+@pstree_args = ("pstree", "-acpsuUl");
+$pid = $ARGV[0];
+push @pstree_args, $pid if $pid;
+
+open my $pipe, '-|', @pstree_args or die "$0: popen: $!\n";
+while(<$pipe>)
+{
+	if(/^(?'TREE'[\s│├─└|\`\`-]*)\(?(?'NAME'[^,]+),(?'PID'\d+)\)?(,(?'USER'\S+)|)(?'AND_ARGS'.*)$/)
+	{
+		# TODO: parse into graph, then select asked PIDs
+		
+		print $+{'TREE'};
+		print " ";
+		
+		print "\x1B[1m" if $+{'PID'} eq $pid;
+		print "\x1B[36m";
+		print $+{'NAME'};
+		print "\x1B[0m";
+		print " ";
+		
+		print "\x1B[1m" if $+{'PID'} eq $pid;
+		print $+{'PID'};
+		print "\x1B[22m" if $+{'PID'} eq $pid;
+		
+		if($+{'USER'})
+		{
+			print " ";
+			print "\x1B[32m";
+			print $+{'USER'};
+			print "\x1B[0m";
+		}
+		
+		print $+{'AND_ARGS'};
+		print "\n";
+	}
+}
+close $pipe;

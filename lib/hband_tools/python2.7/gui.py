@@ -273,6 +273,17 @@ class Scrollable(gtk.ScrolledWindow):
 			else:
 				self.add_with_viewport(child)
 
+class DeactivatedPropertyPersistorContext(object):
+	def __init__(self, property_persistor):
+		self.property_persistor = property_persistor
+	def __enter__(self):
+		self.original_active = self.property_persistor.active
+		self.property_persistor.active = False
+		return self
+	def __exit__(self, exc_type, exc_value, traceback):
+		self.property_persistor.active = self.original_active
+		return False
+
 class PropertyPersistor(object):
 	def __init__(self, obj, obj_name, property_descriptors):
 		assert hasattr(__main__, 'APPNAME') and isinstance(__main__.APPNAME, basestring) and __main__.APPNAME, "Set APPNAME global variable."
@@ -283,6 +294,7 @@ class PropertyPersistor(object):
 		self.triggers = {}
 		self.applicators = {}
 		self.active = True
+		self.Deactivated = DeactivatedPropertyPersistorContext(self)
 		self.currently_applicating = False
 		self.add_properties(property_descriptors)
 	

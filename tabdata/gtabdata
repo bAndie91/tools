@@ -1666,19 +1666,20 @@ class GTabData(object):
 			except SubprocessError as err:
 				execution_error(err)
 			else:
-				td_header = tabdata_decode_record(proc.stdout.readline())
-				self.load_columns(td_header)
-				n_fields = len(td_header)
-				data_generator = ((None, tabdata_decode_record(line, n_fields=n_fields)) for line in iter(proc.stdout.readline, ''))
-				self.load_data(data_generator)
+				header_line = proc.stdout.readline()
+				if header_line != '':
+					td_header = tabdata_decode_record(header_line)
+					self.load_columns(td_header)
+					n_fields = len(td_header)
+					data_generator = ((None, tabdata_decode_record(line, n_fields=n_fields)) for line in iter(proc.stdout.readline, ''))
+					self.load_data(data_generator)
 				proc.stdout.close()
 				try:
 					wait_subprocess(proc)
 				except SubprocessError as err:
 					execution_error(err)
 		
-		with GtkThreadContext():
-			self.after_load_table()
+		self.after_load_table()
 	
 	def load_columns(self, columns):
 		if len(columns) != len(set(columns)):
@@ -1690,7 +1691,7 @@ class GTabData(object):
 		if self.main_table.get_model() is None or treemodel_columns != self.main_table.get_model().get_columns():
 			self.tabdata_key_field = None
 			with GtkThreadContext():
-				with TemporaryProperty((self.proppersist_table, 'active'), (), False):
+				with self.proppersist_table.Deactivated:
 					self.main_table.set_model(NamedColumnsTreeStore(*treemodel_columns))
 					self.main_table.set_columns([(col_name, col_name, 'text', idx) for idx, col_name in enumerate(columns)])
 		
@@ -1757,7 +1758,7 @@ class GTabData(object):
 			cb_data['existing_records_keys'].append(record_key)
 
 	def after_load_table(self):
-		with TemporaryProperty((self.proppersist_table, 'active'), (), False):
+		with self.proppersist_table.Deactivated, GtkThreadContext():
 			self.proppersist_table.apply_saved_properties()
 			# auto size newly learned columns
 			self._auto_size_new_columns()
@@ -1823,15 +1824,15 @@ class GTabData(object):
 		return False
 
 
+	def _auto_size_new_columns(self):
+		self.main_table.columns_autosize([col for col in self.main_table.get_columns() if not col.get_width() or col.get_width() == 1])
+
 	def _window_initial_resize(self):
 		if not self.main_win.property_persistor.props.get('geometry'):
 			tv_width, tv_height = self.main_table.size_request()
 			scr = self.main_win.get_screen()
 			self.main_win.resize(min(tv_width, scr.get_width()), min(tv_height, scr.get_height()))
 	
-	def _auto_size_new_columns(self):
-		self.main_table.columns_autosize([col for col in self.main_table.get_columns() if not col.get_width() or col.get_width() == 1])
-
 	def on_column_added(self, tv, tvc):
 		# restore width
 		width = self.proppersist_table.props.get('column-width', {}).get(tvc.name, None)

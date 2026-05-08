@@ -192,7 +192,7 @@ GetOptions(
 	'i|input=s@' => \@OptInputData,
 	'd|delimiter=s' => \$OptDelimChars,
 	'D|delim-regex|delimiter-regex=s' => \$OptDelimRegex,
-	't|tab' => sub { $OptDelimChars = '\t'; },
+	't|tab' => sub { $OptDelimChars = "\t"; },
 	'td|tabdata' => sub {
 		if((defined $OptDelimChars and $OptDelimChars ne "\t") or (defined $OptDelimRegex and $OptDelimRegex ne "\t"))
 		{
@@ -220,7 +220,7 @@ if(not defined $OptDelimRegex)
 	{
 		$OptDelimChars = $DefaultDelimChars;
 	}
-	$DelimRegex = '[' . quotemeta($OptDelimChars) . ']';
+	$OptDelimRegex = '[' . quotemeta($OptDelimChars) . ']';
 }
 
 if($OptPassFields and not $OptPassData)
@@ -291,12 +291,12 @@ sub placeholder_replacement
 
 if($OptTabdata)
 {
-	@Column = map { unescape_tabdata($_) } split $DelimRegex, next_data();
+	@Column = map { unescape_tabdata($_) } split /$OptDelimRegex/, next_data();
 }
 
 while(defined (my $Data = next_data()))
 {
-	my @Field = split $DelimRegex, $Data;
+	my @Field = split /$OptDelimRegex/, $Data;
 	
 	$ENV{'DATA'} = $Data;
 	my $idx;

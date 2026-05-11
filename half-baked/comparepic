@@ -1,0 +1,41 @@
+#!/bin/bash
+
+set -e
+set -o pipefail
+set -u
+
+tmpfile=''
+
+at_exit()
+{
+	if [ -n "$tmpfile" ]
+	then
+		rm "$tmpfile"
+	fi
+}
+
+trap at_exit EXIT
+
+file1=$1
+file2=$2
+
+identify "$file1"
+identify "$file2"
+
+width1=`identify -format "%w" "$file1"`
+height1=`identify -format "%h" "$file1"`
+width2=`identify -format "%w" "$file2"`
+height2=`identify -format "%h" "$file2"`
+
+tmpfile=`mktemp -t comparepic-XXXXXX`
+
+if [ $width1 -lt $width2 ]
+then
+	convert "$file2" -resize "${width1}x${height1}" "$tmpfile"
+	file2=$tmpfile
+else
+	convert "$file1" -resize "${width2}x${height2}" "$tmpfile"
+	file1=$tmpfile
+fi
+
+compare "$file1" "$file2" png:- | display -

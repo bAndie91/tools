@@ -80,9 +80,5 @@ data = xmltodict.parse(xmldata, force_list=force_list_decider)
 
 transform_lists_to_dict_recursively(data)
 
-json2gron = subprocess.Popen(['json2gron'], stdin=subprocess.PIPE)
-json.dump(data, json2gron.stdin, sort_keys=True)
-json2gron.stdin.close()
-json2gron.wait()
-sys.exit(json2gron.returncode)
+print(json.dumps(data, sort_keys=True))
 

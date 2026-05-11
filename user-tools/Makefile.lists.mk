@@ -68,7 +68,7 @@ TOOLS ?= \
   git-submodule-auto-add \
   git-push-remotes \
   glob \
-  gno2gron \
+  gno2json \
   grepdatetime \
   Head \
   header \

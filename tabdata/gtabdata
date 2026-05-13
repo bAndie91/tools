@@ -1287,6 +1287,8 @@ class SubprocessError(Exception):
 def spawn_subprocess(command_with_args, *popen_args, **popen_options):
 	err = SubprocessError()
 	command_str = command_with_args if isinstance(command_with_args, basestring) else subprocess.list2cmdline(command_with_args)
+	if popen_options.get('shell') and 'executable' not in popen_options:
+		popen_options['executable'] = os.environ.get('SHELL', '/bin/sh')
 	try:
 		proc = subprocess.Popen(command_with_args, *popen_args, **popen_options)
 	except Exception as exc:
@@ -1502,7 +1504,7 @@ def escape_td_sequence(s):
 	else: return repr(s)[2]
 
 def tabdata_decode_record(rawline, n_fields=0):
-	cells = [re.sub(r'(\\[tnre\\])', lambda match: unescape_td_sequence(match.group(1)), cell) for cell in rawline.rstrip('\n').split('\t', n_fields-1)]
+	cells = [re.sub(r'(\\[tnre\\])', lambda match: unescape_td_sequence(match.group(1)), cell) for cell in rawline.split('\t', n_fields-1)]
 	if n_fields > 0:
 		cells = cells + [''] * (n_fields-len(cells))
 	return cells
@@ -1667,11 +1669,15 @@ class GTabData(object):
 				execution_error(err)
 			else:
 				header_line = proc.stdout.readline()
-				if header_line != '':
+				header_line = header_line.rstrip('\n')
+				if header_line == '':
+					with GtkThreadContext():
+						ErrorMessage("Header is empty", title="gTabData: empty header", details="Refusing to update the table.")
+				else:
 					td_header = tabdata_decode_record(header_line)
 					self.load_columns(td_header)
 					n_fields = len(td_header)
-					data_generator = ((None, tabdata_decode_record(line, n_fields=n_fields)) for line in iter(proc.stdout.readline, ''))
+					data_generator = ((None, tabdata_decode_record(line.rstrip('\n'), n_fields=n_fields)) for line in iter(proc.stdout.readline, ''))
 					self.load_data(data_generator)
 				proc.stdout.close()
 				try:

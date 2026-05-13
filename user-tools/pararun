@@ -50,12 +50,32 @@ instead of the default plus sign (C<+>).
 =item -i, --particular-args-stdin
 
 Read additional I<PARTICULAR_ARGS> from STDIN.
-Each line is taken as 1 argument unless B<-d> is given.
+Each line is taken as arguments for a particular command.
+Arguments are split by the regex pattern specified by B<--stdin-delimiter> option if any,
+otherwise each line is taken as one argument for one particular command.
+
+Recommended to use B<--prefixes-and-particular-args-stdin> instead, so you can define explicit prefixes for each command.
+
+=item -I, --prefixes-and-particular-args-stdin, --prefixes-args-stdin
+
+Read command prefixes and additional particular arguments from STDIN
+line-by-line in format: C<< E<lt>I<PREFIX>E<gt>E<lt>B<TAB>E<gt>E<lt>I<PARTICULAR_ARG1>E<gt>E<lt>B<TAB>E<gt>E<lt>I<PARTICULAR_ARG2>E<gt>E<lt>B<TAB>E<gt>... >>.
+Arguments are delimited by a single B<TAB> (or by the regex pattern specified by B<--stdin-delimiter>),
+so each argument may contain space characters (but not tabs, unless you define other delimiter).
+
+Commands, which are executed, are composed from the I<COMMON_ARG> command line arguments plus those arguments read on the input
+like: I<COMMON_ARG1> I<COMMON_ARG2> ... I<PARTICULAR_ARG1> I<PARTICULAR_ARG2> ... I<INPUT_ARG1> I<INPUT_ARG2> ...,
+so I<COMMON_ARG1> is the system command itself if given,
+otherwise I<PARTICULAR_ARG1> if given,
+otherwise I<INPUT_ARG1> is the system command.
 
 =item -d, --stdin-delimiter I<PATTERN>
 
 When reading I<PARTICULAR_ARGS> from STDIN, split up lines into arguments by I<PATTERN> regex pattern.
 Useful delimiter is C<\t> TAB which you may need to quote in your shell, like C<'\t'> in bash(1).
+
+In B<--prefixes-and-particular-args-stdin> mode, the default is B<TAB>,
+otherwise the default is no splitting, so each line is one argument.
 
 =item -a, --success-any
 
@@ -67,10 +87,11 @@ Although still waits for all to complete.
 
 Prefix each output line with the given command's first particular argument.
 
+Can not be used together with B<--prefixes-and-particular-args-stdin> because in that mode the prefix is explicitely given on the input.
+
 =item -C, --colorize-prefix
 
 Colorize each particular command's prefix.
-Implies B<-p>.
 
 =item -T, --prefix-trailer I<STR>
 
@@ -123,7 +144,8 @@ sub AnsiColorReset { AnsiColorCode(0) }
 $OptCommonSep = '---';
 $OptParticularSep = '+';
 $OptParticularArgsStdin = 0;
-$OptStdinDelimiter = undef;
+$OptPrefixesAndParticularArgsStdin = 0;
+$OptStdinDelimiterRegex = undef;
 $OptPrefixFirstParticularArg = 0;
 $OptColorizePrefix = 0;
 $OptPrefixTrailer = ' ';
@@ -135,7 +157,8 @@ GetOptions(
 	's|common-sep=s' => \$OptCommonSep,
 	'S|particular-sep=s' => \$OptParticularSep,
 	'i|particular-args-stdin!' => \$OptParticularArgsStdin,
-	'd|stdin-delimiter=s' => \$OptStdinDelimiter,
+	'I|prefixes-and-particular-args-stdin|prefixes-args-stdin!' => \$OptPrefixesAndParticularArgsStdin,
+	'd|stdin-delimiter=s' => \$OptStdinDelimiterRegex,
 	'a|success-any!' => \$OptSuccessAny,
 	'p|prefix-first-particular-arg!' => \$OptPrefixFirstParticularArg,
 	'C|colorize-prefix!' => \$OptColorizePrefix,
@@ -148,10 +171,27 @@ GetOptions(
 
 if($ARGV[0] ne $OptCommonSep and $ARGV[0] ne $OptParticularSep and $ARGV[0] =~ /^-/)
 {
-	die "unknown option: $ARGV[0]\n";
+	die "$0: unknown option: $ARGV[0]\n";
 }
 
-$OptPrefixFirstParticularArg = 1 if $OptColorizePrefix;
+if($OptPrefixesAndParticularArgsStdin)
+{
+	if($OptParticularArgsStdin)
+	{
+		die "$0: options --prefixes-and-particular-args-stdin and --particular-args-stdin are mutually exclusive\n";
+	}
+	if($OptPrefixFirstParticularArg)
+	{
+		die "$0: options --prefixes-and-particular-args-stdin and --prefix-first-particular-arg are mutually exclusive\n";
+	}
+	if(not defined $OptStdinDelimiterRegex)
+	{
+		$OptStdinDelimiterRegex = '\t';
+	}
+}
+
+
+$OptPrefixFirstParticularArg = 1 if $OptColorizePrefix and not $OptPrefixesAndParticularArgsStdin;
 
 @CommonArgsPre = ();
 @CommonArgsPost = ();
@@ -196,18 +236,31 @@ while(@ARGV)
 	push @CommonArgsPost, $arg;
 }
 
-if($OptParticularArgsStdin)
+@InputPrefix = ();
+
+if($OptParticularArgsStdin or $OptPrefixesAndParticularArgsStdin)
 {
 	while(<STDIN>)
 	{
 		chomp;
-		my @particular_args = ($_);
-		if(defined $OptStdinDelimiter)
+		my $prefix;
+		my @particular_args;
+		if($OptPrefixesAndParticularArgsStdin)
 		{
-			@particular_args = split /$OptStdinDelimiter/, $_;
+			($prefix, @particular_args) = split /$OptStdinDelimiterRegex/, $_;
+			next if $prefix eq '';
+		}
+		else
+		{
+			@particular_args = ($_);
+			if(defined $OptStdinDelimiterRegex)
+			{
+				@particular_args = split /$OptStdinDelimiterRegex/, $_;
+			}
 		}
 		$particular_cmd_idx++;
 		push @{$ParticularArgs[$particular_cmd_idx]}, @particular_args;
+		$InputPrefix[$particular_cmd_idx] = $prefix;
 	}
 }
 
@@ -228,12 +281,20 @@ for my $particular_cmd_idx (0 .. $#ParticularArgs)
 	my $prefix_qm;
 	if($OptPrefixFirstParticularArg)
 	{
-		$prefix = $particular_args[0] . $OptPrefixTrailer;
+		$prefix = $particular_args[0];
+	}
+	if($OptPrefixesAndParticularArgsStdin)
+	{
+		$prefix = $InputPrefix[$particular_cmd_idx];
+	}
+	if(defined $prefix)
+	{
+		$prefix .= $OptPrefixTrailer;
 	}
 	if($OptColorizePrefix)
 	{
 		# TODO: detect which colors are supported by the current terminal (8 ansi colors, bold, 256 colors, ...)
-		# NOTE: assuming black background
+		# TODO: detect terminal background light or dark and choose color palette accordingly
 		$CmdColorCode++;
 		if($CmdColorCode == 8)
 		{

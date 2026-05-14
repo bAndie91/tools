@@ -395,9 +395,9 @@ $ipc = harness @ipc_args;
 $ipc->start;
 while(1)
 {
-	$ipc->pump;
+	$ipc->pump if $ipc->pumpable;
 	ipc_eof_watcher($ipc);
-	$ipc->pump_nb;
+	$ipc->pump_nb if $ipc->pumpable;
 	ipc_eof_watcher($ipc);
 	last if not $ipc->pumpable;
 }

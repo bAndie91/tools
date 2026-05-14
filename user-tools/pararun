@@ -132,7 +132,8 @@ polysh L<https://github.com/innogames/polysh/>
 
 use Errno qw/:POSIX/;
 use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev pass_through require_order/;
-use IPC::Run qw/run harness/;
+use IPC::Run qw/run harness start finish pump/;
+use List::MoreUtils qw/any all/;
 use POSIX;
 use Pod::Usage;
 use Data::Dumper;
@@ -140,6 +141,66 @@ no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 sub AnsiColorCode { chr(0x1B) . '[' . $_[0] . 'm' }
 sub AnsiColorReset { AnsiColorCode(0) }
+
+
+sub process_line
+{
+	my $line = shift;
+	my $stream = shift;
+	print {$stream->{'write_fh'}} $stream->{'prefix'}.$line;
+}
+
+sub process_stream
+{
+	my $stream = shift;
+	while(1)
+	{
+		my $nl = index $stream->{'buf'}, "\n";
+		last if $nl == -1;
+		$nl++;
+		
+		my $line = substr $stream->{'buf'}, 0, $nl;
+		process_line $line, $stream;
+		
+		$stream->{'buf'} = substr $stream->{'buf'}, $nl;
+	}
+}
+
+sub create_stream_handler
+{
+	my $options_ref = shift;
+	my $stream = {
+		%$options_ref,
+		buf => '',
+	};
+	return sub {
+		#warn $stream->{child_idx} . ($stream->{write_fh} == \*STDERR ? ' STDERR' : ' STDOUT') . ": got chunk of size " . (defined $_[0] ? length($_[0]) : 'undef') . "\n";
+		my $chunk = shift;
+		# insert a newline at the end of the output stream if the input stream finished and does not end with a newline, so that the last line is processed and printed as well:
+		$chunk = "\n" if not defined $chunk and length($stream->{'buf'}) and substr($stream->{'buf'}, -1, 1) ne "\n";
+		$stream->{'buf'} .= $chunk;
+		process_stream($stream);
+	};
+}
+
+sub ipc_eof_watcher
+{
+	my $ipc = shift;
+	for my $kid (@{$ipc->{KIDS}})
+	{
+		for my $op_idx (0 .. $#{$kid->{OPS}})
+		{
+			my $op = $kid->{OPS}[$op_idx];
+			#warn "pid: $kid->{PID} op_idx: $op_idx kfd: $op->{KFD} type: $op->{TYPE} fd: $op->{FD} \n";
+			if(not defined $op->{FD} and ref $op->{DEST} eq 'CODE')
+			{
+				$op->{DEST}->(undef);
+			}
+		}
+	}
+}
+
+
 
 $OptCommonSep = '---';
 $OptParticularSep = '+';
@@ -306,33 +367,43 @@ for my $particular_cmd_idx (0 .. $#ParticularArgs)
 		}
 		my $color = $CmdColorBold.';'.'3'.$CmdColorCode;
 		$CommandAnsiColorCode[$particular_cmd_idx] = $color;
-		$prefix = AnsiColorCode($color) . $prefix . AnsiColorReset;
+		if(defined $prefix)
+		{
+			$prefix = AnsiColorCode($color) . $prefix . AnsiColorReset;
+		}
 	}
-	if(defined $prefix)
-	{
-		$prefix_qm = quotemeta($prefix);
-		undef $prefix;
-	}
-	if(defined $prefix_qm)
-	{
-		push @{$Commands[$particular_cmd_idx]}, 'stdfilt', '-f', 's/^/'.$prefix_qm.'/';
-	}
-	push @{$Commands[$particular_cmd_idx]}, @CommonArgsPre, @particular_args, @CommonArgsPost;
+	$Commands[$particular_cmd_idx]->{'prefix'} = $prefix;
+	push @{$Commands[$particular_cmd_idx]->{'cmd_and_args'}}, @CommonArgsPre, @particular_args, @CommonArgsPost;
 }
 
 
-@ipc_run_args = ();
-for my $cmdargs_ref (@Commands)
+
+@ipc_args = ();
+$child_idx = 0;
+for my $cmd_ref (@Commands)
 {
-	push @ipc_run_args, $cmdargs_ref, '&';
+	push @ipc_args, $cmd_ref->{'cmd_and_args'},
+		'1>', create_stream_handler({write_fh=>\*STDOUT, child_idx=>$child_idx, prefix=>$cmd_ref->{'prefix'}}),
+		'2>', create_stream_handler({write_fh=>\*STDERR, child_idx=>$child_idx, prefix=>$cmd_ref->{'prefix'}}), '&';
+	$child_idx++;
 }
 
-$h = harness @ipc_run_args;
-$h->run;
 
 $highest_exit_code = 0;
 $lowest_exit_code = undef;
-@full_results = $h->full_results;
+
+$ipc = harness @ipc_args;
+$ipc->start;
+while(1)
+{
+	ipc_eof_watcher($ipc);
+	$ipc->pump;
+	ipc_eof_watcher($ipc);
+	last if not $ipc->pumpable;
+}
+$ipc->finish;
+@full_results = $ipc->full_results;
+
 for my $cmd_idx (0 .. $#Commands)
 {
 	my $result = $full_results[$cmd_idx];

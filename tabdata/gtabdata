@@ -1684,7 +1684,17 @@ class GTabData(object):
 					wait_subprocess(proc)
 				except SubprocessError as err:
 					execution_error(err)
-		
+
+		else:
+			print("reading data on stdin...", file=sys.stderr)
+			header_line = sys.stdin.readline()
+			header_line = header_line.rstrip('\n')
+			td_header = tabdata_decode_record(header_line)
+			self.load_columns(td_header)
+			n_fields = len(td_header)
+			data_generator = ((None, tabdata_decode_record(line.rstrip('\n'), n_fields=n_fields)) for line in iter(sys.stdin.readline, ''))
+			self.load_data(data_generator)
+
 		self.after_load_table()
 	
 	def load_columns(self, columns):

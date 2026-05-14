@@ -188,10 +188,9 @@ sub ipc_eof_watcher
 	my $ipc = shift;
 	for my $kid (@{$ipc->{KIDS}})
 	{
-		for my $op_idx (0 .. $#{$kid->{OPS}})
+		for my $op (@{$kid->{OPS}})
 		{
-			my $op = $kid->{OPS}[$op_idx];
-			#warn "pid: $kid->{PID} op_idx: $op_idx kfd: $op->{KFD} type: $op->{TYPE} fd: $op->{FD} \n";
+			#warn "pid: $kid->{PID} kfd: $op->{KFD} type: $op->{TYPE} fd: $op->{FD} \n";
 			if(not defined $op->{FD} and ref $op->{DEST} eq 'CODE')
 			{
 				$op->{DEST}->(undef);
@@ -396,8 +395,9 @@ $ipc = harness @ipc_args;
 $ipc->start;
 while(1)
 {
-	ipc_eof_watcher($ipc);
 	$ipc->pump;
+	ipc_eof_watcher($ipc);
+	$ipc->pump_nb;
 	ipc_eof_watcher($ipc);
 	last if not $ipc->pumpable;
 }

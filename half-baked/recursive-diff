@@ -1,0 +1,95 @@
+#!/bin/bash
+
+set -euo pipefail
+
+case "$1" in
+(-c|--continue)
+    shift
+    WORKDIR=$1
+    DIR1=$(cat "$WORKDIR/dir1")
+    DIR2=$(cat "$WORKDIR/dir2")
+    ;;
+(*)
+    DIR1=${1%/}
+    DIR2=${2%/}
+    WORKDIR=$(mktemp -d)
+    #trap 'rm -rf "$WORKDIR"' EXIT
+    echo "$DIR1" > "$WORKDIR/dir1"
+    echo "$DIR2" > "$WORKDIR/dir2"
+    ;;
+esac
+
+echo "saving comparision in: $WORKDIR" >&2
+
+# Step 1: paths only
+if [ ! -e "$WORKDIR/files1.done" ]
+then
+    (cd "$DIR1" && find . -type f | sort) > "$WORKDIR/files1"
+    touch "$WORKDIR/files1.done"
+fi
+if [ ! -e "$WORKDIR/files2.done" ]
+then
+    (cd "$DIR2" && find . -type f | sort) > "$WORKDIR/files2"
+    touch "$WORKDIR/files2.done"
+fi
+
+printf '\n=== Only in %s ===\n' "$DIR1"
+if [ ! -e "$WORKDIR/only1.done" ]
+then
+    comm -23 "$WORKDIR/files1" "$WORKDIR/files2" > "$WORKDIR/only1"
+    touch "$WORKDIR/only1.done"
+fi
+cat "$WORKDIR/only1"
+
+printf '\n=== Only in %s ===\n' "$DIR2"
+if [ ! -e "$WORKDIR/only2.done" ]
+then
+    comm -13 "$WORKDIR/files1" "$WORKDIR/files2" > "$WORKDIR/only2"
+    touch "$WORKDIR/only2.done"
+fi
+cat "$WORKDIR/only2"
+
+# Step 2: sizes, common files only
+if [ ! -e "$WORKDIR/common.done" ]
+then
+    comm -12 "$WORKDIR/files1" "$WORKDIR/files2" > "$WORKDIR/common"
+    touch "$WORKDIR/common.done"
+fi
+
+if [ ! -e "$WORKDIR/sizes1.done" ]
+then
+    (cd "$DIR1" && xargs -a "$WORKDIR/common" -d'\n' -I{} stat -c $'%n\t%s' {}) > "$WORKDIR/sizes1"
+    touch "$WORKDIR/sizes1.done"
+fi
+if [ ! -e "$WORKDIR/sizes2.done" ]
+then
+    (cd "$DIR2" && xargs -a "$WORKDIR/common" -d'\n' -I{} stat -c $'%n\t%s' {}) > "$WORKDIR/sizes2"
+    touch "$WORKDIR/sizes2.done"
+fi
+
+printf '\n=== Size differs ===\n'
+if [ ! -e "$WORKDIR/sizediff.done" ]
+then
+    join -t$'\t' "$WORKDIR/sizes1" "$WORKDIR/sizes2" | awk -F'\t' '$2 != $3 { printf "%s\t%s\t%s\n",$1,$2,$3 }' > "$WORKDIR/sizediff"
+    touch "$WORKDIR/sizediff.done"
+fi
+cat "$WORKDIR/sizediff"
+
+# Step 3: checksum only for same-size common files
+if [ ! -e "$WORKDIR/samesize.done" ]
+then
+    join -t$'\t' "$WORKDIR/sizes1" "$WORKDIR/sizes2" | awk -F'\t' '$2 == $3 { print $1 }' > "$WORKDIR/samesize"
+    touch "$WORKDIR/samesize.done"
+fi
+
+printf '\n=== Checksum differs (same size) ===\n'
+if [ ! -e "$WORKDIR/checksumdiff.done" ]
+then
+    while IFS='' read -r filepath; do
+        checksum1=$(cd "$DIR1" && cksum "$filepath" | cut -d' ' -f1)
+        checksum2=$(cd "$DIR2" && cksum "$filepath" | cut -d' ' -f1)
+        [ "$checksum1" != "$checksum2" ] && echo "$filepath"
+    done < "$WORKDIR/samesize" > "$WORKDIR/checksumdiff"
+    touch "$WORKDIR/checksumdiff.done"
+fi
+cat "$WORKDIR/checksumdiff"

@@ -1,0 +1,5 @@
+#!/bin/sh
+
+exec gtabdata --appinstance docker-ps --title "docker ps" \
+	--data-script "docker ps | td-trans-fixcol -m 2 | td-select NAMES +REST" \
+	--key-field "CONTAINER ID"

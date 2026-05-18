@@ -93,3 +93,12 @@ then
     touch "$WORKDIR/checksumdiff.done"
 fi
 cat "$WORKDIR/checksumdiff"
+
+printf '\n=== Summary ===\n'
+printf '%6d\tfiles in %s\n' $(wc -l "$WORKDIR/files1" | cut -d' ' -f1) "$DIR1"
+printf '%6d\tfiles in %s\n' $(wc -l "$WORKDIR/files2" | cut -d' ' -f1) "$DIR2"
+printf '%6d\tonly in %s\n' $(wc -l "$WORKDIR/only1" | cut -d' ' -f1) "$DIR1"
+printf '%6d\tonly in %s\n' $(wc -l "$WORKDIR/only2" | cut -d' ' -f1) "$DIR2"
+printf '%6d\tcommon files\n' $(wc -l "$WORKDIR/common" | cut -d' ' -f1)
+printf '%6d\tcommon files with different sizes\n' $(wc -l "$WORKDIR/sizediff" | cut -d' ' -f1)
+printf '%6d\tcommon files with same size but different checksums\n' $(wc -l "$WORKDIR/checksumdiff" | cut -d' ' -f1)

@@ -1,0 +1,146 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+forcestdout - force commands to send output to STDOUT
+
+=head1 SYNOPSIS
+
+forcestdout [I<OPTIONS>] [--] I<COMMAND> [I<ARGS>]
+
+=head1 DESCRIPTION
+
+Send the output of I<COMMAND> to STDOUT, even if I<COMMAND> itself always writes to file.
+This is done by having I<COMMAND> write to a temporary file and then outputting the temporary file to STDOUT.
+This is useful for commands that unconditionally write to on-disk file,
+but the caller wants to pipe the output instead and the does not want to manage tempfiles.
+
+=head1 OPTIONS
+
+=over 4
+
+=item -p, --output-file-placeholder I<OUTPUT-FILE-PLACEHOLDER>
+
+Which I<ARGS> argument to replace with the temporary file name.
+Default is a literal C<-> dash (common notation for stdin/stdout).
+
+=item -f, --file I<PATH>
+
+Specify the path to the file that I<COMMAND> writes to.
+Implies B<--no-create> because the file is expected to be created by I<COMMAND> itself.
+By default, I<COMMAND> is expected to write to a file, the path of which is substituted in the place of the I<OUTPUT-FILE-PLACEHOLDER> argument specified by B<--output-file-placeholder>.
+If I<COMMAND> happens to not accepting output file name argument, but always writes to a known file path, specify it by the B<--file> option.
+
+=item -F, --output-failed
+
+Output the temporary file content even if the command did not run successfully.
+By default, don't output anything on STDOUT if the command failed.
+Still exit with the failed command exit code.
+
+=item -C, --no-create
+
+Do not create the temporary file for the I<COMMAND> beforehand,
+but let the I<COMMAND> create it.
+
+=item -d, --delete-file
+
+Delete the file specified by B<--file> at the end.
+If B<--file> is not specified, then the temporary file is always deleted.
+
+=item -v, --verbose
+
+Print informational messages to STDERR.
+
+=back
+
+=head1 EXIT STATUS
+
+I<COMMAND> exit code if terminated normally, or 128+B<sig> if terminated by signal B<sig>.
+
+=head1 SEE ALSO
+
+=cut
+
+
+use File::stat;
+use Data::Dumper;
+use utf8;
+use open ':std', ':utf8';  # mark stdio as utf8 but not verify
+use open ':utf8';
+use Errno qw/:POSIX/;
+use Fcntl qw/:flock :seek F_GETFL F_SETFL O_NONBLOCK F_GETFD F_SETFD FD_CLOEXEC/;
+use File::Temp qw/tempfile/;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev pass_through permute/;
+use IPC::Run qw/run start/;
+use Pod::Usage;
+use POSIX qw/:sys_wait_h strftime/;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+
+
+$OptVerbose = 0;
+$OptFile = undef;
+$OptDeleteFile = 0;
+$OptOutputFailed = 0;
+$OptOutputFilePlaceholder = '-';
+$OptCreateTempfile = 1;
+$Tempfile = undef;
+
+GetOptions(
+	'f|file=s' => \$OptFile,
+	'F|output-failed!' => \$OptOutputFailed,
+	'p|output-file-placeholder=s' => \$OptOutputFilePlaceholder,
+	'C|no-create!' => sub { $OptCreateTempfile = 0; },
+	'd|delete!' => \$OptDeleteFile,
+	'v|verbose+' => \$OptVerbose,
+	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+	'<>' => sub { unshift @ARGV, $_[0]; die '!FINISH'; },
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+
+if($OptCreateTempfile and not defined $OptFile)
+{
+	my ($fh, $filename) = tempfile( "forcestdout-XXXXXX", TMPDIR => 1, UNLINK => $OptCreateTempfile ? 0 : 1 );
+	$Tempfile = $filename;
+	$ENV{'FORCESTDOUT_TEMPFILE'} = $Tempfile;
+	close $fh;  # we dont know how the sub command behaves: does it unlink the file before re-create or just start writing to it? let's assume it won't be the same filehandle when reading back.
+}
+
+@cmd = ();
+for my $arg (@ARGV)
+{
+	if($arg eq $OptOutputFilePlaceholder and defined $Tempfile)
+	{
+		$arg = $Tempfile;
+	}
+	push @cmd, $arg;
+}
+
+if($OptVerbose)
+{
+	use String::ShellQuote;
+	warn "$0: executing: " . join(' ', map { String::ShellQuote::shell_quote($_) } @cmd) . "\n";
+}
+
+$ipc = start [@cmd], '>', \*STDERR;
+$ipc->finish;
+$result = $ipc->full_result;
+$exit_code = WEXITSTATUS($result);
+$signaled = WIFSIGNALED($result);
+$termsig = WTERMSIG($result);
+$exit_code = 128 + $termsig if $signaled;
+
+if(defined $Tempfile)
+{
+	if($exit_code == 0 or $OptOutputFailed)
+	{
+		open my $fh, '<', $Tempfile or die "$0: $Tempfile: open: $!\n";
+		print while <$fh>;
+		close $fh;
+	}
+
+	unlink $Tempfile or warn "$0: $Tempfile: unlink: $!\n";
+}
+
+exit $exit_code;

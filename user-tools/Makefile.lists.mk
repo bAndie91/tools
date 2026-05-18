@@ -56,6 +56,7 @@ TOOLS ?= \
   fixlogfiledatetime \
   fixRFC822filemtime \
   fmtkv \
+  forcestdout \
   foreach \
   fzf-preview \
   g_filename_to_uri \

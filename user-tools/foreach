@@ -146,6 +146,7 @@ use utf8;
 use open ':std', ':utf8';  # mark stdio as utf8 but not verify
 use open ':utf8';
 use Errno qw/:POSIX/;
+use POSIX qw/WEXITSTATUS WTERMSIG WIFSIGNALED/;
 use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev pass_through permute/;
 use IPC::Run qw/run/;
 use List::MoreUtils qw/all any none/;
@@ -158,15 +159,15 @@ do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 # If it contains white space, quotes, etc., quote it, and return the new string.
 sub shell_quote($)
 {
-  my ($s) = @_;
-  if ($s =~ m![^\w+/.,-]!)
-    {
-      # Convert each single quote to '\''
-      $s =~ s/\'/\'\\\'\'/g;
-      # Then single quote the string.
-      $s = "'$s'";
-    }
-  return $s;
+	my ($s) = @_;
+	if ($s =~ m{[^\w+/.,-]} or $s eq '')
+	{
+		# Convert each single quote to '\''
+		$s =~ s/\'/\'\\\'\'/g;
+		# Then single quote the string.
+		$s = "'$s'";
+	}
+	return $s;
 }
 
 

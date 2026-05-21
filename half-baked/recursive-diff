@@ -86,24 +86,26 @@ cat "$WORKDIR/sizediff"
 # Step 3: checksum only for same-size common files
 if [ ! -e "$WORKDIR/samesize.done" ]
 then
-	join -t$'\t' "$WORKDIR/sizes1" "$WORKDIR/sizes2" | awk -F'\t' '$2 == $3 { print $1 }' > "$WORKDIR/samesize"
+	join -t$'\t' "$WORKDIR/sizes1" "$WORKDIR/sizes2" | awk -F'\t' '$2 == $3 { print $1"\t"$2 }' > "$WORKDIR/samesize"
 	touch "$WORKDIR/samesize.done"
 fi
 
 printf '\n=== Checksum differs (same size) ===\n'
 if [ ! -e "$WORKDIR/checksumdiff.done" ]
 then
-	n_files=$(wc -l < "$WORKDIR/samesize")
-	idx=0
+	total_size_dir1=$(awk -F'\t' '{sum += $2} END {print sum}' < "$WORKDIR/samesize")
+	size_sofar=0
 
-	while IFS='' read -r filepath
+	while IFS=$'\t' read -r filepath filesize
 	do
-		print_progress_percentage $[n_files*2] $idx
 		checksum1=$(cd "$DIR1" && cksum "$filepath" | cut -d' ' -f1)
-		print_progress_percentage $[n_files*2] $[++idx]
+		size_sofar=$[size_sofar + filesize]
+		print_progress_percentage $[total_size_dir1*2] $size_sofar
+		
 		checksum2=$(cd "$DIR2" && cksum "$filepath" | cut -d' ' -f1)
+		size_sofar=$[size_sofar + filesize]
+		print_progress_percentage $[total_size_dir1*2] $size_sofar
 		[ "$checksum1" != "$checksum2" ] && echo "$filepath"
-		print_progress_percentage $[n_files*2] $[++idx]
 
 	done < "$WORKDIR/samesize" > "$WORKDIR/checksumdiff"
 

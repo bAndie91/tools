@@ -72,23 +72,23 @@ fi
 
 
 case "$mime" in
-application/pdf)
+(application/pdf)
 	pdftotext -layout "$path" -
 	;;
-application/*)
+(application/*)
 	echo $mime
 	file -bL "$path"
 	;;
-image/*)
+(image/*)
 	identify "$path"
 	;;
-video/*|audio/*)
+(video/*|audio/*)
 	mediainfo "$path"
 	;;
-message/rfc822)
+(message/rfc822)
 	emlv "$path" | fold -w "$FZF_PREVIEW_COLUMNS" -s
 	;;
-*)
+(*)
 	if [ -d "$path" ]
 	then
 		ls -lAhgo ${LS_SORT_FLAGS[$LS_SORT_ORDER]} --time-style=long-iso --indicator-style=slash --color=always "$path/" |\
@@ -99,7 +99,7 @@ message/rfc822)
 	then
 		file "$path"
 	else
-		head -n ${FZF_PREVIEW_LINES:--0} "$path" | strip_ctrl_chars
+		batcat --style=plain,changes --force-colorization "$path"
 	fi
 	;;
 esac

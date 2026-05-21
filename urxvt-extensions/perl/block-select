@@ -1,0 +1,188 @@
+#! perl
+# block-select — rectangular block selection for urxvt
+#
+# Ctrl+Shift+drag (left button): select a rectangular region.
+# On release: text goes into PRIMARY selection (middle-click to paste).
+#
+# Install
+# -------
+# 1. Save this file as ~/.urxvt/ext/block-select
+# 2. Add to ~/.Xresources: URxvt.perl-ext-common:  ...,block-select
+# 3. xrdb -merge ~/.Xresources && restart urxvt
+
+sub on_start {
+    my ($self) = @_;
+    $self->{bsel_active} = 0;
+    ()
+}
+
+sub on_button_press {
+    my ($self, $event) = @_;
+    if ($event->{button} == 1
+            && ($event->{state} & urxvt::ShiftMask)
+            && ($event->{state} & urxvt::ControlMask)) {
+        $self->{bsel_active}    = 1;
+        $self->{bsel_committed} = 0;   # clear any lingering committed selection
+        $self->{bsel_start_col} = $self->_bsel_event_col($event);
+        $self->{bsel_end_col}   = $self->{bsel_start_col};
+        $self->{bsel_start_row} = $self->_bsel_event_row($event);
+        $self->{bsel_end_row}   = $self->{bsel_start_row};
+        $self->_bsel_update_overlay;
+        return 1;
+    }
+    ()
+}
+
+sub on_motion_notify {
+    my ($self, $event) = @_;
+    if ($self->{bsel_active}) {
+        $self->{bsel_end_col} = $self->_bsel_event_col($event);
+        $self->{bsel_end_row} = $self->_bsel_event_row($event);
+        $self->_bsel_update_overlay;
+        return 1;
+    }
+    ()
+}
+
+sub on_button_release {
+    my ($self, $event) = @_;
+    if ($self->{bsel_active} && $event->{button} == 1) {
+        $self->{bsel_active} = 0;
+        my $vs = $self->view_start;
+        $self->{bsel_start_row} += $vs;
+        $self->{bsel_end_row}   += $vs;
+        $self->{bsel_committed}  = 1;
+        $self->_bsel_grab_text;
+        # overlay stays visible — cleared by sel/content events
+        return 1;
+    }
+    ()
+}
+
+sub on_sel_make {
+    my ($self, $eventtime) = @_;
+    $self->_bsel_hide_overlay;
+    ()
+}
+
+# A terminal line was updated (new output, scroll, etc.).
+# If it falls inside our highlighted region, the text under the overlay
+# has changed — clear it.
+sub on_line_update {
+    my ($self, $row) = @_;
+    if ($self->{bsel_committed}) {
+        my (undef, $abs_r1, undef, $abs_r2) = $self->_bsel_corners;
+        my $abs_row = $self->view_start + $row;   # row is screen coord here
+        $self->_bsel_hide_overlay if $abs_row >= $abs_r1 && $abs_row <= $abs_r2;
+    }
+    ()
+}
+
+
+# Reposition overlay when the user scrolls — check bsel_committed, not
+# bsel_overlay, so scrolling back into range recreates the overlay.
+sub on_refresh_begin {
+    my ($self) = @_;
+    if ($self->{bsel_committed}) {
+        my $vs = $self->view_start;
+        if (defined $self->{bsel_last_vs} && $vs != $self->{bsel_last_vs}) {
+            $self->_bsel_update_overlay;
+        }
+        $self->{bsel_last_vs} = $vs;
+    }
+    ()
+}
+
+
+# ── helpers ───────────────────────────────────────────────────────────────────
+
+# Returns (col1, row1, col2, row2) normalised so col1<=col2, row1<=row2.
+sub _bsel_corners {
+    my ($self) = @_;
+    my ($c1, $c2) = sort { $a <=> $b } ($self->{bsel_start_col}, $self->{bsel_end_col});
+    my ($r1, $r2) = sort { $a <=> $b } ($self->{bsel_start_row}, $self->{bsel_end_row});
+    return ($c1, $r1, $c2, $r2);
+}
+
+sub _bsel_update_overlay {
+    my ($self) = @_;
+    $self->_bsel_hide_overlay;
+    return () unless $self->{bsel_active} || $self->{bsel_committed};
+
+    my ($c1, $r1, $c2, $r2) = $self->_bsel_corners;
+    my $vs = $self->view_start;
+    my $nr = $self->nrow;
+
+    # During drag rows are screen coords; after commit they are absolute.
+    my ($sr1, $sr2) = $self->{bsel_committed}
+        ? ($r1 - $vs, $r2 - $vs)
+        : ($r1,       $r2);
+
+    # Clip to visible window — selection may be partially or fully off-screen.
+    my $vis1 = $sr1 < 0    ? 0     : $sr1;
+    my $vis2 = $sr2 >= $nr ? $nr-1 : $sr2;
+    return () if $vis1 > $vis2;
+
+    my $w  = $c2 - $c1 + 1;
+    my $ov = $self->overlay($c1, $vis1, $w, $vis2 - $vis1 + 1,
+                            urxvt::RS_RVid, 0);
+    for my $sr ($vis1 .. $vis2) {
+        my $text = $self->ROW_t($vs + $sr);
+        my $len  = length $text;
+        my $chunk;
+        if ($c1 >= $len) {
+            $chunk = ' ' x $w;
+        } else {
+            my $end = ($c2 < $len) ? $c2 : $len - 1;
+            $chunk  = substr($text, $c1, $end - $c1 + 1);
+            $chunk  =~ s/\x00/ /g;
+            $chunk .= ' ' x ($w - length $chunk);
+        }
+        $ov->set(0, $sr - $vis1, $chunk);
+    }
+    $self->{bsel_overlay} = $ov;
+}
+
+sub _bsel_hide_overlay {
+    my ($self) = @_;
+    delete $self->{bsel_overlay};
+    $self->{bsel_committed} = 0;
+}
+
+sub _bsel_grab_text {
+    my ($self) = @_;
+    my ($c1, $r1, $c2, $r2) = $self->_bsel_corners;
+    # At call time bsel_committed is already 1 and rows are absolute.
+    my @lines;
+    for my $abs_row ($r1 .. $r2) {
+        my $text = $self->ROW_t($abs_row);
+        my $len  = length $text;
+        if ($c1 >= $len) {
+            push @lines, '';
+        } else {
+            my $end   = ($c2 < $len) ? $c2 : $len - 1;
+            my $chunk = substr($text, $c1, $end - $c1 + 1);
+            $chunk =~ s/\x00/ /g;
+            push @lines, $chunk;
+        }
+    }
+    $self->selection(join("\n", @lines));
+    $self->{bsel_own_grab} = 1;
+    $self->selection_grab(urxvt::CurrentTime);
+}
+
+sub _bsel_event_col {
+    my ($self, $event) = @_;
+    return defined $event->{x}
+        ? int($event->{x} / $self->fwidth)
+        : $event->{col};
+}
+
+sub _bsel_event_row {
+    my ($self, $event) = @_;
+    return defined $event->{y}
+        ? int($event->{y} / $self->fheight)
+        : $event->{row};
+}
+
+1;

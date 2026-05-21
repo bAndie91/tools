@@ -130,6 +130,9 @@ polysh L<https://github.com/innogames/polysh/>
 =cut
 
 
+use utf8;
+use open ':std', ':utf8';  # mark stdio as utf8 but not verify
+use open ':utf8';
 use Errno qw/:POSIX/;
 use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev pass_through require_order/;
 use IPC::Run qw/run harness start finish pump/;

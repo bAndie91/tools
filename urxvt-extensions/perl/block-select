@@ -106,7 +106,7 @@ sub _bsel_corners {
 
 sub _bsel_update_overlay {
     my ($self) = @_;
-    $self->_bsel_hide_overlay;
+    $self->_bsel_remove_overlay;
     return () unless $self->{bsel_active} || $self->{bsel_committed};
 
     my ($c1, $r1, $c2, $r2) = $self->_bsel_corners;
@@ -143,9 +143,14 @@ sub _bsel_update_overlay {
     $self->{bsel_overlay} = $ov;
 }
 
-sub _bsel_hide_overlay {
+sub _bsel_remove_overlay {
     my ($self) = @_;
     delete $self->{bsel_overlay};
+}
+
+sub _bsel_hide_overlay {
+    my ($self) = @_;
+    $self->_bsel_remove_overlay;
     $self->{bsel_committed} = 0;
 }
 

@@ -4,16 +4,16 @@
 
 =head1 NAME
 
-regargwrap - Replace non-regular file arguments to regular ones
+solidargs - Replace non-regular file arguments to regular temp files and exec into the specified command
 
 =head1 SYNOPSIS
 
-regargwrap [I<OPTIONS>] I<COMMAND> [I<ARGS>]
+solidargs [I<OPTIONS>] I<COMMAND> [I<ARGS>]
 
 =head1 DESCRIPTION
 
-Saves the content of non-regular files found in I<ARGS> into a temporary file,
-then runs I<COMMAND> I<ARGS> with the non-regular file arguments replace to the regular (yet temporary) ones.
+Saves the content of non-regular files found in I<ARGS> into temporary files,
+then runs I<COMMAND> I<ARGS> with the non-regular file arguments replaced to the regular (yet temporary) ones.
 
 This is useful if I<COMMAND> does not support reading from pipes or other non-seekable files.
 
@@ -30,13 +30,13 @@ This is useful if I<COMMAND> does not support reading from pipes or other non-se
 =item --chars
 
 Replace only pipe/socket/block/char special files.
-If no option like these specified, by default, replace any of them.
+If no option like these specified, by default, replace all of them.
 
 =back
 
 =head1 EXAMPLES
 
-  regargwrap git diff --no-index <(ls -1 dir_a) <(ls -1 dir_b)
+  solidargs git diff --no-index <(ls -1 dir_a) <(ls -1 dir_b)
 
 =head1 LIMITATIONS
 
@@ -45,7 +45,7 @@ because they possibly do not fit on the temporary files' filesystem.
 
 =head1 SEE ALSO
 
-regargwrap(1) is a generalization of seekstdin(1).
+solidargs(1) is a generalization of seekstdin(1).
 
 =cut
 
@@ -90,7 +90,7 @@ for my $arg (@ARGV)
 		   ($OptBlocks and -b $arg) or
 		   ($OptChars and -c $arg))
 		{
-			my ($tmpfh, $tmpfilename) = tempfile( "regargwrap-XXXXXX", TMPDIR => 1, UNLINK => 0 );
+			my ($tmpfh, $tmpfilename) = tempfile( "solidargs-XXXXXX", TMPDIR => 1, UNLINK => 0 );
 			warn "$0: replace '$arg' to '$tmpfilename'\n";
 			open my $fh, '<', $arg or die "$0: $!: $arg\n";
 			while($_ = <$fh>)

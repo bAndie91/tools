@@ -164,7 +164,7 @@ TOOLS ?= \
   rdfindreport \
   recent-files-gtk \
   redirexec \
-  regargwrap \
+  solidargs \
   remount \
   renamemanual \
   rename.td \

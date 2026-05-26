@@ -4,4 +4,5 @@ set -e -o pipefail -u
 f=$1
 ffmpeg -i "$f" -vf vidstabdetect=shakiness=10:accuracy=15:result="$f.trf" -f null -
 ffmpeg -i "$f" -vf vidstabtransform=smoothing=30:zoom=1:optzoom=0:input="$f.trf" "${f%.*}-vidstab.mp4"
+rm "$f.trf"
 

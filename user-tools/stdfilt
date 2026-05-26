@@ -142,7 +142,10 @@ sub stream_tags_match
 {
 	my $current_tags = shift;
 	my $mandatory_tags = shift;
-	return all { $_ ~~ [keys %$current_tags] } keys %$mandatory_tags;
+	my @positive_mandatory_tags = grep { /^[^!]/ } keys %$mandatory_tags;
+	my @negative_mandatory_tags = map { s/^!//r } grep { /^!/ } keys %$mandatory_tags;
+	return (all  { $_ ~~ [keys %$current_tags] } @positive_mandatory_tags and
+            none { $_ ~~ [keys %$current_tags] } @negative_mandatory_tags);
 }
 
 sub apply_filter_rule
@@ -157,17 +160,17 @@ sub apply_filter_rule
 	{
 		eval '$line =~ '.$rule->{replacer}.'; 1' or warn "$0: $@\n";
 		$result->{line} = $line;
-		$applied = 1;
+		$applied++;
 	}
 	if(exists $rule->{tag_start})
 	{
 		$context->{tags}->{$_} = 1 for @{$rule->{tag_start}};
-		$applied = 1;
+		$applied++;
 	}
 	if(exists $rule->{tag_end})
 	{
 		delete $context->{tags}->{$_} for @{$rule->{tag_end}};
-		$applied = 1;
+		$applied++;
 	}
 	return $applied;
 }
@@ -176,19 +179,20 @@ sub evaluate_filters
 {
 	my $line = shift;
 	my $context = shift;
-	my $result = {pass => 1, line => $line,};
+	my $result = {pass => 1, line => $line, pattern_matched => undef,};
 	
 	for my $fnum (0 .. $#Filters)
 	{
 		my $filt = $Filters[$fnum];
 		
-		debug Dumper { filter => $filt, context => $context, };
+		debug Dumper { filter => $filt, context => $context, current_result => $result, };
 		
 		$context->{delayed_rule}->[$fnum]->{count_down} -= 1 if $context->{delayed_rule}->[$fnum]->{count_down} > 0;
 		if(%{$context->{delayed_rule}->[$fnum]} and $context->{delayed_rule}->[$fnum]->{count_down} <= 0)
 		{
-			debug Dumper { apply_delayed_rule => $context->{delayed_rule}->[$fnum]->{rule}, };
-			apply_filter_rule($context->{delayed_rule}->[$fnum]->{rule}, $line, $context, $result);
+			debug Dumper { apply_delayed_rule => $context->{delayed_rule}->[$fnum]->{rule}, current_result => $result, };
+			my $applications = apply_filter_rule($context->{delayed_rule}->[$fnum]->{rule}, $line, $context, $result);
+			debug Dumper { applied_delayed_rule => $context->{delayed_rule}->[$fnum]->{rule}, current_result => $result, applications => $applications, };
 			delete $context->{delayed_rule}->[$fnum];
 		}
 		
@@ -198,34 +202,37 @@ sub evaluate_filters
 		
 		if(exists $filt->{pattern})
 		{
-			my $pattern_matched = $line =~ m/(?$filt->{modifiers})$filt->{pattern}/;
-			$pattern_matched = !$pattern_matched if $filt->{negate};
-			if($pattern_matched)
+			$result->{pattern_matched} = $line =~ m/(?$filt->{modifiers})$filt->{pattern}/;
+			$result->{pattern_matched} = ! $result->{pattern_matched} if $filt->{negate};
+			if($result->{pattern_matched})
 			{
 				if($filt->{offset})
 				{
-					debug Dumper { delay_rule_application => \%applicable_rule, };
+					debug Dumper { delaying_rule => \%applicable_rule, offset => $filt->{offset}, };
 					$context->{delayed_rule}->[$fnum]->{count_down} = $filt->{offset};
 					$context->{delayed_rule}->[$fnum]->{rule} = \%applicable_rule;
 				}
 				else
 				{
-					$result->{pass} = 1;
-					apply_filter_rule(\%applicable_rule, $line, $context, $result);
+					if(%applicable_rule)
+					{
+						apply_filter_rule(\%applicable_rule, $line, $context, $result);
+						# if it's a replacer or tag set/remove rule, then don't change whether the line passes or not.
+					}
 				}
 			}
-			else
+			
+			if(not %applicable_rule)
 			{
-				if(not %applicable_rule)
-				{
-					$result->{pass} = 0;
-				}
+				# if it's not a replacer or tag set/remove rule (only a pattern-matching rule), then actually control the passage.
+				$result->{pass} = $result->{pattern_matched};
 			}
 		}
 		else
 		{
 			apply_filter_rule(\%applicable_rule, $line, $context, $result);
 		}
+		debug Dumper { filter => $filt, context => $context, current_result => $result, };
 	}
 	
 	return $result;
@@ -412,8 +419,10 @@ Each line is a filter rule, of which syntax is:
 
 =item B<match_tags>
 
-Tag names, each of them in square-bracket (eg. C<[blue] [red]>).
-The rest of the rule will be evaluated only if the tags are on the current stream.
+Tag names, each of them in square-bracket (eg. C<[blue] [red] [!green]>).
+A tag name may be preceded by C<!> (exclamation mark) to negatively require it.
+The rest of the rule will be evaluated only if all of these positive tags are on the current stream
+and none of the negative tags are on.
 Tags can be added, removed by the B<set_tags> element.
 
 If a rule only consists of B<match_tags> tags, it opens a section in the filter file (and in B<-f> arguments too).

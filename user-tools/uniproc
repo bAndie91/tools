@@ -634,15 +634,17 @@ if(not eval {
 		$num_shots++;
 	}
 	
-	if($OptShowSummary)
-	{
-		printf STDERR "uniproc: %d total, %d processed in this session, %d successful, %d failed\n", $TotalDataNum, $CountSuccess+$CountFailed, $CountSuccess, $CountFailed;
-	}
 	1;
 })
 {
 	warn $@ if $@ ne "\n";
 	$ExitStatus = -1;
+}
+
+if($OptShowSummary)
+{
+	printf STDERR "uniproc: %d total, %d processed in this session, %d successful, %d failed\n",
+		$TotalDataNum, $CountSuccess+$CountFailed, $CountSuccess, $CountFailed;
 }
 
 if(defined $TermSignal)

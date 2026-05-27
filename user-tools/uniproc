@@ -10,6 +10,8 @@ uniproc - Universal data processing tool
 
 uniproc [I<OPTIONS>] I<INPUTFILE> I<COMMAND> [I<ARGS>]
 
+uniproc [I<OPTIONS>] I<INPUTFILE>
+
 =head1 DESCRIPTION
 
 Take each line from I<INPUTFILE> as B<DATA> (chopping end-of-line chars),
@@ -25,7 +27,7 @@ So you don't need special precautions (locking, data partitioning) when starting
 
 Use a wrapper command/script for I<COMMAND> if you want either of these:
 
-=over 4
+=over 8
 
 =item save I<COMMAND>'s output as well.
 
@@ -126,6 +128,8 @@ Show the raw data what is being started to process.
 
 Show stats summary when exit.
 
+Note, if called without I<COMMAND> argument, uniproc(1) shows stats about the I<INPUTFILE> and exits immediately, without processing any data.
+
 =item --debug
 
 Output debug messages.
@@ -204,11 +208,15 @@ Display the data processing status before each line of data:
 
 How much competed?
 
-  awk -v total=$(wc -l < datafile) 'BEGIN{ok=ip=fail=0} {if($1==0){ok++} else if($1=="..."){ip++} else if($1!=""){fail++}} END{print "total: "total", completed: "ok" ("(ok*100/total)"%), in-progress: "ip" ("(ip*100/total)"%), failed: "fail" ("(fail*100/total)"%)"}' datafile.uniproc
+  uniproc datafile
   
 Output:
 
-  total: 8, completed: 4 (50%), in-progress: 1 (12.5%), failed: 1 (12.5%)
+  total: 8
+  in-progress: 1 (12.5%)
+  success: 4 (50%)
+  failed: 1 (12.5%)
+  remaining: 2 (25%)
 
 Record output of data processing into a file per each data item:
 
@@ -262,7 +270,46 @@ GetOptions(
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
-die "$0: missing command\n" unless scalar @ARGV >= 2;
+
+if(scalar @ARGV < 1)
+{
+	die "$0: missing input file.\n";
+	pod2usage(-exitval=>2, -verbose=>99);
+}
+
+if(scalar @ARGV < 2)
+{
+	($InputFile) = @ARGV;
+	$ResultsFile = "$InputFile.uniproc";
+
+	count_input_records();
+	open my $results_fh, '<', $ResultsFile or die "$0: $ResultsFile: $!\n";
+	while(<$results_fh>)
+	{
+		my $result = substr $_, 0, 3;
+		if($result eq '...')
+		{
+			$CountInProgress++;
+		}
+		elsif($result eq '  0')
+		{
+			$CountSuccess++;
+		}
+		elsif($result ne '   ')
+		{
+			$CountFailed++;
+		}
+	}
+	close $results_fh;
+	$CountRemaining = $TotalDataNum - $CountInProgress - $CountSuccess - $CountFailed;
+	printf join("\n", "total:\t%d", "in-progress:\t%d (%.0f%%)", "success:\t%d (%.0f%%)", "failed:\t%d (%.0f%%)", "remaining:\t%d (%.0f%%)"),
+		$TotalDataNum,
+		$CountInProgress, ($CountInProgress * 100 / $TotalDataNum),
+		$CountSuccess, ($CountSuccess * 100 / $TotalDataNum),
+		$CountFailed, ($CountFailed * 100 / $TotalDataNum),
+		$CountRemaining, ($CountRemaining * 100 / $TotalDataNum);
+	exit;
+}
 
 
 $PROCESS_START_TIMESTAMP = stat("/proc/$$")->ctime;

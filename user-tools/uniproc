@@ -302,7 +302,7 @@ if(scalar @ARGV < 2)
 	}
 	close $results_fh;
 	$CountRemaining = $TotalDataNum - $CountInProgress - $CountSuccess - $CountFailed;
-	printf join("\n", "total:\t%d", "in-progress:\t%d (%.0f%%)", "success:\t%d (%.0f%%)", "failed:\t%d (%.0f%%)", "remaining:\t%d (%.0f%%)"),
+	printf join("\n", "total:\t%d", "in-progress:\t%d (%.0f%%)", "success:\t%d (%.0f%%)", "failed:\t%d (%.0f%%)", "remaining:\t%d (%.0f%%)", ""),
 		$TotalDataNum,
 		$CountInProgress, ($CountInProgress * 100 / $TotalDataNum),
 		$CountSuccess, ($CountSuccess * 100 / $TotalDataNum),

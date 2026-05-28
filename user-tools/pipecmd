@@ -1,6 +1,64 @@
-#!/bin/bash
+#!/usr/bin/env perl
 
-true <<'EOF'
+use Data::Dumper;
+use IPC::Run qw(run harness);
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
+use Pod::Usage;
+use POSIX qw/:sys_wait_h/;
+
+my $OptSeparator = '--';
+my $OptPipefail = 0;
+
+GetOptions(
+	'p|pipe|pipechar=s' => \$OptSeparator,
+	'f|pipefail!' => \$OptPipefail,
+	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+@cmd1 = ();
+@cmd2 = ();
+
+while (@ARGV)
+{
+	my $arg = shift @ARGV;
+	if ($arg eq $OptSeparator) {
+		last;
+	}
+	push @cmd1, $arg;
+}
+@cmd2 = @ARGV;
+
+unless (@cmd1 and @cmd2)
+{
+	pod2usage(
+		-message => "Two commands are required.",
+		-exitval => 2,
+	);
+}
+
+sub derive_exit_code
+{
+	my $status = shift;
+	return 128 + WTERMSIG($status) if WIFSIGNALED($status);
+	return WEXITSTATUS($status);
+}
+
+$ipc = harness \@cmd1, '|', \@cmd2;
+$ipc->run;
+@results = $ipc->full_results;
+$exit_code = derive_exit_code($results[1]);
+
+if ($OptPipefail)
+{
+	for my $exit_status (@results) {
+		my $this_exit_code = derive_exit_code($exit_status);
+		$exit_code = $this_exit_code if $this_exit_code > $exit_code;
+	}
+}
+
+exit $exit_code;
+
+
 =pod
 
 =head1 NAME
@@ -18,7 +76,7 @@ Equivalent to this shell command:
  CMD_1 | CMD_2
 
 The first command's (I<CMD_1>) arguments can not contain a double-dash (C<-->),
-because it's the command separator for pipecmd(1).
+because it's the command separator for pipecmd(1), unless redefined by B<--pipechar> option.
 However, since only a total of 2 commands are supported,
 arguments for I<CMD_2> may contain double-dash(es).
 
@@ -31,7 +89,7 @@ C<CMD_1 | CMD_2 | CMD_3>, like:
 
 =over 4
 
-=item -p, --pipe I<STRING>
+=item -p, --pipechar, --pipe I<STRING>
 
 Use I<STRING> as the command separator.
 Default is double dash (C<-->).
@@ -56,38 +114,3 @@ It's sometimes more convenient to don't involve shell command-line parser.
 pipexec(1)
 
 =cut
-
-EOF
-
-
-set -e
-set -o pipefail
-set -u
-
-if [ $# = 0 ]
-then
-	pod2text "$0" >&2
-	exit 1
-fi
-if [ "$1" = --help ]
-then
-	pod2text "$0"
-	exit 0
-fi
-
-cmd_n=1
-declare -a cmd_1=()
-declare -a cmd_2=()
-
-while [ $# != 0 ]
-do
-	if [ ".$1" = '.--' -a $cmd_n == 1 ]
-	then
-		cmd_n=2
-	else
-		eval "cmd_${cmd_n}+=(\"\$1\")"
-	fi
-	shift
-done
-
-"${cmd_1[@]}" | "${cmd_2[@]}"

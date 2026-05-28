@@ -9,7 +9,7 @@ pipecmd - Run a command and pipe its output to an other one
 
 =head1 SYNOPSIS
 
-pipecmd I<CMD_1> [I<ARGS>] -- I<CMD_2> [I<ARGS>]
+pipecmd [I<OPTIONS>] I<CMD_1> [I<ARGS>] -- I<CMD_2> [I<ARGS>]
 
 =head1 DESCRIPTION
 
@@ -26,6 +26,26 @@ You can chain pipecmd(1) commands together to get a pipeline equivalent to
 C<CMD_1 | CMD_2 | CMD_3>, like:
 
  pipecmd CMD_1 -- pipecmd CMD_2 -- CMD_3
+
+=head1 OPTIONS
+
+=over 4
+
+=item -p, --pipe I<STRING>
+
+Use I<STRING> as the command separator.
+Default is double dash (C<-->).
+
+=item -f, --pipefail
+
+Exit with the highest exit code of the commands in the pipeline (or zero if all commands exit successfully).
+The default is to exit with the latest command's exit code.
+
+=back
+
+=head1 EXIT STATUS
+
+The latest command's exit code, unless B<--pipefail> is specified.
 
 =head1 RATIONALE
 

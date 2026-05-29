@@ -99,7 +99,7 @@ case "$mime" in
 	then
 		file "$path"
 	else
-		batcat --style=plain,changes --force-colorization "$path"
+		batcat --style=plain,numbers,changes --force-colorization "$path"
 	fi
 	;;
 esac

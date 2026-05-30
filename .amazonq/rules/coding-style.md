@@ -27,6 +27,7 @@
 
 - error, diagnostic messages and progress indication go to stderr
 
+
 ## Shell script
 
 ### Structural blocks
@@ -59,6 +60,7 @@
 - POD documentation embedded via `true <<'EOF' ... EOF` block
 - do not hardcode non-standard FD in redirection: use `exec {fd}>>...` for dynamic file descriptors
 
+
 ## Perl script conventions
 
 ### Structural blocks
@@ -78,3 +80,8 @@
 ### Messages
 
 - `warn`/`die "$0: $filename: $!\n"` for (fatal) errors resulted from a syscall
+
+### Misc
+
+- `while(<STDIN>)` instead of `while(<>)`
+- `use ARGV::readonly;` if you insist on `while(<>)`

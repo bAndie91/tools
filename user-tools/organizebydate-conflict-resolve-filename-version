@@ -69,22 +69,30 @@ GetOptions(
 
 pod2usage(-exitval=>2, -verbose=>99) unless scalar @ARGV == 2;
 
+$msg_prefix = "filename conflict resolver: ";
 
 $Source = $ARGV[0];
 $Target = $ARGV[1];
 
-warn "filename conflict resolver: source: $Source\n";
-warn "filename conflict resolver: target: $Target\n";
-warn "comparing checksums...\n";
-if(checksum_file($Source) eq checksum_file($Target))
+warn "${msg_prefix}source: $Source\n";
+warn "${msg_prefix}target: $Target\n";
+if($ENV{'SOURCE_FILE_SIZE'} eq $ENV{'TARGET_FILE_SIZE'})
 {
-	warn "checksums match exactly.\n";
-	print "done\n";
-	exit 0;
+	warn "${msg_prefix}sizes match, comparing checksums...\n";
+	if(checksum_file($Source) eq checksum_file($Target))
+	{
+		warn "${msg_prefix}checksums match exactly.\n";
+		print "done\n";
+		exit 0;
+	}
+	else
+	{
+		warn "${msg_prefix}checksums differ.\n";
+	}
 }
 else
 {
-	warn "checksums differ.\n";
+	warn "${msg_prefix}sizes differ.\n";
 }
 
 
@@ -119,6 +127,6 @@ while(1)
 	$version++;
 }
 
-warn "filename conflict resolver: new target: $new_target\n";
+warn "${msg_prefix}new target: $new_target\n";
 print "proceed $new_target\n";
 exit 0;

@@ -101,7 +101,7 @@ sub checksum_file
 	if($opt{'lookup_db'} and defined $checksum_db)
 	{
 		connect_db();
-		my ($hexdigst) = $db_conn->fetchrow_arrayref("SELECT crc FROM checksum WHERE path = ?", undef, $path);
+		my ($hexdigst) = $db_conn->selectrow_array("SELECT crc FROM checksum WHERE path = ?", undef, $path);
 		return $hexdigst;
 	}
 

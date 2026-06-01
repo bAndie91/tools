@@ -347,7 +347,7 @@ render_path_template()
 	local filetimestamp=$2
 	local basedir=$3
 	local basename=$4
-	local target=`date +"$target_template" -d "@$filetimestamp" | sd -F '%@' "$basedir" | sd -F '%.' "$basename"`
+	local target=`date +"$target_template" -d "@$filetimestamp" | sd -F -- '%@' "$basedir" | sd -F -- '%.' "$basename"`
 	if [ "${target: -1}" = / ]
 	then
 		target=$target$basename

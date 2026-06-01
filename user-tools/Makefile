@@ -54,20 +54,20 @@ $(addprefix /usr/share/bash-completion/completions/,$(COMPLETION_BASH_SCRIPTS)):
 	@$(record_uninstall)
 
 /usr/lib/multithrottler:
-	[ -d $@ ] || mkdir $@
+	[ -d $@ ] || $(INSTALL_WRAPPER) mkdir $@
 	@$(record_uninstall)
 
 
 $(TOOLS_TARGET_DIR):
-	[ -d $@ ] || mkdir $@
+	[ -d $@ ] || $(INSTALL_WRAPPER) mkdir $@
 	@$(record_uninstall)
 
 /usr/share/doc/tool:
-	[ -d $@ ] || mkdir $@
+	[ -d $@ ] || $(INSTALL_WRAPPER) mkdir $@
 	@$(record_uninstall)
 
 /usr/lib/tool:
-	[ -d $@ ] || mkdir $@
+	[ -d $@ ] || $(INSTALL_WRAPPER) mkdir $@
 	@$(record_uninstall)
 
 

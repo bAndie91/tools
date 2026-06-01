@@ -56,7 +56,8 @@ findnewestfile - Search for the newest file in a given path recursively and alwa
 fixRFC822filemtime - Set a file's last modification time, which contains an email message in RFC-822 format, to the email's Date
 fixlogfiledatetime - Set the target files modification time to their respective last log entry's timestamp
 fmtkv - Tranform key=value (each optionally double-quoted) pairs into 1 pair by 1 line on the output
-foreach - Run an OS or shell command on each input line, similar to xargs(1)
+forcestdout - force commands to send output to STDOUT
+foreach - Run a command on each input line, similar to xargs(1)
 g_filename_to_uri - Mimic g_filename_to_uri() GLib function creating a file:// url from path string
 getcvt - Print the current active Virtual Terminal
 git-submodule-auto-add - Automatically add submodules to a git repo according to .gitmodules file
@@ -79,7 +80,6 @@ levenshtein-distance - Calculate the Levenshtein distance of given strings
 lines - Output only the given lines of the input stream
 lnto - Convenience wrapper for ln(1). User enters link target paths relative to the current directory
 loggerexec - Run a command and send STDOUT and STDERR to syslog
-logrotate-counters - Increment numbers in file names
 logto - Run a command and append its STDOUT and STDERR to a file
 lpjobs - Show printer queue jobs (wrapper for lpq and lpstat)
 lsata - List ATA devices on the system
@@ -100,7 +100,9 @@ netrc - manage ~/.netrc file
 noacute - Strip diacritics (acute, umlaut, ...) from letters on the input stream
 nocomment - remove comment lines from input stream
 notashell - A non-interactive shell lacking of any shell syntax
+numoff - numbering offsets of a text file
 organizebydate - Rename files based on their date-time
+organizebydate-conflict-resolve-filename-version - Filename conflict resolver script for organizebydate(1)
 palemoon-current-urls - Display Palemoon web browser's currently opened URLs per window and per tab
 pararun - run commands parallelly
 parsel - Select parts of a HTML document based on CSS selectors
@@ -120,14 +122,15 @@ qrwifi - Generate a string, used in WiFi-setup QR codes, containing a hotspot na
 randstr - Generate random string from a given set of characters and with a given length.
 rcmod - Run a given command and modify its Return Code according to the rules given by the user
 redirexec - Execute a command with some file descriptors redirected.
-regargwrap - Replace non-regular file arguments to regular ones
 rename.td - rename multiple files by a Perl expression
 renamemanual - Interactive file rename tool
 repeat - Run the given command repeatedly
 replcmd - Wrap any command in a REPL interface
 reportcmdstatus - Textually show how the given command finished (exit status/signal)
+rotate-counters - Increment numbers in file names
 rsacrypt - Encrypt/decrypt files with RSA
 rsysrq - Send SysRQ commands remotely over the network
+saveout - Save a programm's output to dynamically named files
 screen-notify - Send status-line message to the current GNU/Screen instance
 screenconsole - Interactive CLI to run GNU/screen commands against current or specified screen session
 screenreattach - Reattach to GNU/screen and import environment variables
@@ -135,10 +138,12 @@ screens - List all GNU/Screen sessions accessible by the user and all of their i
 seekstdin - Makes STDIN seekable for a given command
 set-sys-path - Set PATH according to /etc/environment and run the given command
 set-xcursor-lock-and-run - Set X11 cursor to a padlock and run a command
+solidargs - Replace non-regular file arguments to regular temp files and exec into the specified command
 spoolprocess - process files in a spool directory
 ssh-agent-finder - Find a working ssh agent on the system so you get the same in each of your logon sessions
 stdfilt - Run a command but filter its STDOUT and STDERR
 stdmux - Multiplex the given command's STDOUT and STDERR by prefixing lines
+stdout2env - Substitute other command's STDOUT in command arguments and run the resulting command
 strip-ansi-seq - Dumb script removing more-or-less any ANSI escape sequences from the input stream
 subst_sudo_user - Sudo helper program
 substenv - Substitute environment variables in parameters and run the resulting command

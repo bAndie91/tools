@@ -102,7 +102,10 @@ sub checksum_file
 	{
 		connect_db();
 		my ($hexdigst) = $db_conn->selectrow_array("SELECT crc FROM checksum WHERE path = ?", undef, $path);
-		return $hexdigst;
+		if(defined $hexdigst)
+		{
+			return $hexdigst;
+		}
 	}
 
 	my $digest = Digest::CRC->new('crc64');
@@ -204,5 +207,5 @@ while(-e $proposed_target or -l $proposed_target)
 
 
 warn "${msg_prefix}new target: $proposed_target\n";
-print "proceed $new_target\n";
+print "proceed $proposed_target\n";
 exit 0;

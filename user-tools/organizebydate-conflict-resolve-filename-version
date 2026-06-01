@@ -1,20 +1,5 @@
 #!/usr/bin/env perl
 
-use Data::Dumper;
-use Digest::SHA;
-use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat no_auto_abbrev require_order/;
-use Pod::Usage;
-
-$version_sep1 = '.';
-$version_sep2 = '';
-
-sub checksum_file
-{
-	my $digest = Digest::SHA->new('sha-256');
-	$digest->addfile($_[0]);
-	return $digest->hexdigest;
-}
-
 =pod
 
 =head1 NAME
@@ -30,9 +15,16 @@ organizebydate-conflict-resolve-filename-version [I<OPTIONS>] I<SOURCE> I<TARGET
 This is a helper programm used by organizebydate(1) as a filename conflict resolver command.
 It signals that the I<SOURCE> is already equivalent to the I<TARGET> if their SHA-256 checksums match.
 If not, then sets a new target file name for organizebydate(1).
+
 The new target includes a version number in between the file's basename and extension,
 taking into account any already existing versioned file names, so no files gonna be overwritten
 (unless there is a race condition with other processes writing to the target directory).
+
+Compare I<SOURCE> to all existing versions of the I<TARGET> file, not just the base version.
+Versions are detected by increasing the version number integer
+and stop at the first non-existing file.
+So "gaps" in version numbers are not supported.
+
 
 =head1 OPTIONS
 
@@ -61,6 +53,16 @@ organizebydate(1)
 
 =cut
 
+use Data::Dumper;
+use Digest::SHA;
+use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat no_auto_abbrev require_order/;
+use Pod::Usage;
+use File::stat;
+
+$msg_prefix = "filename conflict resolver: ";
+$version_sep1 = '.';
+$version_sep2 = '';
+
 GetOptions(
 	's=s' => \$version_sep1,
 	't=s' => \$version_sep2,
@@ -69,64 +71,102 @@ GetOptions(
 
 pod2usage(-exitval=>2, -verbose=>99) unless scalar @ARGV == 2;
 
-$msg_prefix = "filename conflict resolver: ";
 
 $Source = $ARGV[0];
 $Target = $ARGV[1];
 
-warn "${msg_prefix}source: $Source\n";
-warn "${msg_prefix}target: $Target\n";
-if($ENV{'SOURCE_FILE_SIZE'} eq $ENV{'TARGET_FILE_SIZE'})
+
+sub checksum_file
 {
-	warn "${msg_prefix}sizes match, comparing checksums...\n";
-	if(checksum_file($Source) eq checksum_file($Target))
+	my $digest = Digest::SHA->new('sha-256');
+	$digest->addfile($_[0]);
+	return $digest->hexdigest;
+}
+
+sub same_as_source_file
+{
+	my ($file2) = @_;
+
+	my $size1 = $ENV{'SOURCE_FILE_SIZE'};
+	my $size2 = (stat $file2)->size;
+	
+	if($size1 eq $size2)
 	{
-		warn "${msg_prefix}checksums match exactly.\n";
-		print "done\n";
-		exit 0;
+		warn "${msg_prefix}sizes match, comparing checksums...\n";
+		if(not defined $cksum_source)
+		{
+			$cksum_source = checksum_file($Source);
+		}
+		if($cksum_source eq checksum_file($file2))
+		{
+			warn "${msg_prefix}checksums match exactly.\n";
+			return 1;
+		}
+		else
+		{
+			warn "${msg_prefix}checksums differ.\n";
+		}
 	}
 	else
 	{
-		warn "${msg_prefix}checksums differ.\n";
+		warn "${msg_prefix}sizes differ.\n";
 	}
+	return 0;
 }
-else
+
+sub increase_version_number
 {
-	warn "${msg_prefix}sizes differ.\n";
+	# insert the version number in the file name right before the extension.
+
+	my ($filename) = @_;
+	my ($prefix, $suffix, $version);
+
+	my ($target_dir, $target_file) = $filename =~ /^(.*?)([^\/]+)$/;
+	# keep the last dot-delimited substring as filename extension:
+	if($target_file =~ /^(.+?)(\.[^\.]+)$/)
+	{
+		$prefix = $1;
+		$suffix = $2;
+	}
+	else
+	{
+		$prefix = $target_file;
+		$suffix = '';
+	}
+	$version = 2;
+
+	# notice if the filename already has a version number:
+	if($prefix =~ /\Q$version_sep1\E(\d+)\Q$version_sep2\E$/)
+	{
+		$version = $1 + 1;
+		$prefix = $`;
+	}
+
+	return $target_dir . $prefix . $version_sep1 . $version . $version_sep2 . $suffix;
 }
 
+warn "${msg_prefix}source: $Source\n";
+$proposed_target = $Target;
 
-my ($target_dir, $target_file) = $Target =~ /^(.*?)([^\/]+)$/;
-# keep the last dot-delimited substring as filename extension:
-if($target_file =~ /^(.+?)(\.[^\.]+)$/)
+if($ENV{'SOURCE_FILE_SIZE'} !~ /^\d+$/)
 {
-	$prefix = $1;
-	$suffix = $2;
+	$ENV{'SOURCE_FILE_SIZE'} = (stat $Source)->size;
 }
-else
+
+while(-e $proposed_target or -l $proposed_target)
 {
-	$prefix = $target_file;
-	$suffix = '';
-}
-$version = 2;
+	warn "${msg_prefix}target: $proposed_target\n";
 
-# notice if the filename already has a version number:
-if($prefix =~ /\Q$version_sep1\E(\d+)\Q$version_sep2\E$/)
-{
-	$version = $1 + 1;
-	$prefix = $`;
-}
+	if(same_as_source_file($proposed_target))
+	{
+		print "done\n";
+		exit 0;
+	}
 
-
-# find the next version number:
-while(1)
-{
-	# insert the version number right before the extension:
-	$new_target = $target_dir . $prefix . $version_sep1 . $version . $version_sep2 . $suffix;
-	last if ! -e $new_target and ! -l $new_target;
-	$version++;
+	$proposed_target = increase_version_number($proposed_target);
 }
 
-warn "${msg_prefix}new target: $new_target\n";
+
+warn "${msg_prefix}new target: $proposed_target\n";
 print "proceed $new_target\n";
 exit 0;

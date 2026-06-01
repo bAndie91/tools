@@ -41,6 +41,11 @@ Set I<STR> as the string separating the version number from the filename suffix 
 Default is empty, so the version number is followed by the dot directly which is the part of the suffix,
 if there is an extension.
 
+=item --checksum-db I<FILE>
+
+Read and record file checksums from and to.
+So no need to recompute for the same file path.
+
 =back
 
 =head1 EXAMPLES
@@ -54,18 +59,22 @@ organizebydate(1)
 =cut
 
 use Data::Dumper;
-use Digest::SHA;
+use Digest::CRC;
 use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat no_auto_abbrev require_order/;
 use Pod::Usage;
 use File::stat;
+use DBI;
 
 $msg_prefix = "filename conflict resolver: ";
 $version_sep1 = '.';
 $version_sep2 = '';
+$checksum_db = undef;
+$db_conn = undef;
 
 GetOptions(
 	's=s' => \$version_sep1,
 	't=s' => \$version_sep2,
+	'checksum-db=s' => \$checksum_db,
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
@@ -76,11 +85,38 @@ $Source = $ARGV[0];
 $Target = $ARGV[1];
 
 
+sub connect_db
+{
+	if(not defined $db_conn)
+	{
+		$db_conn = DBI->connect("dbi:SQLite:dbname=$checksum_db", undef, undef, {AutoCommit=>1, PrintError=>1, PrintWarn=>1, RaiseError=>1});
+	}
+	$db_conn->do("CREATE TABLE IF NOT EXISTS checksum (path TEXT PRIMARY KEY, crc TEXT NOT NULL) WITHOUT ROWID");
+}
+
 sub checksum_file
 {
-	my $digest = Digest::SHA->new('sha-256');
-	$digest->addfile($_[0]);
-	return $digest->hexdigest;
+	my ($path, %opt) = @_;
+
+	if($opt{'lookup_db'} and defined $checksum_db)
+	{
+		connect_db();
+		my ($hexdigst) = $db_conn->fetchrow_arrayref("SELECT crc FROM checksum WHERE path = ?", undef, $path);
+		return $hexdigst;
+	}
+
+	my $digest = Digest::CRC->new('crc64');
+	open my $fh, '<', $path;
+	$digest->addfile($fh);
+	close $fh;
+	my $hexdigst = $digest->hexdigest;
+
+	if($opt{'write_db'} and defined $checksum_db)
+	{
+		connect_db();
+		$db_conn->do("INSERT OR REPLACE INTO checksum (crc, path) VALUES (?, ?)", undef, $hexdigst, $path);
+	}
+	return $hexdigst;
 }
 
 sub same_as_source_file
@@ -97,7 +133,7 @@ sub same_as_source_file
 		{
 			$cksum_source = checksum_file($Source);
 		}
-		if($cksum_source eq checksum_file($file2))
+		if($cksum_source eq checksum_file($file2, lookup_db=>1, write_db=>1))
 		{
 			warn "${msg_prefix}checksums match exactly.\n";
 			return 1;

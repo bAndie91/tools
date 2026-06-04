@@ -1,0 +1,15 @@
+#!/bin/bash
+
+set -e
+
+rotation=$1
+shift
+
+for path in "$@"
+do
+	basename=${path##*/}
+	dirname=${path%/*}
+	tmpfile="$dirname/.${basename%.*}.tmp.${basename##*.}"
+	convert -rotate "$rotation" -orient TopLeft "$path" "$tmpfile"
+	mv "$tmpfile" "$path"
+done

@@ -1,0 +1,31 @@
+#!/bin/bash
+
+if [ -z "$af3fc8ab5873413baa3f1a242404f5de" ]
+then
+	export af3fc8ab5873413baa3f1a242404f5de=1
+	exec x-terminal-emulator -T "video-rotate" -e bash -c 'if ! "$@"; then echo ERROR $?; sleep inf; fi' -- "$0" "$@"
+fi
+
+set -e
+
+rotation=$1
+shift
+
+for path in "$@"
+do
+	dirname=${path%/*}
+	filename=${path##*/}
+	basename=${filename%.*}
+	ext=${filename##*.}
+	
+	case "${ext,,}" in
+	(mp4|mov|3gp)
+		exiftool -verbose -Rotation'<${Rotation;$_=($_+'"$rotation"')%360}' -overwrite_original "$path"
+		;;
+	(*)
+		tmpfile="$dirname/.$basename.tmp.$ext"
+		ffmpeg -i "$path" -c copy -map_metadata 0 -metadata:s:v rotate=$rotation "$tmpfile"
+		mv "$tmpfile" "$path"
+		;;
+	esac
+done

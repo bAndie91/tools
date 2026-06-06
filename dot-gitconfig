@@ -127,7 +127,7 @@
 	grep-commit = log -p --pickaxe-all -G
 	history = ! "cd \"$GIT_PREFIX\" && bash -c 'opts=(); while [ \"${1:0:1}\" = - ]; do opts+=(\"$1\"); shift; done; git log --follow --patch \"${opts[@]}\" -- \"$@\"' --"
 	patch-history = log --pretty=email --patch-with-stat --reverse --full-index --binary -m --first-parent --
-	tags = ! "f(){ git tag -l -n \"$@\" | sort -V; }; f"
+	tags = tag -l --format="%(objectname:short)%09%(refname:strip=2)%09%(contents:lines=1)" --sort=version:refname
 	
 	# get branch/ref info
 	
@@ -207,9 +207,10 @@
 	
 	# commit
 	commit-tracked = ! "fn(){ git commit -a -m \"$*\"; }; fn"
-	ct = ! "git commit-tracked"
+	ct = commit-tracked
 	commit-stage = ! "fn(){ git commit -m \"$*\"; }; fn"
-	rephrase = commit --amend
+	cs = commit-stage
+	rephrase = ! "fn(){ git commit --amend -m \"$*\"; } fn"
 	
 	fixup = ! "hash=$(git show -s --format=%H); git commit -a -m \"fixup! $hash\"; EDITOR=true VISUAL=true git rebase --interactive --autosquash $hash^"
 	undo-commit = reset --soft HEAD~

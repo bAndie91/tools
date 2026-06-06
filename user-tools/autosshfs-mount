@@ -20,6 +20,8 @@ remote_root=$3
 # %r@%n(%h):%p
 # relevant ssh config option: ControlPath /home/.../somewhere/%r@%n(%h):%p
 # see man ssh_config(5) for details.
+# %n    The original remote hostname, as given on the command line.
+# %h    The remote hostname.
 #
 # example incrontab:
 # /home/.../somewhere IN_CREATE autosshfs-mount mnt/ssh $# /
@@ -43,7 +45,15 @@ then
 		ln -snfT "$mountname" "$mountpoint_basedir/$host"
 		if ! mountpoint "$mountpoint"
 		then
-			if [ -e ~/.ssh/autosshfs-extra-options ]; then extra_options=,`cat ~/.ssh/autosshfs-extra-options`; else extra_options=''; fi
+			extra_options=''
+			for extra_options_filename_suffix in ".$host" ".$hostname" ''
+			do
+				extra_options_filename=~/.ssh/autosshfs-extra-options"$extra_options_filename_suffix"
+				if [ -e "$extra_options_filename" ]
+				then
+					extra_options=$extra_options,$(cat "$extra_options_filename")
+				fi
+			done
 			sshfs -o allow_root,auto_unmount,Port=$port,ControlMaster=no,transform_symlinks,Hostname="$hostname"$extra_options "$user@$host:$remote_root" "$mountpoint" {lockfd}>&-
 			err=$?
 			if [ $err != 0 ]

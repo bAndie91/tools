@@ -1,5 +1,6 @@
 
-TOOLS = gexifcomment gtail xgcal xstopper perspect xcred gmenu
+TOOLS = gexifcomment gtail xgcal xstopper perspect xcred gmenu \
+  image-rotate video-rotate
 
 include ../user-tools/Makefile
 
@@ -17,3 +18,17 @@ DEPCHECK/xgcal:
 /usr/share/xgcal:
 	$(INSTALL_WRAPPER) mkdir -p $@
 	@$(record_uninstall)
+
+
+THUNAR_CUSTOM_ACTION_COMMANDS = image-rotate video-rotate
+THUNAR_CUSTOM_ACTION_COMMAND_TARGETS = $(foreach name,$(THUNAR_CUSTOM_ACTION_COMMANDS),$(TOOLS_TARGET_DIR)/$(name))
+
+THUNAR_CUSTOM_ACTION_FILES = $(wildcard thunar-custom-actions/*.xml)
+THUNAR_UCA_CONFIG_FILE = $(HOME)/.config/Thunar/uca.xml
+.PHONY: install-thunar-custom-actions
+install-thunar-custom-actions: $(THUNAR_UCA_CONFIG_FILE)
+
+$(THUNAR_UCA_CONFIG_FILE): $(THUNAR_CUSTOM_ACTION_FILES) $(THUNAR_CUSTOM_ACTION_COMMAND_TARGETS)
+$(THUNAR_CUSTOM_ACTION_FILES):
+	xmlinsert $(THUNAR_UCA_CONFIG_FILE) /actions unique-id < $@
+

@@ -1,0 +1,11 @@
+<action>
+	<icon />
+	<name>↷ Rotate CW</name>
+	<submenu>rotate</submenu>
+	<unique-id>9e8ff571-7a2a-4b79-80f7-585701452897-3</unique-id>
+	<command>video-rotate 90 %F</command>
+	<description />
+	<range>*</range>
+	<patterns>*</patterns>
+	<video-files />
+</action>

@@ -1,0 +1,11 @@
+<action>
+	<icon />
+	<name>↶ Rotate CCW</name>
+	<submenu>rotate</submenu>
+	<unique-id>9e8ff571-7a2a-4b79-80f7-585701452897-2</unique-id>
+	<command>video-rotate 270 %F</command>
+	<description />
+	<range>*</range>
+	<patterns>*</patterns>
+	<video-files />
+</action>

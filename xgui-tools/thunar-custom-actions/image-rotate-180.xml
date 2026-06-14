@@ -1,0 +1,11 @@
+<action>
+	<icon />
+	<name>↺ Rotate 180°</name>
+	<submenu>rotate</submenu>
+	<unique-id>888ff571-7a2a-4b79-80f7-585701452897-4</unique-id>
+	<command>image-rotate 180 %F</command>
+	<description />
+	<range>*</range>
+	<patterns>*</patterns>
+	<image-files />
+</action>

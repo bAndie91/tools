@@ -114,7 +114,7 @@ jget()
 {
 	local json=$1
 	shift
-	jq -r " $* // \"\" " <<< "$json"
+	jq -r " ($*) // \"\" " <<< "$json"
 }
 
 error=`jget "$resp" .error`
@@ -133,5 +133,5 @@ then
 	echo "detection confidence	$confidence%"
 fi
 
-jget "$resp" .alternatives[] | prefixlines "alternative	"
+jget "$resp" '.alternatives | to_entries | .[] | .key as $key | .value | split("\n") | .[] | ($key|tostring)+"\t"+.' | perl -pe 's/^(\d+)\s/alternative.$1\t/'
 jget "$resp" .translatedText | prefixlines "translation	"

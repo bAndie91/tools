@@ -1,0 +1,53 @@
+#!/bin/bash
+
+set -euo pipefail
+#set -x
+
+the_git_dir=FILLME
+
+gittempfile=$1
+
+
+find_encrypted_full_path()
+{
+	local commit
+	local full_path
+	
+	GIT_DIR=$the_git_dir git log --format=%H |\
+	while read commit
+	do
+		full_path=$(
+			GIT_DIR="$the_git_dir" git ls-tree -r "$commit" --name-only |\
+			awk -F / -v "basename=$1" '$NF==basename { print; exit; }'
+		)
+		if [ -n "$full_path" ]
+		then
+			printf %s "$full_path"
+			break
+		fi
+	done
+}
+
+
+basename=${gittempfile##*/}
+encpath=`find_encrypted_full_path "$basename"`
+
+if [ -z "$encpath" ]
+then
+	echo "${0##*/}: encfs path not found for: $basename" >&2
+	exit 2
+fi
+
+tempdir=`TMPDIR=/dev/shm/PRIVATEDIR mktemp -d -t XXXXX`
+tempfile=$tempdir/$encpath
+mkdir -p "${tempfile%/*}"
+cat < "$gittempfile" > "$tempfile"
+cat "$the_git_dir"/.encfs6.xml > "$tempdir/.encfs6.xml"
+
+encname=`encfsctl decode --extpass='cred site encfs.self reveal PASSWORD' "$tempdir" -- "$encpath"`
+# can not affect the pathnames in the git diff output by textconv mechanism, so show it this way as part of the file content:
+echo "# plaintext-path=$encname"
+
+encfsctl cat --extpass='cred site encfs.self reveal PASSWORD' "$tempdir" -- "$encpath"
+
+rm -r "$tempdir" || true

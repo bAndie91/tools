@@ -642,7 +642,12 @@ if(not eval {
 			next;
 		}
 		
-		printf STDERR "uniproc: %d/%d%s%s\n", $LineNum+1, $TotalDataNum, ($OptShowData ? (": ", $Data) : ("", "")) if $OptShowProgress;
+		if($OptShowProgress or $OptShowData)
+		{
+			printf STDERR "uniproc: %s%s%s\n", 
+				($OptShowProgress ? sprintf("%d/%d", $LineNum+1, $TotalDataNum) : ""),
+				($OptShowData ? (": ", $Data) : ("", ""));
+		}
 		
 		$ENV{'UNIPROC_DATANUM'} = $LineNum;
 		$ENV{'UNIPROC_DATANUM_1INDEX'} = $LineNum+1;

@@ -251,7 +251,8 @@ has_prop()
 {
 	local prop=$1
 	shift
-	[ -f "$basedir/$site/$prop" ]
+	local propfile="$basedir/$site/$prop"
+	[ -e "$propfile" -o -L "$propfile" ]
 }
 
 prop()
@@ -353,7 +354,12 @@ prop()
 		fi
 		;;
 	(reveal)
-		cat "$basedir/$site/$prop"
+		if has_prop "$prop"
+		then
+			cat "$basedir/$site/$prop"
+		else
+			exit_with_msg 2 "prop not found: $prop"
+		fi
 		;;
 	(clip)
 		prop "$prop" reveal "$@" | do_clip "$prop"

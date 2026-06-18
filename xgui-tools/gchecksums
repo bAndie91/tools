@@ -1,0 +1,170 @@
+#!/usr/bin/env python2.7
+
+# TODO rework in simplified form (eg. with gtabdata)
+# TODO add Thunar UCA entry
+
+import os
+import sys
+import signal
+import re
+import glib
+import gtk
+import threading
+gtk.threads_init()
+import pango
+import time
+
+
+def main_win_show(widget, event):
+	win.disconnect(start_evt)
+	
+	for ck in Checksum:
+		pid, pipe_write, pipe_read = spawn(ck['cmd'])
+		ck['process'] = {'pid': pid, 'write': pipe_write, 'read': pipe_read}
+	
+	DataThread.start()
+	put_texts()
+
+class FeedThread(threading.Thread):
+	def terminate_subprocesses(self):
+		for ck in filter(lambda ck: ck.has_key('process'), Checksum):
+			PID = ck['process']['pid']
+			os.kill(PID, signal.SIGINT)
+			os.waitpid(PID, 0)
+	def update_progressbar(self, Red, Size):
+		if Size == 0:
+			frac = 1.0
+		else:
+			frac = Red/Size
+		progressbar.set_fraction(frac)
+		progresslbl.set_text('%d%%' % (frac*100,))
+	def run(self):
+		self.should_run = True
+		fh = open(Filepath, 'r')
+		Size = os.fstat(fh.fileno()).st_size + 0.0
+		Red = 0.0
+		while self.should_run:
+			buf = fh.read(4096)
+			if buf == '':
+				Red = Size
+			else:
+				Red += len(buf)
+			glib.idle_add(lambda: self.update_progressbar(Red, Size), priority=glib.PRIORITY_DEFAULT_IDLE)
+			if buf == '': break
+			for ck in Checksum:
+				if self.should_run:
+					pass
+					ck['process']['write'].write(buf)
+		for ck in Checksum:
+			ck['process']['write'].close()
+		if not self.should_run:
+			self.terminate_subprocesses()
+			return
+		while any(ck.has_key('process') for ck in Checksum):
+			for ck in filter(lambda ck: ck.has_key('process'), Checksum):
+				PID = ck['process']['pid']
+				pid, status = os.waitpid(PID, os.WNOHANG)
+				if pid == PID:
+					output = ck['process']['read'].readline()
+					del ck['process']
+					match = re.match('\S+', output)
+					if match:
+						ck['sum'] = match.group(0)
+						glib.idle_add(put_texts, priority=glib.PRIORITY_DEFAULT_IDLE)
+
+
+def add_key_binding(widget, keyname, callback):
+	accelgroup = gtk.AccelGroup()
+	key, modifier = gtk.accelerator_parse(keyname)
+	accelgroup.connect_group(key, modifier, gtk.ACCEL_VISIBLE, callback)
+	widget.add_accel_group(accelgroup)
+
+def bye(*ignore):
+	DataThread.should_run = False
+	gtk.main_quit()
+	DataThread.join()
+
+def put_texts():
+	width = max(len(ck['name']) for ck in Checksum)
+	text = ('%%%ds = %%s\n\n' % width) % ('File', Filepath,)
+	for ck in Checksum:
+		text += ('%%%ds = %%s\n' % width) % (ck['name'], ck['sum'] or '...',)
+	textbuffer.set_text(text)
+
+def spawn(cmd):
+	#sys.stderr.write("spawning %s\n" % cmd[0])
+	
+	pipe_child_read, pipe_parent_write = os.pipe()
+	pipe_parent_read, pipe_child_write = os.pipe()
+	
+	pipe_parent_write = os.fdopen(pipe_parent_write, 'w')
+	pipe_child_read = os.fdopen(pipe_child_read, 'r')
+	pipe_child_write = os.fdopen(pipe_child_write, 'w')
+	pipe_parent_read = os.fdopen(pipe_parent_read, 'r')
+	
+	pid = os.fork()
+	if pid == 0:
+		pipe_parent_read.close()
+		pipe_parent_write.close()
+		os.dup2(pipe_child_read.fileno(), sys.stdin.fileno())
+		os.dup2(pipe_child_write.fileno(), sys.stdout.fileno())
+		try:
+			os.execvp(cmd[0], cmd)
+		except OSError as e:
+			pass
+		os._exit(127)
+	else:
+		pipe_child_read.close()
+		pipe_child_write.close()
+	return pid, pipe_parent_write, pipe_parent_read
+
+
+Checksum = [
+	{'name': 'CRC/32',    'sum': '', 'cmd': ('crc32', '/dev/stdin')},
+	{'name': 'MD5',         'sum': '', 'cmd': ('md5sum', '-b')},
+	{'name': 'SHA-1',       'sum': '', 'cmd': ('sha1sum', '-b')},
+	{'name': 'SHA-224',     'sum': '', 'cmd': ('sha224sum', '-b')},
+	{'name': 'SHA-256',     'sum': '', 'cmd': ('sha256sum', '-b')},
+	{'name': 'SHA-384',     'sum': '', 'cmd': ('sha384sum', '-b')},
+	{'name': 'SHA-512',     'sum': '', 'cmd': ('sha512sum', '-b')},
+	{'name': 'FNV-0/32',  'sum': '', 'cmd': ('fnv0-32',)},
+	{'name': 'FNV-0/64',  'sum': '', 'cmd': ('fnv0-64',)},
+	{'name': 'FNV-1/32',  'sum': '', 'cmd': ('fnv1-32',)},
+	{'name': 'FNV-1/64',  'sum': '', 'cmd': ('fnv1-64',)},
+	{'name': 'FNV-1a/32', 'sum': '', 'cmd': ('fnv1a-32',)},
+	{'name': 'FNV-1a/64', 'sum': '', 'cmd': ('fnv1a-64',)},
+]
+DataThread = FeedThread()
+Filepath = sys.argv[1]
+
+
+
+win = gtk.Window()
+win.set_default_size(720, 350)
+win.connect('delete-event', bye)
+start_evt = win.connect('map-event', main_win_show)
+add_key_binding(win, 'Escape', bye)
+
+frame = gtk.VBox()
+box_progress = gtk.HBox()
+progressbar = gtk.ProgressBar()
+progresslbl = gtk.Label()
+scroll = gtk.ScrolledWindow()                                                               
+textbuffer = gtk.TextBuffer()
+textview = gtk.TextView(textbuffer)
+fontdesc = pango.FontDescription('monospace 12')
+
+textview.set_editable(False)
+textview.modify_font(fontdesc)                                                          
+scroll.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+
+win.add(frame)
+frame.pack_start(box_progress, False, False, 0)
+box_progress.pack_start(progressbar, True, True, 0)
+box_progress.pack_start(progresslbl, False, False, 0)
+frame.pack_start(scroll, True, True, 0)
+scroll.add(textview)
+
+win.show_all()
+gtk.main()
+

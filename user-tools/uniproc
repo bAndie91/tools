@@ -675,7 +675,7 @@ if(not eval {
 		if($OptErrExit)
 		{
 			$ExitStatus = WIFSIGNALED($status) ? 128 + WTERMSIG($status) : WEXITSTATUS($status);
-			last;
+			last if $ExitStatus != 0;
 		}
 		
 		$num_shots++;

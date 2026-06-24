@@ -579,7 +579,7 @@ class TreeView(gtk.TreeView):
 		popup_menu.append(mi)
 
 		if tv_col.get_font_desc().get_family() == 'monospace':
-			mi = ImageMenuItem(label="normal font", icon=gtk.STOCK_SELECT_FONT)
+			mi = ImageMenuItem(label="propotional font", icon=gtk.STOCK_SELECT_FONT)
 			mi.connect('activate', lambda mi, col: col.set_font_desc(None), tv_col)
 		else:
 			mi = ImageMenuItem(label="monospace font", icon=gtk.STOCK_SELECT_FONT)
@@ -1333,7 +1333,9 @@ def ErrorMessage(message_markup, title=None, details=None):
 	if details is not None:
 		dlg.set_resizable(True)
 		carea = dlg.get_content_area()
-		carea.pack_start(Scrollable(Label(markup='<tt>'+glib.markup_escape_text(details)+'</tt>')), True, True)
+		details_label = Label(markup='<tt>'+glib.markup_escape_text(details)+'</tt>')
+		details_label.set_selectable(True)
+		carea.pack_start(Scrollable(details_label), True, True)
 	dlg.get_widget_for_response(gtk.RESPONSE_OK).connect('clicked', lambda btn, dlg: dlg.destroy(), dlg)
 
 	dlg.connect('map-event', lambda *X: PropertyPersistor(dlg, 'error-dialog', [

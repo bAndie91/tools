@@ -31,6 +31,19 @@ def usage():
 	sys.exit(1)
 
 
+def xml_elements_equal(elem1, elem2):
+	"""Recursively compare two XML elements for equality."""
+	if elem1.tag != elem2.tag:
+		return False
+	if (elem1.text or "") != (elem2.text or ""):
+		return False
+	if elem1.attrib != elem2.attrib:
+		return False
+	if len(elem1) != len(elem2):
+		return False
+	return all(xml_elements_equal(c1, c2) for c1, c2 in zip(elem1, elem2))
+
+
 def main():
 	if len(sys.argv) != 4:
 		usage()
@@ -70,11 +83,20 @@ def main():
 	new_key_value = new_key_elem.text
 
 	# Check for existing element with same unique field value
-	for child in parent:
+	for i, child in enumerate(parent):
 		existing_key = child.find(unique_field_name)
 		if existing_key is not None and existing_key.text == new_key_value:
-			print("xmlinsert: " + unique_field_name + " = '" + new_key_value + "' already present, skipping.")
-			sys.exit(0)
+			# Found matching unique field - compare entire XML structure
+			if xml_elements_equal(child, new_elem):
+				print("xmlinsert: " + unique_field_name + " = '" + new_key_value + "' already present, skipping.")
+				sys.exit(0)
+			else:
+				# Structure differs - replace the existing element
+				new_elem.tail = child.tail  # preserve original tail whitespace
+				parent[i] = new_elem
+				tree.write(base_file, encoding="UTF-8", xml_declaration=True)
+				print("xmlinsert: " + unique_field_name + " = '" + new_key_value + "' replaced.")
+				sys.exit(0)
 
 	# Fix up tail whitespace so inserted element is on its own line
 	# Match the indentation style of existing siblings if any

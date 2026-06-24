@@ -1,0 +1,11 @@
+<action>
+	<icon>media-removable</icon>
+	<name>syncfs</name>
+	<submenu></submenu>
+	<unique-id>adc721d5-1355-4558-88b5-240c8b359982</unique-id>
+	<command>urxvt -e reportcmdstatus -s -w syncfs %f</command>
+	<description>Synchonize data to disk</description>
+	<range>1-1</range>
+	<patterns>*</patterns>
+	<directories/>
+</action>

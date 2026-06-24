@@ -137,3 +137,19 @@ install-manpages: $(MANPAGE_FILES) $(SYSTEM_MANPAGES_PATH)/lastbcsv$(MANPAGE_FIL
 /sbin/suid-reboot /sbin/suid-halt: /sbin/%: %
 	$(INSTALL_WRAPPER) install -o root -g root -m 4444 $< $@
 	$(INSTALL_WRAPPER) setfacl -m u:$(subst /sbin/suid-,,$@):r-x $@
+
+
+
+THUNAR_CUSTOM_ACTION_COMMANDS = syncfs
+THUNAR_CUSTOM_ACTION_COMMAND_TARGETS = $(foreach name,$(THUNAR_CUSTOM_ACTION_COMMANDS),$(TARGET_DIR)/$(name))
+
+THUNAR_CUSTOM_ACTION_FILES = $(wildcard thunar-custom-actions/*.xml)
+THUNAR_UCA_CONFIG_FILE = $(HOME)/.config/Thunar/uca.xml
+.PHONY: install-thunar-custom-actions
+install-thunar-custom-actions: $(THUNAR_CUSTOM_ACTION_COMMAND_TARGETS)
+	$(MAKE) $(THUNAR_UCA_CONFIG_FILE) 
+
+$(THUNAR_UCA_CONFIG_FILE): $(THUNAR_CUSTOM_ACTION_FILES)
+$(THUNAR_CUSTOM_ACTION_FILES):
+	xmlinsert $(THUNAR_UCA_CONFIG_FILE) /actions unique-id < $@
+

@@ -66,9 +66,17 @@ sub ssh_control_sockets
 @config_hosts = list_ssh_config_hosts;
 @rhosts = sort {lc $a cmp lc $b} uniq @known_hosts, @config_hosts;
 
+# Note, have to set this ssh config:
+# ControlPath ~/.ssh/ctrl/%r@%n(%h):%p
 @connected_hosts = map { /\@(.+?)\(/; $1; } ssh_control_sockets("$HOME/.ssh/ctrl/");
 
-$executor = "x-terminal-emulator -e env REPEAT_UNTIL=0 REPEAT_DELAY=enter repeat";
+sub command_executor
+{
+	my $title = shift;
+	my $cmdref = shift;
+	my @cmd = @$cmdref;
+	return "x-terminal-emulator -T \"$title\" -e env REPEAT_UNTIL=0 REPEAT_DELAY=enter repeat " . join(' ', map {/^\w+$/ ? $_ : "\"$_\""} @cmd);
+}
 
 for my $rhost (@rhosts)
 {
@@ -77,9 +85,9 @@ for my $rhost (@rhosts)
 	{
 		$icon = "laptopconnected";
 	}
-	print "prog \"$rhost\" $icon $executor ssh \"$rhost\"\n";
+	print "prog \"$rhost\" $icon " . command_executor("ssh $rhost", ["ssh", $rhost]) . "\n";
 	if($rhost ~~ @connected_hosts)
 	{
-		print "prog \"$rhost DISCONNECT\" gtk-disconnect $executor ssh \"$rhost\" -O exit\n";
+		print "prog \"$rhost DISCONNECT\" gtk-disconnect " . command_executor("disconnect ssh: $rhost", ["ssh", $rhost, "-O", "exit"]) . "\n";
 	}
 }

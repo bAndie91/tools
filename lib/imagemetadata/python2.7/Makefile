@@ -1,4 +1,6 @@
 
+INSTALL_WRAPPER =
+
 
 ifndef PYTHONLIBDIR
 PYTHONPREFIX = $(shell python2.7-config --prefix)
@@ -17,7 +19,7 @@ default:
 	@false
 
 $(PYTHONLIBDIR)/imagemetadata.py: imagemetadata.py
-	install --compare "$<" "$@"
+	$(INSTALL_WRAPPER) install --compare "$<" "$@"
 
 .PHONY: install
 install: $(PYTHONLIBDIR)/imagemetadata.py

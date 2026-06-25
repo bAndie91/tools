@@ -19,7 +19,7 @@ if pyexiv2 is None:
 		pass
 		
 if pyexiv2 is None and piexif is None:
-	raise ImportError("Neither pyexiv2 nor piexif module found.")
+	raise ImportError("Neither pyexiv2 (with ImageMetadata support) nor piexif module found.")
 
 FLIP, FLOP, CLOCKWISE, COUNTERCLOCKWISE, UPSIDEDOWN = range(5)
 

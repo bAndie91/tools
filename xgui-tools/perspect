@@ -317,7 +317,7 @@ def load_image(imageobj, sourcefile):
 	image.set_from_pixbuf(rotation['pixbuf'])
 
 def do_open(*_):
-	run_command_background(["gpicview", glob.sourcefile])
+	run_command_background(["mimeopen-gui", glob.sourcefile])
 
 def do_save_as(*_):
 	proposed_path = os.environ.get('PERSPECT_ORIGIN_FILE', glob.sourcefile)

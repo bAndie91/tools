@@ -1,5 +1,55 @@
 #!/usr/bin/env perl
 
+=pod
+
+=head1 NAME
+
+confpatch - set options/values in config file of various formats
+
+=head1 SYNOPSIS
+
+confpatch I<CONFIG_FILE> < I<INPUT_FILE>
+
+=head1 DESCRIPTION
+
+Take config option keys and values on I<INPUT_FILE>
+and edit I<CONFIG_FILE> line-based config file in-place
+to set those config options to the input value (leaving old lines in C<#>-prefixed comment),
+or add those options in I<CONFIG_FILE> if not yet found in it.
+
+=head1 ENVIRONMENT
+
+=over 4
+
+=item B<CONFPATCH_TYPE>
+
+One of B<environment>, B<simple-space>, B<custom>.
+
+=item B<CONFPATCH_KV_PATTERN>
+
+Regexp with 2 capture groups to find option keys and values in I<CONFIG_FILE> when B<CONFPATCH_TYPE> is B<custom>.
+
+=item B<CONFPATCH_POST_CHANGE>
+
+Shell command run after there was any modifications to I<CONFIG_FILE>.
+
+=back
+
+=head1 EXAMPLES
+
+ CONFPATCH_TYPE="environment" confpatch /etc/environment < ...
+ 
+ CONFPATCH_TYPE="simple-space" confpatch /etc/screenrc < ...
+
+ CONFPATCH_TYPE="custom" CONFPATCH_KV_PATTERN='^set\s+(\S+)\s+(.+)$$' confpatch /etc/inputrc < ...
+
+=head1 LIMITATIONS
+
+=head1 SEE ALSO
+
+=cut
+
+
 use Fcntl qw/:flock :seek/;
 
 $input_type = $ENV{'CONFPATCH_TYPE'};
@@ -21,6 +71,7 @@ else
 	die "$0: unknown input type given in CONFPATCH_TYPE: $input_type, valid types: environment, simple-space, custom\n";
 }
 
+$Changed = 0;
 $target_file = $ARGV[0];
 
 open $target_fh, '+<', $target_file or die "$0: open $target_file: $!\n";
@@ -55,6 +106,7 @@ while($variable_definition = <STDIN>)
 						print {$target_fh} "$variable_definition\n";
 						print {$target_fh} $buffer_rest_of_file;
 						warn "$0: patched $varname\n";
+						$Changed = 1;
 					}
 					$variable_set = 1;
 					last;
@@ -65,10 +117,23 @@ while($variable_definition = <STDIN>)
 		{
 			print {$target_fh} "$variable_definition\n";
 			warn "$0: added $varname\n";
+			$Changed = 1;
 		}
 	}
 	else
 	{
 		warn "$0: invalid input line $.: $_\n";
+	}
+}
+
+if($Changed)
+{
+	$run_on_change = $ENV{'CONFPATCH_POST_CHANGE'};
+	if($run_on_change)
+	{
+		warn "$0: running: $run_on_change\n";
+		my $shell = $ENV{'SHELL'} || '/bin/sh';
+		exec $shell, '-c', $run_on_change;
+		exit 127;
 	}
 }

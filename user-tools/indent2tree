@@ -23,10 +23,12 @@ binmode STDOUT, ':utf8';
 );
 $OptOutputPaths = 0;
 $OptPathSep = '/';
+$HorizontalLength = undef;
 
 GetOptions(
 	'v|vertical=s' => \$Charset{vert},
 	'h|horizontal=s' => \$Charset{hori},
+	'H|horiz-length=i' => \$HorizontalLength,
 	'c|child=s' => \$Charset{chld},
 	'l|last=s' => \$Charset{last},
 	'g|gap=s' => \$Charset{pgap},
@@ -43,6 +45,11 @@ GetOptions(
 	},
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
+
+if(defined $HorizontalLength)
+{
+	$Charset{hori} = substr($Charset{hori} x $HorizontalLength, 0, $HorizontalLength);
+}
 
 $indent_prev = 0;
 $level = 0;
@@ -168,6 +175,11 @@ Set B<-v>, B<-h>, B<-c>, and B<-l> options' values to ASCII line-art chars.
 =item -c, --child I<CHAR>
 
 =item -l, --last I<CHAR>
+
+=item -H, --horiz-length I<NUM>
+
+Number of chars in the horizontal pedigree line.
+Default 2.
 
 =item -p, --paths [ I<SEP> ]
 

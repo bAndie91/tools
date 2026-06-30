@@ -1,0 +1,54 @@
+#!/usr/bin/env perl
+
+use File::Slurp;
+use IPC::Run qw/run/;
+use Data::Dumper;
+
+
+run ['xml2json'], '<', \*STDIN, '|',
+	['jq', '-r', '.Downloads.Download[] |
+		[
+			(."@Size" | tostring),
+			(.Segment | if type == "array" then map(."@Size"|tonumber) | add | tostring else ."@Size" end | .//"0"),
+			."@Target"
+		] |
+		join("\t")'], '|',
+	['sort', '-k2'], '>', \$output;
+
+for (split /\n/, $output)
+{
+	m{^(\S+)\s+(\S+)\s+(.+?)(/[^/]+)$};
+	my $size = $1;
+	my $completed_size = $2;
+	my @path = split "/", $3;
+	
+	for my $pathprefix (map {join "/", @path[0..$_]} 0..$#path)
+	{
+		$Total{$pathprefix} += $size;
+		$Completeness{$pathprefix} += $completed_size;
+	}
+}
+
+#warn Dumper \%Total;
+
+run sub {
+		for my $pathprefix (sort keys %Total)
+		{
+			my $parentprefix = $pathprefix =~ s{/[^/]+$}{}r;
+			printf "%s\t%d%%\t%d%%\t%d%%\n", $pathprefix,
+				$Total{$pathprefix}*100 / $Total{''},
+				$Total{$pathprefix}*100 / $Total{$parentprefix},
+				$Completeness{$pathprefix}*100 / $Total{$pathprefix};
+		}
+	}, '|',
+	['sort', '-k2n', '-t', "\t"], '|',
+	['paths2indent', '-s', '-t', "\t"], '|',
+	['indent2tree'], '|',
+	sub {
+		while(<STDIN>)
+		{
+			chomp;
+			s/^([^\t]+)\t(.+)$/join " ", (map {sprintf "%4s", $_} split "\t", $2), $1/e;
+			print "$_\n";
+		}
+	};

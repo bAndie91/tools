@@ -20,7 +20,7 @@ do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 $datetime_parser = new DateTime::Format::Strptime(pattern=>'%b %d %T %Y', on_error=>'croak', locale=>'C');
 
 $ENV{'LANG'} = 'C';
-open $pipe, '-|:utf8', 'lpstat', '-d', '-p', '-a';
+open $pipe, '-|:utf8', 'lpstat', '-d', '-p', '-a', '-s';
 while(<$pipe>)
 {
 	chomp;
@@ -61,6 +61,10 @@ while(<$pipe>)
 		$Printer{$+{'PRINTER'}}->{'ACCEPTANCE'} = $+{'ACCEPTANCE'};
 		$Printer{$+{'PRINTER'}}->{'ACCEPTANCE_SINCE'} = $datetime_parser->parse_datetime($+{'datetime'})->strftime('%F %T');
 	}
+	elsif(/^device for (?'PRINTER'.+?): (?'DEVICE'.+)/)
+	{
+		$Printer{$+{'PRINTER'}}->{'DEVICE'} = $+{'DEVICE'};
+	}
 	else
 	{
 		warn "$0: can not parse: $_\n";
@@ -69,7 +73,7 @@ while(<$pipe>)
 
 #warn Dumper \%Printer;
 
-@Headers = qw/PRINTER DEFAULT STATUS SINCE STAGE JOB REASON ACCEPTANCE ACCEPTANCE_SINCE ACCEPTANCE_REASON/;
+@Headers = qw/PRINTER DEFAULT STATUS SINCE STAGE JOB REASON ACCEPTANCE ACCEPTANCE_SINCE ACCEPTANCE_REASON DEVICE/;
 output_record(@Headers);
 
 for my $printer (sort {$a cmp $b} keys %Printer)

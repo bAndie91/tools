@@ -1,0 +1,36 @@
+#!/usr/bin/env python3
+
+import sys
+import os
+import re
+import cups
+import json
+
+conn = cups.Connection()
+printer = os.environ.get('PRINTER', conn.getDefault())
+attrs = conn.getPrinterAttributes( name = printer, requested_attributes=['all'] )
+
+
+#print(json.dumps(attrs))
+
+job_attrs = set()
+[ job_attrs.add(x) for x in attrs['job-settable-attributes-supported'] ]
+[ job_attrs.add(x) for x in attrs['job-creation-attributes-supported'] ]
+
+for attr in sorted(job_attrs):
+	default = attrs.get(f'{attr}-default')
+	default_txt = f"DEFAULT {default}" if default is not None else ''
+	supported = attrs.get(f'{attr}-supported', [])
+	
+	if not hasattr(supported, '__iter__') or isinstance(supported, str):
+		print(f"{attr}\t{supported}\t{default_txt}")
+	elif len(supported) == 1:
+		print(f"{attr}\t{supported[0]}\t{default_txt}")
+	elif isinstance(supported, tuple) and len(supported) == 2:
+		range = f'{supported[0]} .. {supported[1]}'
+		print(f"{attr}\t{range}\t{default_txt}")
+	else:
+		print(f"{attr}")
+		for val in supported:
+			is_default = ' [DEFAULT]' if default == val else ''
+			print(f"	{val}{is_default}")

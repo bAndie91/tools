@@ -17,12 +17,15 @@ int main(int argc, char** argv)
 	The System V-style setpgrp(), which takes no arguments, is equivalent to setpgid(0, 0).
 	*/
 	
-	int error = setpgid(0, 0);
-	
-	if(error != 0)
+	if(getpid() != getpgrp())  /* if not already a group leader */
 	{
-		perror("setpgid");
-		exit(error);
+		int error = setpgid(0, 0);
+		
+		if(error != 0)
+		{
+			perror("setpgid");
+			exit(error);
+		}
 	}
 	
 	execvp(argv[1], &argv[1]);

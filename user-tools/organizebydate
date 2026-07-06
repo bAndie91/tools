@@ -22,6 +22,7 @@ conflict_resolver_script=''
 faillog=''
 declare -g failed_count=0
 move_success_template=''
+declare -a exclude_regex=()
 
 
 print_usage()
@@ -309,6 +310,12 @@ Equivalent to find(1)'s -mindepth option.
 Maximum directory level to traverse.
 Equivalent to find(1)'s -maxdepth option.
 
+=item -X, --exclude-regex I<PATTERN>
+
+Source file paths matching to un-anchored regexp I<PATTERN> are skipped.
+Regex engine interpreting I<PATTERN> is of bash(1)'s C<[[> command's C<=~> operator, usually Extended Regexp.
+Disregarding any exclusion pattern, still traverses all directories.
+
 =back
 
 =head1 EXIT STATUS
@@ -454,6 +461,10 @@ do
 		shift
 		maxlevel=$1
 		;;
+	(-X|--exclude-regex|--exclude-regexp)
+		shift
+		exclude_regex+=("$1")
+		;;
 	(--copy)
 		ORGANIZEBYDATE_MODE=copy
 		;;
@@ -536,6 +547,21 @@ find "${find_opts[@]}" "${find_args[@]}" ${minlevel:+-mindepth $minlevel} ${maxl
 		datetime=''
 		filetimestamp=''
 		missing_embedmeta=''
+		exclude=''
+		
+		for excl_patt in "${exclude_regex[@]}"
+		do
+			if [[ $file =~ $excl_patt ]]
+			then
+				exclude=1
+				break
+			fi
+		done
+		if [ $exclude ]
+		then
+			echo "excluded$TAB$file"
+			continue
+		fi
 		
 		if [ $datetime_from_embedmeta ]
 		then

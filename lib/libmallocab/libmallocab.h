@@ -9,5 +9,6 @@ void* mallocab(size_t);
 void* reallocab(void*, size_t);
 char* strdupab(const char*);
 char* strndupab(const char*, size_t);
+int snprintfab(char *dst, size_t size, const char *fmt, ...);
 
 #endif

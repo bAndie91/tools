@@ -1,6 +1,14 @@
 
 LIBDIR = /usr/lib/tool
 OLDINCLUDEDIR = /usr/include
+CFLAGS ?= -Wall -Wextra -std=c11
+
+test_libmallocab: test_libmallocab.c libmallocab.c libmallocab.h
+	$(CC) $(CFLAGS) -I. test_libmallocab.c libmallocab.c -o $@
+
+test: test_libmallocab
+	./test_libmallocab
+.PHONY: test
 
 libmallocab.so: libmallocab.c libmallocab.h
 	$(CC) $< $(CFLAGS) -I. -o $@ -shared

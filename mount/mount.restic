@@ -3,6 +3,7 @@
 set -e
 set -u
 
+
 declare -a available_restic_mount_opts=($(restic mount --help | grep -Eio "[-]-[a-z0-9-]+"))
 declare -a restic_mount_args=()
 fuse_opts=''
@@ -12,22 +13,25 @@ shift
 mntpoint=$1
 shift
 
+default_time_template="2006-01-02 15:04:05"
+time_template_specified=''
+
 
 while [ $# -gt 0 ]
 do
 case "$1" in
--o)
+(-o)
 	shift
 	oldIFS=$IFS
 	IFS=,
 	for option in $1
 	do
 		option_key=${option%%=*}
-		is_restic_opt=0
+		is_restic_opt=''
 		for restic_opt in "${available_restic_mount_opts[@]}"
 		do
 			case "$restic_opt" in
-			--repo)	continue;;
+			(--repo)	continue;;
 			esac
 			
 			if [ "--$option_key" = "$restic_opt" ]
@@ -41,30 +45,39 @@ case "$1" in
 						option="$option_key=$option_value"
 					fi
 				fi
-				
-				restic_mount_args+=("--$option")
-				is_restic_opt=1
+				is_restic_opt=yes
 				break
 			fi
 		done
 		
-		if [ $is_restic_opt = 0 ]
+		if [ $is_restic_opt = yes ]
 		then
+			if [ "$option" = time-template ]
+			then
+				time_template_specified=yes
+			fi
+			restic_mount_args+=("--$option")
+		else
 			fuse_opts=$fuse_opts${fuse_opts:+,}$option
 		fi
 	done
 	IFS=$oldIFS
 	;;
--n|-s)
+(-n|-s)
 	true
 	;;
-*)
+(*)
 	echo "Unknown option: $1" >&2
 	exit 255
 	;;
 esac
 shift
 done
+
+if [ ! $time_template_specified ]
+then
+	restic_mount_args+=("--time-template=$default_time_template")
+fi
 
 set +u
 

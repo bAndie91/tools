@@ -86,16 +86,14 @@ class TreeModelRow(object):
 		for col_ref, col_data in (row_data if isinstance(row_data, dict) else enumerate(row_data)):
 			self[col_ref] = col_data
 	def __getitem__(self, item):
-		item = self.upstream_treemodel.get_column_num(item)
-		answer = gtk.TreeModel.get(self.model, self.iter, item)[0]
-		return self.upstream_treemodel.convert_cell(item, answer)
+		return self.upstream_treemodel.get(self.iter, item)[0]
 	def __setitem__(self, item, value):
 		item = self.upstream_treemodel.get_column_num(item)
 		self.real_treemodelrow[item] = value
 	def __len__(self):
 		return self.real_treemodelrow.__len__()
-	def as_dict(self):
-		return dict([(col_name, self[col_name]) for col_name in self.upstream_treemodel.column_name])
+	def as_dict(self, callback = lambda x, cb_data: x, cb_data = None):
+		return dict([(col_name, callback(self[col_name], cb_data)) for col_name in self.upstream_treemodel.column_name])
 	def __repr__(self):
 		return '<%s %s>' % (self.__class__.__name__, self.as_dict())
 
@@ -107,6 +105,48 @@ class TreeModelProxy(object):
 		derived_model = _proxy_userdata['derived_model']
 		return func(derived_model, treepath, treeiter, userdata)
 
+class NamedColumnsTreeStoreCell(object):
+	def __init__(self, returntype, cell_data):
+		self.returntype = returntype
+		self.data = cell_data
+	@property
+	def raw(self):
+		return self.data
+	@property
+	def value(self):
+		return self.returntype(self.data)
+	@property
+	def lax(self):
+		if self.returntype == unicode:
+			return self.data.decode('utf-8', 'replace')
+		return self.value
+	def __unicode__(self):
+		if self.data is None: return None
+		return unicode(self.value)
+	def __str__(self):
+		if self.data is None: return None
+		return str(self.value)
+	@property
+	def is_empty(self):
+		return self.data is None or self.data == ''
+	def __eq__(self, other):
+		return self.value == other
+	def __ne__(self, other):
+		return not self.__eq__(other)
+	def __hash__(self):
+		return hash(self.value)
+	def __len__(self):
+		return len(self.value)
+	def __add__(self, other):
+		return self.value + other
+	def __radd__(self, other):
+		return other + self.value
+	def __contains__(self, item):
+		return item in self.value
+	def __getattr__(self, name):
+		# catches non-dunder access like .upper(), .split(), .encode()
+		return getattr(self.value, name)
+
 class NamedColumnsTreeStore(gtk.TreeStore):
 	__gsignals__ = {
 		'changed': (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE, ()),
@@ -114,7 +154,7 @@ class NamedColumnsTreeStore(gtk.TreeStore):
 	}
 	def __init__(self, *columns):
 		self.column_name = []
-		self.reader = {}
+		self.returntype = {}
 		self.empty = []
 		types = []
 		self.input_types = []
@@ -122,9 +162,9 @@ class NamedColumnsTreeStore(gtk.TreeStore):
 		for col_name, col_type in columns:
 			self.input_types.append(col_type)
 			empty_value = None
+			self.returntype[n] = col_type
 			if col_type == unicode:
 				col_type = str
-				self.reader[n] = self.to_unicode
 			if col_type == str:
 				empty_value = ''
 			elif col_type in [int, float]:
@@ -141,10 +181,6 @@ class NamedColumnsTreeStore(gtk.TreeStore):
 	def emit_signal(self, *args):
 		signal_name = args[-1]
 		self.emit(signal_name)
-	@staticmethod
-	def to_unicode(s):
-		if s is None: return None
-		return unicode(s)
 	class ColumnNotFoundException(Exception):
 		pass
 	def get_columns(self):
@@ -174,15 +210,11 @@ class NamedColumnsTreeStore(gtk.TreeStore):
 		answer = super(NamedColumnsTreeStore, self).get(row, *columns)
 		answer = list(answer)
 		for i, col_num in enumerate(columns):
-			answer[i] = self.convert_cell(col_num, answer[i])
+			answer[i] = NamedColumnsTreeStoreCell(self.returntype[col_num], answer[i])
 		answer = tuple(answer)
 		return answer
 	def get_value(self, treeiter, column):
 		raise NotImplementedError()
-	def convert_cell(self, col_num, cell_value):
-		if self.reader.has_key(col_num):
-			return self.reader[col_num](cell_value)
-		return cell_value
 	def __getitem__(self, item):
 		answer = super(NamedColumnsTreeStore, self).__getitem__(item)
 		return TreeModelRow(answer, self)
@@ -389,9 +421,9 @@ class TreeView(gtk.TreeView):
 		all_column_filter_match = True
 		for col in self.get_columns():
 			if col.filter_regex_pattern is not None:
-				cell_content = model[treeiter][col.name]
-				if cell_content is not None:
-					if regex.search(col.filter_regex_pattern, cell_content) is None:
+				cell = model[treeiter][col.name]
+				if cell is not None:
+					if regex.search(col.filter_regex_pattern, cell.value) is None:
 						all_column_filter_match = False
 						break
 		return all_column_filter_match
@@ -889,8 +921,8 @@ class CellRendererTextOverflow(gtk.GenericCellRenderer):
 			while True:
 				col_idx += col_idx_incr
 				if col_idx < 0 or col_idx >= len(cols): break
-				column_text = model[treepath][cols[col_idx].name]
-				if column_text is None or column_text == '':
+				cell = model[treepath][cols[col_idx].name]
+				if cell.is_empty:
 					adjacent_cols_width += cols[col_idx].get_width()
 					adjacent_cols_names.append(cols[col_idx].name)
 				else:
@@ -1140,24 +1172,24 @@ class GDKCursor(object):
 		return False  # don't ignore exceptions
 
 class CompositeContext(object):
-    def __init__(self, *contexts):
-        self.contexts = contexts
+	def __init__(self, *contexts):
+		self.contexts = contexts
 
-    def __enter__(self):
-        return tuple(ctx.__enter__() for ctx in self.contexts)
+	def __enter__(self):
+		return tuple(ctx.__enter__() for ctx in self.contexts)
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        suppressed = False
-        for ctx in reversed(self.contexts):
-            try:
-                if ctx.__exit__(exc_type, exc_val, exc_tb):
-                    suppressed = True
-                    exc_type = exc_val = exc_tb = None
-            except Exception:
-                import sys
-                exc_type, exc_val, exc_tb = sys.exc_info()
-                suppressed = False
-        return suppressed
+	def __exit__(self, exc_type, exc_val, exc_tb):
+		suppressed = False
+		for ctx in reversed(self.contexts):
+			try:
+				if ctx.__exit__(exc_type, exc_val, exc_tb):
+					suppressed = True
+					exc_type = exc_val = exc_tb = None
+			except Exception:
+				import sys
+				exc_type, exc_val, exc_tb = sys.exc_info()
+				suppressed = False
+		return suppressed
 
 class ContextTransitionContext:
     def __init__(self, cm1, cm2):
@@ -1439,14 +1471,19 @@ def populate_row_context_menu(menu, items, macros):
 	menu.show_all()
 
 def gen_focus_data(treeview, c_treepath, tv_col):
-	row = {} if c_treepath is None else treeview.get_model()[c_treepath].as_dict()
 	column = None if tv_col is None else tv_col.name
-	selected_rows = [treeview.get_model()[treepath].as_dict() for treepath in treeview.get_selection().get_selected_rows()[1]]
+	if c_treepath is None:
+		row = {}
+		cell = None
+	else:
+		row = treeview.get_model()[c_treepath]
+		cell = row[column].raw
+	selected_treepaths = treeview.get_selection().get_selected_rows()[1]
 	return {
-		'row': row,
 		'column': column,
-		'cell': row.get(column),
-		'selected_rows': selected_rows,
+		'row': row,
+		'cell': cell,
+		'selected_rows': [treeview.get_model()[treepath] for treepath in selected_treepaths],
 	}
 
 def on_context_menu_item_activate(mi, menu):
@@ -1458,20 +1495,29 @@ def on_context_menu_item_activate(mi, menu):
 def on_context_menu_copy(mi, menu, what):
 	focus_data = menu.get_data('focus-data')
 	if what == 'cell':
-		text = focus_data['row'][focus_data['column']]
+		text = focus_data['cell']
 	elif what == 'row-as-json':
-		text = json.dumps(focus_data['row'])
+		text = json.dumps(focus_data['row'].as_dict(map_obj_attr_cb('lax')))
 	elif what == 'selection-as-json':
-		text = json.dumps(focus_data['selected_rows'])
+		text = json.dumps([ row.as_dict(map_obj_attr_cb('lax')) for row in focus_data['selected_rows'] ])
+	elif what == 'row-as-td':
+		text = tabdata_encode_record(focus_data['row'].as_dict(map_obj_attr_cb('raw')).values())
+	elif what == 'selection-as-td':
+		text = tabdata_encode_rows(
+			[focus_data['selected_rows'][0].as_dict().keys()] + 
+			[row.as_dict(map_obj_attr_cb('raw')).values() for row in focus_data['selected_rows'] ])
 	else:
 		raise ValueError()
 	gtk.Clipboard().set_text(text)
+
+def map_obj_attr_cb(attrname):
+	return lambda obj, cb_data: getattr(obj, attrname)
 
 def on_table_row_activated(treeview, c_treepath, tv_col):
 	if cliargs.activate_command is not None:
 		command_template = cliargs.activate_command
 		macros = {
-			'row': treeview.get_model()[c_treepath].as_dict(),
+			'row': treeview.get_model()[c_treepath].as_dict(map_obj_attr_cb('raw')),
 		}
 		command = Template(command_template).render(**macros)
 		run_system_command_async(split_command_args(command), gen_focus_data(treeview, c_treepath, tv_col))
@@ -1831,9 +1877,15 @@ class GTabData(object):
 		mi = ImageMenuItem(label="Copy row as JSON", icon=gtk.STOCK_COPY)
 		mi.connect('activate', on_context_menu_copy, popup_menu, 'row-as-json')
 		popup_menu.append(mi)
+		mi = ImageMenuItem(label="Copy row as TabData", icon=gtk.STOCK_COPY)
+		mi.connect('activate', on_context_menu_copy, popup_menu, 'row-as-td')
+		popup_menu.append(mi)
 		if n_selected > 1:
 			mi = ImageMenuItem(label="Copy selection as JSON", icon=gtk.STOCK_COPY)
 			mi.connect('activate', on_context_menu_copy, popup_menu, 'selection-as-json')
+			popup_menu.append(mi)
+			mi = ImageMenuItem(label="Copy selection as TabData", icon=gtk.STOCK_COPY)
+			mi.connect('activate', on_context_menu_copy, popup_menu, 'selection-as-td')
 			popup_menu.append(mi)
 		mi = ImageMenuItem(label="Refresh table data", icon=gtk.STOCK_REFRESH)
 		mi.set_sensitive(not self.table_is_loading)

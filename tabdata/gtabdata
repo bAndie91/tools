@@ -1192,29 +1192,29 @@ class CompositeContext(object):
 		return suppressed
 
 class ContextTransitionContext:
-    def __init__(self, cm1, cm2):
-        self.cm1 = cm1
-        self.cm2 = cm2
+	def __init__(self, cm1, cm2):
+		self.cm1 = cm1
+		self.cm2 = cm2
 
-    def __enter__(self):
-        self.cm1.__enter__()
-        try:
-            handler2 = self.cm2.__enter__()
-        except:
-            self.cm1.__exit__(*sys.exc_info())
-            raise
-        self.cm1.__exit__(None, None, None)
-        return handler2
+	def __enter__(self):
+		self.cm1.__enter__()
+		try:
+			handler2 = self.cm2.__enter__()
+		except:
+			self.cm1.__exit__(*sys.exc_info())
+			raise
+		self.cm1.__exit__(None, None, None)
+		return handler2
 
-    def __exit__(self, *exc_info):
-        self.cm1.__enter__()
-        try:
-            is_suppressed = self.cm2.__exit__(*exc_info)
-        except:
-            self.cm1.__exit__(*sys.exc_info())
-            raise
-        self.cm1.__exit__(None, None, None)
-        return is_suppressed
+	def __exit__(self, *exc_info):
+		self.cm1.__enter__()
+		try:
+			is_suppressed = self.cm2.__exit__(*exc_info)
+		except:
+			self.cm1.__exit__(*sys.exc_info())
+			raise
+		self.cm1.__exit__(None, None, None)
+		return is_suppressed
 
 class NoneContext(object):
 	def __enter__(self):
@@ -1274,7 +1274,7 @@ class TimedChunkProcessor(object):
 		Iterates over ``iterator`` and calls ``loop_func`` for each item, and stops as
 		soon as ``timebox_sec`` wall-clock seconds have elapsed.  If items remain,
 		``run()`` is called to schedule the next chunk.
-        """
+		"""
 		continue_processing = True
 		chunk_start = time.time()
 		with self.loop_context as context_handler:
@@ -1504,7 +1504,7 @@ def on_context_menu_copy(mi, menu, what):
 		text = tabdata_encode_record(focus_data['row'].as_dict(map_obj_attr_cb('raw')).values())
 	elif what == 'selection-as-td':
 		text = tabdata_encode_rows(
-			[focus_data['selected_rows'][0].as_dict().keys()] + 
+			[focus_data['selected_rows'][0].as_dict().keys()] +
 			[row.as_dict(map_obj_attr_cb('raw')).values() for row in focus_data['selected_rows'] ])
 	else:
 		raise ValueError()

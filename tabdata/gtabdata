@@ -1038,14 +1038,6 @@ class MenuItem(gtk.MenuItem):
 		self.set_label('.')
 		self.get_label_widget().set_markup(markup)
 
-class SubmenuMenuItem(MenuItem):
-	def __init__(self, **opt):
-		super(SubmenuMenuItem, self).__init__(**opt)
-		self.submenu = gtk.Menu()
-		self.set_submenu(self.submenu)
-	def __getattr__(self, name):
-		return getattr(self.submenu, name)
-
 class CheckMenuItem(gtk.CheckMenuItem, MenuItem):
 	def __init__(self, label=None, markup=None, use_underline=False):
 		super(CheckMenuItem, self).__init__(label=label, use_underline=use_underline)
@@ -1053,7 +1045,7 @@ class CheckMenuItem(gtk.CheckMenuItem, MenuItem):
 			self.set_markup(markup)
 
 class ImageMenuItem(gtk.ImageMenuItem, MenuItem):
-	def __init__(self, stock_id=None, accel_group=None, label=None, markup=None, icon=None):
+	def __init__(self, stock_id=None, accel_group=None, label=None, markup=None, icon=None, activate=None):
 		assert not(label is not None and markup is not None), "label and markup arguments are mutually exclusive"
 		super(ImageMenuItem, self).__init__(stock_id=stock_id, accel_group=accel_group)
 		if label is not None:
@@ -1062,6 +1054,8 @@ class ImageMenuItem(gtk.ImageMenuItem, MenuItem):
 			self.set_markup(markup)
 		if icon is not None:
 			self.set_icon(icon)
+		if activate is not None:
+			self.connect('activate', *activate)
 	def set_icon(self, icon):
 		if not icon: return
 		img = gtk.Image()
@@ -1082,6 +1076,14 @@ class ImageMenuItem(gtk.ImageMenuItem, MenuItem):
 			pixbuf = get_pixbuf_from_file_at_size(iconfile, width_px, height_px)
 			img.set_from_pixbuf(pixbuf)
 		self.set_image(img)
+
+class SubmenuMenuItem(ImageMenuItem):
+	def __init__(self, **opt):
+		super(SubmenuMenuItem, self).__init__(**opt)
+		self.submenu = gtk.Menu()
+		self.set_submenu(self.submenu)
+	def __getattr__(self, name):
+		return getattr(self.submenu, name)
 
 
 class TemporaryProperty(object):
@@ -1492,26 +1494,56 @@ def on_context_menu_item_activate(mi, menu):
 	for command_args in commands:
 		run_system_command_async(command_args, focus_data)
 
-def on_context_menu_copy(mi, menu, what):
+def on_context_menu_copy(mi, menu, what, format):
 	focus_data = menu.get_data('focus-data')
-	if what == 'cell':
+	if what == 'cell' and format == 'raw':
 		text = focus_data['cell']
-	elif what == 'row-as-json':
-		text = json.dumps(focus_data['row'].as_dict(map_obj_attr_cb('lax')))
-	elif what == 'selection-as-json':
-		text = json.dumps([ row.as_dict(map_obj_attr_cb('lax')) for row in focus_data['selected_rows'] ])
-	elif what == 'row-as-td':
-		text = tabdata_encode_record(focus_data['row'].as_dict(map_obj_attr_cb('raw')).values())
-	elif what == 'selection-as-td':
-		text = tabdata_encode_rows(
-			[focus_data['selected_rows'][0].as_dict().keys()] +
-			[row.as_dict(map_obj_attr_cb('raw')).values() for row in focus_data['selected_rows'] ])
+	elif what in ['row', 'selection']:
+		if format == 'json':
+			if what == 'row':
+				text = json.dumps(focus_data['row'].as_dict(map_obj_attr_cb('lax')))
+			elif what == 'selection':
+				text = json.dumps([ row.as_dict(map_obj_attr_cb('lax')) for row in focus_data['selected_rows'] ])
+			else:
+				raise ValueError()
+		elif format.startswith('td-'):
+			colnames = [col.name for col in menu.get_data('treeview').get_columns() if '-allcol' in format or col.get_visible()]
+			if what == 'row':
+				row = focus_data['row'].as_dict(map_obj_attr_cb('raw'))
+				row = KeyOrderedDict(row, order=colnames)
+				text = tabdata_encode_record(row.values())
+			elif what == 'selection':
+				text = tabdata_encode_rows(
+					[KeyOrderedDict(focus_data['selected_rows'][0].as_dict(), order=colnames).keys()] +
+					[KeyOrderedDict(row.as_dict(map_obj_attr_cb('raw')), order=colnames).values() for row in focus_data['selected_rows'] ])
+			else:
+				raise ValueError()
+		else:
+			raise ValueError()
 	else:
 		raise ValueError()
+	print([(x, ord(x)) for x in text], file=sys.stderr)
 	gtk.Clipboard().set_text(text)
 
 def map_obj_attr_cb(attrname):
 	return lambda obj, cb_data: getattr(obj, attrname)
+
+from collections import OrderedDict
+
+class KeyOrderedDict(OrderedDict):
+	"""
+	OrderedDict subclass where you explicitly specify the key order,
+	pulling values from an existing (unordered) dict.
+
+	Usage:
+		d = {'b': 2, 'a': 1, 'c': 3}
+		od = KeyOrderedDict(d, ['a', 'b', 'c'])
+	"""
+
+	def __init__(self, d, order):
+		d = dict(d)  # allow any mapping
+		pairs = [(k, d[k]) for k in order]
+		super(KeyOrderedDict, self).__init__(pairs)
 
 def on_table_row_activated(treeview, c_treepath, tv_col):
 	if cliargs.activate_command is not None:
@@ -1862,6 +1894,7 @@ class GTabData(object):
 	def on_table_row_context_menu_open(self, treeview, popup_menu, c_treepath, tv_col, cell_x, cell_y):
 		focus_data = gen_focus_data(treeview, c_treepath, tv_col)
 		popup_menu.set_data('focus-data', focus_data)
+		popup_menu.set_data('treeview', treeview)
 		n_selected = len(focus_data['selected_rows'])
 		macros = focus_data.copy()
 		macros['n_selected'] = n_selected
@@ -1872,21 +1905,22 @@ class GTabData(object):
 		if popup_menu.get_children():
 			popup_menu.append(gtk.SeparatorMenuItem())
 		mi = ImageMenuItem(label="Copy cell", icon=gtk.STOCK_COPY)
-		mi.connect('activate', on_context_menu_copy, popup_menu, 'cell')
+		mi.connect('activate', on_context_menu_copy, popup_menu, 'cell', 'raw')
 		popup_menu.append(mi)
-		mi = ImageMenuItem(label="Copy row as JSON", icon=gtk.STOCK_COPY)
-		mi.connect('activate', on_context_menu_copy, popup_menu, 'row-as-json')
-		popup_menu.append(mi)
-		mi = ImageMenuItem(label="Copy row as TabData", icon=gtk.STOCK_COPY)
-		mi.connect('activate', on_context_menu_copy, popup_menu, 'row-as-td')
-		popup_menu.append(mi)
+		
+		smi = SubmenuMenuItem(label="Copy row", icon=gtk.STOCK_COPY)
+		smi.append(ImageMenuItem(label="as JSON", activate=(on_context_menu_copy, popup_menu, 'row', 'json')))
+		smi.append(ImageMenuItem(label="as TabData (visible columns)", activate=(on_context_menu_copy, popup_menu, 'row', 'td-viscol')))
+		smi.append(ImageMenuItem(label="as TabData (all columns)", activate=(on_context_menu_copy, popup_menu, 'row', 'td-allcol')))
+		popup_menu.append(smi)
+		
 		if n_selected > 1:
-			mi = ImageMenuItem(label="Copy selection as JSON", icon=gtk.STOCK_COPY)
-			mi.connect('activate', on_context_menu_copy, popup_menu, 'selection-as-json')
-			popup_menu.append(mi)
-			mi = ImageMenuItem(label="Copy selection as TabData", icon=gtk.STOCK_COPY)
-			mi.connect('activate', on_context_menu_copy, popup_menu, 'selection-as-td')
-			popup_menu.append(mi)
+			smi = SubmenuMenuItem(label="Copy selection", icon=gtk.STOCK_COPY)
+			smi.append(ImageMenuItem(label="as JSON", activate=(on_context_menu_copy, popup_menu, 'selection', 'json')))
+			smi.append(ImageMenuItem(label="as TabData (visible columns)", activate=(on_context_menu_copy, popup_menu, 'selection', 'td-viscol')))
+			smi.append(ImageMenuItem(label="as TabData (all columns)", activate=(on_context_menu_copy, popup_menu, 'selection', 'td-allcol')))
+			popup_menu.append(smi)
+		
 		mi = ImageMenuItem(label="Refresh table data", icon=gtk.STOCK_REFRESH)
 		mi.set_sensitive(not self.table_is_loading)
 		mi.connect('activate', lambda mi: main_app.load_table_async())

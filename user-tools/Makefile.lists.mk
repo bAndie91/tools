@@ -30,6 +30,7 @@ TOOLS ?= \
   debdiff \
   delfattr \
   descpids \
+  deutf8ify \
   dfbar \
   digasn \
   diu \
@@ -221,6 +222,7 @@ TOOLS ?= \
   url_encode \
   url_encode_bf \
   url-parts \
+  utf8ify \
   verscmp \
   vidir-sanitize \
   vifiles \

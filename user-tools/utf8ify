@@ -1,0 +1,27 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+use Encode qw(decode encode);
+
+binmode(STDIN,  ':raw');
+binmode(STDOUT, ':raw');
+
+# PUA codepoint, encodes/decodes normally
+my $MARKER      = "\x{F8FF}";
+# its fixed 3-byte encoding
+my $MARKER_UTF8 = encode('UTF-8', $MARKER);
+
+while (my $raw = <STDIN>) {
+    # 1. Byte-level pre-pass: escape any literal occurrence of the
+    #    marker's own bytes BEFORE decoding, so post-decode we know
+    #    every marker character we see was inserted by us.
+    $raw =~ s/\Q$MARKER_UTF8\E/${MARKER_UTF8}L/g;
+
+    # 2. Decode; CHECK escapes each invalid byte as MARKER + 2 hex digits.
+    my $text = decode('UTF-8', $raw, sub {
+        my $bad_byte = shift;
+        return $MARKER . sprintf('%02X', $bad_byte);
+    });
+
+    print encode('UTF-8', $text);   # strictly valid UTF-8, guaranteed
+}

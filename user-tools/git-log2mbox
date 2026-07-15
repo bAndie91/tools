@@ -1,0 +1,59 @@
+#!/usr/bin/env perl
+
+use open ':std', ':utf8';
+use utf8;
+
+
+$Phase = 'header';
+$PrevPhase = undef;
+$PhaseLead = {
+	'header' => [],
+	'subject' => ['Subject: '],
+	'patch' => [],
+};
+$PhaseTrail = {
+	'header' => [],
+	'subject' => ['', ''],
+	'patch' => ['--', '0.0', '', ''],
+};
+$PhaseNext = {
+	'header' => 'subject',
+	'subject' => 'patch',
+	'patch' => 'header',
+};
+
+while(<STDIN>)
+{
+	if($Phase ne $PrevPhase)
+	{
+		print join "\n", @{$PhaseLead->{$Phase}};
+		$PrevPhase = $Phase;
+	}
+	
+	if($Phase eq 'header')
+	{
+		s/^commit (.+)/From $1 Mon Sep 17 00:00:00 2001/;
+		s/^Author:/From:/;
+	}
+	elsif($Phase eq 'subject')
+	{
+		s/^[ ]{4}//;
+		s/^From />$&/;
+	}
+	elsif($Phase eq 'patch')
+	{
+	}
+
+	if(/^\r?$/)
+	{
+		undef $_;
+		$Phase = $PhaseNext->{$Phase};
+	}
+	
+	print;
+	
+	if($Phase ne $PrevPhase)
+	{
+		print join "\n", @{$PhaseTrail->{$PrevPhase}}
+	}
+}

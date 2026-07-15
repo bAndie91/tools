@@ -67,6 +67,7 @@ TOOLS ?= \
   git-mirrors \
   gitconfigexec \
   git_diff \
+  git-log2mbox \
   git-submodule-auto-add \
   git-push-remotes \
   glob \

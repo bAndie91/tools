@@ -15,6 +15,7 @@ import re
 import difflib
 import json
 import regex
+import base64
 from jinja2 import Template
 from dateutil.relativedelta import relativedelta
 import gtk
@@ -1554,8 +1555,25 @@ def on_table_row_activated(treeview, c_treepath, tv_col):
 		command = Template(command_template).render(**macros)
 		run_system_command_async(split_command_args(command), gen_focus_data(treeview, c_treepath, tv_col))
 
+def prepare_json_dump(obj):
+	if hasattr(obj, 'as_dict'):
+		return obj.as_dict(map_obj_attr_cb('lax'))
+	elif hasattr(obj, 'iteritems'):
+		return { k: prepare_json_dump(v) for k, v in obj.iteritems() }
+	elif isinstance(obj, (list, tuple)):
+		return [ prepare_json_dump(x) for x in obj ]
+	elif isinstance(obj, str):
+		try:
+			obj.decode('utf-8', 'strict')
+		except UnicodeDecodeError:
+			return {
+				'_lax': obj.decode('utf-8', 'replace'),
+				'_base64': base64.b64encode(obj),
+			},
+	return obj
+
 def run_system_command_async(command_with_args, input_object):
-	Thread(target=run_system_command, args=(command_with_args, json.dumps(input_object)), daemon=True).start()
+	Thread(target=run_system_command, args=(command_with_args, json.dumps(prepare_json_dump(input_object))), daemon=True).start()
 
 def run_system_command(command_with_args, input_text):
 	try:
@@ -1699,7 +1717,7 @@ class GTabData(object):
 			('sort-order',     'column-sort-order-changed', lambda tv, tvc: tvc.get_sort_order().value_nick if tvc is not None else None, None),
 		])
 		if cliargs.key_field is not None or cliargs.auto_key_field:
-			self.proppersist_table.add_properties([('selected-rows', 'selection-change', lambda tv, sel_rows: [row[self.tabdata_key_field] for row in sel_rows], self.restore_selection)])
+			self.proppersist_table.add_properties([('selected-rows', 'selection-change', lambda tv, sel_rows: [row[self.tabdata_key_field].value for row in sel_rows], self.restore_selection)])
 		self.proppersist_column = {}
 		
 	def run(self):

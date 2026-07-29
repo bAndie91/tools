@@ -1532,7 +1532,6 @@ def on_context_menu_copy(mi, menu, what, format):
 			raise ValueError()
 	else:
 		raise ValueError()
-	print([(x, ord(x)) for x in text], file=sys.stderr)
 	gtk.Clipboard().set_text(text)
 
 def map_obj_attr_cb(attrname):

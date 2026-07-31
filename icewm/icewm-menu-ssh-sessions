@@ -68,7 +68,9 @@ sub ssh_control_sockets
 
 # Note, have to set this ssh config:
 # ControlPath ~/.ssh/ctrl/%r@%n(%h):%p
-@connected_hosts = map { /\@(.+?)\(/; $1; } ssh_control_sockets("$HOME/.ssh/ctrl/");
+# or
+# ControlPath ~/.ssh/ctrl/%r@%n:%p
+@connected_hosts = map { /\@(.+?)[\(:]/; $1; } ssh_control_sockets("$HOME/.ssh/ctrl/");
 
 sub command_executor
 {

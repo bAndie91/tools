@@ -11,8 +11,8 @@ then
 	exit 1
 fi
 
-connection_params=$2
-connection_params=${connection_params##*/}
+ssh_control_socket_path=$2
+connection_params=${ssh_control_socket_path##*/}
 
 remote_root=$3
 
@@ -30,6 +30,7 @@ remote_root=$3
 user=''
 host=''
 hostname=''
+sshconf_hostname=''
 port=''
 
 if [[ $connection_params =~ ^([^@]+)@([^\(]+)\(([^\)]+)\):([0-9]+) ]]
@@ -37,6 +38,7 @@ then
 	user=${BASH_REMATCH[1]}
 	host=${BASH_REMATCH[2]}
 	hostname=${BASH_REMATCH[3]}
+	sshconf_hostname=$hostname
 	port=${BASH_REMATCH[4]}
 elif [[ $connection_params =~ ^([^@]+)@([^\(]+):([0-9]+) ]]
 then
@@ -68,7 +70,7 @@ then
 					extra_options=$extra_options,$(cat "$extra_options_filename")
 				fi
 			done
-			sshfs -o allow_root,auto_unmount,Port=$port,ControlMaster=no,transform_symlinks,Hostname="$hostname"$extra_options "$user@$host:$remote_root" "$mountpoint" {lockfd}>&-
+			sshfs -o allow_root,auto_unmount,Port=$port,ControlMaster=no,transform_symlinks,ControlPath=$ssh_control_socket_path,${sshconf_hostname:+Hostname="$sshconf_hostname"}$extra_options "$user@$host:$remote_root" "$mountpoint" {lockfd}>&-
 			err=$?
 			if [ $err != 0 ]
 			then

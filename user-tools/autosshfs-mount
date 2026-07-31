@@ -27,13 +27,27 @@ remote_root=$3
 # /home/.../somewhere IN_CREATE autosshfs-mount mnt/ssh $# /
 # /home/.../somewhere IN_CREATE autosshfs-mount mnt/rhome $# .
 
+user=''
+host=''
+hostname=''
+port=''
+
 if [[ $connection_params =~ ^([^@]+)@([^\(]+)\(([^\)]+)\):([0-9]+) ]]
 then
 	user=${BASH_REMATCH[1]}
 	host=${BASH_REMATCH[2]}
 	hostname=${BASH_REMATCH[3]}
 	port=${BASH_REMATCH[4]}
-	
+elif [[ $connection_params =~ ^([^@]+)@([^\(]+):([0-9]+) ]]
+then
+	user=${BASH_REMATCH[1]}
+	host=${BASH_REMATCH[2]}
+	hostname=$host
+	port=${BASH_REMATCH[3]}
+fi
+
+if [ -n "$host" ]
+then
 	hash=`echo -n "$user$host$hostname$port" | md5sum | cut -c 1-32`
 	exec {lockfd}>> /tmp/autosshfs-mount-$hash.lock
 	

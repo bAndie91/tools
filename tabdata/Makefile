@@ -26,6 +26,7 @@ TOOLS = \
   td-gnuplot \
   td-ip-address \
   td-ip-route \
+  td-ip-rule \
   td-keepheader \
   td-lpstat \
   td-ls \

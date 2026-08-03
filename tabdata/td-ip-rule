@@ -1,0 +1,8 @@
+#!/bin/bash
+
+ip -json rule list "$@" |\
+jq -r '[.[]] as $rules | $rules |
+	(reduce .[] as $o ({}; .+$o)) | keys_unsorted as $keys |
+	[$keys] + [$rules | .[] | . as $r | [$keys[] | $r[.] // "" | if type=="array" then join(" ") else . end]] |
+	.[] | @tsv'
+

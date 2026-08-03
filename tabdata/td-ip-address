@@ -1,6 +1,6 @@
 #!/bin/bash
 
-ip -json address show |\
+ip -json address show "$@" |\
 jq -r '[.[] | . as $nic | .addr_info[] | ($nic|with_entries(.key="nic_"+.key))+. | del(.nic_addr_info)] as $addresses |
 	$addresses | (reduce .[] as $o ({}; .+$o)) | keys_unsorted as $keys | 
 	[$keys] + [$addresses | .[] | . as $addr | [$keys[] | $addr[.] // "" | if type=="array" then join(" ") else . end]] |

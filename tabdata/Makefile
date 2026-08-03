@@ -24,6 +24,8 @@ TOOLS = \
   td-filter \
   td-format \
   td-gnuplot \
+  td-ip-address \
+  td-ip-route \
   td-keepheader \
   td-lpstat \
   td-ls \

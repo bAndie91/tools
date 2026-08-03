@@ -1,0 +1,8 @@
+#!/bin/bash
+
+ip -json route show |\
+jq -r '[.[]] as $routes | $routes |
+	(reduce .[] as $o ({}; .+$o)) | keys_unsorted as $keys |
+	[$keys] + [$routes | .[] | . as $r | [$keys[] | $r[.] // "" | if type=="array" then join(" ") else . end]] |
+	.[] | @tsv'
+

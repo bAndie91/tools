@@ -102,9 +102,14 @@ See B<--prefix> option.
 Add B<DATA> to the prefix which is printed before each command execution.
 See B<--prefix> option.
 
-=item --prefix-add-tab
+=item --prefix-add-lf
 
 Add a B<TAB> char to the prefix which is printed before each command execution.
+See B<--prefix> option.
+
+=item --prefix-add-lf
+
+Add a B<linefeed> char to the prefix which is printed before each command execution.
 See B<--prefix> option.
 
 =item -v, --verbose
@@ -207,6 +212,7 @@ GetOptions(
 	'prefix-add=s' => sub { $OptPrefixTemplate .= $_[1]; },
 	'prefix-add-data' => sub { $OptPrefixTemplate .= '{}'; },
 	'prefix-add-tab' => sub { $OptPrefixTemplate .= "\t"; },
+	'prefix-add-newline|prefix-add-nl|prefix-add-linebreak|prefix-add-linefeed|prefix-add-lf' => sub { $OptPrefixTemplate .= "\n"; },
 	'v|verbose!' => \$OptVerbose,
 	'n|dry-run!' => \$OptDryRun,
 	'E|errexit!' => \$OptErrExit,

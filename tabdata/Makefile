@@ -24,9 +24,6 @@ TOOLS = \
   td-filter \
   td-format \
   td-gnuplot \
-  td-ip-address \
-  td-ip-route \
-  td-ip-rule \
   td-keepheader \
   td-lpstat \
   td-ls \
@@ -40,6 +37,7 @@ TOOLS = \
   td-trans-fixcol \
   td-trans-group \
   td-trans-gshadow \
+  td-trans-ipjson \
   td-trans-ls \
   td-trans-mount \
   td-trans-passwd \

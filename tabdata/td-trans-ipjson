@@ -1,0 +1,65 @@
+#!/usr/bin/python3
+
+import sys
+import json
+import re
+from collections import OrderedDict
+
+
+list_delimiter = ' '
+subfield_separator = '.'
+
+
+def tabdata_encode_rows(rows):
+	return ''.join([ tabdata_encode_record(row) + "\n" for row in rows ])
+
+def tabdata_encode_record(row):
+	return '\t'.join([ tabdata_encode_cell(cell) for cell in row ])
+
+def tabdata_encode_cell(s):
+	return re.sub(r'([\t\n\r\x1B\\])', lambda match: escape_td_sequence(match.group(1)), s)
+
+def escape_td_sequence(s):
+	if s == '\x1B': return '\\e'
+	else: return '\\' + repr(s)[2]
+
+
+
+items = json.load(sys.stdin)
+list_of_dicts_item_found = None
+
+while list_of_dicts_item_found is not False:
+	list_of_dicts_item_found = False
+	for item in items:
+		for field, value in item.items():
+			if isinstance(value, list):
+				if len(value) > 0 and isinstance(value[0], dict):
+					list_of_dicts_item_found = True
+					items.remove(item)
+					for subitem in value:
+						clone_item = json.loads(json.dumps(item))
+						del clone_item[field]
+						for subfield, subvalue in subitem.items():
+							clone_item[field+subfield_separator+subfield] = subvalue
+						items.append(clone_item)
+					break
+				else:
+					item[field] = list_delimiter.join(value)
+		if list_of_dicts_item_found:
+			break
+
+columns = OrderedDict()
+for item in items:
+	for field in item.keys():
+		columns[field] = True
+
+rows = []
+for item in items:
+	row = []
+	for field in columns:
+		cell = str(item.get(field, ''))
+		row.append(cell)
+	rows.append(row)
+
+header = columns
+print(tabdata_encode_rows([header] + rows), end='')

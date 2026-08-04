@@ -1521,7 +1521,7 @@ def on_context_menu_copy(mi, menu, what, format):
 			if what == 'row':
 				row = focus_data['row'].as_dict(map_obj_attr_cb('raw'))
 				row = KeyOrderedDict(row, order=colnames)
-				text = tabdata_encode_record(row.values())
+				text = tabdata_encode_rows([colnames, row.values()])
 			elif what == 'selection':
 				text = tabdata_encode_rows(
 					[KeyOrderedDict(focus_data['selected_rows'][0].as_dict(), order=colnames).keys()] +
@@ -1607,7 +1607,7 @@ def unescape_td_sequence(s):
 
 def escape_td_sequence(s):
 	if s == '\x1B': return '\\e'
-	else: return repr(s)[2]
+	else: return '\\' + repr(s)[2]
 
 def tabdata_decode_record(rawline, n_fields=0):
 	cells = [re.sub(r'(\\[tnre\\])', lambda match: unescape_td_sequence(match.group(1)), cell) for cell in rawline.split('\t', n_fields-1)]

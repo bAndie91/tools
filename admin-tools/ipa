@@ -1,0 +1,1 @@
+td-ip-address  | td-select -i -- nic_ifname nic_flags nic_operstate local prefixlen scope nic_master nic_link | tabularize -H

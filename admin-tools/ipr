@@ -1,0 +1,7 @@
+#!/bin/bash
+
+rules=`td-ip-rule`
+echo "$rules" | tabularize -H
+
+echo "$rules" | td-filter table is not local | td-filter table is not default | td-select -H table |\
+	foreach --prefix-add "route table: " --prefix-add-data --prefix-add-linefeed pipecmd td-ip-route table {} -- tabularize -H

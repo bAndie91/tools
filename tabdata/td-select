@@ -8,7 +8,7 @@ td-select - Show only the specified columns from the input tabular data stream.
 
 =head1 USAGE
 
-td-select [I<OPTIONS>] [--] [-][~]I<COLUMN> [[-][~]I<COLUMN> [...]]
+td-select [I<OPTIONS>] [--] [-][~][?]I<COLUMN> [[-][~][?]I<COLUMN> [...]]
 
 =head1 OPTIONS
 

@@ -12,20 +12,32 @@ then
 fi
 
 ssh_control_socket_path=$2
+
+if [[ $ssh_control_socket_path =~ , ]]
+then
+	echo "$0: ssh control socket should not contain comma (\",\") char." >&2
+	exit 1
+fi
+
 connection_params=${ssh_control_socket_path##*/}
 
 remote_root=$3
 
-# connection_params is in form of:
-# %r@%n(%h):%p
-# relevant ssh config option: ControlPath /home/.../somewhere/%r@%n(%h):%p
+# connection_params is in form of: %r@%n(%h):%p
+# or: %r@%n:%p
+#
+# relevant ssh config option:
+#   ControlPath /home/.../somewhere/%r@%n(%h):%p
+#   ControlPath /home/.../somewhere/%r@%n:%p
 # see man ssh_config(5) for details.
+# %r    Remote login username.
 # %n    The original remote hostname, as given on the command line.
-# %h    The remote hostname.
+# %h    The remote hostname (as given by the `-o HostName=` option).
+# %p    Port.
 #
 # example incrontab:
-# /home/.../somewhere IN_CREATE autosshfs-mount mnt/ssh $# /
-# /home/.../somewhere IN_CREATE autosshfs-mount mnt/rhome $# .
+# /home/.../somewhere IN_CREATE autosshfs-mount mnt/ssh $@/$# /
+# /home/.../somewhere IN_CREATE autosshfs-mount mnt/rhome $@/$# .
 
 user=''
 host=''
@@ -65,12 +77,13 @@ then
 			for extra_options_filename_suffix in ".$host" ".$hostname" ''
 			do
 				extra_options_filename=~/.ssh/autosshfs-extra-options"$extra_options_filename_suffix"
-				if [ -e "$extra_options_filename" ]
+				if [ -s "$extra_options_filename" ]
 				then
-					extra_options=$extra_options,$(cat "$extra_options_filename")
+					extra_options=$extra_options${extra_options:+,}$(cat "$extra_options_filename")
 				fi
 			done
-			sshfs -o allow_root,auto_unmount,Port=$port,ControlMaster=no,transform_symlinks,ControlPath=$ssh_control_socket_path,${sshconf_hostname:+Hostname="$sshconf_hostname"}$extra_options "$user@$host:$remote_root" "$mountpoint" {lockfd}>&-
+			set +e
+			sshfs -o allow_root,auto_unmount,Port=$port,ControlMaster=no,transform_symlinks,ControlPath=$ssh_control_socket_path${sshconf_hostname:+,Hostname="$sshconf_hostname"}${extra_options:+,}$extra_options "$user@$host:$remote_root" "$mountpoint" {lockfd}>&-
 			err=$?
 			if [ $err != 0 ]
 			then

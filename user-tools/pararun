@@ -46,6 +46,7 @@ instead of the default triple dash (C<--->).
 
 The string I<SEP> separates the particular arguments
 instead of the default plus sign (C<+>).
+If I<SEP> is empty, each word is added as a single argument to each particular command.
 
 =item -i, --particular-args-stdin
 
@@ -280,6 +281,12 @@ while(@ARGV)
 	{
 		last;
 	}
+	if($OptParticularSep eq '')
+	{
+		push @{$ParticularArgs[$particular_cmd_idx]}, $arg;
+		$particular_cmd_idx++;
+		next;
+	}
 	if($arg eq $OptParticularSep)
 	{
 		$particular_cmd_idx++;
@@ -288,6 +295,7 @@ while(@ARGV)
 	}
 	push @{$ParticularArgs[$particular_cmd_idx]}, $arg;
 }
+
 
 while(@ARGV)
 {

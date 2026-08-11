@@ -125,7 +125,7 @@ If can not write to the output file, or can not even open it,
 print the failed line of text to its own STDERR,
 then depending on the I<ACTION>:
 
-=over 4
+=over 8
 
 =item TERM
 
@@ -143,6 +143,10 @@ I<COMMAND> may recover from the error condition itself.
 Just ignore.
 
 =back
+
+=item --mkpath
+
+Create the output file's path if it does not exist.
 
 =back
 
@@ -164,6 +168,8 @@ use Fcntl qw/F_GETFL F_SETFL O_NONBLOCK/;
 use POSIX qw/strftime :sys_wait_h dup2/;
 use Pod::Usage;
 use List::MoreUtils qw/all any none/;
+use File::Basename qw/dirname/;
+use File::Path;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 
@@ -175,6 +181,7 @@ $OptDefaultFlush = {
 };
 @FailureActions = ('TERM', 'PIPE', 'IGNORE');
 $OptFailAction = $FailureActions[0];
+$OptMkPath = 0;
 
 @args = ();
 while(@ARGV)
@@ -239,6 +246,8 @@ GetOptions(
 		else {
 			die_invalid_option_argument(@_); }
 	},
+
+	'mkpath' => \$OptMkPath,
 	
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
@@ -301,6 +310,14 @@ sub process_line
 	}
 	if(not defined $output->{'fh'} or $output_file ne $output->{'file'})
 	{
+		if($OptMkPath)
+		{
+			my $output_dir = dirname($output_file);
+			if(not -d $output_dir)
+			{
+				File::Path::make_path($dir) or warn "$0: make_path: $output_dir: $!\n";
+			}
+		}
 		my $open_ok = open $output->{'fh'}, '>>', $output_file;
 		if(not $open_ok)
 		{

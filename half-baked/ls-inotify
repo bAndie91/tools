@@ -1,0 +1,1 @@
+find / $(cat /proc/$(pgrep incrond)/fdinfo/{5,7} | grep -Eo 'ino:\S+' | cut -f2 -d: | sort -u | perl -ne 'print " -or" if $.>1 ; printf " -inum %d", hex')

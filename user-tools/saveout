@@ -247,7 +247,7 @@ GetOptions(
 			die_invalid_option_argument(@_); }
 	},
 
-	'mkpath' => \$OptMkPath,
+	'mkpath!' => \$OptMkPath,
 	
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
@@ -315,7 +315,7 @@ sub process_line
 			my $output_dir = dirname($output_file);
 			if(not -d $output_dir)
 			{
-				File::Path::make_path($dir) or warn "$0: make_path: $output_dir: $!\n";
+				File::Path::make_path($output_dir) or warn "$0: make_path: $output_dir: $!\n";
 			}
 		}
 		my $open_ok = open $output->{'fh'}, '>>', $output_file;

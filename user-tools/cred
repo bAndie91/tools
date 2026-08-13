@@ -271,29 +271,34 @@ prop()
 		;;
 	esac
 	
-	if [ "$prop" = TOTP ]
+	if [[ $prop =~ ^(.+/|)TOTP$ ]]
 	then
+		local prop_prefix=${BASH_REMATCH[1]}
+		
 		case "$instruct" in
 		(set)
 			touch "$basedir/$site/$prop"
 			return
 			;;
 		(reveal)
-			local td td2 label_prop
+			local td td2
 			declare -a otp_codes
 			
-			if has_prop OTP-ISSUER
+			if has_prop ${prop_prefix}OTP-ISSUER
 			then
-				td=`get_totp_all | td-filter ISSUER = "$(prop OTP-ISSUER show)"`
+				td=`get_totp_all | td-filter ISSUER = "$(prop ${prop_prefix}OTP-ISSUER show)"`
 			else
-				td=`get_totp_all | td-filter ISSUER = "$site" or ISSUER = "${site%%/*}"`
+				local basesite=${site%%/*}
+				td=`get_totp_all | td-filter ISSUER = "$site" or ISSUER = "$basesite"`
 			fi
 			
+			local label_prop
 			otp_codes=($(echo "$td" | td-select -H CODE))
 			if [ ${#otp_codes[@]} -gt 1 ]
 			then
 				for label_prop in EMAIL USERNAME LOGIN
 				do
+					label_prop=${prop_prefix}$label_prop
 					if has_prop "$label_prop"
 					then
 						td2=`echo "$td" | td-filter LABEL = "$(prop "$label_prop" show)"`
@@ -317,7 +322,8 @@ prop()
 			;;
 		(del|clip|show)
 			true;;  # handled below by generic propery operations
-		(*)	false;;  # invalid instruction given
+		(*)
+			false;;  # invalid instruction given
 		esac
 	fi
 	

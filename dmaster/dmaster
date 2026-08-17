@@ -188,6 +188,10 @@ consider it a respawn-burst, and hold it back a while.
 How much time (seconds) to wait before starting a daemon
 after a respawn-burst.
 
+=item DAEMON_ID
+
+Set for the daemon process to read itself name.
+
 =back
 
 =head1 EXAMPLE INSTALLATION
@@ -308,6 +312,7 @@ sub start_daemon
 		close $management_socket;
 		close $_ for map {$Daemon->{$_}->{'pidfd'}} grep {exists $Daemon->{$_}->{'pidfd'}} keys %Daemon;
 		# leave STDIO there for convenience
+		$ENV{'DAEMON_ID'} = $id;
 		
 		exec @$cmd_args;
 		exit 127;

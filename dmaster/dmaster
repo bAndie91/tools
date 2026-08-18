@@ -300,11 +300,16 @@ sub stop_daemon
 	}
 }
 
+sub render_cmd_args
+{
+	return join ' ', map { /[ \\"]/ ? '"'.(s/[\\"]/\\$&/rg).'"' : $_ } @_;
+}
+
 sub start_daemon
 {
 	my $id = shift;
 	my $cmd_args = $Daemon{$id}->{'cmd_args'};
-	logger "starting $id: @$cmd_args";
+	logger "starting $id: ".render_cmd_args(@$cmd_args);
 	
 	my $pid = fork;
 	if($pid == 0)

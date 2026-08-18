@@ -192,6 +192,10 @@ after a respawn-burst.
 
 Set for the daemon process to read itself name.
 
+=item HOSTNAME
+
+Set for the daemon process to the host current hostname.
+
 =back
 
 =head1 EXAMPLE INSTALLATION
@@ -237,6 +241,7 @@ no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 use Socket;
 use Config;
 use Fcntl qw(:flock);
+use Sys::Hostname qw/hostname/;
 require 'syscall.ph';
 @signal_names = split ' ', $Config{'sig_name'};
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
@@ -318,6 +323,7 @@ sub start_daemon
 		close $_ for map {$Daemon->{$_}->{'pidfd'}} grep {exists $Daemon->{$_}->{'pidfd'}} keys %Daemon;
 		# leave STDIO there for convenience
 		$ENV{'DAEMON_ID'} = $id;
+		$ENV{'HOSTNAME'} = hostname();
 		
 		exec @$cmd_args;
 		exit 127;

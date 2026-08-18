@@ -91,6 +91,8 @@ DEPCHECK/dbus-call:
 	perl -MJSON -e 1
 DEPCHECK/tabularize:
 	perl -MTerm::Size -e 1
+DEPCHECK/stdfilt:
+	perl -MList::MoreUtils -e 1
 
 .PHONY: try-satisfy-dependencies
 try-satisfy-dependencies:
@@ -107,6 +109,7 @@ try-satisfy-dependencies:
 	-$(INSTALL_WRAPPER) apt install libversion-util-perl || cpan Version::Util
 	-$(INSTALL_WRAPPER) apt install libdatetime-format-strptime-perl || cpan DateTime::Format::Strptime
 	-$(INSTALL_WRAPPER) apt install libterm-size-perl || cpan Term::Size
+	-$(INSTALL_WRAPPER) apt install liblist-moreutils-perl || cpan List::MoreUtils
 
 
 .PHONY: install-all

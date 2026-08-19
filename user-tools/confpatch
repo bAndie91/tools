@@ -173,7 +173,7 @@ while(1)
 							$buffer_rest_of_file = <$target_fh>;
 						}
 						my $new_file_data;
-						$new_file_data .= $target_line_raw =~ s/^/$CommentLinePrefix/mr;  # comment out the old line(s)
+						$new_file_data .= $target_line_raw =~ s/^/$CommentLinePrefix/mgr;  # comment out the old line(s)
 						$new_file_data .= $variable_definition_raw;
 						$new_file_data .= $buffer_rest_of_file;
 						# append whitespace to the file to fail early if can not write this much data.

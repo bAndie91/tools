@@ -13,8 +13,9 @@ if [ ! -x "$CONFPATCH" ]; then
 fi
 
 TMPDIR=$(mktemp -d)
+echo "temporary dir: $TMPDIR" >&2
 cleanup() { rm -rf "$TMPDIR"; }
-trap cleanup EXIT
+#trap cleanup EXIT
 
 # fixtures directory (this dir)
 FIXDIR=`cd "$(dirname "$0")" && pwd`
@@ -120,3 +121,5 @@ echo -e "\nFinished: $((total_count-fail_count)) passed, $fail_count failed out 
 if [ "$fail_count" -ne 0 ]; then
   exit 1
 fi
+
+cleanup

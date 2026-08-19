@@ -38,7 +38,12 @@ run_case() {
 
   # pick fixture files
   local cfg_fixture="$FIXDIR/fixtures/config_${case}_${cfg_le}.txt"
-  local inp_fixture="$FIXDIR/fixtures/input_${case}_${inp_le}.txt"
+  local inp_fixture
+  if [ -n "$line_cont_set" ]; then
+    inp_fixture="$FIXDIR/fixtures/input_${case}_${inp_le}_backslash.txt"
+  else
+    inp_fixture="$FIXDIR/fixtures/input_${case}_${inp_le}.txt"
+  fi
 
   # target file
   local target="$TMPDIR/target_${tag}.txt"

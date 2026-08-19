@@ -14,20 +14,40 @@ confpatch I<CONFIG_FILE> < I<INPUT_FILE>
 
 Take config option keys and values on I<INPUT_FILE>
 and edit I<CONFIG_FILE> line-based config file in-place
-to set those config options to the input value (leaving old lines in C<#>-prefixed comment),
+to set those config options to the input value (leaving old lines in commented-out form),
 or add those options in I<CONFIG_FILE> if not yet found in it.
+Assuming any config option by name only occurs once in I<CONFIG_FILE> (or not at all).
 
 =head1 ENVIRONMENT
 
 =over 4
 
-=item B<CONFPATCH_TYPE>
+=item B<CONFPATCH_FORMAT>
 
 One of B<environment>, B<simple-space>, B<custom>.
 
+=item B<CONFPATCH_COMMENT_LINE_PATTERN>
+
+Regexp to detect comment lines.
+Don't forget to anchor the pattern to the beginning of the line.
+Default is C<^\s*#>.
+Other useful example: C<^\s*;>.
+
+=item B<CONFPATCH_COMMENT_LINE_PREFIX>
+
+String to prefix lines to comment them out.
+Default is C<#> hashmark.
+
+=item B<CONFPATCH_LINE_CONTINUATION>
+
+Allow logical lines (both in I<CONFIG_FILE> and I<INPUT_FILE>) to be broken into multiple physical lines if they end with this string.
+CR/LF is implicit; no need to include in the variable.
+Default is no line continuation.
+A common example is backslash: C<CONFPATCH_LINE_CONTINUATION="\\">.
+
 =item B<CONFPATCH_KV_PATTERN>
 
-Regexp with 2 capture groups to find option keys and values in I<CONFIG_FILE> when B<CONFPATCH_TYPE> is B<custom>.
+Regexp with 2 capture groups to find option keys and values in I<CONFIG_FILE> when B<CONFPATCH_FORMAT> is B<custom>.
 
 =item B<CONFPATCH_POST_CHANGE>
 
@@ -37,11 +57,11 @@ Shell command run after there was any modifications to I<CONFIG_FILE>.
 
 =head1 EXAMPLES
 
- CONFPATCH_TYPE="environment" confpatch /etc/environment < ...
+ CONFPATCH_FORMAT="environment" confpatch /etc/environment < ...
  
- CONFPATCH_TYPE="simple-space" confpatch /etc/screenrc < ...
+ CONFPATCH_FORMAT="simple-space" confpatch /etc/screenrc < ...
 
- CONFPATCH_TYPE="custom" CONFPATCH_KV_PATTERN='^set\s+(\S+)\s+(.+)$$' confpatch /etc/inputrc < ...
+ CONFPATCH_FORMAT="custom" CONFPATCH_KV_PATTERN='^set\s+(\S+)\s+(.+)$$' confpatch /etc/inputrc < ...
 
 =head1 LIMITATIONS
 
@@ -52,46 +72,93 @@ Shell command run after there was any modifications to I<CONFIG_FILE>.
 
 use Fcntl qw/:flock :seek/;
 
-$input_type = $ENV{'CONFPATCH_TYPE'};
-if($input_type eq 'environment')
+$LineContinuationMark = $ENV{'CONFPATCH_LINE_CONTINUATION'} // undef;
+$CommentLinePattern = $ENV{'CONFPATCH_COMMENT_LINE_PATTERN'} || '^\s*#';
+$CommentLinePrefix = $ENV{'CONFPATCH_COMMENT_LINE_PREFIX'} || '#';
+
+
+$input_format = $ENV{'CONFPATCH_FORMAT'};
+if($input_format eq 'environment')
 {
 	$variable_definition_regex = qr/^(?:export )?([^=]+)=(.*)$/;
 }
-elsif($input_type eq 'simple-space')
+elsif($input_format eq 'simple-space')
 {
 	$variable_definition_regex = qr/^(\S+)\s*(.*)$/;
 }
-elsif($input_type eq 'custom')
+elsif($input_format eq 'custom')
 {
 	#$variable_definition_regex = qr/^$lead_regex($key_regex)$separator_regex($value_regex)$trail_regex$/;
 	$variable_definition_regex = $ENV{'CONFPATCH_KV_PATTERN'} or die "$0: no CONFPATCH_KV_PATTERN given\n";
 }
 else
 {
-	die "$0: unknown input type given in CONFPATCH_TYPE: $input_type, valid types: environment, simple-space, custom\n";
+	die "$0: unknown or no input format is given in CONFPATCH_FORMAT: '$input_format', valid types: environment, simple-space, custom\n";
 }
+
+
+sub read_line
+{
+	my $fh = shift;
+	my $physical_lines = undef;
+	while(1)
+	{
+		my $physical_line = <$fh>;
+		last if not defined $physical_line;
+		$physical_lines .= $physical_line;
+		last if not defined $LineContinuationMark or $physical_line !~ /\Q$LineContinuationMark\E\r?$/;
+	}
+	my $logical_line = $physical_lines;
+	$logical_line =~ s/\Q$LineContinuationMark\E\r?(\n|$)//g if defined $LineContinuationMark;
+	$logical_line =~ s/\r?\n$//;
+	$physical_lines .= "\n" if defined $physical_lines and $physical_lines !~ /\n$/;
+	
+	# $physical_lines is always terminated by LF (when defined).
+	# $logical_line never has LF (nor CR).
+	return ($physical_lines, $logical_line);
+}
+
+sub write_fh
+{
+	my $filename = shift;
+	my $fh = shift;
+	my $data = shift;
+	# readwrite "+<" file handles allegedly require a seek/tell/rewind/fflush between switching from reading to writing or vice versa.
+	seek $fh, 0, SEEK_CUR;
+	print {$fh} $data;
+	$fh->flush or die "$0: write $filename: $!\n";
+}
+
 
 $Changed = 0;
 $target_file = $ARGV[0];
 
 open $target_fh, '+<', $target_file or die "$0: open $target_file: $!\n";
 flock $target_fh, LOCK_EX or die "$0: lock $target_file: $!\n";
+binmode $target_fh;
+binmode STDIN;
 
-while($variable_definition = <STDIN>)
+while(1)
 {
-	chomp $variable_definition;
-	# TODO: keep comment block belonging to a setting
-	next if $variable_definition =~ /^#/;
+	my ($variable_definition_raw, $variable_definition) = read_line(STDIN);
+	last if not defined $variable_definition_raw;
+
+	# TODO: keep comment block belonging to the setting below it
+	next if $variable_definition =~ /$CommentLinePattern/;
 	next if $variable_definition =~ /^\s*$/;
+
 	if(my ($varname, $qvalue) = $variable_definition =~ /$variable_definition_regex/)
 	{
 		my $value = $qvalue =~ s/^"(.*?)"$/$1/r;  # $value is not quoted, $qvalue is the original value which is maybe quoted
 		$variable_set = 0;
 		seek $target_fh, 0, SEEK_SET;
-		while(do{ $pos = tell $target_fh; $target_line = <$target_fh>; })
+		while(1)
 		{
-			chomp $target_line;
-			next if $target_line =~ /^#/;
+			my $pos = tell $target_fh;
+			my ($target_line_raw, $target_line) = read_line($target_fh);
+			last if not defined $target_line_raw;
+			next if $target_line =~ /$CommentLinePattern/;
+
 			if(my ($old_varname, $old_qvalue) = $target_line =~ /$variable_definition_regex/)
 			{
 				if($old_varname eq $varname)
@@ -99,12 +166,25 @@ while($variable_definition = <STDIN>)
 					my $old_value = $old_qvalue =~ s/^"(.*?)"$/$1/r;
 					if($old_value ne $value)
 					{
-						local $/ = undef;
-						my $buffer_rest_of_file = <$target_fh>;
-						seek $target_fh, $pos, SEEK_SET;
-						print {$target_fh} "#$target_line\n";
-						print {$target_fh} "$variable_definition\n";
-						print {$target_fh} $buffer_rest_of_file;
+						my $pos_after = tell $target_fh;
+						my $buffer_rest_of_file;
+						{
+							local $/ = undef;
+							$buffer_rest_of_file = <$target_fh>;
+						}
+						my $new_file_data;
+						$new_file_data .= $target_line_raw =~ s/^/$CommentLinePrefix/mr;  # comment out the old line(s)
+						$new_file_data .= $variable_definition_raw;
+						$new_file_data .= $buffer_rest_of_file;
+						# append whitespace to the file to fail early if can not write this much data.
+						my $file_size_growth = length($new_file_data) - ($pos_after - $pos) - length($buffer_rest_of_file);
+						write_fh $target_file, $target_fh, "\n" x $file_size_growth;
+						# growth is always positive because we cite all the $target_line_raw (which itself
+						# is possibly 1 LF longer than the original data in the config file) plus comment marks
+						# and the new variable definition.
+
+						seek $target_fh, $pos, SEEK_SET or die "$0: seek $target_file: $!\n";
+						write_fh $target_file, $target_fh, $new_file_data;
 						warn "$0: patched $varname\n";
 						$Changed = 1;
 					}
@@ -115,16 +195,26 @@ while($variable_definition = <STDIN>)
 		}
 		if(not $variable_set)
 		{
-			print {$target_fh} "$variable_definition\n";
+			my $new_file_data = '';
+			# ensure the file ends with a newline before appending the new variable definition
+			seek $target_fh, -1, SEEK_END;
+			read $target_fh, my $last_char, 1;
+			$new_file_data .= "\n" if $last_char ne "\n";
+
+			# append the new variable definition to the end of the file
+			$new_file_data .= $variable_definition_raw;
+			write_fh $target_file, $target_fh, $new_file_data;
 			warn "$0: added $varname\n";
 			$Changed = 1;
 		}
 	}
 	else
 	{
-		warn "$0: invalid input line $.: $_\n";
+		warn "$0: invalid input line $.: $variable_definition\n";
 	}
 }
+
+close $target_fh or die "$0: close $target_file: $!\n";
 
 if($Changed)
 {

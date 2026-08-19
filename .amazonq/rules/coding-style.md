@@ -34,7 +34,7 @@
 
 - `set -e`, `set -o pipefail`, `set -u` each on separate lines
 - `then`, `else`, `do` keywords NOT on same line as preceding flow control keyword, except if the whole `if ...; then ...; [else ...;] fi`, `for`/`while ...; do ...; done` is on a single line
-- function body opening brace `{` on its own line
+- function body opening brace `{` on its own line, except if the whole function definition is 1 line total.
 - `case` patterns use parenthesis-only form: `(pattern)` NOT `pattern)`
 - `case` closing `;;` indented at the same level as the pattern body, not at the pattern's indentation level
 
@@ -48,7 +48,7 @@
 
 ### Test conditionals
 
-- prefer `[` for most tests in `if` statements and `-a`/`-o` for logical operators
+- prefer `[` over `[[` for most tests in `if` statements and `-a`/`-o` for logical operators
 - use `[[` for regexp tests (`=~`) in `if` statements
 
 ### CLI arguments

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+ROOT_DIR=`cd "$(dirname "$0")/../.." && pwd`
 CONFPATCH="$ROOT_DIR/user-tools/confpatch"
 
 echo "Using confpatch: $CONFPATCH"
@@ -17,7 +17,7 @@ cleanup() { rm -rf "$TMPDIR"; }
 trap cleanup EXIT
 
 # fixtures directory (this dir)
-FIXDIR="$(cd "$(dirname "$0")" && pwd)"
+FIXDIR=`cd "$(dirname "$0")" && pwd`
 
 # newline helper: normalize file content to LF for content comparisons
 norm() { tr -d '\r' < "$1"; }
@@ -27,25 +27,17 @@ total_count=0
 
 run_case() {
   local line_cont_set="$1"  # either empty or backslash
-  local cfg_nl="$2"        # LF or CRLF
-  local in_nl="$3"         # LF or CRLF
-  local case="$4"          # exists-equal | exists-different | missing
+  local cfg_le="$2"        # LF or CRLF
+  local inp_le="$3"         # LF or CRLF
+  local case="$4"          # exists-same | exists-diff | missing
 
   total_count=$((total_count+1))
-  local tag="LC${line_cont_set:-_unset}_CFG${cfg_nl}_IN${in_nl}_${case}"
-  echo "\n=== Test: $tag ==="
+  local tag="LC${line_cont_set:-_unset}_CFG${cfg_le}_IN${inp_le}_${case}"
+  echo -e "\n=== Test: $tag ==="
 
   # pick fixture files
-  local cfg_fixture="$FIXDIR/fixtures/config_${case}_${cfg_nl}.txt"
-  local in_fixture  ="$FIXDIR/fixtures/input_${case}_${in_nl}.txt"
-  # Note: the input fixture name mapping: for exists cases input may be same or different
-  if [ "$case" = "exists-equal" ]; then
-    in_fixture="$FIXDIR/fixtures/input_same_${in_nl}.txt"
-  elif [ "$case" = "exists-different" ]; then
-    in_fixture="$FIXDIR/fixtures/input_diff_${in_nl}.txt"
-  else
-    in_fixture="$FIXDIR/fixtures/input_missing_${in_nl}.txt"
-  fi
+  local cfg_fixture="$FIXDIR/fixtures/config_${case}_${cfg_le}.txt"
+  local inp_fixture="$FIXDIR/fixtures/input_${case}_${inp_le}.txt"
 
   # target file
   local target="$TMPDIR/target_${tag}.txt"
@@ -56,8 +48,6 @@ run_case() {
   before_md5=$(md5sum "$target" | cut -d' ' -f1)
 
   # prepare environment
-  export CONFPATCH_TYPE="simple-space"
-  # Also set CONFPATCH_FORMAT for compatibility with the test request (script uses CONFPATCH_TYPE)
   export CONFPATCH_FORMAT="simple-space"
   if [ -n "$line_cont_set" ]; then
     export CONFPATCH_LINE_CONTINUATION="\\"
@@ -67,7 +57,7 @@ run_case() {
   unset CONFPATCH_POST_CHANGE || true
 
   # run confpatch
-  if ! ("$CONFPATCH" "$target" < "$in_fixture"); then
+  if ! ("$CONFPATCH" "$target" < "$inp_fixture"); then
     echo "confpatch exited non-zero for $tag" >&2
     fail_count=$((fail_count+1))
     return
@@ -77,7 +67,7 @@ run_case() {
   after_md5=$(md5sum "$target" | cut -d' ' -f1)
 
   # verify
-  if [ "$case" = "exists-equal" ]; then
+  if [ "$case" = "exists-same" ]; then
     # file should be unchanged
     if [ "$before_md5" != "$after_md5" ]; then
       echo "[FAIL] $tag: file changed but should not have" >&2
@@ -87,7 +77,7 @@ run_case() {
     else
       echo "[OK] $tag: file unchanged as expected"
     fi
-  elif [ "$case" = "exists-different" ]; then
+  elif [ "$case" = "exists-diff" ]; then
     # old value should be commented and new value present
     local normt="$TMPDIR/normt_${tag}.txt"
     norm "$target" > "$normt"
@@ -117,16 +107,16 @@ run_case() {
 
 # iterate over combinations
 for line_cont in "" "BACKSLASH"; do
-  for cfg_nl in LF CRLF; do
-    for in_nl in LF CRLF; do
-      for case in exists-equal exists-different missing; do
-        run_case "$line_cont" "$cfg_nl" "$in_nl" "$case"
+  for cfg_le in LF CRLF; do
+    for inp_le in LF CRLF; do
+      for case in exists-same exists-diff missing; do
+        run_case "$line_cont" "$cfg_le" "$inp_le" "$case"
       done
     done
   done
 done
 
-echo "\nFinished: $((total_count-fail_count)) passed, $fail_count failed out of $total_count tests."
+echo -e "\nFinished: $((total_count-fail_count)) passed, $fail_count failed out of $total_count tests."
 if [ "$fail_count" -ne 0 ]; then
   exit 1
 fi

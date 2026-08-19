@@ -89,7 +89,7 @@ run_case() {
     else
       if [ -n "$line_cont_set" ]; then
         # Expect the new definition to be written as continued physical lines
-        if ! grep -q -E '^FOO\s+ba\\$' "$normt" || ! grep -q -E '^z$' "$normt"; then
+        if ! grep -A1 -E '^FOO\s+ba\\$' "$normt" | grep -q -E '^z$'; then
           echo "[FAIL] $tag: new continued value not present as expected" >&2
           echo "Result contents:"; cat "$normt"
           fail_count=$((fail_count+1))
@@ -110,7 +110,7 @@ run_case() {
     local normt="$TMPDIR/normt_${tag}.txt"
     norm "$target" > "$normt"
     if [ -n "$line_cont_set" ]; then
-      if ! grep -q -E '^NEWKEY\s+val\\$' "$normt" || ! grep -q -E '^ue$' "$normt"; then
+      if ! grep -A1 -E '^NEWKEY\s+val\\$' "$normt" | grep -q -E '^ue$'; then
         echo "[FAIL] $tag: new continued key not added as expected" >&2
         echo "Result contents:"; cat "$normt"
         fail_count=$((fail_count+1))

@@ -86,22 +86,45 @@ run_case() {
       echo "[FAIL] $tag: old value not commented as expected" >&2
       echo "Result contents:"; cat "$normt"
       fail_count=$((fail_count+1))
-    elif ! grep -q -E '^FOO\s+baz$' "$normt"; then
-      echo "[FAIL] $tag: new value not present as expected" >&2
-      echo "Result contents:"; cat "$normt"
-      fail_count=$((fail_count+1))
     else
-      echo "[OK] $tag: patched as expected"
+      if [ -n "$line_cont_set" ]; then
+        # Expect the new definition to be written as continued physical lines
+        if ! grep -q -E '^FOO\s+ba\\$' "$normt" || ! grep -q -E '^z$' "$normt"; then
+          echo "[FAIL] $tag: new continued value not present as expected" >&2
+          echo "Result contents:"; cat "$normt"
+          fail_count=$((fail_count+1))
+        else
+          echo "[OK] $tag: patched as expected (continued lines)"
+        fi
+      else
+        if ! grep -q -E '^FOO\s+baz$' "$normt"; then
+          echo "[FAIL] $tag: new value not present as expected" >&2
+          echo "Result contents:"; cat "$normt"
+          fail_count=$((fail_count+1))
+        else
+          echo "[OK] $tag: patched as expected"
+        fi
+      fi
     fi
   elif [ "$case" = "missing" ]; then
     local normt="$TMPDIR/normt_${tag}.txt"
     norm "$target" > "$normt"
-    if ! grep -q -E '^NEWKEY\s+value$' "$normt"; then
-      echo "[FAIL] $tag: new key not added as expected" >&2
-      echo "Result contents:"; cat "$normt"
-      fail_count=$((fail_count+1))
+    if [ -n "$line_cont_set" ]; then
+      if ! grep -q -E '^NEWKEY\s+val\\$' "$normt" || ! grep -q -E '^ue$' "$normt"; then
+        echo "[FAIL] $tag: new continued key not added as expected" >&2
+        echo "Result contents:"; cat "$normt"
+        fail_count=$((fail_count+1))
+      else
+        echo "[OK] $tag: added key as expected (continued lines)"
+      fi
     else
-      echo "[OK] $tag: added key as expected"
+      if ! grep -q -E '^NEWKEY\s+value$' "$normt"; then
+        echo "[FAIL] $tag: new key not added as expected" >&2
+        echo "Result contents:"; cat "$normt"
+        fail_count=$((fail_count+1))
+      else
+        echo "[OK] $tag: added key as expected"
+      fi
     fi
   fi
 }

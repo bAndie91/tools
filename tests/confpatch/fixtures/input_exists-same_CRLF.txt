@@ -1,2 +1,1 @@
-FOO o\
-ld
+FOO old

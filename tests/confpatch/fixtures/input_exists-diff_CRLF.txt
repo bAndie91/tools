@@ -1,2 +1,1 @@
-FOO ba\
-z
+FOO baz

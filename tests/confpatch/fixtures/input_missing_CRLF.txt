@@ -1,1 +1,2 @@
-NEWKEY value
+NEWKEY val\
+ue

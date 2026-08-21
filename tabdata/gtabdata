@@ -40,7 +40,7 @@ def add_key_binding(widget, keyname, callback):
 
 def parse_options_string(s):
 	ret = {}
-	for opt in s.split(','):
+	for opt in s.split(';'):
 		if '=' in opt:
 			k, v = opt.split('=', 1)
 		else:
@@ -1681,7 +1681,7 @@ LABEL is a jinja2 template rendered to the menu item label, supporting these var
 	May create nested menus (submenus) by using "//" (couble slash) as a separator in LABEL to describe the path through the menu hierarchy.
 	Parent menus are implicit, but if want to define icon for one, end its LABEL with "//" (double slash).
 MENUITEM-OPTIONS
-	Comma-delimited list of zero or more options:
+	Semicolon-delimited list of zero or more options:
 	- per-each-selected-row: run the COMMAND separately on each row. Default is to run COMMAND once (and pass 'selected_rows' in JSON on its STDIN)
 	- columns=COL1,COL2,...: comma-delimited list of column names of which cells the given menu item is to be shown on.
 	- column-regex=PATTERN: the given menu item is to be shown if the column name the context menu is triggered on matches to the (case-sensitive, unanchored) regexp pattern.

@@ -1,3 +1,12 @@
 #!/bin/sh
 
-fuser -k -SIGHUP /var/run/dmaster.sock
+set -e
+
+signal=HUP
+
+if [ "$1" = --hard ]
+then
+	signal=USR2
+fi
+
+fuser -k -SIG$signal /var/run/dmaster.sock

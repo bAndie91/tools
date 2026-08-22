@@ -203,6 +203,13 @@ sub ipc_eof_watcher
 	}
 }
 
+sub signal_handler
+{
+	my ($sig) = @_;
+	$ipc->signal($sig);
+	print STDERR "\n";
+}
+
 
 
 $OptCommonSep = '---';
@@ -403,6 +410,9 @@ $highest_exit_code = 0;
 $lowest_exit_code = undef;
 
 $ipc = harness @ipc_args;
+$SIG{'INT'} = \&signal_handler;
+$SIG{'TERM'} = \&signal_handler;
+$SIG{'QUIT'} = \&signal_handler;
 $ipc->start;
 while(1)
 {

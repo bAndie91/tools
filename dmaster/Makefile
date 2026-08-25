@@ -33,6 +33,11 @@ README.md: dmaster dmaster-signal
 	cat $^ | pod2markdown --utf8 | sed -e 's/^# /#&/; s/^## NAME/# NAME/' > "$@~" && mv "$@~" "$@"
 
 
+.PHONY: try-install-dependencies
+try-install-dependencies:
+	$(INSTALL_WRAPPER) apt install libtime-duration-perl netcat-openbsd psmisc
+
+
 
 define remove
 @[ ! -e $(1) ] || $(INSTALL_WRAPPER) rm -v $(1)

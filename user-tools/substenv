@@ -32,6 +32,12 @@ Replace the occurrances of I<NAME> environment variable.
 May be specified more than once.
 If B<-a> option is NOT given, ONLY these I<NAME>s are replaced.
 
+=item -x, --except I<NAME>
+
+Don't replace the occurrances of I<NAME> environment variable,
+but keep them as-is (regardless of the B<-k> option).
+May be specified more than once.
+
 =item -k, --keep-undefined
 
 Do not replace variables which are not defined (ie. not in the environment),
@@ -92,10 +98,12 @@ $OptAlwaysAll = 0;
 $OptKeepUndef = 0;
 $OptDryRun = 0;
 @subst_env_only = ();
+@except_envs = ();
 
 GetOptions(
 	'a|all!' => \$OptAlwaysAll,
 	'e|env|environ|environment=s@' => \@subst_env_only,
+	'x|except=s@' => \@except_envs,
 	'k|keep-undefined!' => \$OptKeepUndef,
 	'dry-run|dryrun!' => \$OptDryRun,
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
@@ -125,11 +133,24 @@ sub subst_env
 {
 	my $varname = shift;
 	my $whole_substring = shift;
-	if(not $OptKeepUndef or exists $ENV{$varname}) {
+	if(grep { $_ eq $varname } @except_envs)
+	{
+		return $whole_substring;
+	}
+	if(exists $ENV{$varname})
+	{
 		return $ENV{$varname};
 	}
-	else {
-		return $whole_substring;
+	else
+	{
+		if($OptKeepUndef)
+		{
+			return $whole_substring;
+		}
+		else
+		{
+			return '';
+		}
 	}
 }
 

@@ -116,6 +116,10 @@ sub parse_filter_expr
 			eval 'my $test = ""; $test =~ '.$replacer.'; 1' or die "$0: error in s/// expression: $@\n";
 			$filt->{replacer} = $replacer;
 		}
+		elsif(s/^>\s*(STDOUT|STDERR|\d+)//)
+		{
+			$filt->{write_fd} = $1;
+		}
 		else
 		{
 			die "$0: can not parse expression: $_\n";
@@ -172,6 +176,24 @@ sub apply_filter_rule
 		delete $context->{tags}->{$_} for @{$rule->{tag_end}};
 		$applied++;
 	}
+	if(exists $rule->{write_fd})
+	{
+		if($rule->{write_fd} eq 'STDOUT')
+		{
+			$result->{write_fh} = \*STDOUT;
+		}
+		elsif($rule->{write_fd} eq 'STDERR')
+		{
+			$result->{write_fh} = \*STDERR;
+		}
+		else
+		{
+			my $fd = int $rule->{write_fd};
+			open my $fh, '>&', $fd;
+			$result->{write_fh} = $fh;
+		}
+		$applied++;
+	}
 	return $applied;
 }
 
@@ -198,7 +220,7 @@ sub evaluate_filters
 		
 		next if not stream_tags_match($context->{tags}, $filt->{match_tags});
 		
-		my %applicable_rule = map {($_=>$filt->{$_})} grep {$_ ~~ [qw/tag_start tag_end replacer/]} keys %$filt;
+		my %applicable_rule = map {($_=>$filt->{$_})} grep {$_ ~~ [qw/tag_start tag_end replacer write_fd/]} keys %$filt;
 		
 		if(exists $filt->{pattern})
 		{
@@ -243,7 +265,9 @@ sub process_line
 	my $line = shift;
 	my $stream = shift;
 	my $filt_result = evaluate_filters($line, $stream->{filter_context});
-	print {$stream->{'write_fh'}} $filt_result->{line} if $filt_result->{pass};
+	my $write_fh = $stream->{'write_fh'};
+	$write_fh = $filt_result->{write_fh} if defined $filt_result->{write_fh};
+	print {$write_fh} $filt_result->{line} if $filt_result->{pass};
 }
 
 sub process_stream
@@ -413,7 +437,7 @@ Comment is everything after a hashmark (C<#>) preceded by whitespace or the whil
 
 Each line is a filter rule, of which syntax is:
 
-[B<match_tags>] [B<pattern> [B<offset>]] [B<replacer>] [B<set_tags>]
+[B<match_tags>] [B<pattern> [B<offset>]] [B<replacer>] [B<set_tags>] [B<< > fd >>]
 
 =over 4
 
@@ -501,6 +525,11 @@ Example filter:
  [keyblock] s/^/\t/
 
 This prepends a TAB char to each lines in the output stream which are between the lines containing "BEGIN" and "END".
+
+=item B<< > fd >>
+
+write the matched line to the file descriptor B<fd> (number or name) instead of its original fd.
+STDOUT and STDERR are the supported names.
 
 =back
 

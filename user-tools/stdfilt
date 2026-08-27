@@ -116,7 +116,7 @@ sub parse_filter_expr
 			eval 'my $test = ""; $test =~ '.$replacer.'; 1' or die "$0: error in s/// expression: $@\n";
 			$filt->{replacer} = $replacer;
 		}
-		elsif(s/^>\s*(STDOUT|STDERR|\d+)//)
+		elsif(s/^>\s*&(STDOUT|STDERR|\d+)//)
 		{
 			$filt->{write_fd} = $1;
 		}
@@ -437,7 +437,7 @@ Comment is everything after a hashmark (C<#>) preceded by whitespace or the whil
 
 Each line is a filter rule, of which syntax is:
 
-[B<match_tags>] [B<pattern> [B<offset>]] [B<replacer>] [B<set_tags>] [B<< > fd >>]
+[B<match_tags>] [B<pattern> [B<offset>]] [B<replacer>] [B<set_tags>] [B<< >&fd >>]
 
 =over 4
 
@@ -526,10 +526,11 @@ Example filter:
 
 This prepends a TAB char to each lines in the output stream which are between the lines containing "BEGIN" and "END".
 
-=item B<< > fd >>
+=item B<< >&fd >>
 
 write the matched line to the file descriptor B<fd> (number or name) instead of its original fd.
 STDOUT and STDERR are the supported names.
+Note, although similar, but this is not a full-fledged shell-like I/O redirection.
 
 =back
 

@@ -42,6 +42,7 @@ ie. a value which was not there in the first group,
 it won't be distibuted into the new column, since the header is already sent,
 but left in the original column just like B<-u> option would not be in effect.
 See "pause" and "resume" in the example below.
+See B<-c> option to specify these in command arguments.
 
 B<Example>:
 
@@ -58,6 +59,10 @@ B<Example>:
  COUNT | ID | EVENT        | TIME        | TIME_start | TIME_end | STATUS | STATUS_start | STATUS_end
  2     | 15 |              |             | 10:00      | 10:05    |        |              | ok
  4     | 16 | pause resume | 11:04 11:05 | 11:00      | 11:06    |        |              | err
+
+=item -c, --cell I<VALUE>
+
+Anticipate I<VALUE> in B<-u> I<FIELD> column.
 
 =item -s, --distributed-column-name-separator I<STR>
 
@@ -111,6 +116,10 @@ Have to sort input data first.
 
 Group key is always the first input column.
 
+The I<FIELD> field (specified by B<--distribute-unique-field>)
+in the first row-group must contain all the cell values which the caller wants to distribute into new columns across the whole table
+(because headers are sent early), or specify them in arguments by (repeated) B<-c> option.
+
 If a row in the input data has more cells than the number of columns, those are ignored.
 
 =head1 SEE ALSO
@@ -126,19 +135,22 @@ td-collapse(1) roughly translates to SELECT COUNT(*) + GROUP_CONCAT() + GROUP BY
 
 $OptGlue = " ";
 $OptDistUniqueField = undef;
+@OptKnownCells = ();
 $OptDistColumnNameSeparator = "_";
 $OptKeepSameCells = 0;
 $OptEmptyDistCells = 0;
+
 %TabdataOptionDefs = (
 	'g|glue=s' => \$OptGlue,
 	'u|distribute-unique-field=s' => \$OptDistUniqueField,
+	'c|cell=s@' => \@OptKnownCells,
 	's|distributed-column-name-separator=s' => \$OptDistColumnNameSeparator,
 	'k|keep-equivalent-cells-united!' => \$OptKeepSameCells,
 	'z|empty-distributed-cells!' => \$OptEmptyDistCells,
 );
 
 use Data::Dumper;
-use List::MoreUtils qw/all/;
+use List::MoreUtils qw/all uniq/;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
@@ -166,12 +178,12 @@ sub commit_group
 {
 	if($group_count == 0)
 	{
-		if($OptDistUniqueField)
+		if(defined $OptDistUniqueField)
 		{
 			for my $colidx (1..$#Header)
 			{
 				next if $colidx == $uniq_field_idx;
-				@distributed_cells = @{$group_members[$uniq_field_idx]};
+				@distributed_cells = uniq @OptKnownCells, @{$group_members[$uniq_field_idx]};
 				for my $uniq_cell (@distributed_cells)
 				{
 					my $distrib_colname = $Header[$colidx] . $OptDistColumnNameSeparator . $uniq_cell;

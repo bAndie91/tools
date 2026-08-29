@@ -9,6 +9,7 @@ TOOLS = \
   icewm-menu-startup-progs \
   icewm-menu-ssh-sessions \
   icewm-trayapp \
+  icewm-menu-xrandr \
   
 
 

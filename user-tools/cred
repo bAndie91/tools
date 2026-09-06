@@ -91,13 +91,15 @@ Enter B<reveal> to show secrets as well.
 By B<clip> you may copy the value to the clipboard.
 If you use CopyQ(1), secrets are prevented to get to CopyQ's clipboard items history.
 
-=item fill-form I<PROPERTY> [I<PROPERTY> [...]]
+=item fill-form I<PROPERTY>[,] [I<PROPERTY>[,] [...]]
 
-Takes one or more property names and types their values to the window accessible by pressing Alt+Tab on your desktop.
-Also presses <TAB> after each string, but does not press <RETURN>.
+Takes one or more property names and types their values to the window accessible by pressing B<Alt+Tab> on your desktop.
+Also presses B<TAB> after each string, but does not press <RETURN>.
 A single dot (C<.>) is a pseudo I<PROPERTY> name: if it's given, nothing will be typed in its place,
-but <TAB> is still pressed after it.
+but B<TAB> is still pressed after it.
 Use it if the form has fields which you don't want to fill in.
+If a I<PROPERTY> ends with comma (C<,>), not even B<TAB> is pressed after it.
+
 Obviously it's useful only with a B<$DISPLAY>.
 Depends on xdotool(1).
 
@@ -509,13 +511,23 @@ case "$subcmd" in
 		strings=''
 		for prop in "$@"
 		do
+			tab=1
+			if [ "${prop: -1}" = , ]
+			then
+				tab=''
+				prop=${prop:0:-1}
+			fi
 			if [ "$prop" = . ]
 			then
 				val=''
 			else
 				val=`prop "$prop" reveal`
 			fi
-			strings="$strings$val"$'\t'
+			strings="$strings$val"
+			if [ $tab ]
+			then
+				strings="$strings$TAB"
+			fi
 		done
 		xdotool key Alt+Tab
 		# TODO verify if the new window is something we are supposed to type secrets

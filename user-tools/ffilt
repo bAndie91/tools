@@ -1,6 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env perl
 
-true <<'EOF'
 =pod
 
 =head1 NAME
@@ -16,7 +15,7 @@ ffilt I<FILE> I<COMMAND> [I<ARGS>]
 Feed I<FILE> into I<COMMAND>'s stdin, then save its stdout back to I<FILE>
 if I<COMMAND> ran successfully.
 
-ffilt(1) is a quasi shorthand for this shell construct:
+ffilt(1) is quasi a shorthand for this shell idiom:
 
  output=`cat FILE | COMMAND`
  [ $? = 0 ] && echo "$output" > FILE
@@ -29,46 +28,63 @@ sponge(1), insitu(1) L<https://github.com/athas/insitu>
 
 =cut
 
-EOF
+
+use open IN => ':raw :bytes', OUT => ':raw :bytes';
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev pass_through permute/;
+use IPC::Run qw/run/;
+use Pod::Usage;
+use Data::Dumper;
+use POSIX;
+use Fcntl qw/:seek/;
 
 
-set -e
-set -o pipefail
-set -u
+GetOptions(
+    'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+) or pod2usage(-exitval=>2, -verbose=>99);
 
-. /usr/lib/tool/bash-utils
-
-
-opt_verbose=no
+# Getopt's pass_through mode leaves "--" there
+shift @ARGV if $ARGV[0] eq '--';
 
 
-while [ $# != 0 ]
-do
-	case "$1" in
-	--help)
-		pod2text "$0"
-		exit 0;;
-	-v|--verbose)
-		opt_verbose=yes
-		;;
-	--)
-		shift
-		break;;
-	-*)
-		errx -1 "unknown option: $1";;
-	*)
-		break;;
-	esac
-	shift
-done
+sub cease
+{
+	my ($code, $msg) = @_;
+	warn "$0: $msg\n";
+	exit $code;
+}
 
-set -e
-set -o pipefail
-set -u
 
-file=$1
-shift
+$File = shift @ARGV or pod2usage(-exitval=>2, -verbose=>99);
+open $filehandle, '+<', $File or cease(int $!, "$File: open: $!");
 
-stdout=`cat "$file" | command "$@"`
-# pipefail make us die here if either cat or command failed
-cat > "$file" <<< "$stdout"
+$exit_status = 0;
+run [@ARGV], '<', $filehandle, '>', \$stdout;
+$run_status = $?;
+
+if($run_status == 0)
+{
+	seek $filehandle, 0, SEEK_SET	or cease(int $!, "$File: seek: $!");
+	print {$filehandle} $stdout		or cease(int $!, "$File: write: $!");
+	seek $filehandle, 0, SEEK_CUR	or cease(int $!, "$File: seek: $!");
+	truncate $filehandle, length $stdout	or cease(int $!, "$File: truncate: $!");
+	close $filehandle				or cease(int $!, "$File: close: $!");
+	$exit_status = 0;
+}
+else
+{
+	if(WIFSIGNALED($run_status))
+	{
+		my $sig = WTERMSIG($run_status);
+		warn "$0: $ARGV[0]: command terminated by signal $sig\n";
+		$exit_status = 128 + $sig;
+	}
+	else
+	{
+		my $code = WEXITSTATUS($run_status);
+		warn "$0: $ARGV[0]: command exited with status $code\n";
+		$exit_status = $code;
+	}
+	
+}
+exit $exit_status;
+

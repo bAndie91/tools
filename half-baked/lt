@@ -25,7 +25,11 @@ do
 	shift
 done
 
-if [ -z "$*" ]
+if [ $# = 0 ]
+then
+	echo "reading stdin..." >&2
+	query_text=`cat`
+elif [ "$1" == --help ]
 then
 	{
 		echo "Usage: $0 [<OPTIONS>] <TEXT>"
@@ -38,6 +42,8 @@ then
 		echo "    <SOURCE_LANG>→<TARGET_LANG>"
 	} >&2
 	exit 1
+else
+	query_text="$*"
 fi
 
 
@@ -108,7 +114,7 @@ echo "target language	$target" >&2
 
 resp=`http --pretty none --body --check-status --ignore-stdin \
 	http://$host:$port/translate \
-	alternatives="$alternatives" format=text source="$source" target="$target" q="$*"`
+	alternatives="$alternatives" format=text source="$source" target="$target" q="$query_text"`
 
 jget()
 {

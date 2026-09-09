@@ -93,6 +93,8 @@ DEPCHECK/tabularize:
 	perl -MTerm::Size -e 1
 DEPCHECK/stdfilt:
 	perl -MList::MoreUtils -e 1
+DEPCHECK/ffilt:
+	perl -MIPC::Run -e 1
 
 .PHONY: try-satisfy-dependencies
 try-satisfy-dependencies:

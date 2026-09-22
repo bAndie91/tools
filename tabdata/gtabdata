@@ -352,6 +352,26 @@ def glib_callback_once(func, *args):
 	func(*args)
 	return False
 
+class Debouncer(object):
+	def __init__(self, delay_ms, callback):
+		self.delay_ms = delay_ms
+		self.callback = callback
+		self._timeout_id = None
+
+	def cancel(self):
+		if self._timeout_id is not None:
+			gobject.source_remove(self._timeout_id)
+
+	def trigger(self):
+		self.cancel()
+		self._timeout_id = gobject.timeout_add(self.delay_ms, self.fire)
+
+	def fire(self):
+		self.cancel()
+		self._timeout_id = None
+		self.callback()
+		return False  # False = don't repeat the timeout
+
 class TreeView(gtk.TreeView):
 	__gsignals__ = {
 		'menu-popup': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT)),
@@ -381,6 +401,10 @@ class TreeView(gtk.TreeView):
 		self.connect('key-release-event', self._on_key_release)
 		self.connect('header-menu-popup', self._on_header_menu_popup)
 		self.connect_after('expose-event', self._on_expose)
+		self.filter_debouncer = Debouncer(1000, self._refilter)
+
+	def _refilter(self):
+		self.derived_model.refilter()
 
 	def _on_expose(self, tv, event):
 		self._highlight_focused_cell(event)
@@ -504,7 +528,8 @@ class TreeView(gtk.TreeView):
 		tvc.connect('notify::width', self._on_column_width_change)
 		tvc.connect('notify::visible', self._on_column_visibility_changed)
 		tvc.connect('notify::sort-order', self._on_column_sort_order_changed)
-		tvc.connect('filter-expression-changed', lambda tvc, fexpr: self.derived_model.refilter())
+		tvc.connect('filter-expression-changed', lambda tvc, fexpr: self.filter_debouncer.trigger())
+		tvc.connect('filter-expression-keypress-return', lambda tvc: self.filter_debouncer.fire())
 
 	def _on_column_click(self, col_widget, event):
 		if event.button == MOUSE_BUTTON_RIGHT:
@@ -665,6 +690,7 @@ class TreeViewColumn(gtk.TreeViewColumn):
 	__gsignals__ = {
 		'button-press-event': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
 		'filter-expression-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (str,)),
+		'filter-expression-keypress-return': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, ()),
 		'font-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (str,)),
 		'alignment-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (str,)),
 	}
@@ -686,6 +712,7 @@ class TreeViewColumn(gtk.TreeViewColumn):
 		self.filter_entrybox.set_width_chars(1)  # minimal width so its final width is controlled by the column width
 		self.filter_entrybox.connect('changed', lambda editable: self.filter_expression_changed())
 		self.filter_entrybox.connect('notify::visible', lambda wdg, gparam: self.filter_expression_changed())
+		self.filter_entrybox.connect('activate', lambda entry: self.emit('filter-expression-keypress-return'))
 
 	def add_attribute(self, cellrenderer, attrname, col_num):
 		super(TreeViewColumn, self).add_attribute(cellrenderer, attrname, col_num)
@@ -754,7 +781,7 @@ class TreeViewColumn(gtk.TreeViewColumn):
 			self.filter_regex_pattern = filter_regex_pattern
 			self.emit('filter-expression-changed', new)
 			self._saved_filter_expr = new
-
+	
 	@property
 	def name(self):
 		return self.get_name()

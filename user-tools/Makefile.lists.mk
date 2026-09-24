@@ -67,6 +67,9 @@ TOOLS ?= \
   git-mirrors \
   gitconfigexec \
   git_diff \
+  git-apply-raw-log \
+  git-patchset-push-sendEmail \
+  git-remote-patchset \
   git-log2mbox \
   git-submodule-auto-add \
   git-push-remotes \

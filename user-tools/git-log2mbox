@@ -3,6 +3,13 @@
 use open ':std', ':utf8';
 use utf8;
 
+# TODO parse MIME-encoded Subject header
+#  Subject: [PATCH] =?UTF-8?...?=
+#  MIME-Version: 1.0
+#  Content-Type: text/plain; charset=UTF-8
+#  Content-Transfer-Encoding: 8bit
+
+
 
 $Phase = 'header';
 $PrevPhase = undef;

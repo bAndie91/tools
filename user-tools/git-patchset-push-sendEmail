@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+params=$*
+
+set -f	# params must word-split into flags but never glob-expand against cwd
+sendEmail -f anon@$RANDOM.$RANDOM -u "git:${PWD##*/}:$GIT_PATCHSET_REFRANGE" $params
+
+# example git remote patchset:
+# git remote add pidgeonpost patchset::@sendEmail:"-t pidgeon@example.net -s smtp.example.net:25 -v"   

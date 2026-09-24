@@ -1,0 +1,221 @@
+#!/usr/bin/env bash
+#
+# Reconstructs commits from a stream produced by:
+#   git log --pretty=raw --patch-with-stat --full-index --binary -m --reverse --first-parent <old>..<new>
+# (--reverse: input must be oldest-first, so each commit's parent already
+# exists by the time it's built) read from stdin, writing objects into the
+# current repo's object database and advancing a ref after each one (see
+# advance_ref() below) — a failure partway through still leaves every earlier
+# commit attached instead of losing the whole run.
+#
+# ponytail: a true merge commit (more than one "parent" line) only keeps the
+# last parent line seen — fine for -m --first-parent streams, which is all
+# this is meant to consume. Real merge reconstruction would need to collect
+# every "parent" line and pass multiple -p to commit-tree.
+#
+# ponytail: advance_ref() runs `git checkout` after every commit rather
+# than once at the end, so it's an O(n) worktree materialization instead
+# of O(1). Fine at human/patch scale; revisit if this ever needs to eat
+# thousand-commit histories. Also: a commit that fails its tree/hash
+# check (below) has already run read-tree/apply against the real index
+# by that point, so the index can be left reflecting the failed
+# candidate rather than the last successfully advanced commit — a plain
+# `git reset` cleans that up; nothing uncommitted is ever at risk since
+# the working tree itself is untouched until advance_ref() succeeds, and
+# git checkout itself refuses (rather than silently overwriting) if the
+# target commit would clobber either an uncommitted tracked change or an
+# untracked file sitting in the way of a path the commit introduces.
+
+set -euo pipefail
+
+input_sha=''
+input_tree_sha=''
+parent=''
+author_line=''
+committer_line=''
+extra_headers=''
+in_header_tail=0
+commit_message=()
+patch_lines=()
+in_message_section=0
+in_patch_section=0
+do_skip_input_lines=0
+
+# checked once, up front, before anything below starts building candidate
+# trees directly in the real index — once that begins, the index is
+# expected to differ from HEAD, so this check couldn't mean anything
+# useful done again later.
+if git rev-parse -q --verify HEAD >/dev/null && ! git diff-index --quiet HEAD --
+then
+	echo "$0: working tree has uncommitted changes, refusing to proceed" >&2
+	exit 1
+fi
+
+# new_sha already an ancestor of (or equal to) current HEAD: nothing to
+# do. Otherwise, re-derived fresh every call from wherever HEAD actually
+# is right now: no branch checked out — just advance HEAD, nothing to protect.
+# On a branch, and new_sha is a
+# fast-forward from here — move that branch. On a branch, but it isn't a
+# fast-forward (new_sha builds on some earlier point in, or entirely
+# outside, this branch's history) — leave the branch alone and branch
+# off as a detached HEAD instead; any further commits down that same
+# lineage then land in the "no branch checked out" case above, since
+# we're already detached by then.
+advance_ref()
+{
+	local new_sha=$1 current live_branch
+	current=$(git rev-parse -q --verify HEAD) || current=''
+	live_branch=$(git symbolic-ref -q --short HEAD) || live_branch=''
+
+	if [ -n "$current" ] && git merge-base --is-ancestor "$new_sha" "$current"
+	then
+		return 0
+	fi
+
+	# process_buffered_commit() staged the candidate straight into the real
+	# index (--cached), so the index right now already equals new_sha's
+	# tree while the actual on-disk files still reflect $current. Left
+	# alone, checkout below would see index == target and, wrongly
+	# trusting that, skip rewriting files that are still stale on disk.
+	# Undo that by pointing the index back at $current first, so
+	# checkout's own before/after comparison is honest again.
+	if [ -n "$current" ]
+	then
+		git read-tree "$current"
+	else
+		git read-tree --empty
+	fi
+
+	if [ -z "$live_branch" ]
+	then
+		echo "$0: advancing detached HEAD from ${current:-<empty>} to $new_sha" >&2
+		git checkout -q --detach "$new_sha"
+	elif [ -z "$current" ] || git merge-base --is-ancestor "$current" "$new_sha"
+	then
+		echo "$0: fast-forwarding $live_branch from ${current:-<empty>} to $new_sha" >&2
+		git checkout -q -B "$live_branch" "$new_sha"
+	else
+		echo "$0: branching off from $live_branch at ${current:-<empty>}, as a detached HEAD at $new_sha" >&2
+		git checkout -q --detach "$new_sha"
+	fi
+}
+
+process_buffered_commit()
+{
+	[ -z "$input_sha" ] && return 0
+
+	# commit already present in this repo's object database: nothing to
+	# rebuild, its body was never parsed (do_skip_input_lines) — but the
+	# ref may still need to move up to it, e.g. if it's dangling.
+	if [ "$do_skip_input_lines" = 0 ]
+	then
+		if [ -n "$parent" ]
+		then
+			git read-tree "$parent"
+		else
+			git read-tree --empty
+		fi
+		if [ "${#patch_lines[@]}" -gt 0 ]
+		then
+			printf '%s\n' "${patch_lines[@]}" | git apply --cached --binary
+		fi
+		rebuilt_tree_sha=$(git write-tree)
+		if [ "$rebuilt_tree_sha" != "$input_tree_sha" ]
+		then
+			echo "$0: tree mismatch for $input_sha (got $rebuilt_tree_sha, want $input_tree_sha, probably a bug)" >&2
+			echo "$0: left at the last commit applied OK; index still holds this failed rebuild, run 'git reset' before anything else" >&2
+			exit 1
+		fi
+
+		parent_line=''
+		[ -n "$parent" ] && parent_line="parent $parent"$'\n'
+		# hash-object, not commit-tree, so any extra header (gpgsig, encoding, mergetag, ...) replays byte-for-byte
+		rebuilt_sha=$({
+			echo "tree $rebuilt_tree_sha"
+			printf '%s' "$parent_line"
+			echo "$author_line"
+			echo "$committer_line"
+			printf '%s' "$extra_headers"
+			echo ""
+			printf '%s\n' "${commit_message[@]}"
+		} | git hash-object -t commit -w --stdin)
+		if [ "$rebuilt_sha" != "$input_sha" ]
+		then
+			echo "$0: hash mismatch for $input_sha (got $rebuilt_sha, probably a bug)" >&2
+			echo "$0: left at the last commit applied OK; index still holds this failed rebuild, run 'git reset' before anything else" >&2
+			exit 1
+		fi
+	fi
+
+	advance_ref "$input_sha"
+}
+
+while IFS='' read -r line
+do
+	line=${line%$'\r'}	# tolerate CRLF, e.g. an rfc822 email body; no line unfolding
+
+	case "$line" in
+	(commit\ *)
+		process_buffered_commit
+
+		input_sha=${line#commit }
+		input_tree_sha=''; parent=''; author_line=''; committer_line=''; extra_headers=''; in_header_tail=0; commit_message=(); patch_lines=()
+		in_message_section=0; in_patch_section=0
+		if git cat-file -e "$input_sha" 2>/dev/null
+		then
+			do_skip_input_lines=1
+			echo "$0: $input_sha: already in this repo" >&2
+		else
+			do_skip_input_lines=0
+			echo "$0: $input_sha: new commit" >&2
+		fi
+		continue
+		;;
+	(parent\ *)
+		parent=${line#parent }
+		continue
+		;;
+	esac
+
+	if [ "$do_skip_input_lines" = 1 ]
+	then
+		continue
+	fi
+
+	case "$line" in
+	(tree\ *)
+		input_tree_sha=${line#tree }
+		;;
+	(author\ *)
+		author_line=$line
+		;;
+	(committer\ *)
+		committer_line=$line
+		in_message_section=1
+		in_header_tail=1
+		;;
+	(diff\ --git\ *)
+		in_patch_section=1
+		patch_lines+=("$line")
+		;;
+	(*)
+		if [ "$in_patch_section" = 1 ]
+		then
+			patch_lines+=("$line")
+		elif [ "$in_message_section" = 1 ]
+		then
+			if [ "${line:0:4}" = "    " ]
+			then
+				commit_message+=("${line:4}")
+				in_header_tail=0
+			elif [ "$in_header_tail" = 1 ]
+			then
+				# extra raw header (gpgsig, encoding, mergetag, ...): replay verbatim; ends at the blank line before the message
+				[ -n "$line" ] && extra_headers+="$line"$'\n' || in_header_tail=0
+			fi
+		fi
+		;;
+	esac
+done
+
+process_buffered_commit

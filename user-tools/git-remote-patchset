@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+#
+# git remote helper for the "patchset::" URL scheme.
+#
+# Setup:
+#	 git remote add myremote patchset::<RECEPTOR>:<RECEPTOR-PARAMS>
+#	 git config remote.myremote.push 'refs/heads/*:refs/heads/*'
+#
+# $1 = remote name (as configured above), $2 = part of remote URL after "::"
+# The helper mirrors each pushed ref's state under refs/remotes/myremote/... so
+# it can tell what's already been sent — this helper never fetches; git itself
+# writes that mirror after every successful push, matching remote.myremote.fetch.
+# Lookups below assume a fixed path per ref (refs/remotes/myremote/<ref-sans-refs/>),
+# so remote.myremote.fetch must be exactly "+refs/*:refs/remotes/myremote/*" —
+# auto-installed on the first push, replacing git's own narrower default (which
+# makes that one push fail so the fixed-up config takes effect on retry).
+
+set -euo pipefail
+
+remote_name=$1
+target=$2
+
+# leading "@" is inert: it only dodges git-core reading target as a URI with userinfo before the "@"
+if [[ $target =~ ^@?([^:]+)(.*)$ ]]
+then
+	receptor=${BASH_REMATCH[1]}
+	receptor_params=${BASH_REMATCH[2]#:}
+else
+	receptor=${target#@}
+	receptor_params=''
+fi
+
+# git remote add installs a fetch refspec covering only refs/heads/*, flattened
+# (no "heads/" segment); replace it with one covering every ref at the fixed
+# path the push loop below probes directly.
+replace_default_refspec()
+{
+	local default="+refs/heads/*:refs/remotes/$remote_name/*"
+	local new="+refs/*:refs/remotes/$remote_name/*"
+	local confkey="remote.$remote_name.fetch"
+	git config --get-all "$confkey" | grep -qxF "$default" || return 0
+	echo "replacing config '$confkey' from '$default' to '$new'" >&2
+	git config --replace-all --fixed-value "$confkey" "$new" "$default"
+	echo "changed remote fetch refspec. can not continue. please retry." >&2
+	return 11
+}
+
+while IFS='' read -r line
+do
+	case "$line" in
+	(capabilities)
+		echo push
+		echo
+		;;
+	(list*)
+		# refs/remotes/$remote_name/* is our only record of what's already been sent —
+		# git wrote it itself after a prior successful push, per the fetch refspec above
+		git for-each-ref --format="%(objectname) refs/%(refname:lstrip=3)" "refs/remotes/$remote_name/"
+		echo
+		;;
+	(push\ *)
+		specs=()
+		
+		while [ -n "$line" ]
+		do
+			specs+=("${line:5}")
+			IFS='' read -r line
+		done
+		
+		replace_default_refspec
+		
+		for spec in "${specs[@]}"
+		do
+			IFS=':' read -r src dst <<<"$spec"
+			[ "${src:0:1}" = "+" ] && src=${src:1}
+			if [ -z "$src" ]
+			then
+				echo "error $dst delete not supported"
+				continue
+			fi
+			new=$(git rev-parse "$src")
+			mirror="refs/remotes/$remote_name/${dst#refs/}"
+			old=$(git rev-parse --verify -q "$mirror" || true)
+			if [ "$old" = "$new" ]
+			then
+				echo "ok $dst"
+				continue
+			fi
+			
+			#export GIT_PATCHSET_REFRANGE=${old:+$old..}$new
+			export GIT_PATCHSET_REFRANGE=${old:+$old..}$src
+			
+			#git log --pretty=email --patch-with-stat --reverse --full-index --binary -m --first-parent \
+			#git fast-export --reference-excluded-parents \
+			git log --pretty=raw --patch-with-stat --reverse --full-index --binary -m --first-parent \
+				"$GIT_PATCHSET_REFRANGE" |\
+			git-patchset-push-"$receptor" "$receptor_params" >&2
+			echo "ok $dst"
+		done
+		echo
+		;;
+	('')
+		exit 0
+		;;
+	esac
+done
+exit 0

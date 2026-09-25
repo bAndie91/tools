@@ -2085,6 +2085,13 @@ class GTabData(object):
 		gtk.main_quit()
 
 
+# validate context menu specifications: exercise all code paths (column match/no-match, disabled, separator, per-each-selected-row, empty command/label)
+_dummy_row = {'name': 'Alice', 'age': '30'}
+_dummy_macros_match   = {'column': 'name', 'row': _dummy_row, 'cell': 'Alice', 'selected_rows': [_dummy_row, {'name': 'Bob', 'age': '25'}], 'n_selected': 2}
+_dummy_macros_nomatch = {'column': 'other', 'row': _dummy_row, 'cell': 'Alice', 'selected_rows': [_dummy_row], 'n_selected': 1}
+populate_row_context_menu(gtk.Menu(), cliargs.context_menu, _dummy_macros_match)
+populate_row_context_menu(gtk.Menu(), cliargs.context_menu, _dummy_macros_nomatch)
+
 main_app = GTabData()
 main_app.main_win.title = Template(cliargs.title).render({'env': os.environ})
 main_app.main_win.set_icon_from_any(cliargs.icon)

@@ -19,16 +19,18 @@ sub errstr
 $opt_report_start = 0;
 $opt_clone_status = 0;
 $opt_wait_end = 0;
+$opt_wait_end_failed = 0;
 
 GetOptions(
 	's|report-start!' => \$opt_report_start,
 	'c|clone|clone-status!' => \$opt_clone_status,
 	'w|wait-end!' => \$opt_wait_end,
+	'W|wait-end-failed!' => \$opt_wait_end_failed,
 	'help|?' => sub{ pod2usage(-exitval=>0, -verbose=>99); },
 	'<>' => sub{ unshift @ARGV, @_; die '!FINISH'; },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
-if($opt_wait_end)
+if($opt_wait_end or $opt_wait_end_failed)
 {
 	eval q{ use Term::ReadKey; 1; } or die $@;
 }
@@ -67,9 +69,10 @@ else
 	$mystatus = WEXITSTATUS($status);
 }
 
-printf STDERR "command (pid %d) %s: %d (%s)%s\n", $COMMAND_PID, $end_mode, $end_code, $code_name, $opt_wait_end ? ", waiting for the user to press Enter." : "";
+$do_wait = ($opt_wait_end or ($opt_wait_end_failed and $status != 0));
+printf STDERR "command (pid %d) %s: %d (%s)%s\n", $COMMAND_PID, $end_mode, $end_code, $code_name, $do_wait ? ", waiting for the user to press Enter." : "";
 
-if($opt_wait_end)
+if($do_wait)
 {
 	$got_sigint = 0;
 	$SIG{'INT'} = sub { $got_sigint = 1; };
@@ -118,6 +121,10 @@ Report what is being started, ie. I<COMMAND> I<ARGS>, to the STDERR.
 =item -w, --wait-end
 
 Wait when I<COMMAND> ended for the user to press Enter before quit.
+
+=item -W, --wait-end-failed
+
+Like B<--wait-end> but only if I<COMMAND> failed (signaled or exist status is non-zero).
 
 =back
 

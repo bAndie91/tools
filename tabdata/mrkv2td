@@ -62,7 +62,6 @@ $OptFailBadColumnNames = 1;
 
 use Data::Dumper;
 use List::MoreUtils qw/all any none/;
-no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 
@@ -93,7 +92,7 @@ while(my $line = <STDIN>)
 		{
 			for my $predef_column (@OptPredefColumns)
 			{
-				if(not $predef_column ~~ @Headers)
+				if(not in_list($predef_column, @Headers))
 				{
 					push @Headers, $predef_column;
 				}
@@ -121,16 +120,16 @@ while(my $line = <STDIN>)
 		
 		if($record_num == 0)
 		{
-			if(not $field ~~ @Headers)
+			if(not in_list($field, @Headers))
 			{
 				push @Headers, $field;
 			}
 		}
 		else
 		{
-			if(not $field ~~ @Headers)
+			if(not in_list($field, @Headers))
 			{
-				unless($field ~~ @warned_fields)
+				unless(in_list($field, @warned_fields))
 				{
 					warn "$0: column not defined: $field\n" if $OptWarnBadColumnNames;
 					push @warned_fields, $field_name;

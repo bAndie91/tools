@@ -97,7 +97,6 @@ $OptFailBadNegativeColumnNames = 0;
 	'strict-columns' => sub { $OptWarnBadColumnNames = 1; $OptFailBadColumnNames = 1; $OptFailBadNegativeColumnNames = 1; },
 );
 
-no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 process_header(scalar <STDIN>);
@@ -137,7 +136,7 @@ while(@ARGV)
 	}
 	elsif($arg eq '+REST')
 	{
-		push @Columns, grep {not $_ ~~ @Columns} @Header;
+		push @Columns, grep {not in_list($_, @Columns)} @Header;
 	}
 	elsif($arg =~ /^(~|)(.+)$/)
 	{

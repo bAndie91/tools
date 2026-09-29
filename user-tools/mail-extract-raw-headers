@@ -43,7 +43,8 @@ Works both with and without B<-j> option.
 use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat/;
 use Pod::Usage;
 use Data::Dumper;
-no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+use List::Util qw/any/;
+sub in_list { my $needle = shift; any {$_ eq $needle} @_ }
 
 $OptKeepLF = 0;
 $OptNames = 0;
@@ -82,7 +83,7 @@ while(<STDIN>)
 	
 	if(my($header_name, $content) = /^(\S+?):[ ]?(.*)/)
 	{
-		if(lc $header_name ~~ @asked_headers)
+		if(in_list(lc $header_name, @asked_headers))
 		{
 			my $header_name_pretty = $header_name =~ s/[^-]*/\L\u$&/gr;
 			my $header_hash = { "name" => $header_name, "pretty_name" => $header_name_pretty, "content" => $content, };

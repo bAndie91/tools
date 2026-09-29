@@ -151,7 +151,6 @@ $OptEmptyDistCells = 0;
 
 use Data::Dumper;
 use List::MoreUtils qw/all uniq/;
-no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 process_header(scalar <STDIN>);
@@ -200,7 +199,7 @@ sub commit_group
 		for my $uniq_cell_idx (0..$#{$group_members[$uniq_field_idx]})
 		{
 			my $uniq_cell = $group_members[$uniq_field_idx]->[$uniq_cell_idx];
-			next if not $uniq_cell ~~ @distributed_cells;
+			next if not in_list($uniq_cell, @distributed_cells);
 			for my $colidx (1..$last_input_column_idx)
 			{
 				my $colname = $Header[$colidx];

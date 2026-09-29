@@ -168,9 +168,9 @@ use Fcntl qw/F_GETFL F_SETFL O_NONBLOCK/;
 use POSIX qw/strftime :sys_wait_h dup2/;
 use Pod::Usage;
 use List::MoreUtils qw/all any none/;
+sub in_list { my $needle = shift; any {$_ eq $needle} @_ }
 use File::Basename qw/dirname/;
 use File::Path;
-no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 
 $Stream = {};
@@ -241,7 +241,7 @@ GetOptions(
 	'Sn|flush-sec-fd=s' => sub { set_flush_opt('sec', @_); },
 	
 	'f|fail|failure=s' => sub {
-		if($_[1] ~~ @FailureActions) {
+		if(in_list($_[1], @FailureActions)) {
 			$OptFailAction = $_[1]; }
 		else {
 			die_invalid_option_argument(@_); }
@@ -291,7 +291,7 @@ sub handle_failure
 	
 	warn "$0: $msg\n";
 	print STDERR "$0: fd $fdnum: can not save: $linetext";
-	if($OptFailAction ~~ ['TERM', 'PIPE'])
+	if(in_list($OptFailAction, 'TERM', 'PIPE'))
 	{
 		kill $OptFailAction, $CHILD_PID;
 	}

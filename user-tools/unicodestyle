@@ -5,7 +5,8 @@ use Getopt::Long;
 use Data::Dumper;
 use Encode qw/decode encode/;
 use constant { LOWER => 0, UPPER => 1, COMMON_SURROGATE => 0xd835, };
-no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+use List::Util qw/any/;
+sub in_list { my $needle = shift; any {$_ eq $needle} @_ }
 binmode STDIN, ':utf8';
 binmode STDOUT, ':utf8';
 
@@ -102,9 +103,9 @@ sub is_applicable_transformer
 	}
 	if(exists $trn->{transtable})
 	{
-		return 1 if hexord($chr) ~~ [keys $trn->{transtable}];
-		return 1 if $chr ~~ [keys $trn->{transtable}];
-		return 1 if $trn->{ignorecase} and uc $chr ~~ [keys $trn->{transtable}];
+		return 1 if in_list(hexord($chr), keys %{$trn->{transtable}});
+		return 1 if in_list($chr, keys %{$trn->{transtable}});
+		return 1 if $trn->{ignorecase} and in_list(uc $chr, keys %{$trn->{transtable}});
 	}
 	if(exists $trn->{transrange})
 	{

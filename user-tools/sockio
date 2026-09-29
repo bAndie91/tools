@@ -7,7 +7,8 @@ use Socket qw/AF_UNIX AF_INET SOCK_STREAM pack_sockaddr_in inet_aton sockaddr_un
 use POSIX ':sys_wait_h';
 use Data::Dumper;
 use Fcntl qw/F_GETFL F_SETFL O_NONBLOCK O_RDONLY O_WRONLY/;
-no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+use List::Util qw/any/;
+sub in_list { my $needle = shift; any {$_ eq $needle} @_ }
 
 
 sub blockio
@@ -39,12 +40,12 @@ else
   print STDERR "SOCKIO_AF not given, fallback to 'tcp'\n";
   $af = 'tcp';
 }
-unless($af ~~ [qw/file abstract tcp/])
+unless(in_list($af, qw/file abstract tcp/))
 {
   die "invalid SOCKIO_AF given, choose one of file, abstract, tcp\n";
 }
 
-if($af ~~ [qw/file abstract/])
+if(in_list($af, qw/file abstract/))
 {
   socket $srv, AF_UNIX, SOCK_STREAM, 0 or die $!;
   setsockopt($srv, SOL_SOCKET, SO_PASSCRED, 1);
@@ -83,7 +84,7 @@ listen $srv, 1 or die $!;
 $pid = fork;
 if($pid == 0)
 {
-  if($af ~~ [qw/file abstract/])
+  if(in_list($af, qw/file abstract/))
   {
     socket $cln, AF_UNIX, SOCK_STREAM, 0 or die $!;
   }

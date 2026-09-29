@@ -72,10 +72,10 @@ Note, not all styles are supported by all terminal emulators.
 use Data::Dumper;
 use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat pass_through/;
 use feature qw/switch/;
-no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 use Pod::Usage;
 use Carp qw/croak/;
 use List::MoreUtils qw/all any none/;
+sub in_list { my $needle = shift; any {$_ eq $needle} @_ }
 
 use POSIX qw/strftime setlocale LC_TIME/;
 use DateTime;
@@ -375,7 +375,7 @@ while(<$pipe>)
 					
 					for my $ival (@{$Highlight->{'interval'}})
 					{
-						next if @{$ival->{'dow'}} and not $dow ~~ @{$ival->{'dow'}};
+						next if @{$ival->{'dow'}} and not in_list($dow, @{$ival->{'dow'}});
 						
 						my $s = $ival->{'start'};
 						my $e = $ival->{'end'};

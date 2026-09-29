@@ -64,7 +64,6 @@ No newline.
 
 
 use Switch;
-no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 
 sub replace_nofield
@@ -104,7 +103,7 @@ $OptNoNewline = 0;
 
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
-pod2usage(-exitval=>2, -verbose=>99) if not $OptNoFieldBehavior ~~ @NoFieldBehaviorValues;
+pod2usage(-exitval=>2, -verbose=>99) if not in_list($OptNoFieldBehavior, @NoFieldBehaviorValues);
 
 @Templates = @ARGV;
 

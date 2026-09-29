@@ -40,7 +40,6 @@ td-sort(1) is analogous to SQL ORDER BY.
 
 =cut
 
-no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 use Data::Dumper;
 
@@ -81,7 +80,7 @@ while(@ARGV)
 	{
 		$arg = $1.replace_colnames_in_string($2);
 	}
-	elsif($prev_arg ~~ ['-k', '--key'])
+	elsif(in_list($prev_arg, '-k', '--key'))
 	{
 		$arg = replace_colnames_in_string($arg);
 	}

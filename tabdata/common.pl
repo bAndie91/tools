@@ -10,11 +10,12 @@ $RS = $/ = "\n";
 %Header = ();
 
 use Getopt::Long qw/:config no_ignore_case bundling pass_through require_order no_getopt_compat no_auto_abbrev/;
+use List::Util qw/any/;
+sub in_list { my $needle = shift; any {$_ eq $needle} @_ }
 use Pod::Usage;
 use Encode;
 use open ':std', ':utf8';
 use open ':utf8';
-no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 # take cli arguments as utf8 strings:
 @ARGV = map {decode('UTF-8', $_, Encode::FB_CROAK)} @ARGV;
@@ -27,7 +28,7 @@ if(%TabdataOptionDefs)
 		%TabdataOptionDefs,
 	) or pod2usage(-exitval=>2, -verbose=>99);
 	
-	if('--' ~~ @ARGV and $ARGV[0] ne '--')
+	if(in_list('--', @ARGV) and $ARGV[0] ne '--')
 	{
 		# at least 1 unknown option remained in @ARGV
 		pod2usage(-exitval=>2, -verbose=>99, -msg=>"$0: unknown parameter: $ARGV[0]");

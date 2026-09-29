@@ -6,7 +6,8 @@ use Throttler;
 use YAML;
 use Getopt::Long;
 Getopt::Long::Configure('no_ignore_case');
-no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+use List::Util qw/any/;
+sub in_list { my $needle = shift; any {$_ eq $needle} @_ }
 
 sub warnxf
 {
@@ -111,7 +112,7 @@ if(defined $Zonefile)
 	$mode .= 'F' if $doForce;
 	$mode .= 'x' if $doInfo or $doDump;
 	
-	if(not($mode ~~ ['r', 'rC', 'rCF', 'Z', 'C', 'CF', 'x', 'ZC', 'ZCF']))
+	if(not(in_list($mode, 'r', 'rC', 'rCF', 'Z', 'C', 'CF', 'x', 'ZC', 'ZCF')))
 	{
 		errx "Wrong combination of options. ($mode)";
 	}

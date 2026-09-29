@@ -237,14 +237,14 @@ setpgrp(1), multicmd(1), saveout(1)
 
 use Data::Dumper;
 use POSIX ":sys_wait_h";
-no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 use Socket;
 use Config;
 use Fcntl qw(:flock);
 use Sys::Hostname qw/hostname/;
+use List::Util qw/any/;
+sub in_list { my $needle = shift; any {$_ eq $needle} @_ }
 require 'syscall.ph';
 @signal_names = split ' ', $Config{'sig_name'};
-no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 $pidfd_support = eval q{ use Linux::FD::Pid; 1; };
 warn "degrading PIDFD support: $@" if $@;
@@ -409,7 +409,7 @@ sub reload
 	
 	for my $id (keys %Daemon)
 	{
-		if($id ~~ [keys %new_daemon])
+		if(in_list($id, keys %new_daemon))
 		{
 			my $needto_stop = ($do_restart_changed_daemons and not lists_are_equal($Daemon{$id}->{'started_cmd_args'}, $new_daemon{$id}->{'cmd_args'}));
 			$Daemon{$id}->{'cmd_args'} = $new_daemon{$id}->{'cmd_args'};

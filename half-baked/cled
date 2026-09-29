@@ -127,7 +127,8 @@ Show line numbers in verbose mode.
 use Data::Dumper;
 use Getopt::Long qw/:config no_ignore_case bundling pass_through/;
 use feature qw/switch/;
-no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+use List::Util qw/any/;
+sub in_list { my $needle = shift; any {$_ eq $needle} @_ }
 use Pod::Usage;
 # Term::ReadLine::Gnu is recommended
 $readline_support = eval q{ use Term::ReadLine; 1; };
@@ -504,7 +505,7 @@ while(@ARGV)
 		shift @ARGV;
 	}
 	
-	if($ARGV[0] ~~ ['[', '(', '{'])
+	if(in_list($ARGV[0], '[', '(', '{'))
 	{
 		if(not %$selector)
 		{
@@ -517,7 +518,7 @@ while(@ARGV)
 		next;
 	}
 	
-	if($ARGV[0] ~~ [']', ')', '}'])
+	if(in_list($ARGV[0], ']', ')', '}'))
 	{
 		die "$0: selector without a command: $selector->{'repr'}\n" if %$selector;
 		pop @group_selectors or die "$0: too many closing brackets\n";

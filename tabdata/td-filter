@@ -197,7 +197,6 @@ $OptFailNonNumericRValue = 1;
 use Switch;
 use List::MoreUtils qw/all any none uniq/;
 use Data::Dumper;
-no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 use Math::Cartesian::Product;
@@ -210,7 +209,7 @@ sub subst_alternate_forms
 	my @product_terms = ();
 	for my $word (split /\s+/, $words)
 	{
-		push @product_terms, ($word ~~ [keys %$altforms]) ? $altforms->{$word} : [$word];
+		push @product_terms, (in_list($word, keys %$altforms)) ? $altforms->{$word} : [$word];
 	}
 	my @results = ();
 	cartesian {push @results, join ' ', @_} @product_terms;
@@ -285,7 +284,7 @@ sub parse_operator
 			}
 		}
 	}
-	if($args[0] ~~ [@canonical_operators])
+	if(in_list($args[0], @canonical_operators))
 	{
 		return {operator => $args[0], remaining_args => [@args[1..$#args]]};
 	}
@@ -330,7 +329,7 @@ else
 			die "$0: missing r-value field name for: $column $operator\n" if not defined $ref_field;
 		}
 		
-		if(defined $rvalue and $operator ~~ [qw/== != <= >= < >/] and $rvalue !~ /^[+-]?[0-9]\d*(.\d+|)(E[+-]?\d+|)$/i)
+		if(defined $rvalue and in_list($operator, qw/== != <= >= < >/) and $rvalue !~ /^[+-]?[0-9]\d*(.\d+|)(E[+-]?\d+|)$/i)
 		{
 			warn "$0: operator ($operator) is numeric but r-value ($rvalue) is not\n" if $OptWarnNonNumericRValue;
 			exit -1 if $OptFailNonNumericRValue;
@@ -444,7 +443,7 @@ while(not eof STDIN)
 				{
 					my $left_code = '$left_data';
 					my $right_code = '$right_data';
-					$right_code = "/$right_code/" if $operator ~~ ['=~', '!~'];
+					$right_code = "/$right_code/" if in_list($operator, '=~', '!~');
 					$result = eval "$left_code $operator $right_code";
 				}
 			}

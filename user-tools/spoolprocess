@@ -86,10 +86,10 @@ use File::Glob;
 use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
 use IPC::Run qw/run harness/;
 use List::MoreUtils qw/all any none/;
+sub in_list { my $needle = shift; any {$_ eq $needle} @_ }
 use Pod::Usage;
 use POSIX;
 use Socket qw/AF_UNIX AF_INET SOCK_STREAM pack_sockaddr_in inet_aton sockaddr_un/;
-no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 $OptVerbose = 0;
 @OptDirectories = ();
@@ -142,7 +142,7 @@ for my $trigger_dir (@OptDirectories)
 			$basename = $1;
 			$ver = $2;
 		}
-		next if @OptGroups and not $basename ~~ [@OptGroups];
+		next if @OptGroups and not in_list($basename, @OptGroups);
 		push @{$TriggerFiles{$basename}->{files}}, {path => $filepath, ver => $ver};
 	}
 	closedir $dh;

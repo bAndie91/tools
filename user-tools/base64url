@@ -1,10 +1,11 @@
 #!/usr/bin/env perl
 
 use warnings;
-no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 use MIME::Base64 qw/encode_base64url decode_base64url/;
+use List::Util qw/any/;
+sub in_list { my $needle = shift; any {$_ eq $needle} @_ }
 
-if($ARGV[0] ~~ ['-d', '--decode'])
+if(in_list($ARGV[0], '-d', '--decode'))
 {
 	undef $/;
 	print decode_base64url(<STDIN>);

@@ -1,7 +1,8 @@
 #!/usr/bin/env perl
 ###################
 
-no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+use List::Util qw/any/;
+sub in_list { my $needle = shift; any {$_ eq $needle} @_ }
 $me=$0;
 $0="jobsel";
 #sub helpy { $pos = tell DATA; print STDERR <DATA>; seek DATA,$pos,0 }
@@ -13,7 +14,7 @@ sub bye { print STDOUT "export JOBSEL_DISPLAY_MODE=$dispmode"; exit ReadMode 0 }
 sub getkey { while(not defined ($k = ReadKey(-1))){} return $k }
 $SIG{INT}=$SIG{STOP}=$SIG{STOP}=$SIG{TSTP}=$SIG{QUIT}='bye';
 $dispmode = $ENV{JOBSEL_DISPLAY_MODE};
-$dispmode = "x" unless $dispmode ~~ ["c", "x", "l"];
+$dispmode = "x" unless in_list($dispmode, "c", "x", "l");
 $dispmode = "l" unless $ARGV[1];
 
 while(1){

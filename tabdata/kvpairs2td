@@ -88,7 +88,6 @@ $OptUnknownToRest = 0;
 );
 
 use Data::Dumper;
-no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 @Headers = ();
@@ -147,7 +146,7 @@ while(my $Line = <STDIN>)
 	
 	if($RN == 0)
 	{
-		push @Headers, grep { not $_ ~~ @Headers } @OptPredefColumns, $OptRestColumnName;
+		push @Headers, grep { not in_list($_, @Headers) } @OptPredefColumns, $OptRestColumnName;
 		$rest_column_idx = $#Headers;
 		output_record(@Headers);
 		STDOUT->flush;

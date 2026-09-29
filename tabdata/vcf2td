@@ -83,7 +83,6 @@ use Data::Dumper;
 use Encode;
 use MIME::QuotedPrint;
 use Switch;
-no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 @columns = @OptPredefColumns;
@@ -114,9 +113,9 @@ while(<STDIN>)
 		my($field_name, @params) = split /;/, $field;
 		my %param = map {split /=/, $_, 2} @params;
 		
-		if(not $field_name ~~ @columns)
+		if(not in_list($field_name, @columns))
 		{
-			if(not $field_name ~~ [qw/BEGIN VERSION END/])
+			if(not in_list($field_name, qw/BEGIN VERSION END/))
 			{
 				if($RN == 0)
 				{
@@ -124,7 +123,7 @@ while(<STDIN>)
 				}
 				else
 				{
-					unless($field_name ~~ @warned_fields)
+					unless(in_list($field_name, @warned_fields))
 					{
 						warn "$0: column not defined: $field_name\n" if $OptWarnBadColumnNames;
 						push @warned_fields, $field_name;

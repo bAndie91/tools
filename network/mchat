@@ -9,8 +9,8 @@ use IO::Socket::Multicast;
 use IO::Select;
 use Sys::Hostname;
 use List::MoreUtils qw/all any none first_index/;
+sub in_list { my $needle = shift; any {$_ eq $needle} @_ }
 use Errno;
-no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 $NUL = chr  0;
 $SOH = chr  1;
@@ -849,7 +849,7 @@ while(1)
 					$nick_is_from = join ' ', @relay_chain, $peer_ip;
 				}
 				
-				if(not $nick_is_from ~~ [keys %nicks_are_from])
+				if(not in_list($nick_is_from, keys %nicks_are_from))
 				{
 					system_message sprintf "%s is from %s", $nickprint, $relay_chain_print;
 				}

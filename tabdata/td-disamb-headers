@@ -24,7 +24,6 @@ Output:
 =cut
 
 
-no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
 
 
@@ -35,7 +34,7 @@ for my $colname (@Header)
 {
 	my @other_Columns = grep {$_ ne $colname} @Header;
 	my $new_colname = $colname;
-	while($new_colname ~~ @new_Columns or $new_colname ~~ @other_Columns)
+	while(in_list($new_colname, @new_Columns) or in_list($new_colname, @other_Columns))
 	{
 		# increment trailing counter
 		$new_colname =~ s/(\d*)$/($1 or 1) + 1/e;

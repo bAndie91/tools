@@ -2,8 +2,8 @@
 
 use IPC::Run qw/run/;
 use List::MoreUtils qw/all any none uniq/;
+sub in_list { my $needle = shift; any {$_ eq $needle} @_ }
 use Data::Dumper;
-no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 $HOME = $ENV{'HOME'};
 
@@ -83,12 +83,12 @@ sub command_executor
 for my $rhost (@rhosts)
 {
 	my $icon = "laptopdisconnected";
-	if($rhost ~~ @connected_hosts)
+	if(in_list($rhost, @connected_hosts))
 	{
 		$icon = "laptopconnected";
 	}
 	print "prog \"$rhost\" $icon " . command_executor("ssh $rhost", ["ssh", $rhost]) . "\n";
-	if($rhost ~~ @connected_hosts)
+	if(in_list($rhost, @connected_hosts))
 	{
 		print "prog \"$rhost DISCONNECT\" gtk-disconnect " . command_executor("disconnect ssh: $rhost", ["ssh", $rhost, "-O", "exit"]) . "\n";
 	}

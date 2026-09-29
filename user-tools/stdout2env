@@ -54,7 +54,8 @@ use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_
 use Pod::Usage;
 use IPC::Run qw/run harness/;
 use POSIX qw/:sys_wait_h/;
-no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+use List::Util qw/any/;
+sub in_list { my $needle = shift; any {$_ eq $needle} @_ }
 
 
 $OptDelimiter = '--';
@@ -109,7 +110,7 @@ sub capture_cmd_stdout_in_env
 
 while(@ARGV)
 {
-	last unless $OptDelimiter ~~ @ARGV;
+	last unless in_list($OptDelimiter, @ARGV);
 	
 	my $arg = shift @ARGV;
 	if($arg eq $OptDelimiter)

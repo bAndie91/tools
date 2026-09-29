@@ -6,8 +6,8 @@ use Getopt::Long qw/:config no_ignore_case bundling no_getopt_compat require_ord
 use Pod::Usage;
 use IPC::Run qw/run/;
 use JSON;
-
-no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+use List::Util qw/any/;
+sub in_list { my $needle = shift; any {$_ eq $needle} @_ }
 
 
 $host = "gateway.localdomain";
@@ -160,7 +160,7 @@ switch(shift @ARGV)
 			}
 			$proto = 'ALL' unless $proto;
 			$proto = uc $proto;
-			pod2usage(-exitval=>2, -verbose=>99) unless $proto ~~ ['TCP', 'UDP', 'ALL'];
+			pod2usage(-exitval=>2, -verbose=>99) unless in_list($proto, 'TCP', 'UDP', 'ALL');
 			
 			my @pfwd = pfwd_hashlist();
 			

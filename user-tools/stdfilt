@@ -6,7 +6,7 @@ use Fcntl qw/F_GETFL F_SETFL O_NONBLOCK/;
 use POSIX;
 use Pod::Usage;
 use List::MoreUtils qw/all any none/;
-no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+sub in_list { my $needle = shift; any {$_ eq $needle} @_ }
 
 
 @Filters = ();
@@ -148,8 +148,8 @@ sub stream_tags_match
 	my $mandatory_tags = shift;
 	my @positive_mandatory_tags = grep { /^[^!]/ } keys %$mandatory_tags;
 	my @negative_mandatory_tags = map { s/^!//r } grep { /^!/ } keys %$mandatory_tags;
-	return (all  { $_ ~~ [keys %$current_tags] } @positive_mandatory_tags and
-            none { $_ ~~ [keys %$current_tags] } @negative_mandatory_tags);
+	return (all  { in_list($_, keys %$current_tags) } @positive_mandatory_tags and
+            none { in_list($_, keys %$current_tags) } @negative_mandatory_tags);
 }
 
 sub apply_filter_rule
@@ -220,7 +220,7 @@ sub evaluate_filters
 		
 		next if not stream_tags_match($context->{tags}, $filt->{match_tags});
 		
-		my %applicable_rule = map {($_=>$filt->{$_})} grep {$_ ~~ [qw/tag_start tag_end replacer write_fd/]} keys %$filt;
+		my %applicable_rule = map {($_=>$filt->{$_})} grep {in_list($_, qw/tag_start tag_end replacer write_fd/)} keys %$filt;
 		
 		if(exists $filt->{pattern})
 		{

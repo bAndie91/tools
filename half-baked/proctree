@@ -19,8 +19,10 @@ pstree(1)
 
 use Pod::Usage;
 use Data::Dumper;
+use List::Util qw/any/;
+sub in_list { my $needle = shift; any {$_ eq $needle} @_ }
 
-if('--help' ~~ @ARGV)
+if(in_list('--help', @ARGV))
 {
 	pod2usage(-exitval=>0, -verbose=>99);
 }

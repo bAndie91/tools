@@ -8,6 +8,15 @@
 # advance_ref() below) — a failure partway through still leaves every earlier
 # commit attached instead of losing the whole run.
 #
+# --force-parent: don't require the stream to continue exactly where the
+# current HEAD is. Every new commit is built on top of the current HEAD
+# regardless of the "parent" (and "tree") recorded in the input; author,
+# committer and any other header, and the message are kept. A commit is
+# made only if its diff applies to HEAD, otherwise the run stops (exit 1)
+# with nothing committed for it. The resulting commit hashes necessarily
+# differ from the input ones (and a replayed gpgsig header no longer
+# matches the commit it ends up in).
+#
 # ponytail: a true merge commit (more than one "parent" line) only keeps the
 # last parent line seen — fine for -m --first-parent streams, which is all
 # this is meant to consume. Real merge reconstruction would need to collect

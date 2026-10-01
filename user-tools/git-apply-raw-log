@@ -155,11 +155,22 @@ process_buffered_commit()
 {
 	[ -z "$input_sha" ] && return 0
 
+	# the commit to move the ref up to: the input commit itself, unless
+	# --force-parent rebuilds it on top of HEAD (see below)
+	target_sha=$input_sha
+
 	# commit already present in this repo's object database: nothing to
 	# rebuild, its body was never parsed (do_skip_input_lines) — but the
 	# ref may still need to move up to it, e.g. if it's dangling.
 	if [ "$do_skip_input_lines" = 0 ]
 	then
+		# --force-parent: ignore the parent recorded in the input, build on
+		# whatever HEAD is right now (none, if the branch is still unborn).
+		if [ "$force_parent" = 1 ]
+		then
+			parent=$(git rev-parse -q --verify HEAD) || parent=''
+		fi
+
 		if [ -n "$parent" ]
 		then
 			git read-tree "$parent"
@@ -168,10 +179,30 @@ process_buffered_commit()
 		fi
 		if [ "${#patch_lines[@]}" -gt 0 ]
 		then
-			printf '%s\n' "${patch_lines[@]}" | git apply --cached --binary
+			if [ "$force_parent" = 1 ]
+			then
+				if ! printf '%s\n' "${patch_lines[@]}" | git apply --cached --binary
+				then
+					echo "$0: $input_sha: patch does not apply to the current HEAD, not committing" >&2
+					# nothing was committed, so put the index back where HEAD is
+					# (and refresh its stat data, which read-tree leaves blank)
+					if [ -n "$parent" ]
+					then
+						git read-tree "$parent"
+					else
+						git read-tree --empty
+					fi
+					git update-index -q --refresh || true
+					exit 1
+				fi
+			else
+				printf '%s\n' "${patch_lines[@]}" | git apply --cached --binary
+			fi
 		fi
 		rebuilt_tree_sha=$(git write-tree)
-		if [ "$rebuilt_tree_sha" != "$input_tree_sha" ]
+		# the resulting tree is expected to differ from the input one when the
+		# parent was forced, so there is nothing to verify then
+		if [ "$force_parent" = 0 ] && [ "$rebuilt_tree_sha" != "$input_tree_sha" ]
 		then
 			echo "$0: tree mismatch for $input_sha (got $rebuilt_tree_sha, want $input_tree_sha, probably a bug)" >&2
 			echo "$0: left at the last commit applied OK; index still holds this failed rebuild, run 'git reset' before anything else" >&2
@@ -181,6 +212,7 @@ process_buffered_commit()
 		parent_line=''
 		[ -n "$parent" ] && parent_line="parent $parent"$'\n'
 		# hash-object, not commit-tree, so any extra header (gpgsig, encoding, mergetag, ...) replays byte-for-byte
+		# (with --force-parent a gpgsig no longer matches the rewritten commit, it is kept all the same)
 		rebuilt_sha=$({
 			echo "tree $rebuilt_tree_sha"
 			printf '%s' "$parent_line"
@@ -190,7 +222,11 @@ process_buffered_commit()
 			echo ""
 			printf '%s\n' "${commit_message[@]}"
 		} | git hash-object -t commit -w --stdin)
-		if [ "$rebuilt_sha" != "$input_sha" ]
+		if [ "$force_parent" = 1 ]
+		then
+			echo "$0: $input_sha: committed on top of ${parent:-<empty>} as $rebuilt_sha" >&2
+			target_sha=$rebuilt_sha
+		elif [ "$rebuilt_sha" != "$input_sha" ]
 		then
 			echo "$0: hash mismatch for $input_sha (got $rebuilt_sha, probably a bug)" >&2
 			echo "$0: left at the last commit applied OK; index still holds this failed rebuild, run 'git reset' before anything else" >&2
@@ -198,7 +234,7 @@ process_buffered_commit()
 		fi
 	fi
 
-	advance_ref "$input_sha"
+	advance_ref "$target_sha"
 }
 
 while IFS='' read -r line
@@ -212,7 +248,11 @@ do
 		input_sha=${line#commit }
 		input_tree_sha=''; parent=''; author_line=''; committer_line=''; extra_headers=''; in_header_tail=0; commit_message=(); patch_lines=()
 		in_message_section=0; in_patch_section=0
-		if git cat-file -e "$input_sha" 2>/dev/null
+		# with --force-parent an object that merely exists in the repo (e.g.
+		# on some other branch) is not enough: it must already be part of
+		# HEAD's history, otherwise it is rebuilt on top of HEAD.
+		if git cat-file -e "$input_sha" 2>/dev/null &&
+			{ [ "$force_parent" = 0 ] || git merge-base --is-ancestor "$input_sha" HEAD 2>/dev/null; }
 		then
 			do_skip_input_lines=1
 			echo "$0: $input_sha: already in this repo" >&2

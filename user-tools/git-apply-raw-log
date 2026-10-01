@@ -28,6 +28,57 @@
 
 set -euo pipefail
 
+usage()
+{
+	cat <<-EOF
+	Usage: ${0##*/} [--force-parent] < raw-log-stream
+
+	Options:
+	  --force-parent  Add each new commit on top of the current HEAD, even if
+	                  that is not the parent recorded in the input (so the
+	                  resulting commit hash will differ from the input one).
+	                  Author, committer and other headers and the commit
+	                  message are kept as-is. A commit is made only if its
+	                  diff applies cleanly to the current HEAD.
+	  -h, --help      Show this help.
+	EOF
+}
+
+force_parent=0
+
+while [ $# -gt 0 ]
+do
+	case "$1" in
+	(--force-parent)
+		force_parent=1
+		;;
+	(-h|--help)
+		usage
+		exit 0
+		;;
+	(--)
+		shift
+		break
+		;;
+	(-*)
+		echo "$0: unknown option: $1" >&2
+		usage >&2
+		exit 2
+		;;
+	(*)
+		break
+		;;
+	esac
+	shift
+done
+
+if [ $# -gt 0 ]
+then
+	echo "$0: unexpected argument: $1" >&2
+	usage >&2
+	exit 2
+fi
+
 input_sha=''
 input_tree_sha=''
 parent=''

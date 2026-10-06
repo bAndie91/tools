@@ -1,0 +1,125 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+globexec - Expand shell-wildcard patterns in arguments and executes into
+
+=head1 SYNOPSIS
+
+globexec [I<OPTIONS>] [--] I<COMMAND> [I<ARG> [I<ARG> [...]]]
+
+=head1 DESCRIPTION
+
+Expand shell-wildcard patterns (that is asterisk C<*>, question mark C<?>, and square brackets C<[]>,
+plus brace C<{}> and tilde C<~> if B<--brace> and B<--tilde> options are given, respectively) in I<ARG> arguments.
+Then executes I<COMMAND> with expanded I<ARG> arguments.
+
+=head1 OPTIONS
+
+=over 4
+
+=item -f
+
+Fail if can not read a directory.
+See B<GLOB_ERR> in File::Glob(3perl).
+
+=item -E
+
+If any wildcard I<ARG> did not match,
+does not execute anything,
+but exit with status code 2.
+
+=item -i, --case-insensitive
+
+Match case-insensitively.
+Default is case-sensitive.
+
+=item -b, --brace
+
+Support curly bracket expansion.
+See B<GLOB_BRACE> in File::Glob(3perl).
+
+=item -t, --tilde
+
+Support tilde-expansion.
+See B<GLOB_TILDE> in File::Glob(3perl).
+
+=back
+
+=head1 LIMITATIONS
+
+Uses perl(1)'s B<bsd_glob> function from File::Glob(3perl),
+
+=head1 SEE ALSO
+
+File::Glob(3perl), perldoc(1): glob, glob(1)
+
+=cut
+
+
+use Data::Dumper;
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev require_order/;
+use Pod::Usage;
+use File::Glob;
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+
+$OptGlobFlags = File::Glob::GLOB_QUOTE | File::Glob::GLOB_NOSORT;
+$OptFailNoMatch = 0;
+$OptGlobBrace = 0;
+$OptGlobTilde = 0;
+
+GetOptions(
+	'f' => sub { $OptGlobFlags |= File::Glob::GLOB_ERR; },
+	'i|case-insensitive' => sub { $OptGlobFlags |= File::Glob::GLOB_NOCASE; },
+	'b|brace!' => \$OptGlobBrace,
+	't|tilde!' => \$OptGlobTilde,
+	'E' => \$OptFailNoMatch,
+	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+$OptGlobFlags |= File::Glob::GLOB_BRACE if $OptGlobBrace;
+$OptGlobFlags |= File::Glob::GLOB_TILDE if $OptGlobTilde;
+
+$glob_metachars = '*?[]';
+$glob_metachars .= '{}' if $OptGlobBrace;
+$glob_metachars .= '~' if $OptGlobTilde;
+
+$Command = shift @ARGV;
+@CommandArgs = ();
+$not_matched_count = 0;
+
+for my $pattern (@ARGV)
+{
+	my @matches = File::Glob::bsd_glob($pattern, $OptGlobFlags);
+	if(File::Glob::GLOB_ERROR)
+	{
+		die "$0: $!: $pattern\n";
+	}
+	if(@matches)
+	{
+		push @CommandArgs, @matches;
+	}
+	else
+	{
+		# check if $pattern does look like a real glob pattern:
+		if($pattern =~ /(\\\\)*[\Q$glob_metachars\E]/)
+		{
+			warn "$0: no match: $pattern\n" if $OptFailNoMatch;
+			$not_matched_count++;
+		}
+		else
+		{
+			push @CommandArgs, $pattern;
+		}
+	}
+}
+
+exit 2 if $OptFailNoMatch and $not_matched_count > 0;
+
+exec {$Command} $Command, @CommandArgs;
+($errno, $errstr) = (int $!, $!);
+warn "$0: $Command: $errstr\n";
+exit 125+$errno;

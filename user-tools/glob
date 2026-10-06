@@ -33,15 +33,20 @@ See B<GLOB_ERR> in File::Glob(3perl).
 Fail if any I<PATTERN> did not match.
 Exit code is 2 in this case.
 
-=item -i
+=item -i, --case-insensitive
 
 Match case-insensitively.
 Default is case-sensitive.
 
-=item -b
+=item -b, --brace
 
 Support curly bracket expansion.
 See B<GLOB_BRACE> in File::Glob(3perl).
+
+=item -t, --tilde
+
+Support tilde-expansion.
+See B<GLOB_TILDE> in File::Glob(3perl).
 
 =back
 
@@ -63,14 +68,15 @@ use File::Glob;
 no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
 
 $OptNullTerminated = 0;
-$OptGlobFlags = File::Glob::GLOB_QUOTE | File::Glob::GLOB_TILDE;
+$OptGlobFlags = File::Glob::GLOB_QUOTE;
 $OptFailNoMatch = 0;
 
 GetOptions(
 	'0' => \$OptNullTerminated,
 	'f' => sub { $OptGlobFlags |= File::Glob::GLOB_ERR; },
-	'i' => sub { $OptGlobFlags |= File::Glob::GLOB_NOCASE; },
-	'b' => sub { $OptGlobFlags |= File::Glob::GLOB_BRACE; },
+	'i|case-insensitive' => sub { $OptGlobFlags |= File::Glob::GLOB_NOCASE; },
+	'b|brace' => sub { $OptGlobFlags |= File::Glob::GLOB_BRACE; },
+	't|tilde' => sub { $OptGlobFlags |= File::Glob::GLOB_TILDE; },
 	'E' => \$OptFailNoMatch,
 	'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
 	'<>' => sub { unshift @ARGV, @_[0]; die '!FINISH'; },

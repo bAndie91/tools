@@ -1,4 +1,5 @@
 #!/bin/sh
 
 exec gtabdata --appinstance lpjobs --title lpjobs --icon printer --data-command lpjobs \
-	--context-menu 'STOCK_DELETE:remove:per-each-selected-row:lprm -P {{row.PRINTER}} {{row.JOB}}'
+	--context-menu 'STOCK_DELETE:remove:per-each-selected-row:lprm -P {{row.PRINTER}} {{row.JOB}}' \
+	"$@"

@@ -5,7 +5,7 @@ true <<'EOF'
 
 =head1 NAME
 
-lpjobs - Show printer queue jobs (wrapper for lpq and lpstat)
+lpjobs [PRINTER] - Show printer queue jobs (wrapper for lpq and lpstat) in tabular format.
 
 =cut
 
@@ -21,7 +21,14 @@ lpq_short_list_to_td()
 	perl -ne 'print join("\t", map {s/\s*$//r} /^(.{7}) (.{7}) (.{7}) (.{31}) (\S+)/), "\n"'
 }
 
-LANG=C lpq -a |\
+TRG_PRINTER=$1
+
+if [ -z "$TRG_PRINTER" ]
+then
+	LANG=C lpq -a
+else
+	LANG=C lpq -P "$TRG_PRINTER" | sed -e 1d
+fi |\
 sed -e '/^no entries$/ d' |\
 lpq_short_list_to_td |\
 ifne td-select -H Job Rank 'File(s)' |\
@@ -39,23 +46,36 @@ ifne td-select -H Job Rank 'File(s)' |\
 		jobs[$jobid]=1
 	done
 	
-	LANG=C lpstat -o | td-trans -c 4 |\
-	td-add-headers -X PRINTERJOBID USER SIZE DATETIME |\
-	td-alter _='($printer, $jobid) = PRINTERJOBID =~ /^(.+?)-(\d+)$/' PRINTER='$printer' JOBID='$jobid' |\
-	ifne td-select -H JOBID PRINTER DATETIME |\
+	for completeness in not-completed completed
+	do
+		LANG=C lpstat -R -W "$completeness" -o ${TRG_PRINTER:+"$TRG_PRINTER"} |\
+		td-trans -c 5 |\
+		td-add-headers -X RANK PRINTERJOBID USER SIZE DATETIME |\
+		td-alter -B 'use DateTime::Format::Strptime; $dtparser = DateTime::Format::Strptime->new(pattern=>"%a %b %d %T %Y", on_error=>"croak", locale=>"C")' \
+			_='($printer, $jobid) = PRINTERJOBID =~ /^(.+?)-(\d+)$/' \
+			PRINTER='$printer' JOBID='$jobid' \
+			COMPLETED="\"$completeness\"" \
+			DATETIME='$dtparser->parse_datetime(DATETIME)->strftime("%F %T")' |\
+		ifne td-select -H JOBID RANK COMPLETED PRINTER DATETIME
+	done |\
 	{
-		while read -r jobid printer datetime
+		while read -r jobid rank completeness printer datetime
 		do
 			job_printer[$jobid]=$printer
 			job_datetime[$jobid]=$datetime
+			job_completeness[$jobid]=$completeness
+			if [ -z "${job_rank[$jobid]}" ]
+			then
+				job_rank[$jobid]=$rank
+			fi
 			jobs[$jobid]=1
 		done
 		
-		echo "JOB${TAB}PRINTER${TAB}RANK${TAB}DATETIME${TAB}FILE"
+		echo "JOB${TAB}PRINTER${TAB}COMPLETED${TAB}RANK${TAB}DATETIME${TAB}FILE"
 		
 		for jobid in `printf '%s\n' "${!jobs[@]}" | sort -n`
 		do
-			echo "$jobid${TAB}${job_printer[$jobid]}${TAB}${job_rank[$jobid]}${TAB}${job_datetime[$jobid]}${TAB}${job_filename[$jobid]}"
+			echo "$jobid${TAB}${job_printer[$jobid]}${TAB}${job_completeness[$jobid]}${TAB}${job_rank[$jobid]}${TAB}${job_datetime[$jobid]}${TAB}${job_filename[$jobid]}"
 		done
 	}
 }

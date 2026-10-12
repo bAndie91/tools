@@ -1697,6 +1697,7 @@ def parse_cli_args():
 	key_group = parser.add_mutually_exclusive_group()
 	key_group.add_argument('--key-field', type=str, default=None, metavar='COLUMN')
 	key_group.add_argument('--auto-key-field', action='store_true', default=False, help='Default key field is the first column in the input data.')
+	parser.add_argument('--filter', action='append', default=[], type=str, metavar='FIELD:PATTERN', help='Filter FIELD with PATTERN')
 	parser.add_argument('--activate-command', type=str, metavar='COMMAND', help='System command to run when double clicked on a row.')
 	parser.add_argument('--context-menu', action='append', default=[], type=str, metavar='ICON:LABEL:MENUITEM-OPTIONS:COMMAND', help='Menu item definitions for rows context menu.')
 	parser.add_argument('--auto-refresh-interval', type=float, metavar='SEC')
@@ -1871,6 +1872,15 @@ class GTabData(object):
 		if self.tabdata_key_field is not None:
 			with GtkThreadContext():
 				self.main_table.get_model().add_key_column(self.tabdata_key_field)
+		
+		for filter_field_pattern in cliargs.filter:
+			field, pattern = filter_field_pattern.split(':', 1)
+			try:
+				tvc = self.main_table.get_column_by_name(field)
+			except:
+				traceback.print_exc()
+			else:
+				tvc.set_filter_expr(pattern)
 
 	def load_data(self, data_rows_iterator):
 		cb_data = {

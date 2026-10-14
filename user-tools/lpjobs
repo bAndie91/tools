@@ -68,6 +68,11 @@ ifne td-select -H Job Rank 'File(s)' |\
 			then
 				job_rank[$jobid]=$rank
 			fi
+			if [ -z "${job_filename[$jobid]}" ]
+			then
+				jobid_pad5=`printf %05d "$jobid"`
+				job_filename[$jobid]=`ippdump /var/spool/cups/c$jobid_pad5 | grep -m1 ^job-attributes/job-name= | cut -d= -f2-`
+			fi
 			jobs[$jobid]=1
 		done
 		

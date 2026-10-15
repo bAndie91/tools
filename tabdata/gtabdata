@@ -1489,33 +1489,37 @@ def context_menu_option_column_match(colname, exact_column_names=None, column_na
 def populate_row_context_menu(menu, items, macros):
 	hierarchy = MenuHierarchy(separator='//')
 	for definition in items:
-		icon, label_template, menuitem_options, command_template = [field.replace('\\:', ':') for field in re.split(r'(?<!\\):', definition, maxsplit=3)]
-		menuitem_options = parse_options_string(menuitem_options)
-		menuitem_label = Template(label_template).render(**macros)
-		if menuitem_label != '' and context_menu_option_column_match(macros['column'], exact_column_names=menuitem_options.get('columns'), column_name_regex=menuitem_options.get('column-regex')):
-			enabled = True
-			if menuitem_label.startswith(' '):
-				menuitem_label = menuitem_label[1:]
-				enabled = False
+		try:
+			icon, label_template, menuitem_options, command_template = [field.replace('\\:', ':') for field in re.split(r'(?<!\\):', definition, maxsplit=3)]
+			menuitem_options = parse_options_string(menuitem_options)
+			menuitem_label = Template(label_template).render(**macros)
+			if menuitem_label != '' and context_menu_option_column_match(macros['column'], exact_column_names=menuitem_options.get('columns'), column_name_regex=menuitem_options.get('column-regex')):
+				enabled = True
+				if menuitem_label.startswith(' '):
+					menuitem_label = menuitem_label[1:]
+					enabled = False
 
-			if menuitem_options.get('separator'):
-				mi = hierarchy.add_menu_item(klass=SeparatorMenuItem, label=menuitem_label)
-			else:
-				mi = hierarchy.add_menu_item(klass=ImageMenuItem, label=menuitem_label, icon=icon)
-			mi.set_sensitive(enabled)
-			
-			commands = []
-			if menuitem_options.get('per-each-selected-row'):
-				for row in macros['selected_rows']:
-					command = Template(command_template).render(row=row, n_selected=macros['n_selected'], column=macros['column'])
+				if menuitem_options.get('separator'):
+					mi = hierarchy.add_menu_item(klass=SeparatorMenuItem, label=menuitem_label)
+				else:
+					mi = hierarchy.add_menu_item(klass=ImageMenuItem, label=menuitem_label, icon=icon)
+				mi.set_sensitive(enabled)
+				
+				commands = []
+				if menuitem_options.get('per-each-selected-row'):
+					for row in macros['selected_rows']:
+						command = Template(command_template).render(row=row, n_selected=macros['n_selected'], column=macros['column'])
+						if command != '':
+							commands.append(split_command_args(command))
+				else:
+					command = Template(command_template).render(**macros)
 					if command != '':
 						commands.append(split_command_args(command))
-			else:
-				command = Template(command_template).render(**macros)
-				if command != '':
-					commands.append(split_command_args(command))
-			mi.set_data('commands', commands)
-			mi.connect('activate', on_context_menu_item_activate, menu)
+				mi.set_data('commands', commands)
+				mi.connect('activate', on_context_menu_item_activate, menu)
+		except Exception as exc:
+			exc.gtabdata_menu_definition = definition
+			raise
 	hierarchy.append_to_menu(menu)
 	menu.show_all()
 
@@ -1741,7 +1745,7 @@ cliargs = parse_cli_args()
 APPNAME = cliargs.appname + '.' + cliargs.appinstance
 
 
-class ContextMenuValidationUndefined(Undefined):
+class ValidationDummyUndefined(Undefined):
 	def __str__(self):
 		return ''
 	__unicode__ = __str__
@@ -1778,13 +1782,13 @@ class ContextMenuValidationUndefined(Undefined):
 		return other
 
 
-class ContextMenuValidationRow(dict):
+class ValidationDummyRow(dict):
 	def __missing__(self, key):
-		return ContextMenuValidationUndefined(name=key)
+		return ValidationDummyUndefined(name=key)
 	def __getitem__(self, key):
 		if key not in self:
-			return ContextMenuValidationUndefined(name=key)
-		return super(ContextMenuValidationRow, self).__getitem__(key)
+			return ValidationDummyUndefined(name=key)
+		return super(ValidationDummyRow, self).__getitem__(key)
 	def __getattr__(self, name):
 		return self[name]
 
@@ -1793,12 +1797,21 @@ class ContextMenuValidationRow(dict):
 # Missing fields resolve to safe Jinja Undefined values so startup catches syntax/formatting errors
 # but does not fail on data-dependent parts of the template.
 def validate_context_menu(items):
-	row = ContextMenuValidationRow()
+	row = ValidationDummyRow()
 	macros = {'column': 'dummy', 'row': row, 'cell': '', 'selected_rows': [row], 'n_selected': 1}
 	try:
 		populate_row_context_menu(gtk.Menu(), items, macros)
 	except Exception as exc:
-		print('gtabdata: invalid context menu definition:', file=sys.stderr)
+		print('gtabdata: invalid context menu definition: %s' % getattr(exc, 'gtabdata_menu_definition', ''), file=sys.stderr)
+		raise
+
+def validate_activate_command(command):
+	row = ValidationDummyRow()
+	macros = {'column': 'dummy', 'row': row, 'cell': '', 'selected_rows': [row], 'n_selected': 1}
+	try:
+		Template(command).render(**macros)
+	except:
+		print('gtabdata: invalid activate command template:', file=sys.stderr)
 		raise
 
 
@@ -2158,11 +2171,7 @@ class GTabData(object):
 
 validate_context_menu(cliargs.context_menu)
 if cliargs.activate_command is not None:
-	try:
-		Template(cliargs.activate_command).render(**macros)
-	except:
-		print('gtabdata: invalid activate command template:', file=sys.stderr)
-		raise
+	validate_activate_command(cliargs.activate_command)
 
 main_app = GTabData()
 main_app.main_win.title = Template(cliargs.title).render({'env': os.environ})

@@ -1,4 +1,5 @@
 [MESSAGES CONTROL]
-disable=missing-function-docstring,missing-class-docstring,missing-module-docstring
+#disable=missing-function-docstring,missing-class-docstring,missing-module-docstring
+disable=convention
 [FORMAT]
 indent-string='\t'

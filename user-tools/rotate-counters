@@ -16,7 +16,7 @@ set -u
 set -e
 set -o pipefail
 
-. /usr/lib/tool/bash-utils
+. /usr/lib/hband-tools/bash/utils-base
 
 if [ $# = 0 ]
 then

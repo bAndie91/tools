@@ -34,7 +34,7 @@ set -e
 set -o pipefail
 set -u
 
-. /usr/lib/tool/bash-utils
+. /usr/lib/hband-tools/bash/utils-base
 
 
 opt_verbose=no

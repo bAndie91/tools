@@ -333,7 +333,7 @@ EOF
 
 
 set -e
-. /usr/lib/tool/bash-utils
+. /usr/lib/hband-tools/bash/utils-base
 set +e
 
 

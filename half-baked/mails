@@ -1,6 +1,6 @@
 #!/bin/bash
 
-. /usr/lib/tool/bash-utils || exit -1
+. /usr/lib/hband-tools/bash/utils-base || exit -1
 
 opt_maildir=~/Mail/new/
 opt_newer=''

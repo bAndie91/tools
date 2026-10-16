@@ -4,7 +4,7 @@
 # are found to be unavailable on the system.
 
 set -e
-. /usr/lib/tool/bash-utils
+. /usr/lib/hband-tools/bash/utils-base
 
 
 locale |\

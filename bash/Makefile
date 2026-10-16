@@ -24,8 +24,8 @@ install-bash-command-not-found-handle: /etc/profile.d/bash.d/command-not-found-h
 	$(mkdir-recipe)
 
 
-LIBPREFIX = /usr/lib/tool
-LIBS = bash-util ansi-codes bash-cache
+LIBPREFIX = /usr/lib/hband-tools/bash
+LIBS = utils-base utils-experimental utils-pipe utils-semver utils-template utils-try ansi-codes
 INSTALL_LIBS_TARGETS = $(addprefix $(LIBPREFIX)/,$(LIBS))
 
 .PHONY: install-libs

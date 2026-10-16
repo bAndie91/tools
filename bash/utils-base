@@ -1,0 +1,149 @@
+#!/bin/bash
+
+is_digit()
+{
+	[ "$1" = 0 -o "$1" = 1 -o "$1" = 2 -o "$1" = 3 -o "$1" = 4 -o "$1" = 5 -o "$1" = 6 -o "$1" = 7 -o "$1" = 8 -o "$1" = 9 ]
+}
+
+is_number()
+{
+	[ "$1" -ge 0 -o "$1" -lt 0 ] 2>/dev/null
+}
+
+is_alpha()
+{
+	expr "$1" : '[a-zA-Z]\+$' >/dev/null 2>&1
+}
+
+warnx()
+{
+	# warnx - mimic warnx(3) in shell
+	local msg="$*"
+	local ln
+	local rest_msg
+	while [ -n "$msg" ]
+	do
+		ln=${msg%%$'\n'*}
+		rest_msg=${msg#*$'\n'}
+		if [ "$msg" = "$rest_msg" ]
+		then
+			msg=''
+		else
+			msg=$rest_msg
+		fi
+		echo "${0##*/}: $ln" >&2
+	done
+}
+
+errx()
+{
+	# errx - mimic errx(3) in shell
+	errno=$1
+	shift
+	warnx "$@"
+	exit $errno
+}
+
+bash_isset()
+{
+	local sets=${2:-$-}
+	sets=${sets//[!$1]/}
+	echo ${sets:-_}
+}
+
+bash_defined()
+{
+	[ "${!1+x}" = x ]
+}
+
+errorlevel()
+{
+	return $1
+}
+
+bash_join()
+{
+	if [ ${#1} = 1 ]
+	then
+		local IFS=$1
+		shift
+		echo "$*"
+	else
+		local d=$1
+		shift
+		local n=0
+		local x
+		for x in "$@"
+		do
+			if [ $n -gt 0 ]
+			then
+				printf %s "$d"
+			fi
+			printf %s "$x"
+			n=$[n+1]
+		done
+	fi
+}
+
+in_list()
+{
+	local needle=$1
+	local hay
+	shift
+	for hay in "$@"
+	do
+		if [ ".$hay" = ".$needle" ]
+		then
+			return 0
+		fi
+	done
+	return 1
+}
+
+array_shift()
+{
+	if [ "$1" = --help ]
+	then
+		echo "NAME"
+		echo "  array_shift - print and remove the first element from a bash indexed array"
+		echo "INVOCATION"
+		echo "  array_shift <VARNAME>"
+		echo "EXAMPLE"
+		echo "  shoplist=(bread milk sausage)"
+		echo "  first_element=\$(array_shift shoplist)"
+		echo "  next_element=\$(array_shift shoplist)"
+		return
+	fi
+	
+	local array_name=$1
+	local aux
+	eval "aux=\${$array_name[0]}"
+	unset $array_name[0]
+	eval "$array_name=(\"\${$array_name[@]}\")"
+	echo "$aux"
+}
+
+array_reverse()
+{
+	if [ "$1" = --help ]
+	then
+		echo "NAME"
+		echo "  array_reverse - reverse the order of elements in a bash array in-place"
+		echo "INVOCATION"
+		echo "  array_reverse <VARNAME>"
+		echo "RETURN VALUE"
+		echo "  void"
+		return
+	fi
+	
+	local array_name=$1
+	local i ci len aux
+	eval "len=\${#$array_name[@]}"
+	for ((i=0; i<len/2; i++))
+	do
+		ci=$[len-i-1]
+		eval "aux=\${$array_name[$i]}"
+		eval "$array_name[$i]=\${$array_name[$ci]}"
+		eval "$array_name[$ci]=\$aux"
+	done
+}

@@ -1,6 +1,7 @@
 #!/bin/bash
 
-. /usr/lib/tool/bash-utils || exit 1
+. /usr/lib/hband-tools/bash/utils-base || exit 1
+. /usr/lib/hband-tools/bash/utils-try || exit 1
 
 verbose()
 {
@@ -23,11 +24,6 @@ run()
 debug()
 {
 	[ "$debug" != yes ] || warnx "$@"
-}
-
-warnx()
-{
-	echo "$PROGNAME: $*" >&2
 }
 
 yesno()

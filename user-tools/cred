@@ -155,7 +155,7 @@ set -eE
 set -o pipefail
 set -u
 
-. /usr/lib/tool/bash-utils
+. /usr/lib/hband-tools/bash/utils-base
 
 colors_supported()
 {

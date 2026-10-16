@@ -27,7 +27,7 @@ EOF
 set +e
 set -u
 
-. /usr/lib/tool/bash-utils
+. /usr/lib/hband-tools/bash/utils-base
 
 _status()
 {

@@ -22,7 +22,7 @@ list_all_sockets=''
 verbose=''
 sourced=''
 
-. /usr/lib/tool/bash-utils
+. /usr/lib/hband-tools/bash/utils-pipe
 
 parse_opts()
 {

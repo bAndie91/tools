@@ -87,7 +87,7 @@ EOF
 set -e
 set -o pipefail
 
-. /usr/lib/tool/bash-utils
+. /usr/lib/hband-tools/bash/utils-base
 
 
 

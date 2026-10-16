@@ -17,7 +17,7 @@ EOF
 set -e
 set -u
 
-. /usr/lib/tool/bash-utils
+. /usr/lib/hband-tools/bash/utils-base
 
 
 is_cow()

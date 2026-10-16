@@ -1806,8 +1806,7 @@ def validate_context_menu(items):
 		raise
 
 def validate_activate_command(command):
-	row = ValidationDummyRow()
-	macros = {'column': 'dummy', 'row': row, 'cell': '', 'selected_rows': [row], 'n_selected': 1}
+	macros = {'row': ValidationDummyRow()}
 	try:
 		Template(command).render(**macros)
 	except:
@@ -2048,6 +2047,8 @@ class GTabData(object):
 		popup_menu.set_data('treeview', treeview)
 		n_selected = len(focus_data['selected_rows'])
 		macros = focus_data.copy()
+		macros['row'] = macros['row'].as_dict(map_obj_attr_cb('raw'))
+		macros['selected_rows'] = [row.as_dict(map_obj_attr_cb('raw')) for row in macros['selected_rows']]
 		macros['n_selected'] = n_selected
 		# add user-defined menu items
 		populate_row_context_menu(popup_menu, cliargs.context_menu, macros)

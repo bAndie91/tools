@@ -1,7 +1,7 @@
 #!/bin/sh
 
 exec gtabdata --appinstance lpjobs --title lpjobs --icon printer --data-command lpjobs \
-	--activate-command 'x-terminal-emulator -e reportcmdstatus -w pipecmd ippdump /var/spool/cups/c{{ "%05d" | format(row.JOB) }} -- pipecmd paths2indent -t = -- indent2tree' \
-	--context-menu 'STOCK_OPEN:open document:per-each-selected-row:globexec mimeopen-gui /var/spool/cups/d{{ "%05d" | format(row.JOB) }}-*' \
+	--activate-command 'x-terminal-emulator -e reportcmdstatus -w pipecmd ippdump /var/spool/cups/c{{ "%05d" | format(row.JOB | int) }} -- pipecmd paths2indent -t = -- indent2tree' \
+	--context-menu 'STOCK_OPEN:open document:per-each-selected-row:globexec mimeopen-gui /var/spool/cups/d{{ "%05d" | format(row.JOB | int) }}-*' \
 	--context-menu 'STOCK_DELETE:remove job:per-each-selected-row:lprm -P {{row.PRINTER}} {{row.JOB}}' \
 	"$@"

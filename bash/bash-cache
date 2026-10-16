@@ -1,0 +1,50 @@
+#!/bin/bash
+
+bash_cache_init()
+{
+	local global_var=$1
+	local cachefile=$2
+	if declare -p "${global_var}_file" >/dev/null 2>/dev/null
+	then
+		# already initialized
+		return 0
+	fi
+	declare -g "${global_var}_file"
+	eval "${global_var}_file=\$cachefile"
+	declare -g -A "$global_var"
+	local key value
+	if [ -s "$cachefile" ]
+	then
+		while IFS=$'\t' read -r key value
+		do
+			eval "$global_var[\$key]=\$value"
+		done < "$cachefile"
+	fi
+}
+
+bash_cache_retrieve()
+{
+	local global_var=$1
+	local key=$2
+	local output_var=$3
+	local exists
+	eval "exists=\${$global_var[\$key]+yes}"
+	if [ "$exists" = yes ]
+	then
+		eval "printf -v $output_var %s \"\${$global_var[\$key]}\""
+	else
+		return 1
+	fi
+}
+
+bash_cache_set()
+{
+	local global_var=$1
+	local key=$2
+	local value=$3
+	eval "$global_var[\$key]=\$value"
+	local cachefile
+	eval "cachefile=\${${global_var}_file}"
+	mkdir -p "${cachefile%/*}"
+	printf '%s\t%s\n' "$key" "$value" >> "$cachefile"
+}

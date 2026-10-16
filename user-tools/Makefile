@@ -45,10 +45,6 @@ $(addprefix /usr/share/bash-completion/completions/,$(COMPLETION_BASH_SCRIPTS)):
 	$(INSTALL_WRAPPER) install $< $@
 	@$(record_uninstall)
 
-/usr/lib/tool/bash-utils: ../bash/bash-utils | /usr/lib/tool
-	$(INSTALL_WRAPPER) install $< $@
-	@$(record_uninstall)
-
 /usr/lib/multithrottler/Throttler.pm: ../lib/multithrottler/Throttler.pm | /usr/lib/multithrottler
 	$(INSTALL_WRAPPER) install $< $@
 	@$(record_uninstall)
@@ -77,24 +73,64 @@ depcheck-all: $(DEPCHECK_TARGETS)
 .PHONY: $(DEPCHECK_TARGETS)
 
 
-DEPCHECK/lines:
-	perl -MARGV::readonly -e 1
-DEPCHECK/parsel:
-	python3 -c 'import parsel; import cssselect'
-DEPCHECK/xml2json:
-	python -c 'import xmltodict'
-DEPCHECK/palemoon-current-urls:
-	which jq
+
+DEPCHECK/chattr-cow:
+	test -r /usr/lib/tool/bash-utils
+DEPCHECK/chattr-nocow:
+	test -r /usr/lib/tool/bash-utils
+DEPCHECK/daemonctl:
+	test -r /usr/lib/tool/bash-utils
 DEPCHECK/dbus-call:
 	perl -MNet::DBus -e 1
 	perl -MXML::Hash::LX -e 1
 	perl -MJSON -e 1
-DEPCHECK/tabularize:
-	perl -MTerm::Size -e 1
-DEPCHECK/stdfilt:
-	perl -MList::MoreUtils -e 1
 DEPCHECK/ffilt:
 	perl -MIPC::Run -e 1
+DEPCHECK/killcmd:
+	test -r /usr/lib/tool/bash-utils
+DEPCHECK/killexe:
+	test -r /usr/lib/tool/bash-utils
+DEPCHECK/killp:
+	test -r /usr/lib/tool/bash-utils
+DEPCHECK/killpgrp:
+	test -r /usr/lib/tool/bash-utils
+DEPCHECK/lines:
+	perl -MARGV::readonly -e 1
+DEPCHECK/locale-validator:
+	test -r /usr/lib/tool/bash-utils
+DEPCHECK/lpjobs:
+	test -r /usr/lib/tool/bash-cache
+DEPCHECK/ssh-agent-finder:
+	test -r /usr/lib/tool/bash-utils
+DEPCHECK/symlinks-analyze:
+	test -r /usr/lib/tool/bash-utils
+DEPCHECK/PMbwmon:
+	test -r /usr/lib/tool/bash-utils
+DEPCHECK/cred:
+	test -r /usr/lib/tool/bash-utils
+DEPCHECK/organizebydate:
+	test -r /usr/lib/tool/bash-utils
+DEPCHECK/palemoon-current-urls:
+	which jq
+DEPCHECK/parsel:
+	python3 -c 'import parsel; import cssselect'
+DEPCHECK/remount:
+	test -r /usr/lib/tool/bash-utils
+DEPCHECK/repeat:
+	test -r /usr/lib/tool/bash-utils
+DEPCHECK/rotate-counters:
+	test -r /usr/lib/tool/bash-utils
+DEPCHECK/screenreattach:
+	test -r /usr/lib/tool/bash-utils
+DEPCHECK/stdfilt:
+	perl -MList::MoreUtils -e 1
+DEPCHECK/tabularize:
+	perl -MTerm::Size -e 1
+DEPCHECK/takeown:
+	test -r /usr/lib/tool/bash-utils
+DEPCHECK/xml2json:
+	python -c 'import xmltodict'
+
 
 .PHONY: try-satisfy-dependencies
 try-satisfy-dependencies:
@@ -117,7 +153,6 @@ try-satisfy-dependencies:
 .PHONY: install-all
 install-all: \
   git-utimes \
-  /usr/lib/tool/bash-utils \
   install-tools \
   install-manpages
 
@@ -138,17 +173,17 @@ $(TOOLS_TARGET_FILES): $(TOOLS_TARGET_DIR)/%: %
 	$(INSTALL_WRAPPER) install $< $@
 	@$(record_uninstall)
 
-install-symlinks: $(TOOLS_TARGET_SYMLINKS)
 .PHONY: install-symlinks
+install-symlinks: $(TOOLS_TARGET_SYMLINKS)
 
 $(TOOLS_TARGET_SYMLINKS): $(TOOLS_TARGET_DIR)/%: %
 	$(INSTALL_WRAPPER) ln -snfv $(shell readlink $<) $@
 	@$(record_uninstall)
 
 
+.PHONY: list-tools
 list-tools:
 	@echo $(TOOLS) | tr " " "\n" | sort
-.PHONY: list-tools
 
 
 include $(dir $(lastword $(MAKEFILE_LIST)))/Makefile.documentation.mk

@@ -1,33 +1,39 @@
 
+INSTALL_WRAPPER =
+
 define mkdir-recipe
-	mkdir -p $@
+	[ -d $@ ] || $(INSTALL_WRAPPER) mkdir -p $@
 	@echo remove $@ >> uninstall.sh
 endef
 
-define install-dep-recipe
-	install --compare $< $@
-	@echo remove $@ >> uninstall.sh
-endef
-
-
-default:
-	@echo may be interested in: bash-command-not-found-handle
-	@false
 
 .PHONY: default
+default:
+	$(error try `make INSTALL_WRAPPER=sudo install-bash-command-not-found-handle install-libs´)
 
-bash-command-not-found-handle: /etc/profile.d/bash.d/command-not-found-handle.sh
 
-.PHONY: bash-command-not-found-handle
+.PHONY: install-bash-command-not-found-handle
+install-bash-command-not-found-handle: /etc/profile.d/bash.d/command-not-found-handle.sh
+
 
 /etc/profile.d/bash.d/command-not-found-handle.sh: command-not-found-handle.sh | /etc/profile.d/bash.d
-	$(install-dep-recipe)
+	$(INSTALL_WRAPPER) install --compare $< $@
+	@echo remove $@ >> uninstall.sh
 
 /etc/profile.d/bash.d:
 	$(mkdir-recipe)
 
-/usr/lib/tool/ansi-codes: ansi-codes | /usr/lib/tool
-	$(install-dep-recipe)
 
-/usr/lib/tool:
+LIBPREFIX = /usr/lib/tool
+LIBS = bash-util ansi-codes bash-cache
+INSTALL_LIBS_TARGETS = $(addprefix $(LIBPREFIX)/,$(LIBS))
+
+.PHONY: install-libs
+install-libs: $(INSTALL_LIBS_TARGETS)
+
+$(INSTALL_LIBS_TARGETS): $(LIBPREFIX)/%: % | $(LIBPREFIX)
+	$(INSTALL_WRAPPER) install $< $@
+	@echo remove $@ >> uninstall.sh
+
+$(LIBPREFIX):
 	$(mkdir-recipe)

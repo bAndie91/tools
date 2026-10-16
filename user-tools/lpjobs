@@ -21,6 +21,57 @@ lpq_short_list_to_td()
 	perl -ne 'print join("\t", map {s/\s*$//r} /^(.{7}) (.{7}) (.{7}) (.{31}) (\S+)/), "\n"'
 }
 
+init_cache()
+{
+	local global_var=$1
+	local cachefile=$2
+	if declare -p "${global_var}_file" >/dev/null 2>/dev/null
+	then
+		# already initialized
+		return 0
+	fi
+	declare -g "${global_var}_file"
+	eval "${global_var}_file=\$cachefile"
+	declare -g -A "$global_var"
+	local key value
+	if [ -s "$cachefile" ]
+	then
+		while IFS=$'\t' read -r key value
+		do
+			eval "$global_var[\$key]=\$value"
+		done < "$cachefile"
+	fi
+}
+
+cache_retrieve()
+{
+	local global_var=$1
+	local key=$2
+	local output_var=$3
+	local exists
+	eval "exists=\${$global_var[\$key]+yes}"
+	if [ "$exists" = yes ]
+	then
+		eval "printf -v $output_var %s \"\${$global_var[\$key]}\""
+	else
+		return 1
+	fi
+}
+
+cache_set()
+{
+	local global_var=$1
+	local key=$2
+	local value=$3
+	eval "$global_var[\$key]=\$value"
+	local cachefile
+	eval "cachefile=\${${global_var}_file}"
+	mkdir -p "${cachefile%/*}"
+	printf '%s\t%s\n' "$key" "$value" >> "$cachefile"
+}
+
+
+
 TRG_PRINTER=$1
 
 if [ -z "$TRG_PRINTER" ]
@@ -39,6 +90,9 @@ ifne td-select -H Job Rank 'File(s)' |\
 	declare -a job_datetime
 	declare -A jobs
 	
+	echo "JOB${TAB}PRINTER${TAB}COMPLETED${TAB}RANK${TAB}DATETIME${TAB}FILE"
+	
+	# load printer queue jobs from lpq
 	while read -r jobid rank filename
 	do
 		job_rank[$jobid]=$rank
@@ -46,6 +100,7 @@ ifne td-select -H Job Rank 'File(s)' |\
 		jobs[$jobid]=1
 	done
 	
+	# load printer queue (completed and non-completed) jobs from lpstat
 	for completeness in not-completed completed
 	do
 		LANG=C lpstat -R -W "$completeness" -o ${TRG_PRINTER:+"$TRG_PRINTER"} |\
@@ -70,13 +125,20 @@ ifne td-select -H Job Rank 'File(s)' |\
 			fi
 			if [ -z "${job_filename[$jobid]}" ]
 			then
-				jobid_pad5=`printf %05d "$jobid"`
-				job_filename[$jobid]=`ippdump /var/spool/cups/c$jobid_pad5 | grep -m1 ^job-attributes/job-name= | cut -d= -f2-`
+				init_cache JOBNAME_CACHE ~/.cache/lpjobs/cups-jobname
+				if ! cache_retrieve JOBNAME_CACHE "$jobid" jobname
+				then
+					jobid_pad5=`printf %05d "$jobid"`
+					jobname=`ippdump /var/spool/cups/c$jobid_pad5 | grep -m1 ^job-attributes/job-name= | cut -d= -f2-`
+					if [ -n "$jobname" ]
+					then
+						cache_set JOBNAME_CACHE "$jobid" "$jobname"
+					fi
+				fi
+				job_filename[$jobid]=$jobname
 			fi
 			jobs[$jobid]=1
 		done
-		
-		echo "JOB${TAB}PRINTER${TAB}COMPLETED${TAB}RANK${TAB}DATETIME${TAB}FILE"
 		
 		for jobid in `printf '%s\n' "${!jobs[@]}" | sort -n`
 		do

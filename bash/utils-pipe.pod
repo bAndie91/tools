@@ -1,0 +1,50 @@
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+bash/utils-pipe - anonymous file-descriptor pipe helpers
+
+=head1 SYNOPSIS
+
+  source bash/utils-pipe
+
+  pipe read_fd write_fd
+  echo Lorem ipsum >&$write_fd
+  read -u $read_fd data
+
+=head1 DESCRIPTION
+
+This library implements anonymous pipe creation and simple file descriptor
+management for bash scripts. It can create a reader/writer pair, close one or
+more descriptors, and capture stdout/stderr separately without running the
+command twice.
+
+=head1 FUNCTIONS
+
+=over 4
+
+=item pipe($reader_var, $writer_var)
+
+Create an anonymous pipe and store the read end and write end file descriptors
+in variables named by the supplied arguments. Input is two variable names; output
+is none, but both variables are assigned numeric file descriptor values. The
+implementation uses /proc and helper sleep processes to acquire the pipe ends.
+
+=item close(FD...)
+
+Close one or more file descriptors by calling the Bash C<exec {fd}>&-> form.
+Input is a list of file descriptor numbers; output is none. It does not depend
+on global state and does not set any variables.
+
+=item capture2(COMMAND...)
+
+Run a command while capturing stdout and stderr into the script-global
+variables C<capture2_stdout> and C<capture2_stderr>. Input is the command plus
+its arguments; output is the command's exit status from C<return>. It depends on
+C<pipe> and C<close>, and it sets the two global variables above.
+
+=back
+
+=cut

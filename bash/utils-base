@@ -17,7 +17,6 @@ is_alpha()
 
 warnx()
 {
-	# warnx - mimic warnx(3) in shell
 	local msg="$*"
 	local ln
 	local rest_msg
@@ -37,7 +36,6 @@ warnx()
 
 errx()
 {
-	# errx - mimic errx(3) in shell
 	errno=$1
 	shift
 	warnx "$@"
@@ -102,19 +100,6 @@ in_list()
 
 array_shift()
 {
-	if [ "$1" = --help ]
-	then
-		echo "NAME"
-		echo "  array_shift - print and remove the first element from a bash indexed array"
-		echo "INVOCATION"
-		echo "  array_shift <VARNAME>"
-		echo "EXAMPLE"
-		echo "  shoplist=(bread milk sausage)"
-		echo "  first_element=\$(array_shift shoplist)"
-		echo "  next_element=\$(array_shift shoplist)"
-		return
-	fi
-	
 	local array_name=$1
 	local aux
 	eval "aux=\${$array_name[0]}"
@@ -125,17 +110,6 @@ array_shift()
 
 array_reverse()
 {
-	if [ "$1" = --help ]
-	then
-		echo "NAME"
-		echo "  array_reverse - reverse the order of elements in a bash array in-place"
-		echo "INVOCATION"
-		echo "  array_reverse <VARNAME>"
-		echo "RETURN VALUE"
-		echo "  void"
-		return
-	fi
-	
 	local array_name=$1
 	local i ci len aux
 	eval "len=\${#$array_name[@]}"

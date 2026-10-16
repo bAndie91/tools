@@ -2,24 +2,6 @@
 
 pipe()
 {
-	if [ "$1" = --help ]
-	then
-		echo "NAME"
-		echo "  pipe - mimic pipe(2) syscall in shell"
-		echo "INVOCATION"
-		echo "  pipe <READER_VAR> <WRITER_VAR>"
-		echo "DESCRIPTION"
-		echo "  Create anonymous pipe."
-		echo "  Reader end's file descriptor stored in variable name in the first argument."
-		echo "  Writer end's file descriptor stored in variable name in the second argument."
-		echo "EXAMPLE"
-		echo "  pipe read_fd write_fd"
-		echo "  echo Lorem ipsum >&\$write_fd"
-		echo "  read -u \$read_fd data"
-		echo "  echo \$data  # => Lorem ipsum"
-		return
-	fi
-	
 	local pid1 pid2 myin myout lnk0 lnk1
 	[ "$1" = rdr ] || local rdr
 	[ "$2" = wtr ] || local wtr
@@ -53,58 +35,15 @@ pipe()
 
 close()
 {
-	if [ "$1" = --help ]
-	then
-		echo "NAME"
-		echo "  close - mimic close(2) syscall in shell"
-		echo "INVOCATION"
-		echo "  close <FD_1> [FD_2 [FD_3 [...]]]"
-		echo "DESCRIPTION"
-		echo "  Close file descriptor(s) given in arguments."
-		echo "EXAMPLE"
-		echo "  pipe read_fd write_fd"
-		echo "  close \$write_fd"
-		return
-	fi
-	
 	local fd
 	for fd in "$@"
 	do
-		#eval "exec $fd>&-"
 		exec {fd}>&-
 	done
 }
 
 capture2()
 {
-	if [ "$1" = --help ]
-	then
-		echo "NAME"
-		echo "  capture2 - store a command's stdout and stderr in separated variables"
-		echo "INVOCATION"
-		echo "  capture2 <COMMAND> [<ARGS>]"
-		echo "DESCRIPTION"
-		echo "  Capture <COMMAND>'s stdout and stderr in separated shell variables"
-		echo "  without running it twice."
-		echo "  Store stdout and stderr data in script-global variables"
-		echo "  called \$capture2_stdout and \$capture2_stderr respectively."
-		echo "EXAMPLE"
-		echo "  capture2 ls -lRA /etc"
-		echo "  echo output was "'\$capture2_stdout'""
-		echo "  echo error was "'\$capture2_stderr'""
-		echo "RETURN VALUE"
-		echo "  <COMMAND>'s exit status"
-		echo "VARIABLES"
-		echo "  using the following script-global variables"
-		echo "  - capture2_stdout"
-		echo "  - capture2_stderr"
-		echo "CAVEAT"
-		echo "  May not work on large output, depend on fifo buffer size."
-		echo "SEE ALSO"
-		echo "  pipe(1bash) close(1bash)"
-		return
-	fi
-	
 	local x r w
 	pipe r w
 	capture2_stdout=$("$@" 2>&$w)

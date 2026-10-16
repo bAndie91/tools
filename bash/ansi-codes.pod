@@ -1,0 +1,36 @@
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+bash/ansi-codes - shell variables for ANSI escape sequences
+
+=head1 SYNOPSIS
+
+  source bash/ansi-codes
+
+  printf '%s%s%s\n' "$ANSI_fg_red" "hello" "$ANSI_reset"
+
+=head1 DESCRIPTION
+
+This library declares shell variables beginning with C<ANSI_> for common ANSI
+terminal styling and color sequences. Each variable is exported in the current
+shell environment by evaluating a loop that assigns C<$'\033'[...m'> to a name
+constructed from the code definition list.
+
+The file defines the standard SGR codes for text styles, foreground/background
+colors (including bright variants), and common resets. It is intended for shell
+scripts that need to emit colorized or styled terminal output.
+
+=head1 VARIABLES
+
+Variables are created for common styles such as C<ANSI_reset>, C<ANSI_bold>,
+C<ANSI_italic>, C<ANSI_underline>, C<ANSI_inverse>, and C<ANSI_crossed>, plus
+foreground and background colors such as C<ANSI_fg_red>, C<ANSI_bg_blue>,
+C<ANSI_fg_bright_green>, and C<ANSI_bg_bright_white>.
+
+The library also defines reset names like C<ANSI_normal>, C<ANSI_nobold>,
+C<ANSI_nofaint>, C<ANSI_noitalic>, C<ANSI_nounderline>, and C<ANSI_reset>.
+
+=cut

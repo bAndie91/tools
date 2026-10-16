@@ -1,0 +1,65 @@
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+bash/utils-semver - compare canonical semver-like version strings
+
+=head1 SYNOPSIS
+
+  source bash/utils-semver
+
+  version_compare 1.2.3 1.2.4
+
+=head1 DESCRIPTION
+
+This library helps normalize and compare version strings using sort-based,
+version-aware ordering. It strips trailing C<.0> components and compares the
+results with the shell's C<sort --version-sort>, making it useful for semantic
+and release-version comparisons.
+
+=head1 FUNCTIONS
+
+=over 4
+
+=item canonize_semver($version)
+
+Return the canonical version string by removing trailing C<.0> segments from the
+input. Input is a version string; output is the normalized version printed on
+stdout. It does not depend on or set any globals.
+
+=item version_compare($a, $b)
+
+Compare two version strings and return 0 when equal, 1 when A is greater than
+B, and 255 when A is less than B. Input is two version strings; output is the
+shell return status. It canonicalizes both values and uses C<sort --version-sort>
+to determine the ordering.
+
+=item version_is_lesser($a, $b)
+
+Return success when A is less than B according to semantic version ordering.
+Input is two version strings; output is the shell return status. It depends on
+C<version_compare> and does not set globals.
+
+=item version_is_greater($a, $b)
+
+Return success when A is greater than B according to semantic version ordering.
+Input is two version strings; output is the shell return status. It depends on
+C<version_compare> and does not set globals.
+
+=item version_is_greater_or_equal($a, $b)
+
+Return success when A is greater than or equal to B. Input is two version
+strings; output is the shell return status. It depends on C<version_is_lesser>
+and no globals are modified.
+
+=item version_is_lesser_or_equal($a, $b)
+
+Return success when A is less than or equal to B. Input is two version strings;
+output is the shell return status. It depends on C<version_is_greater> and no
+globals are modified.
+
+=back
+
+=cut

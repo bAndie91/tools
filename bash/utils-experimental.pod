@@ -1,0 +1,60 @@
+=pod
+
+=encoding UTF-8
+
+=head1 NAME
+
+bash/utils-experimental - small experimental shell helpers
+
+=head1 SYNOPSIS
+
+  source bash/utils-experimental
+
+=head1 DESCRIPTION
+
+This library contains a few convenience helpers for script authors, including a
+safe command wrapper for C<errexit> handling, a directory resolver for the
+current script, a compact echo wrapper, and a global assignment helper.
+
+=head1 FUNCTIONS
+
+=over 4
+
+=item fixerrexit(COMMAND...)
+
+Run the supplied command in a subshell while preserving the current C<errexit>
+setting in the parent shell. Input is a shell command string; output is the
+command's exit status. It depends on the parent shell's current options and does
+not set any global variables.
+
+=item bash_scriptdir()
+
+Print the directory name of the currently executing script by resolving
+C<BASH_SOURCE[-1]> through C<readlink -f> and C<dirname>. Input is none; output is
+a directory path on stdout. It depends on Bash's source stack and does not set
+any globals.
+
+=item ECHO(@text)
+
+Print the provided text without adding a trailing newline. Input is one or more
+strings; output is written to stdout. It is a minimal wrapper around
+C<printf %s> and does not set any variables.
+
+=item bash_assign_global(NAME... -- VALUE...)
+
+Create or replace one or more globals with the given values in the current bash
+environment. Input is a list of variable names followed by a literal C<--> and
+values; output is none. It assigns the values using C<declare -g> and therefore
+creates global variables in the calling scope.
+
+=item bash_assign_global_greedy(NAME... VALUE...)
+
+Call C<bash_assign_global> with C<BASH_ASSIGN_GLOBAL_GREEDY=1> so that trailing
+arguments are appended to the last variable using the current IFS separator.
+Input is the same as C<bash_assign_global>; output is none and it sets the
+C<BASH_ASSIGN_GLOBAL_GREEDY> environment variable only for the duration of the
+call.
+
+=back
+
+=cut

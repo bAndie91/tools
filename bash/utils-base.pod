@@ -13,87 +13,85 @@ bash/utils-base - helper functions for shell scripts
 =head1 DESCRIPTION
 
 This library provides small utility functions for basic type checks, shell flag
-inspection, array manipulation, simple logging, and list/argument handling.
+inspection, array manipulation, diagnostic messages, and list handling.
 
 =head1 FUNCTIONS
 
 =over 4
 
-=item is_digit($value)
+=item B<is_digit>
 
-Return success if the argument is a single decimal digit 0 through 9. Input is
-one string value; output is the shell return status, which is 0 on success and
-non-zero otherwise. It does not depend on any globals and does not set any.
+Return success if the argument is a single decimal digit 0 through 9.
+Input is the argument; output is the shell return status,
+which is 0 on success and non-zero otherwise.
 
-=item is_number($value)
+=item B<is_number>
 
-Return success if the argument is an integer value accepted by shell arithmetic
-comparison. Input is a string; output is the shell return status. It uses
-C<[ "$1" -ge 0 -o "$1" -lt 0 ]> with stderr redirected to /dev/null.
+Return success if the argument is an integer value (as accepted by shell arithmetic
+comparison).
+Input is the argument; output is the shell return status.
 
-=item is_alpha($value)
+=item B<is_alpha>
 
 Return success if the argument is composed only of ASCII letters A-Z or a-z.
-Input is a string; output is the shell return status. It depends on the
-C<expr> command and does not modify any globals.
+Input is the argument; output is the shell return status.
 
-=item warnx(@message)
+=item B<warnx> $message
 
-Print the message to stderr prefixed with the current script name and a colon,
-while preserving multiline output one line at a time. Input is one or more
-arguments that are concatenated to a single message string; output is written to
-stderr. It does not set any globals.
+Print I<message> to stderr prefixed with the current script name,
+while preserving multiline output one line at a time.
+Input is one or more arguments that are concatenated to a single message string;
+output is written to stderr.
 
-=item errx($status, @message)
+=item B<errx> $code $message
 
-Mimic C<errx(3)> by printing a warning message and then exiting with the given
-status code. Input is an integer exit status followed by message text; output
-is diagnostic text to stderr and a process exit. It depends on C<warnx> and
-does not return to the caller.
+Mimic C<errx(3)> by printing I<message> to stderr and then exiting with the given status I<code>.
+Input is an integer exit status code followed by message text;
+output is diagnostic text to stderr.
 
-=item bash_isset($mask, [$shellopts])
+=item B<bash_isset> $mask [$shellopts]
 
-Return the subset of characters from C<$mask> that are present in the shell
-option string C<$shellopts> (default: C<$->). Input is a character mask and an
-optional option string; output is printed to stdout, or a single underscore if
-no matches are found. It does not set any globals.
+Return the subset of characters from I<mask> that are present in the shell
+option string I<shellopts> (default: C<$->).
+The result is printed to stdout.
+It's a single underscore if no matches are found.
 
-=item bash_defined($varname)
+=item B<bash_defined> $varname
 
 Return success if the variable named by the argument exists in the current
-shell environment. Input is a variable name; output is the shell return status.
-It depends on parameter expansion and does not set any globals.
+shell environment.
+Input is the variable name; output is the shell return status.
 
-=item errorlevel($code)
+=item B<errorlevel> $code
 
-Return the numeric status code passed in the argument. Input is an integer;
-output is the shell return code set via C<return>. This function does not
-modify global state.
+Simply return the numeric status I<code> passed in the argument.
+Useful to set C<$?> without actually exiting a function/script.
 
-=item bash_join($delimiter, @items)
+=item B<bash_join> $delimiter ${items[@]}
 
-Join the remaining arguments with the given delimiter and print the result on
-stdout. Input is a separator string followed by any number of values; output is
-a single string. When the separator is a single character, it temporarily sets
-C<IFS> for the join operation.
+Join I<items> with the given I<delimiter> and print the result on stdout.
+When the separator is a single character, it temporarily sets C<IFS> for the join operation.
 
-=item in_list($needle, @haystack)
+=item B<in_list> $needle ${haystack[@]}
 
-Return success if C<$needle> matches one of the supplied list elements.
-Input is the needle followed by candidate values; output is the shell return
-status. It performs string comparison and does not set any globals.
+Return success if I<$needle> found in the supplied I<$haystack> list.
 
-=item array_shift($array_name)
+=item B<array_shift> I<array_variable_name>
 
-Remove and print the first element from the named indexed bash array while
-reindexing the remaining entries. Input is the array variable name; output is
-the removed element printed on stdout. It modifies the provided array in place.
+Return the first element from the named indexed array,
+remove it from the array,
+and reindexing the remaining entries.
+Input is the array variable's name;
+output is the first (removed) element printed on stdout.
+It modifies the named array in place.
 
-=item array_reverse($array_name)
+=item B<array_reverse> I<array_variable_name>
 
-Reverse the contents of the named indexed bash array in place. Input is the
-array variable name; output is none. It depends on the named array existing and
-mutates that array by swapping pairs of elements.
+Reverse the elements of the named indexed array in place.
+Input is the array variable's name;
+output is none.
+It depends on the named array existing.
+Mutates that array by swapping pairs of elements.
 
 =back
 

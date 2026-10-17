@@ -4,7 +4,7 @@
 
 =head1 NAME
 
-bash/utils-cache - associative-array cache helpers for bash
+bash/utils-cache - helpers to cache single line text for bash
 
 =head1 SYNOPSIS
 
@@ -20,29 +20,28 @@ array, retrieves values by key, and appends updates back to the backing file.
 
 =over 4
 
-=item bash_cache_init($global_var, $cachefile)
+=item B<bash_cache_init> $global_var_name $cachefile_path
 
-Initialize a global associative array named C<$global_var> and bind it to the
-cache file at C<$cachefile>. Input is the variable name and the cache file path;
-output is the shell return status (success is 0 if already initialized or just
-set up). On initialization, it creates a C<${global_var}_file> variable holding
-the cache path and loads any existing tab-separated entries from the file into
-the associative array.
+Initialize a global associative array named by the name passed by I<$global_var_name> argument
+and load up from the file specified by I<$cachefile_path> argument.
+On initialization, it creates an also global variable named like C<${global_var_name}_file>,
+which holds I<$cachefile_path>.
+If invoked like, for example, C<bash_cache_init CACHED_DATA /var/cache/data>,
+it sets C<$CACHED_DATA_file> to C</var/cache/data>.
 
-=item bash_cache_retrieve($global_var, $key, $output_var)
+=item B<bash_cache_retrieve> $global_var_name $key $output_var_name
 
-Look up a key in the named associative array and assign its value to the
-variable named by C<$output_var>. Input is the global array name, the lookup
-key, and the target variable name; output is written to that variable, or the
-function returns 1 when the key is absent. It depends on the array being
-initialized and does not modify any other globals.
+Look up I<key> in the named associative array and assign its value to the
+variable named by I<output_var_name>.
+Returns 1 when the key is absent.
+It depends on the array being initialized by B<bash_cache_init>.
 
-=item bash_cache_set($global_var, $key, $value)
+=item B<bash_cache_set> $global_var_name $key $value
 
-Store a value under a key in the named associative array and append a
-C<key<TAB>value> line to the backing cache file. Input is the array name, the
-key, and the value; output is none. It also creates the parent directory for
-the cache file if needed and sets the global associative array entry.
+Store a value under I<key> in the named associative array
+and append a C<< key<TAB>value >> line to the backing cache file.
+Creates the cache file if not exists.
+See B<bash_cache_init> to initialize I<global_var_name> array.
 
 =back
 

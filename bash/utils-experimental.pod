@@ -4,7 +4,7 @@
 
 =head1 NAME
 
-bash/utils-experimental - small experimental shell helpers
+bash/utils-experimental - bash helper functions, experimental stage
 
 =head1 SYNOPSIS
 
@@ -12,48 +12,40 @@ bash/utils-experimental - small experimental shell helpers
 
 =head1 DESCRIPTION
 
-This library contains a few convenience helpers for script authors, including a
-safe command wrapper for C<errexit> handling, a directory resolver for the
-current script, a compact echo wrapper, and a global assignment helper.
+This library contains a few convenience helpers for script authors.
 
 =head1 FUNCTIONS
 
 =over 4
 
-=item fixerrexit(COMMAND...)
+=item B<fixerrexit> I<COMMAND...>
 
 Run the supplied command in a subshell while preserving the current C<errexit>
-setting in the parent shell. Input is a shell command string; output is the
-command's exit status. It depends on the parent shell's current options and does
-not set any global variables.
+setting in the parent shell.
+Return with the I<COMMAND>'s exit status.
 
-=item bash_scriptdir()
+=item B<bash_scriptdir>
 
-Print the directory name of the currently executing script by resolving
-C<BASH_SOURCE[-1]> through C<readlink -f> and C<dirname>. Input is none; output is
-a directory path on stdout. It depends on Bash's source stack and does not set
-any globals.
+Return the directory path of the currently executing script on stdout,
 
-=item ECHO(@text)
+=item B<ECHO>
 
-Print the provided text without adding a trailing newline. Input is one or more
-strings; output is written to stdout. It is a minimal wrapper around
-C<printf %s> and does not set any variables.
+Print the argument to stdout without adding a trailing newline.
 
-=item bash_assign_global(NAME... -- VALUE...)
+=item B<bash_assign_global> I<NAME_1> [I<NAME_2> [...]] -- I<VALUE_1> [I<VALUE_2> [...]]
 
-Create or replace one or more globals with the given values in the current bash
-environment. Input is a list of variable names followed by a literal C<--> and
-values; output is none. It assigns the values using C<declare -g> and therefore
-creates global variables in the calling scope.
+Create or replace one or more globals with the given values.
+Input is a list of variable names followed by a literal C<--> and values.
+It assigns I<VALUE_1> (I<VALUE_2> and so on) values
+to global variable(s) I<NAME_1> (I<NAME_2> and so on, respectively).
+If there are more I<< VALUE_Z<>B<n> >> arguments than I<< NAME_Z<>B<n> >>,
+then the unmatched ones are ignored.
 
-=item bash_assign_global_greedy(NAME... VALUE...)
+=item B<bash_assign_global_greedy> I<NAME_1> [I<NAME_2> [...]] -- I<VALUE_1> [I<VALUE_2> [...]]
 
-Call C<bash_assign_global> with C<BASH_ASSIGN_GLOBAL_GREEDY=1> so that trailing
-arguments are appended to the last variable using the current IFS separator.
-Input is the same as C<bash_assign_global>; output is none and it sets the
-C<BASH_ASSIGN_GLOBAL_GREEDY> environment variable only for the duration of the
-call.
+Same as B<bash_assign_global>, except if there are more I<< VALUE_Z<>B<n> >> arguments
+than I<< NAME_Z<>B<n> >>, then appends the remaining values to the last I<NAME_z> variable
+with the first char of C<IFS> as joiner.
 
 =back
 

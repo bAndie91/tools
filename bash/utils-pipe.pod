@@ -25,25 +25,26 @@ command twice.
 
 =over 4
 
-=item pipe($reader_var, $writer_var)
+=item B<pipe> I<reader_var_name> I<writer_var_name>
 
 Create an anonymous pipe and store the read end and write end file descriptors
-in variables named by the supplied arguments. Input is two variable names; output
-is none, but both variables are assigned numeric file descriptor values. The
-implementation uses /proc and helper sleep processes to acquire the pipe ends.
+in variables named by the supplied arguments.
+Both variables are assigned numeric file descriptor values.
+The implementation uses /proc and helper sleep processes to acquire the pipe ends.
 
-=item close(FD...)
+=item B<close> I<FD> [I<FD> [...]]
 
-Close one or more file descriptors by calling the Bash C<exec {fd}>&-> form.
-Input is a list of file descriptor numbers; output is none. It does not depend
-on global state and does not set any variables.
+Close the file descriptors supplied in arguments.
+Example:
 
-=item capture2(COMMAND...)
+  close 60 11 $writer_fd
 
-Run a command while capturing stdout and stderr into the script-global
-variables C<capture2_stdout> and C<capture2_stderr>. Input is the command plus
-its arguments; output is the command's exit status from C<return>. It depends on
-C<pipe> and C<close>, and it sets the two global variables above.
+=item B<capture2> I<COMMAND> [I<ARG> [I<ARG> [...]]]
+
+Run I<COMMAND> while capturing stdout and stderr into the script-global
+variables: B<capture2_stdout> and B<capture2_stderr>.
+Return status is I<COMMAND>'s return status.
+It depends on C<pipe> and C<close>.
 
 =back
 

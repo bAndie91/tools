@@ -15,50 +15,39 @@ bash/utils-semver - compare canonical semver-like version strings
 =head1 DESCRIPTION
 
 This library helps normalize and compare version strings using sort-based,
-version-aware ordering. It strips trailing C<.0> components and compares the
-results with the shell's C<sort --version-sort>, making it useful for semantic
-and release-version comparisons.
+version-aware ordering. Useful for semantic- and release-version comparisons.
 
 =head1 FUNCTIONS
 
 =over 4
 
-=item canonize_semver($version)
+=item B<canonize_semver> $version_string
 
-Return the canonical version string by removing trailing C<.0> segments from the
-input. Input is a version string; output is the normalized version printed on
-stdout. It does not depend on or set any globals.
+Return the canonical version string by removing trailing C<.0> segments from the input.
+Input is a version string; output is the normalized version printed on stdout.
 
-=item version_compare($a, $b)
+=item B<version_compare> $ver_a $ver_b
 
-Compare two version strings and return 0 when equal, 1 when A is greater than
-B, and 255 when A is less than B. Input is two version strings; output is the
-shell return status. It canonicalizes both values and uses C<sort --version-sort>
-to determine the ordering.
+Compare two version strings and return 
+0 when equal, 
+1 when C<$ver_a> is greater than C<$ver_b>, and
+255 when C<$ver_a> is less than C<$ver_b>.
 
-=item version_is_lesser($a, $b)
+=item B<version_is_lesser> $ver_a $ver_b
 
-Return success when A is less than B according to semantic version ordering.
-Input is two version strings; output is the shell return status. It depends on
-C<version_compare> and does not set globals.
+Return success when C<$ver_a> is less than C<$ver_b> according to semantic version ordering.
 
-=item version_is_greater($a, $b)
+=item B<version_is_greater> $ver_a $ver_b
 
-Return success when A is greater than B according to semantic version ordering.
-Input is two version strings; output is the shell return status. It depends on
-C<version_compare> and does not set globals.
+Return success when C<$ver_a> is greater than C<$ver_b> according to semantic version ordering.
 
-=item version_is_greater_or_equal($a, $b)
+=item B<version_is_greater_or_equal> $ver_a $ver_b
 
-Return success when A is greater than or equal to B. Input is two version
-strings; output is the shell return status. It depends on C<version_is_lesser>
-and no globals are modified.
+Return success when C<$ver_a> is greater than or equal to C<$ver_b> according to semantic version ordering.
 
-=item version_is_lesser_or_equal($a, $b)
+=item B<version_is_lesser_or_equal> $ver_a $ver_b
 
-Return success when A is less than or equal to B. Input is two version strings;
-output is the shell return status. It depends on C<version_is_greater> and no
-globals are modified.
+Return success when C<$ver_a> is less than or equal to C<$ver_b> according to semantic version ordering.
 
 =back
 

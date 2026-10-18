@@ -30,60 +30,65 @@ eval $expr;
 die "$0: eval: $@" if $@;
 my $updated = $_;
 
+
+my ($outfh, $outname);
+
 if (!$OptInplace)
 {
     my @st = stat($fh);
-    my ($tmpfh, $tmp) = tempfile(
+    ($outfh, $outname) = tempfile(
         '.' . basename($file) . '.XXXXXX',
         DIR => dirname($file),
         UNLINK => 0,
     );
 
-    my $ok = eval {
-        chmod($st[2] & 07777, $tmp)
-            or die "$0: chmod: $tmp: $!\n";
-
-        my $offset = 0;
-        while ($offset < length($updated))
-        {
-            my $n = syswrite($tmpfh, $updated, length($updated) - $offset, $offset);
-            next if !defined($n) && $! == EINTR;
-            die "$0: write: $tmp: $!\n" unless defined($n) && $n > 0;
-            $offset += $n;
-        }
-
-        $tmpfh->sync or die "$0: $tmp: sync: $!\n";
-        close($tmpfh) or die "$0: $tmp: close: $!\n";
-        rename($tmp, $file) or die "$0: rename: $file: $!\n";
-        1;
-    };
-
-    if (!$ok)
-    {
-        my $error = $@ || "$0: $file: unknown error\n";
-        close($tmpfh);
-        unlink($tmp);
-        die $error;
-    }
+    chmod($st[2] & 07777, $outname)
+        or die "$0: chmod: $outname: $!\n";
 }
 else
 {
-    seek($fh, 0, SEEK_SET) or die "$0: seek: $file: $!\n";
+    $outfh = $fh;
+    $outname = $file;
 
-    my $ok = eval {
-        my $offset = 0;
-        while ($offset < length($updated))
-        {
-            my $n = syswrite($fh, $updated, length($updated) - $offset, $offset);
-            next if !defined($n) && $! == EINTR;
-            die "$0: write: $file: $!\n" unless defined($n) && $n > 0;
-            $offset += $n;
-        }
+    seek($outfh, 0, SEEK_SET)
+        or die "$0: seek: $file: $!\n";
+}
 
-        truncate($fh, length($updated))
+my $ok = eval {
+    my $offset = 0;
+    while ($offset < length($updated))
+    {
+        my $n = syswrite($outfh, $updated, length($updated) - $offset, $offset);
+        next if !defined($n) && $! == EINTR;
+        die "$0: write: $outname: $!\n" unless defined($n) && $n > 0;
+        $offset += $n;
+    }
+
+    if ($OptInplace)
+    {
+        truncate($outfh, length($updated))
             or die "$0: truncate: $file: $!\n";
-        1;
-    };
+    }
+    else
+    {
+        $outfh->sync or die "$0: $outname: sync: $!\n";
+        close($outfh) or die "$0: $outname: close: $!\n";
+        rename($outname, $file)
+            or die "$0: rename: $file: $!\n";
+    }
 
-    die "$0: $file: $@" unless $ok;
+    1;
+};
+
+if (!$ok)
+{
+    my $error = $@ || "$0: $file: unknown error\n";
+
+    if (!$OptInplace)
+    {
+        close($outfh);  # possibly already closed, ignore error.
+        unlink($outname);  # possibly already gone, ignore error.
+    }
+
+    die $error;
 }

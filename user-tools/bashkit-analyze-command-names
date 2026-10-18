@@ -1,0 +1,9 @@
+#!/usr/bin/env python3
+
+import sys
+from bashkit import Bash
+
+inputfile = sys.argv[1]
+script = open(inputfile).read()
+analysis = Bash().analyze(script)
+print("\n".join(c for c in sorted(analysis.command_names)))

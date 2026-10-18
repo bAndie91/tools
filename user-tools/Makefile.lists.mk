@@ -9,6 +9,7 @@ TOOLS ?= \
   awk-cut \
   base58 \
   base64url \
+  bashkit-analyze-command-names \
   bencode2json \
   body \
   callgraph.js \

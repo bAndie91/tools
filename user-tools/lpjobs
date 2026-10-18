@@ -8,15 +8,32 @@ set +e
 true <<'EOF'
 =pod
 
+=encoding UTF-8
+
 =head1 NAME
 
 lpjobs [PRINTER] - Show printer queue jobs (wrapper for lpq and lpstat) in tabular format.
+
+=head1 INSTALL
+
+In order for lpjobs(1) to acquire a printed document's filename,
+need to set read permission on CUPS print job control files.
+This can be done in an event-based manner by a system-wide incrontab(5) entry like this:
+
+ /var/spool/cups IN_CREATE,IN_MOVED_TO,recursive=false chmod g+r $@ $@/$#
+
+=head1 LIMITATIONS
+
+Print job names are read from CUPS control files (C</var/spool/cups/c*>) which,
+by factory defaults, are readable only for root. See S<INSTALL> section to make them
+readable for others (for eaxmple for the B<lp> system group).
 
 =cut
 
 EOF
 
 
+#'
 TAB=$'\t'
 
 lpq_short_list_to_td()

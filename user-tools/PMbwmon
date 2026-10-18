@@ -18,7 +18,6 @@ EOF
 
 set -e
 
-. /usr/lib/tool/bash-utils
 
 wrong_usage()
 {
@@ -38,25 +37,26 @@ prefix=${1:-kbit}
 shift
 ifaces=("$@")
 
-cd /sys/class/net
 
 
 case "${prefix:0:1}" in
-k)	qt=1024;;
-M)	qt=$[1024*1024];;
-G)	qt=$[1024*1024*1024];;
-b)	qt=1;;
-B)	qt=8;;
-*)	wrong_usage;;
+(k)	qt=1024;;
+(M)	qt=$[1024*1024];;
+(G)	qt=$[1024*1024*1024];;
+(b)	qt=1;;
+(B)	qt=8;;
+(*)	wrong_usage;;
 esac
 if [ "${#prefix}" -gt 1 ]; then
   case "${prefix:1}" in
-  Byte)	qt=$[qt*8];;
-  bit)	true;;
-  *)	wrong_usage;;
+  (Byte)	qt=$[qt*8];;
+  (bit)	true;;
+  (*)	wrong_usage;;
   esac
 fi
 
+
+cd /sys/class/net
 
 shot=0
 while true

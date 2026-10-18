@@ -25,7 +25,7 @@ install-bash-command-not-found-handle: /etc/profile.d/bash.d/command-not-found-h
 
 
 LIBPREFIX = /usr/lib/hband-tools/bash
-LIBS = utils-base utils-experimental utils-pipe utils-semver utils-template utils-try ansi-codes
+LIBS = utils-base utils-cache utils-experimental utils-pipe utils-semver utils-template utils-try ansi-codes
 INSTALL_LIBS_TARGETS = $(addprefix $(LIBPREFIX)/,$(LIBS))
 MANSECTION = 1
 MANPREFIX = /usr/share/man/man$(MANSECTION)

@@ -75,11 +75,11 @@ depcheck-all: $(DEPCHECK_TARGETS)
 
 
 DEPCHECK/chattr-cow:
-	test -r /usr/lib/tool/bash-utils
+	test -r /usr/lib/hband-tools/bash/utils-base
 DEPCHECK/chattr-nocow:
-	test -r /usr/lib/tool/bash-utils
+	test -r /usr/lib/hband-tools/bash/utils-base
 DEPCHECK/daemonctl:
-	test -r /usr/lib/tool/bash-utils
+	test -r /usr/lib/hband-tools/bash/utils-base
 DEPCHECK/dbus-call:
 	perl -MNet::DBus -e 1
 	perl -MXML::Hash::LX -e 1
@@ -87,47 +87,51 @@ DEPCHECK/dbus-call:
 DEPCHECK/ffilt:
 	perl -MIPC::Run -e 1
 DEPCHECK/killcmd:
-	test -r /usr/lib/tool/bash-utils
+	test -r /usr/lib/hband-tools/bash/utils-base
 DEPCHECK/killexe:
-	test -r /usr/lib/tool/bash-utils
+	test -r /usr/lib/hband-tools/bash/utils-base
 DEPCHECK/killp:
-	test -r /usr/lib/tool/bash-utils
+	test -r /usr/lib/hband-tools/bash/utils-base
 DEPCHECK/killpgrp:
-	test -r /usr/lib/tool/bash-utils
+	test -r /usr/lib/hband-tools/bash/utils-base
 DEPCHECK/lines:
 	perl -MARGV::readonly -e 1
 DEPCHECK/locale-validator:
-	test -r /usr/lib/tool/bash-utils
+	test -r /usr/lib/hband-tools/bash/utils-base
 DEPCHECK/lpjobs:
-	test -r /usr/lib/tool/bash-cache
+	test -r /usr/lib/hband-tools/bash/utils-cache
+	type td-select
+	type td-trans
+	type td-add-headers
+	type td-alter
+	type lpq
+	type lpstat
+	type ippdump
 DEPCHECK/ssh-agent-finder:
-	test -r /usr/lib/tool/bash-utils
+	test -r /usr/lib/hband-tools/bash/utils-pipe
 DEPCHECK/symlinks-analyze:
-	test -r /usr/lib/tool/bash-utils
-DEPCHECK/PMbwmon:
-	test -r /usr/lib/tool/bash-utils
+	test -r /usr/lib/hband-tools/bash/utils-base
 DEPCHECK/cred:
-	test -r /usr/lib/tool/bash-utils
+	test -r /usr/lib/hband-tools/bash/utils-base
 DEPCHECK/organizebydate:
-	test -r /usr/lib/tool/bash-utils
+	test -r /usr/lib/hband-tools/bash/utils-base
 DEPCHECK/palemoon-current-urls:
 	which jq
 DEPCHECK/parsel:
 	python3 -c 'import parsel; import cssselect'
 DEPCHECK/remount:
-	test -r /usr/lib/tool/bash-utils
-DEPCHECK/repeat:
-	test -r /usr/lib/tool/bash-utils
+	test -r /usr/lib/hband-tools/bash/utils-base
 DEPCHECK/rotate-counters:
-	test -r /usr/lib/tool/bash-utils
+	test -r /usr/lib/hband-tools/bash/utils-base
 DEPCHECK/screenreattach:
-	test -r /usr/lib/tool/bash-utils
+	test -r /usr/lib/hband-tools/bash/utils-base
 DEPCHECK/stdfilt:
 	perl -MList::MoreUtils -e 1
 DEPCHECK/tabularize:
 	perl -MTerm::Size -e 1
 DEPCHECK/takeown:
-	test -r /usr/lib/tool/bash-utils
+	test -r /usr/lib/hband-tools/bash/utils-base
+	test -r /usr/lib/hband-tools/bash/utils-try
 DEPCHECK/xml2json:
 	python -c 'import xmltodict'
 

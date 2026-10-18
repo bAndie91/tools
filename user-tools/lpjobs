@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -e
-. /usr/lib/tool/bash-cache
+. /usr/lib/hband-tools/bash/utils-cache
 set +e
 
 
@@ -26,7 +26,7 @@ This can be done in an event-based manner by a system-wide incrontab(5) entry li
 
 Print job names are read from CUPS control files (C</var/spool/cups/c*>) which,
 by factory defaults, are readable only for root. See S<INSTALL> section to make them
-readable for others (for eaxmple for the B<lp> system group).
+readable for others (for example for the B<lp> system group).
 
 =cut
 
@@ -98,14 +98,14 @@ ifne td-select -H Job Rank 'File(s)' |\
 			fi
 			if [ -z "${job_filename[$jobid]}" ]
 			then
-				init_cache JOBNAME_CACHE ~/.cache/lpjobs/cups-jobname
-				if ! cache_retrieve JOBNAME_CACHE "$jobid" jobname
+				bash_cache_init JOBNAME_CACHE ~/.cache/lpjobs/cups-jobname
+				if ! bash_cache_retrieve JOBNAME_CACHE "$jobid" jobname
 				then
 					jobid_pad5=`printf %05d "$jobid"`
 					jobname=`ippdump /var/spool/cups/c$jobid_pad5 | grep -m1 ^job-attributes/job-name= | cut -d= -f2-`
 					if [ -n "$jobname" ]
 					then
-						cache_set JOBNAME_CACHE "$jobid" "$jobname"
+						bash_cache_set JOBNAME_CACHE "$jobid" "$jobname"
 					fi
 				fi
 				job_filename[$jobid]=$jobname

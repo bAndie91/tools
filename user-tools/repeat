@@ -38,8 +38,8 @@ In seconds, by default.
 See sleep(1) for valid parameters, eg. "10m" for 10 minutes.
 Default is no delay.
 
-The exceptional value for B<REPEAT_DELAY> is B<enter>,
-for which repeat(1) waits until the user presses Enter on the terminal, to repeat the given command.
+B<REPEAT_DELAY> may take a not time interval value, which is B<enter>.
+When B<REPEAT_DELAY> is B<enter>, repeat(1) waits until the user presses Enter/Return on the terminal, to re-run the given I<COMMAND>.
 
 =back
 
@@ -48,7 +48,6 @@ for which repeat(1) waits until the user presses Enter on the terminal, to repea
 EOF
 
 
-. /usr/lib/tool/bash-utils
 
 if [ $# = 0 ]
 then

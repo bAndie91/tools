@@ -42,80 +42,78 @@ sed(1), ed(1), ex(1), awk(1)
 =cut
 
 
-use strict;
-use warnings;
 use Fcntl qw(:DEFAULT :flock SEEK_SET);
 use File::Basename qw(dirname basename);
 use File::Temp qw(tempfile);
 use Errno qw(EINTR);
 use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev pass_through permute/;
 
-my $OptInplace = 0;
+my $PedOptInplace = 0;
 
 GetOptions(
-        'i|inplace!' => \$OptInplace,
+        'i|inplace!' => \$PedOptInplace,
         'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
         '<>' => sub { unshift @ARGV, $_[0]; die '!FINISH'; },
 ) or pod2usage(-exitval=>2, -verbose=>99);
 
-my ($expr, $file) = @ARGV or pod2usage(-exitval=>2, -verbose=>99);
+my ($PedExpr, $PedFile) = @ARGV or pod2usage(-exitval=>2, -verbose=>99);
 
-sysopen(my $fh, $file, O_RDWR) or die "$0: $file: $!\n";
-flock($fh, LOCK_EX) or die "$0: flock: $file: $!\n";
+sysopen($PedInFH, $PedFile, O_RDWR) or die "$0: $PedFile: $!\n";
+flock($PedInFH, LOCK_EX) or die "$0: flock: $PedFile: $!\n";
 
 local $/;
-$_ = <$fh>;
-defined $_ or die "$0: read: $file: $!\n";
+$_ = <$PedInFH>;
+defined $_ or die "$0: read: $PedFile: $!\n";
 
-eval $expr;
+eval $PedExpr;
 die "$0: eval: $@" if $@;
-my $updated = $_;
+my $PedNewContent = $_;
 
 
-my ($outfh, $outname);
+my ($PedOutFH, $PedOutFilename);
 
-if (!$OptInplace)
+if (!$PedOptInplace)
 {
-    my @st = stat($fh);
-    ($outfh, $outname) = tempfile(
-        '.' . basename($file) . '.XXXXXX',
-        DIR => dirname($file),
+    my @st = stat($PedInFH);
+    ($PedOutFH, $PedOutFilename) = tempfile(
+        '.' . basename($PedFile) . '.XXXXXX',
+        DIR => dirname($PedFile),
         UNLINK => 0,
     );
 
-    chmod($st[2] & 07777, $outname)
-        or die "$0: chmod: $outname: $!\n";
+    chmod($st[2] & 07777, $PedOutFilename)
+        or die "$0: chmod: $PedOutFilename: $!\n";
 }
 else
 {
-    $outfh = $fh;
-    $outname = $file;
+    $PedOutFH = $PedInFH;
+    $PedOutFilename = $PedFile;
 
-    seek($outfh, 0, SEEK_SET)
-        or die "$0: seek: $file: $!\n";
+    seek($PedOutFH, 0, SEEK_SET)
+        or die "$0: seek: $PedFile: $!\n";
 }
 
 my $ok = eval {
     my $offset = 0;
-    while ($offset < length($updated))
+    while ($offset < length($PedNewContent))
     {
-        my $n = syswrite($outfh, $updated, length($updated) - $offset, $offset);
+        my $n = syswrite($PedOutFH, $PedNewContent, length($PedNewContent) - $offset, $offset);
         next if !defined($n) && $! == EINTR;
-        die "$0: write: $outname: $!\n" unless defined($n) && $n > 0;
+        die "$0: write: $PedOutFilename: $!\n" unless defined($n) && $n > 0;
         $offset += $n;
     }
 
-    if ($OptInplace)
+    if ($PedOptInplace)
     {
-        truncate($outfh, length($updated))
-            or die "$0: truncate: $file: $!\n";
+        truncate($PedOutFH, length($PedNewContent))
+            or die "$0: truncate: $PedFile: $!\n";
     }
     else
     {
-        $outfh->sync or die "$0: $outname: sync: $!\n";
-        close($outfh) or die "$0: $outname: close: $!\n";
-        rename($outname, $file)
-            or die "$0: rename: $file: $!\n";
+        $PedOutFH->sync or die "$0: $PedOutFilename: sync: $!\n";
+        close($PedOutFH) or die "$0: $PedOutFilename: close: $!\n";
+        rename($PedOutFilename, $PedFile)
+            or die "$0: rename: $PedFile: $!\n";
     }
 
     1;
@@ -123,12 +121,12 @@ my $ok = eval {
 
 if (!$ok)
 {
-    my $error = $@ || "$0: $file: unknown error\n";
+    my $error = $@ || "$0: $PedFile: unknown error\n";
 
-    if (!$OptInplace)
+    if (!$PedOptInplace)
     {
-        close($outfh);  # possibly already closed, ignore error.
-        unlink($outname);  # possibly already gone, ignore error.
+        close($PedOutFH);  # possibly already closed, ignore error.
+        unlink($PedOutFilename);  # possibly already gone, ignore error.
     }
 
     die $error;

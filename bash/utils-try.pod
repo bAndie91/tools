@@ -16,8 +16,8 @@ bash/utils-try - try/except style shell error handling
 
 =head1 DESCRIPTION
 
-This library provides a small stack-based emulation of a try/except block in
-bash. It saves the current error-trap and errexit/errtrace settings before
+This library provides a small stack-based emulation of a try/except block in bash.
+It saves the current error-trap and errexit/errtrace settings before
 turning them on for the guarded code, then restores the previous state with
 C<untry> when the block is complete.
 
@@ -25,25 +25,23 @@ C<untry> when the block is complete.
 
 =over 4
 
-=item bash_trapbody($signal)
+=item B<bash_trapbody> $signal
 
-Return the current trap body for the named signal, or a single hyphen when no
-trap is set. Input is the signal name; output is printed to stdout. It depends
-on C<trap -p> and does not set global state.
+Return the current trap body for the named signal,
+or a single hyphen when no trap is set.
+Input is the signal name; output is printed to stdout.
 
-=item try([--except COMMAND])
+=item B<try> [--except I<COMMAND>]
 
-Begin a try region by saving the current shell settings and ERR trap state in a
-stack named C<TRYSTACK>. Input is an optional C<--except> flag and a command to
-use as the ERR trap handler; output is none. The function enables C<set -o
-errexit> and C<set -o errtrace> for the duration of the try block and sets the
-C<TRYSTACK> global.
+Begin a try region by saving the current shell B<errexit> and B<errtrace> settings and B<ERR> trap
+in a global scalar variable called C<TRYSTACK>.
+The B<--except> option sets I<COMMAND> as the B<ERR> trap handler
 
-=item untry()
+=item B<untry>
 
-Restore the shell state saved by the most recent C<try> call and clear the last
-entry from C<TRYSTACK>. Input is none; output is the shell return status (0 on
-success). It restores the previous C<errexit>, C<errtrace>, and ERR trap values.
+Restore the shell state saved by the most recent B<try> call
+and pop C<TRYSTACK>.
+It restores the previous C<errexit>, C<errtrace>, and B<ERR> trap values.
 
 =back
 

@@ -10,29 +10,22 @@ bash/utils-template - template substitution for shell values
 
   source bash/utils-template
 
-  template input.txt > output.txt
+  template input.tmpl > output.txt
 
 =head1 DESCRIPTION
 
 This library reads text from files or stdin and replaces template tokens in the
-form C<%NAME%> with the value of the shell variable named by C<NAME>. It uses
-C<grep> and C<sed> to expand all matches in each line without needing to run a
-separate command per placeholder.
+form C<%NAME%> with the value of the shell variable named by C<NAME>.
 
 =head1 FUNCTIONS
 
 =over 4
 
-=item template(FILE...)
+=item B<template> [I<PATH> [I<PATH> [...]]]
 
-Read each input file (or stdin if no files are given) and expand C<%VAR%>
-placeholders using the current shell variable values. Input is file arguments or
-stdin; output is substituted text written to stdout. The function depends on the
-presence of variables referenced in the template and does not set any globals.
-
-The implementation escapes backslashes and ampersands before generating the sed
-replacement script so that template values containing shell metacharacters do not
-break the substitutions.
+Read each input file I<PATH> (or stdin if no files are given) and expand C<%VAR%>
+placeholders using the current shell variable values.
+Output the substituted text to stdout.
 
 =back
 

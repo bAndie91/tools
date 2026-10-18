@@ -1,5 +1,47 @@
 #!/usr/bin/perl
 
+=pod
+
+=head1 NAME
+
+ped - programmatic file editor in perl
+
+=head1 SYNOPSIS
+
+ped [I<OPTIONS>] I<EXPRESSION> I<FILE>
+
+=head1 DESCRIPTION
+
+Edit I<FILE> by evaluating I<EXPRESSION> on the file contents.
+The whole file's content is available in the C<$_> variable,
+and, after I<EXPRESSION> is evaluated, C<$_> is written back to the file.
+
+=head1 OPTIONS
+
+=over 4
+
+=item -i, --inplace
+
+Write I<FILE> in place.
+It's not always safe - see S<CAVEATS> below.
+By default, the file is replaced by an atomic (rename) operation,
+keeping the permission (file mode) of the original file,
+but not owner/group, SELinux context, ACLs, or other extended attributes.
+
+=back
+
+=head1 CAVEATS
+
+In in-place mode, the atomic file-write is not guaranteed:
+the resulted file may be cut in half if the ped(1) dies midway.
+
+=head1 SEE ALSO
+
+sed(1), ed(1), ex(1), awk(1)
+
+=cut
+
+
 use strict;
 use warnings;
 use Fcntl qw(:DEFAULT :flock SEEK_SET);
@@ -22,10 +64,9 @@ sysopen(my $fh, $file, O_RDWR) or die "$0: $file: $!\n";
 flock($fh, LOCK_EX) or die "$0: flock: $file: $!\n";
 
 local $/;
-my $original = <$fh>;
-defined $original or die "$0: read: $file: $!\n";
+$_ = <$fh>;
+defined $_ or die "$0: read: $file: $!\n";
 
-$_ = $original;
 eval $expr;
 die "$0: eval: $@" if $@;
 my $updated = $_;

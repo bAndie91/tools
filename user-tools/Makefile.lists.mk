@@ -147,6 +147,7 @@ TOOLS ?= \
   pathmod \
   paths2indent \
   pcut \
+  ped \
   perlprintf \
   perl-repl \
   pfx2pem \

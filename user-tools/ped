@@ -1,0 +1,89 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use Fcntl qw(:DEFAULT :flock SEEK_SET);
+use File::Basename qw(dirname basename);
+use File::Temp qw(tempfile);
+use Errno qw(EINTR);
+use Getopt::Long qw/:config no_ignore_case no_bundling no_getopt_compat no_auto_abbrev pass_through permute/;
+
+my $OptInplace = 0;
+
+GetOptions(
+        'i|inplace!' => \$OptInplace,
+        'help' => sub { pod2usage(-exitval=>0, -verbose=>99); },
+        '<>' => sub { unshift @ARGV, $_[0]; die '!FINISH'; },
+) or pod2usage(-exitval=>2, -verbose=>99);
+
+my ($expr, $file) = @ARGV or pod2usage(-exitval=>2, -verbose=>99);
+
+sysopen(my $fh, $file, O_RDWR) or die "$0: $file: $!\n";
+flock($fh, LOCK_EX) or die "$0: flock: $file: $!\n";
+
+local $/;
+my $original = <$fh>;
+defined $original or die "$0: read: $file: $!\n";
+
+$_ = $original;
+eval $expr;
+die "$0: eval: $@" if $@;
+my $updated = $_;
+
+if (!$OptInplace)
+{
+    my @st = stat($fh);
+    my ($tmpfh, $tmp) = tempfile(
+        '.' . basename($file) . '.XXXXXX',
+        DIR => dirname($file),
+        UNLINK => 0,
+    );
+
+    my $ok = eval {
+        chmod($st[2] & 07777, $tmp)
+            or die "$0: chmod: $tmp: $!\n";
+
+        my $offset = 0;
+        while ($offset < length($updated))
+        {
+            my $n = syswrite($tmpfh, $updated, length($updated) - $offset, $offset);
+            next if !defined($n) && $! == EINTR;
+            die "$0: write: $tmp: $!\n" unless defined($n) && $n > 0;
+            $offset += $n;
+        }
+
+        $tmpfh->sync or die "$0: $tmp: sync: $!\n";
+        close($tmpfh) or die "$0: $tmp: close: $!\n";
+        rename($tmp, $file) or die "$0: rename: $file: $!\n";
+        1;
+    };
+
+    if (!$ok)
+    {
+        my $error = $@ || "$0: $file: unknown error\n";
+        close($tmpfh);
+        unlink($tmp);
+        die $error;
+    }
+}
+else
+{
+    seek($fh, 0, SEEK_SET) or die "$0: seek: $file: $!\n";
+
+    my $ok = eval {
+        my $offset = 0;
+        while ($offset < length($updated))
+        {
+            my $n = syswrite($fh, $updated, length($updated) - $offset, $offset);
+            next if !defined($n) && $! == EINTR;
+            die "$0: write: $file: $!\n" unless defined($n) && $n > 0;
+            $offset += $n;
+        }
+
+        truncate($fh, length($updated))
+            or die "$0: truncate: $file: $!\n";
+        1;
+    };
+
+    die "$0: $file: $@" unless $ok;
+}

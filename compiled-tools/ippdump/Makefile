@@ -1,14 +1,14 @@
 
 PREFIX = /usr/local
+INSTALL_WRAPPER =
 
 .PHONY: default
 default:
-	$(error try `make install INSTALL_WRAPPER=sudo´)
+	$(error try `make ippdump´ and `make install INSTALL_WRAPPER=sudo´)
 
 ippdump: ippdump.go
-	go mod init ippdump
-	go get github.com/OpenPrinting/goipp
-	go build -o $@ $<
+	go get
+	go build -mod=readonly -o $@ $<
 
 .PHONY: install
 install: $(PREFIX)/bin/ippdump

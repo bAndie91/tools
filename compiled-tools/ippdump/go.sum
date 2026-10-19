@@ -1,0 +1,4 @@
+github.com/OpenPrinting/goipp v1.2.0 h1:qeB3GyhhB7NM16quwyl51CsTEHFb9chZXAprt+00NKo=
+github.com/OpenPrinting/goipp v1.2.0/go.mod h1:ot2iw+QF7fVLaX+55JUNlF5YSDNiXVo2LRAv21iGcQI=
+github.com/spf13/pflag v1.0.10 h1:4EBh2KAYBwaONj6b2Ye1GiHfwjqyROoF4RwYO+vPwFk=
+github.com/spf13/pflag v1.0.10/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=

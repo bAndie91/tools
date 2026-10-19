@@ -1596,13 +1596,20 @@ class KeyOrderedDict(OrderedDict):
 		super(KeyOrderedDict, self).__init__(pairs)
 
 def on_table_row_activated(treeview, c_treepath, tv_col):
-	if cliargs.activate_command is not None:
-		command_template = cliargs.activate_command
+	if cliargs.activate_command is not None or cliargs.activate_script is not None:
 		macros = {
 			'row': treeview.get_model()[c_treepath].as_dict(map_obj_attr_cb('raw')),
 		}
+		if cliargs.activate_command is not None:
+			command_template = cliargs.activate_command
+		elif cliargs.activate_script is not None:
+			command_template = cliargs.activate_script
 		command = Template(command_template).render(**macros)
-		run_system_command_async(split_command_args(command), gen_focus_data(treeview, c_treepath, tv_col))
+		if cliargs.activate_command is not None:
+			os_command = split_command_args(command)
+		elif cliargs.activate_script is not None:
+			os_command = [os.environ.get('SHELL', '/bin/sh'), '-c', command]
+		run_system_command_async(os_command, gen_focus_data(treeview, c_treepath, tv_col))
 
 def prepare_json_dump(obj):
 	if hasattr(obj, 'as_dict'):
@@ -1702,9 +1709,11 @@ def parse_cli_args():
 	key_group.add_argument('--key-field', type=str, default=None, metavar='COLUMN')
 	key_group.add_argument('--auto-key-field', action='store_true', default=False, help='Default key field is the first column in the input data.')
 	parser.add_argument('--filter', action='append', default=[], type=str, metavar='FIELD:PATTERN', help='Filter FIELD with PATTERN')
-	parser.add_argument('--activate-command', type=str, metavar='COMMAND', help='System command to run when double clicked on a row.')
+	activate_group = parser.add_mutually_exclusive_group()
+	activate_group.add_argument('--activate-command', type=str, metavar='COMMAND', help='System command to run when double clicked on a row.')
+	activate_group.add_argument('--activate-script', type=str, metavar='SCRIPT', help='Shell command(s) to run when double clicked on a row.')
 	parser.add_argument('--context-menu', action='append', default=[], type=str, metavar='ICON:LABEL:MENUITEM-OPTIONS:COMMAND', help='Menu item definitions for rows context menu.')
-	parser.add_argument('--auto-refresh-interval', type=float, metavar='SEC')
+	parser.add_argument('--auto-refresh-interval', type=float, metavar='SEC')  # TODO
 	parser.add_argument('--inotify-refresh', type=str, metavar='FILE', help='')  # TODO
 	parser.epilog = '''
 ICON is one of these:

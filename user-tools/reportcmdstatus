@@ -49,10 +49,19 @@ sub child_process_forked
 	}
 }
 
-$ipc = start [@ARGV], init=>\&child_process_forked;
-$COMMAND_PID = $ipc->{KIDS}->[0]->{PID};
-finish $ipc;
-$status = $?;
+eval { $ipc = start [@ARGV], init=>\&child_process_forked; 1; };
+if(not $@)
+{
+	$COMMAND_PID = $ipc->{KIDS}->[0]->{PID};
+	finish $ipc;
+	$status = $?;
+}
+else
+{
+	warn $@;
+	$COMMAND_PID = -1;
+	$status = 127 << 8;
+}
 
 if(WIFSIGNALED($status))
 {

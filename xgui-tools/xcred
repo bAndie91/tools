@@ -72,7 +72,7 @@ sub extract_url
 	# put other web browsers here
 	else
 	{
-		push @gmenu_items, GmenuHeader("unknown foreground application: ".esc($win->{class}), 'dialog-question');
+		push @gmenu_items, GmenuHeader("unsupported foreground application: ".esc($win->{class}), 'dialog-question');
 	}
 	return $url;
 }

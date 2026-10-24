@@ -1503,6 +1503,11 @@ def populate_row_context_menu(menu, items, macros):
 		try:
 			icon, label_template, menuitem_options, command_template = [field.replace('\\:', ':') for field in re.split(r'(?<!\\):', definition, maxsplit=3)]
 			menuitem_options = parse_options_string(menuitem_options)
+			unknown_options = set(menuitem_options) - set(['activation','columns','column-regex','per-each-selected-row','separator'])
+			if unknown_options:
+				raise ValueError("unknown option(s) in context menu definition."+"\n"+
+					"\tdefinition: "+definition+"\n"+
+					"\toption(s): "+", ".join(unknown_options))
 			if menuitem_options.get('activation'):
 				if cliargs.activate_command is not None:
 					command_template = cliargs.activate_command
@@ -2202,6 +2207,8 @@ class GTabData(object):
 validate_context_menu(cliargs.context_menu)
 if cliargs.activate_command is not None:
 	validate_activate_command(cliargs.activate_command)
+if cliargs.activate_script is not None:
+	validate_activate_command(cliargs.activate_script)
 
 main_app = GTabData()
 main_app.main_win.title = Template(cliargs.title).render({'env': os.environ})

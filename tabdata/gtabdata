@@ -41,12 +41,14 @@ def add_key_binding(widget, keyname, callback):
 def parse_options_string(s):
 	ret = {}
 	for opt in s.split(';'):
+		k = None
 		if '=' in opt:
 			k, v = opt.split('=', 1)
-		else:
+		elif opt != '':
 			k = opt
 			v = True
-		ret[k] = v
+		if k is not None:
+			ret[k] = v
 	return ret
 
 def successor_iter(model, predecessor):

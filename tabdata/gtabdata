@@ -1486,12 +1486,35 @@ def context_menu_option_column_match(colname, exact_column_names=None, column_na
 		return True
 	return False
 
+def render_system_command(command_template, macros, shell=False):
+	if command_template is None or command_template == '':
+		return None
+	command = Template(command_template).render(**macros)
+	if command == '':
+		return None
+	if shell:
+		return [os.environ.get('SHELL', '/bin/sh'), '-c', command]
+	return split_command_args(command)
+
+
 def populate_row_context_menu(menu, items, macros):
 	hierarchy = MenuHierarchy(separator='//')
 	for definition in items:
 		try:
 			icon, label_template, menuitem_options, command_template = [field.replace('\\:', ':') for field in re.split(r'(?<!\\):', definition, maxsplit=3)]
 			menuitem_options = parse_options_string(menuitem_options)
+			if menuitem_options.get('activation'):
+				if cliargs.activate_command is not None:
+					command_template = cliargs.activate_command
+					shell = False
+				elif cliargs.activate_script is not None:
+					command_template = cliargs.activate_script
+					shell = True
+				else:
+					command_template = ''
+					shell = False
+			else:
+				shell = False
 			menuitem_label = Template(label_template).render(**macros)
 			if menuitem_label != '' and context_menu_option_column_match(macros['column'], exact_column_names=menuitem_options.get('columns'), column_name_regex=menuitem_options.get('column-regex')):
 				enabled = True
@@ -1508,13 +1531,14 @@ def populate_row_context_menu(menu, items, macros):
 				commands = []
 				if menuitem_options.get('per-each-selected-row'):
 					for row in macros['selected_rows']:
-						command = Template(command_template).render(row=row, n_selected=macros['n_selected'], column=macros['column'])
-						if command != '':
-							commands.append(split_command_args(command))
+						row_macros = {'row': row, 'n_selected': macros['n_selected'], 'column': macros['column']}
+						command = render_system_command(command_template, row_macros, shell=shell)
+						if command is not None:
+							commands.append(command)
 				else:
-					command = Template(command_template).render(**macros)
-					if command != '':
-						commands.append(split_command_args(command))
+					command = render_system_command(command_template, macros, shell=shell)
+					if command is not None:
+						commands.append(command)
 				mi.set_data('commands', commands)
 				mi.connect('activate', on_context_menu_item_activate, menu)
 		except Exception as exc:
@@ -1601,14 +1625,9 @@ def on_table_row_activated(treeview, c_treepath, tv_col):
 			'row': treeview.get_model()[c_treepath].as_dict(map_obj_attr_cb('raw')),
 		}
 		if cliargs.activate_command is not None:
-			command_template = cliargs.activate_command
+			os_command = render_system_command(cliargs.activate_command, macros, shell=False)
 		elif cliargs.activate_script is not None:
-			command_template = cliargs.activate_script
-		command = Template(command_template).render(**macros)
-		if cliargs.activate_command is not None:
-			os_command = split_command_args(command)
-		elif cliargs.activate_script is not None:
-			os_command = [os.environ.get('SHELL', '/bin/sh'), '-c', command]
+			os_command = render_system_command(cliargs.activate_script, macros, shell=True)
 		run_system_command_async(os_command, gen_focus_data(treeview, c_treepath, tv_col))
 
 def prepare_json_dump(obj):
@@ -1733,9 +1752,10 @@ LABEL is a jinja2 template rendered to the menu item label, supporting these var
 	Parent menus are implicit, but if want to define icon for one, end its LABEL with "//" (double slash).
 MENUITEM-OPTIONS
 	Semicolon-delimited list of zero or more options:
-	- per-each-selected-row: run the COMMAND separately on each row. Default is to run COMMAND once (and pass 'selected_rows' in JSON on its STDIN)
+	- activation: the menu item triggers the same action as --activate-command/--activate-script. Takes no COMMAND parameter.
 	- columns=COL1,COL2,...: comma-delimited list of column names of which cells the given menu item is to be shown on.
 	- column-regex=PATTERN: the given menu item is to be shown if the column name the context menu is triggered on matches to the (case-sensitive, unanchored) regexp pattern.
+	- per-each-selected-row: run the COMMAND separately on each row. Default is to run COMMAND once (and pass 'selected_rows' in JSON on its STDIN)
 	- separator: this option makes the menu item a separator. Note, it still needs a non-empty LABEL to be shown and other fields (eg: `--context-menu=:sep:separator:`)
 COMMAND
 	The COMMAND option parameter is a jinja2 template, after rendered, split by whitespaces into command and arguments, no quoting or escaping is supported.

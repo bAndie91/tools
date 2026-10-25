@@ -1734,6 +1734,7 @@ def parse_cli_args():
 	key_group = parser.add_mutually_exclusive_group()
 	key_group.add_argument('--key-field', type=str, default=None, metavar='COLUMN')
 	key_group.add_argument('--auto-key-field', action='store_true', default=False, help='Default key field is the first column in the input data.')
+	parser.add_argument('--treepath-field', type=str, default=None, metavar='COLUMN', help='If treepath field is specified, a tree struture is rendered according to this field\'s values representing the row\'s position on the tree by comma-delimited tree path.')
 	parser.add_argument('--filter', action='append', default=[], type=str, metavar='FIELD:PATTERN', help='Filter FIELD with PATTERN')
 	activate_group = parser.add_mutually_exclusive_group()
 	activate_group.add_argument('--activate-command', type=str, metavar='COMMAND', help='System command to run when double clicked on a row.')
@@ -1893,6 +1894,14 @@ class GTabData(object):
 	def table_is_loading(self):
 		return self._load_table_thread_name in [thr.name for thr in threading.enumerate()]
 	
+	def tabdata_tree_generator(self, tabdata_generator, treepath_field=None):
+		for row in tabdata_generator:
+			yield (None, row)
+
+	def tabdata_generator_from_filehandle(self, fh, n_fields=0):
+		for line in iter(fh.readline, ''):
+			yield tabdata_decode_record(line.rstrip('\n'), n_fields=n_fields)
+	
 	def load_table(self):
 		if cliargs.db_query:
 			import sqlalchemy
@@ -1903,8 +1912,7 @@ class GTabData(object):
 
 			columns = [(col, unicode) for col in db_result.keys()]
 			self.load_columns(columns)
-			data_generator = ((None, row) for row in db_result)
-			self.load_data(data_generator)
+			self.load_data(self.tabdata_tree_generator(db_result, treepath_field=cliargs.treepath_field))
 		
 		elif cliargs.data_command or cliargs.data_script:
 			if cliargs.data_command:
@@ -1934,8 +1942,10 @@ class GTabData(object):
 					td_header = tabdata_decode_record(header_line)
 					self.load_columns(td_header)
 					n_fields = len(td_header)
-					data_generator = ((None, tabdata_decode_record(line.rstrip('\n'), n_fields=n_fields)) for line in iter(proc.stdout.readline, ''))
-					self.load_data(data_generator)
+					print(repr(n_fields))
+					self.load_data(self.tabdata_tree_generator(
+						self.tabdata_generator_from_filehandle(proc.stdout, n_fields=n_fields),
+						treepath_field=cliargs.treepath_field))
 				proc.stdout.close()
 				try:
 					wait_subprocess(proc)
@@ -1949,8 +1959,9 @@ class GTabData(object):
 			td_header = tabdata_decode_record(header_line)
 			self.load_columns(td_header)
 			n_fields = len(td_header)
-			data_generator = ((None, tabdata_decode_record(line.rstrip('\n'), n_fields=n_fields)) for line in iter(sys.stdin.readline, ''))
-			self.load_data(data_generator)
+			self.load_data(self.tabdata_tree_generator(
+				self.tabdata_generator_from_filehandle(sys.stdin, n_fields=n_fields),
+				treepath_field=cliargs.treepath_field))
 
 		self.after_load_table()
 	

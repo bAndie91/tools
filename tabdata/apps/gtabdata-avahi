@@ -1,4 +1,4 @@
 #!/bin/sh
 
 exec gtabdata --appinstance avahi-browse --title avahi-browse \
-	--data-script 'avahi-browse -alprt | sd ";" "\t" | td-add-headers STAGE IFACE AF SVC SRV DOMAIN HOST IP PORT DETAILS'
+	--data-script 'avahi-browse -alprt | sd ";" "\t" | td-add-headers STAGE IFACE AF SVC SRV DOMAIN HOST IP PORT DETAILS | td-alter SVC="s/\\\\(\\d\\d\\d)/chr \$1/ger"'

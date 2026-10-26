@@ -92,7 +92,7 @@ do
 			
 			#git log --pretty=email --patch-with-stat --reverse --full-index --binary -m --first-parent \
 			#git fast-export --reference-excluded-parents \
-			git log --pretty=raw --patch-with-stat --reverse --full-index --binary -m --first-parent \
+			git log --no-textconv --pretty=raw --patch-with-stat --reverse --full-index --binary -m --first-parent \
 				"$GIT_PATCHSET_REFRANGE" |\
 			git-patchset-push-"$receptor" "$receptor_params" >&2
 			echo "ok $dst"

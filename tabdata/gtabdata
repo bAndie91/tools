@@ -85,6 +85,7 @@ class TreeModelRow(object):
 	def model(self):
 		return self.real_treemodelrow.model
 	def update(self, row_data):
+		#TODO treepath
 		"row_data can be a dict with column names as keys, or just a list of the new cells."
 		for col_ref, col_data in (row_data if isinstance(row_data, dict) else enumerate(row_data)):
 			self[col_ref] = col_data
@@ -259,6 +260,55 @@ class NamedColumnsTreeStore(gtk.TreeStore):
 			yield answer
 			treeiter = successor_iter(self, row.iter)
 
+class NamedColumnsOrganizedTreeStore(NamedColumnsTreeStore):
+	"""Feed it add_row(row, treepath) in any order; it keeps the gtk.TreeStore
+	structure in sync with the logical paths.
+
+	- treepath.path is None -> plain root-level row, not addressable as a parent.
+	- A row whose parent has not arrived yet sits at root level (with all of its
+	  own descendants) until the parent shows up, then the whole subtree moves.
+	"""
+
+	def __init__(self, *pargs, **kwargs):
+		super(NamedColumnsOrganizedTreeStore, self).__init__(*pargs, **kwargs)
+		self._rowrefs = {}    # path -> TreeRowReference of the row's current place
+		self._children = {}   # path -> [child paths]; may include children whose parent hasn't arrived yet
+
+	def add_row(self, row, treepath):
+		print(self)
+		path = treepath.path
+		if path is None:
+			return self.append(None, row)
+
+		parent_path = treepath.parent.path
+		self._children.setdefault(parent_path, []).append(path)
+
+		# parent_iter is None if the parent is missing; the row waits at root level
+		treeiter = self.append(self.get_iter_by_orgpath(parent_path), row)
+		self._rowrefs[path] = gtk.TreeRowReference(self, self.get_path(treeiter))
+
+		# rows already listed as our children are orphans waiting at root level
+		for child in self._children.get(path, []):
+			self._move_subtree(child, treeiter)
+
+		return treeiter
+
+	def get_iter_by_orgpath(self, path):
+		rowref = self._rowrefs.get(path)
+		if rowref is None:
+			return None
+		return self.get_iter(rowref.get_path())
+
+	def _move_subtree(self, path, parent_iter):
+		old_iter = self.get_iter_by_orgpath(path)
+		values = self.get(old_iter, *range(self.get_n_columns()))
+		new_iter = self.append(parent_iter, values)
+		self._rowrefs[path] = gtk.TreeRowReference(self, self.get_path(new_iter))
+		for child in self._children.get(path, []):
+			self._move_subtree(child, new_iter)
+		self.remove(old_iter)
+
+
 def floatOrNone(s):
 	try:
 		return float(s)
@@ -342,7 +392,7 @@ class TreeModelFilterSortIndex(TreeModelSortIndexed):
 		self.set_sort_column_id(col_num, sort_order)
 	# proxy methods:
 	def __getattribute__(self, attrname):
-		if attrname in ['get_column_num', 'get_column_name', 'get_columns', 'append', 'clear']:
+		if attrname in ['get_column_num', 'get_column_name', 'get_columns', 'append', 'add_row', 'clear']:
 			return object.__getattribute__(self.base_model, attrname)
 		elif attrname in ['set_visible_func', 'refilter']:
 			return object.__getattribute__(self.filtering_model, attrname)
@@ -1637,6 +1687,12 @@ def on_table_row_activated(treeview, c_treepath, tv_col):
 			os_command = render_system_command(cliargs.activate_script, macros, shell=True)
 		run_system_command_async(os_command, gen_focus_data(treeview, c_treepath, tv_col))
 
+def get_list_index_or_none(lst, val):
+	try:
+		return lst.index(val)
+	except ValueError:
+		return None
+
 def prepare_json_dump(obj):
 	if hasattr(obj, 'as_dict'):
 		return obj.as_dict(map_obj_attr_cb('lax'))
@@ -1735,6 +1791,7 @@ def parse_cli_args():
 	key_group.add_argument('--key-field', type=str, default=None, metavar='COLUMN')
 	key_group.add_argument('--auto-key-field', action='store_true', default=False, help='Default key field is the first column in the input data.')
 	parser.add_argument('--treepath-field', type=str, default=None, metavar='COLUMN', help='If treepath field is specified, a tree struture is rendered according to this field\'s values representing the row\'s position on the tree by comma-delimited tree path.')
+	parser.add_argument('--treepath-separator', type=str, default=',', metavar='STR')
 	parser.add_argument('--filter', action='append', default=[], type=str, metavar='FIELD:PATTERN', help='Filter FIELD with PATTERN')
 	activate_group = parser.add_mutually_exclusive_group()
 	activate_group.add_argument('--activate-command', type=str, metavar='COMMAND', help='System command to run when double clicked on a row.')
@@ -1851,6 +1908,22 @@ def validate_activate_command(command):
 		raise
 
 
+class TreePath(object):
+	def __init__(self, path, sep=','):
+		if isinstance(path, basestring):
+			path = path.split(sep)
+		assert path is None or hasattr(path, '__iter__')
+		if path is not None:
+			path = tuple(path)
+		self.path = path
+	@property
+	def parent(self):
+		if self.path is None or len(self.path) <= 1:
+			return TreePath(None)
+		return TreePath(self.path[:-1])
+	def __repr__(self):
+		return '<%s %s>' % (self.__class__.__name__, repr(self.path))
+
 class GTabData(object):
 	def __init__(self):
 		self.tabdata_key_field = None
@@ -1894,9 +1967,12 @@ class GTabData(object):
 	def table_is_loading(self):
 		return self._load_table_thread_name in [thr.name for thr in threading.enumerate()]
 	
-	def tabdata_tree_generator(self, tabdata_generator, treepath_field=None):
+	def tabdata_tree_generator(self, tabdata_generator, treepath_field_idx=None):
+		treepath = None
 		for row in tabdata_generator:
-			yield (None, row)
+			if treepath_field_idx is not None:
+				treepath = row[treepath_field_idx]
+			yield (row, TreePath(treepath, sep=cliargs.treepath_separator))
 
 	def tabdata_generator_from_filehandle(self, fh, n_fields=0):
 		for line in iter(fh.readline, ''):
@@ -1912,7 +1988,7 @@ class GTabData(object):
 
 			columns = [(col, unicode) for col in db_result.keys()]
 			self.load_columns(columns)
-			self.load_data(self.tabdata_tree_generator(db_result, treepath_field=cliargs.treepath_field))
+			self.load_data(self.tabdata_tree_generator(db_result, treepath_field_idx=get_list_index_or_none(db_result.keys(), cliargs.treepath_field)))
 		
 		elif cliargs.data_command or cliargs.data_script:
 			if cliargs.data_command:
@@ -1942,10 +2018,9 @@ class GTabData(object):
 					td_header = tabdata_decode_record(header_line)
 					self.load_columns(td_header)
 					n_fields = len(td_header)
-					print(repr(n_fields))
 					self.load_data(self.tabdata_tree_generator(
 						self.tabdata_generator_from_filehandle(proc.stdout, n_fields=n_fields),
-						treepath_field=cliargs.treepath_field))
+						treepath_field_idx=get_list_index_or_none(td_header, cliargs.treepath_field)))
 				proc.stdout.close()
 				try:
 					wait_subprocess(proc)
@@ -1961,7 +2036,7 @@ class GTabData(object):
 			n_fields = len(td_header)
 			self.load_data(self.tabdata_tree_generator(
 				self.tabdata_generator_from_filehandle(sys.stdin, n_fields=n_fields),
-				treepath_field=cliargs.treepath_field))
+				treepath_field_idx=get_list_index_or_none(td_header, cliargs.treepath_field)))
 
 		self.after_load_table()
 	
@@ -1976,7 +2051,7 @@ class GTabData(object):
 			self.tabdata_key_field = None
 			with GtkThreadContext():
 				with self.proppersist_table.Deactivated:
-					self.main_table.set_model(NamedColumnsTreeStore(*treemodel_columns))
+					self.main_table.set_model(NamedColumnsOrganizedTreeStore(*treemodel_columns))
 					self.main_table.set_columns([(col_name, col_name, 'text', idx) for idx, col_name in enumerate(columns)])
 		
 		if cliargs.auto_key_field and self.tabdata_key_field is None:
@@ -2036,7 +2111,7 @@ class GTabData(object):
 					del self.main_table.get_model()[rowref.get_path()]
 
 	def load_data_row(self, loop_var, context_handlers, cb_data):
-		treepath, row_cells = loop_var
+		row_cells, treepath = loop_var
 		record_key = None
 		existing_record = None
 		if self.tabdata_key_field is not None:
@@ -2044,13 +2119,14 @@ class GTabData(object):
 			record_key = row_cells[col_idx]
 			existing_record = cb_data['model'].get_row_by_key(self.tabdata_key_field, record_key)
 		if existing_record is None:
-			cb_data['model'].append(treepath, row_cells)
+			cb_data['model'].add_row(row_cells, treepath=treepath)
 		else:
-			existing_record.update(row_cells)
+			existing_record.update(row_cells, treepath=treepath)  # TODO treepath
 		if self.tabdata_key_field is not None:
 			cb_data['existing_records_keys'].append(record_key)
 
 	def after_load_table(self):
+		self.main_table.expand_all()
 		with self.proppersist_table.Deactivated, GtkThreadContext():
 			self.proppersist_table.apply_saved_properties()
 			# auto size newly learned columns

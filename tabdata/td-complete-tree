@@ -1,0 +1,76 @@
+#!/usr/bin/env perl
+
+=pod
+
+=head1 NAME
+
+td-complete-tree - Add a new column to tabular data containing tree paths
+
+=head1 OPTIONS
+
+=over 4
+
+=item --new-column, -n I<COLUMN>
+
+Add new column with this name containing all paths,
+including parent paths which are missing from the input.
+Default is B<PATH>.
+
+=item --path-column, -p I<COLUMN>
+
+Name of the column containing incomplete paths.
+Only the path's leaf elements is left in this column.
+
+=item --path-separator, -s I<STRING>
+
+Path elements are separated by I<STRING> in the full path.
+Default is C</> slash.
+
+=back
+
+=cut
+
+$OptNewColumn = 'PATH';
+$OptIncompleteColumn = undef;
+$OptPathSep = '/';
+%TabdataOptionDefs = (
+	'n|new-column=s' => \$OptNewColumn,
+	'p|path-column=s' => \$OptIncompleteColumn,
+	's|path-separator=s' => \$OptPathSep,
+);
+
+no if ($] >= 5.018), 'warnings' => 'experimental::smartmatch';
+do '/usr/lib/tool/perl5/tabdata/common.pl' or die "$@";
+
+die "$0: missing --path-column option\n" if not defined $OptIncompleteColumn;
+
+
+%Parent = ();
+
+process_header(scalar <STDIN>);
+output_record($OptNewColumn, @Header);
+
+while(not eof STDIN)
+{
+	my @row = read_record(\*STDIN);
+	my $path = $row[$Header{$OptIncompleteColumn}];
+	$Parent{$path} = 1;
+	
+	my @path = split /\Q$OptPathSep\E/, $path;
+	my @parent = @path[0..$#path-1];
+	my $parent = join $OptPathSep, @parent;
+	$Parent{$parent} = 0 if $parent ne '' and not exists $Parent{$parent};
+	
+	my $leaf = $path[$#path];
+	$row[$Header{$OptIncompleteColumn}] = $leaf;
+	output_record($path, @row);
+}
+
+for my $missing_parent (grep {!$Parent{$_}} keys %Parent)
+{
+	my @path = split /\Q$OptPathSep\E/, $missing_parent;
+	my $leaf = $path[$#path];
+	my @row = map { undef } @Header;
+	$row[$Header{$OptIncompleteColumn}] = $leaf;
+	output_record($missing_parent, @row);
+}

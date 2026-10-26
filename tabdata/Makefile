@@ -18,6 +18,7 @@ TOOLS = \
   td-add-headers \
   td-alter \
   td-collapse \
+  td-complete-tree \
   td-disamb-headers \
   td-env \
   td-expand \

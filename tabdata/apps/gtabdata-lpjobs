@@ -3,6 +3,6 @@
 exec gtabdata --appinstance lpjobs --title lpjobs --icon printer --data-command lpjobs \
 	--activate-script 'gtabdata --appinstance ippdump --title "print job {{row.JOB}} details" --icon document-print-preview --data-script "ippdump --keypath-delim=/ /var/spool/cups/c{{ "%05d" | format(row.JOB | int) }} | td-add-headers -X KEY VALUE | td-complete-tree -p KEY -n PATH -s /" --treepath-field=PATH --treepath-separator=/' \
 	--context-menu 'document-print-preview:job{% if n_selected > 1 %}s ({{n_selected}}){% endif %} details:per-each-selected-row;activation:' \
-	--context-menu 'STOCK_OPEN:open document(s):per-each-selected-row:globexec mimeopen-gui /var/spool/cups/d{{ "%05d" | format(row.JOB | int) }}-*' \
+	--context-menu 'STOCK_OPEN:open document(s)::globexec mimeopen-gui {% for row in selected_rows %} /var/spool/cups/d{{ "%05d" | format(row.JOB | int) }}-*{% endfor %}' \
 	--context-menu 'STOCK_DELETE:{% if row.COMPLETED=="completed" %} {% endif %}cancel job:per-each-selected-row:lprm -P {{row.PRINTER}} {{row.JOB}}' \
 	"$@"

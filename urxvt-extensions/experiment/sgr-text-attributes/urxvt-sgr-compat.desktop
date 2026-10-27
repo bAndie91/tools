@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Rxvt Color Unicode Terminal with SGR compatibility relay
+TryExec=urxvt-sgr-compat
+Exec=urxvt-sgr-compat
+Icon=urxvt_48x48.xpm
+Type=Application
+Categories=Utility;TerminalEmulator;
+StartupNotify=true
+Keywords=Run;
+StartupWMClass=URxvt

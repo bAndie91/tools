@@ -1,0 +1,25 @@
+#!/bin/bash
+
+declare -a urxvt_args=()
+declare -a cmd_args=()
+
+phase=urxvt
+
+while [ $# -gt 0 ]
+do
+	case "$1" in
+	(-e)
+		shift
+		phase=cmd
+		;;
+	(*)
+		case "$phase" in
+		(urxvt)	urxvt_args+=("$1");;
+		(cmd)	cmd_args+=("$1");;
+		esac
+		;;
+	esac
+	shift
+done
+
+exec urxvt "${urxvt_args[@]}" -e urxvt-sgr-proxy "${cmd_args[@]}"

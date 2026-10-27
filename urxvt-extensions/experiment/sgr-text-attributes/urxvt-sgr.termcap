@@ -1,0 +1,2 @@
+urxvt-sgr|rxvt-unicode with SGR compatibility relay:\
+        :mh=\E[2m:mk=\E[8m:tc=rxvt-unicode-256color:

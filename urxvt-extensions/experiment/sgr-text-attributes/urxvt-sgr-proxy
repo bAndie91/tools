@@ -1,0 +1,547 @@
+#!/usr/bin/env python3
+"""PTY relay that emulates selected SGR attributes for rxvt-unicode.
+
+SGR 2 (faint): blend the text colour towards the background.
+SGR 8 (conceal): set the effective foreground to the background.
+SGR 9 (crossed out): approximate with underline.
+
+This must sit between the application and urxvt because urxvt's Perl API does
+not expose incoming CSI/SGR sequences.  Uses only Python 3's standard library.
+"""
+from __future__ import annotations
+
+import fcntl
+import os
+import pty
+import re
+import select
+import shutil
+import signal
+import struct
+import subprocess
+import sys
+import termios
+import tty
+from dataclasses import dataclass
+from typing import Optional
+
+ESC = b"\x1b"
+TIOCGWINSZ = getattr(termios, "TIOCGWINSZ", 0x5413)
+TIOCSWINSZ = getattr(termios, "TIOCSWINSZ", 0x5414)
+
+# Traditional xterm palette; X resources override entries 0..15.
+DEFAULT_ANSI = [
+    "#000000", "#cd0000", "#00cd00", "#cdcd00",
+    "#0000ee", "#cd00cd", "#00cdcd", "#e5e5e5",
+    "#7f7f7f", "#ff0000", "#00ff00", "#ffff00",
+    "#5c5cff", "#ff00ff", "#00ffff", "#ffffff",
+]
+
+
+def parse_rgb(value: str) -> Optional[tuple[int, int, int]]:
+    value = value.strip()
+    if value.startswith("#"):
+        h = value[1:]
+        if len(h) == 3 and re.fullmatch(r"[0-9a-fA-F]{3}", h):
+            return tuple(int(c * 2, 16) for c in h)  # type: ignore[return-value]
+        if len(h) == 6 and re.fullmatch(r"[0-9a-fA-F]{6}", h):
+            return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))  # type: ignore[return-value]
+        if len(h) == 12 and re.fullmatch(r"[0-9a-fA-F]{12}", h):
+            return tuple(int(h[i:i + 4], 16) >> 8 for i in (0, 4, 8))  # type: ignore[return-value]
+    m = re.fullmatch(r"rgb:([0-9a-fA-F]{1,4})/([0-9a-fA-F]{1,4})/([0-9a-fA-F]{1,4})", value)
+    if m:
+        parts = [int(part, 16) for part in m.groups()]
+        widths = [len(part) for part in m.groups()]
+        return tuple(round(n * 255 / ((1 << (4 * w)) - 1)) for n, w in zip(parts, widths))  # type: ignore[return-value]
+    # Common X color names are enough as a fallback; X resource values are
+    # normally hex. Unknown names fall back rather than needing Xlib bindings.
+    named = {
+        "black": (0, 0, 0), "white": (255, 255, 255),
+        "red": (255, 0, 0), "green": (0, 255, 0), "blue": (0, 0, 255),
+        "yellow": (255, 255, 0), "cyan": (0, 255, 255), "magenta": (255, 0, 255),
+    }
+    return named.get(value.lower())
+
+
+def query_xresources() -> dict[str, tuple[int, int, int]]:
+    """Read URxvt colors from xrdb when available; never make startup depend on it."""
+    result: dict[str, tuple[int, int, int]] = {}
+    xrdb = shutil.which("xrdb")
+    if not xrdb or not os.environ.get("DISPLAY"):
+        return result
+    try:
+        cp = subprocess.run([xrdb, "-query"], stdout=subprocess.PIPE,
+                           stderr=subprocess.DEVNULL, text=True, timeout=1.0, check=False)
+        if cp.returncode:
+            return result
+        for line in cp.stdout.splitlines():
+            m = re.match(r"\s*(?:URxvt|urxvt)[.*](foreground|background|color(?:[0-9]|1[0-5]))\s*:\s*(\S+)", line)
+            if not m:
+                continue
+            rgb = parse_rgb(m.group(2))
+            if rgb:
+                result[m.group(1).lower()] = rgb
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return result
+
+
+@dataclass(frozen=True)
+class Color:
+    kind: str                    # "default", "index", or "rgb"
+    value: object = None
+
+
+class Palette:
+    def __init__(self) -> None:
+        resources = query_xresources()
+        self.default_fg = parse_rgb(os.environ.get("URXVT_SGR_DEFAULT_FG", "")) or resources.get("foreground", (255, 255, 255))
+        self.default_bg = parse_rgb(os.environ.get("URXVT_SGR_DEFAULT_BG", "")) or resources.get("background", (0, 0, 0))
+        self.ansi = []
+        for i, fallback in enumerate(DEFAULT_ANSI):
+            configured = parse_rgb(os.environ.get(f"URXVT_SGR_COLOR{i}", "")) or resources.get(f"color{i}") or parse_rgb(fallback)
+            self.ansi.append(configured or (0, 0, 0))
+
+    def rgb(self, color: Color, default: str) -> tuple[int, int, int]:
+        if color.kind == "default":
+            return self.default_fg if default == "fg" else self.default_bg
+        if color.kind == "rgb":
+            return color.value  # type: ignore[return-value]
+        idx = int(color.value)  # type: ignore[arg-type]
+        if idx < 16:
+            return self.ansi[idx]
+        if idx < 232:
+            idx -= 16
+            levels = (0, 95, 135, 175, 215, 255)
+            return (levels[idx // 36], levels[(idx // 6) % 6], levels[idx % 6])
+        v = 8 + 10 * (idx - 232)
+        return (v, v, v)
+
+    def nearest256(self, rgb: tuple[int, int, int]) -> int:
+        best_index, best_distance = 0, None
+        # Use the current resource palette for 0..15, then the conventional
+        # xterm 6x6x6 cube and grayscale ramp.
+        for idx in range(256):
+            candidate = self.rgb(Color("index", idx), "fg")
+            distance = sum((a - b) ** 2 for a, b in zip(rgb, candidate))
+            if best_distance is None or distance < best_distance:
+                best_index, best_distance = idx, distance
+        return best_index
+
+
+class SGRFilter:
+    """Incremental ANSI CSI filter; retains attribute/color state across chunks."""
+    def __init__(self, palette: Optional[Palette] = None) -> None:
+        self.palette = palette or Palette()
+        self.pending = b""
+        self.fg = Color("default")
+        self.bg = Color("default")
+        self.faint = False
+        self.conceal = False
+        self.strike = False
+        self.underline = False
+        self.inverse = False
+        self.synthetic_channel: Optional[str] = None
+
+    def _reset(self) -> None:
+        self.fg = Color("default")
+        self.bg = Color("default")
+        self.faint = self.conceal = self.strike = self.underline = self.inverse = False
+        self.synthetic_channel = None
+
+    @staticmethod
+    def _int(token: str) -> Optional[int]:
+        return int(token) if token and token.isdigit() else None
+
+    def _set_color(self, channel: str, color: Color) -> None:
+        if channel == "fg":
+            self.fg = color
+        else:
+            self.bg = color
+
+    def _color_code(self, channel: str, color: Color) -> bytes:
+        if color.kind == "default":
+            return b"39" if channel == "fg" else b"49"
+        if color.kind == "index":
+            return (b"38;5;" if channel == "fg" else b"48;5;") + str(int(color.value)).encode("ascii")
+        rgb = color.value
+        r, g, b = rgb  # type: ignore[misc]
+        if os.environ.get("URXVT_SGR_TRUECOLOR", "0").lower() in ("1", "yes", "true"):
+            prefix = b"38;2;" if channel == "fg" else b"48;2;"
+            return prefix + f"{r};{g};{b}".encode("ascii")
+        index = self.palette.nearest256((r, g, b))
+        prefix = b"38;5;" if channel == "fg" else b"48;5;"
+        return prefix + str(index).encode("ascii")
+
+    def _effective_override(self) -> tuple[Optional[str], Optional[Color]]:
+        if not (self.faint or self.conceal):
+            return None, None
+        if self.inverse:
+            channel = "bg"
+            display_fg, display_bg = self.bg, self.fg
+        else:
+            channel = "fg"
+            display_fg, display_bg = self.fg, self.bg
+        if self.conceal:
+            target = display_bg
+        else:
+            f = self.palette.rgb(display_fg, "bg" if self.inverse else "fg")
+            b = self.palette.rgb(display_bg, "fg" if self.inverse else "bg")
+            target_rgb = tuple(round((x + y) / 2) for x, y in zip(f, b))
+            target = Color("rgb", target_rgb)
+        return channel, target
+
+    def transform_sgr(self, raw: str) -> bytes:
+        # Empty SGR is equivalent to SGR 0. Preserve original textual tokens
+        # where possible, but interpret numeric semicolon parameters.
+        tokens = raw.split(";") if raw else ["0"]
+        out_tokens: list[str] = []
+        reset_seen = False
+        underline_relevant = False
+        i = 0
+        while i < len(tokens):
+            token = tokens[i]
+            code = self._int(token)
+            if code is None:
+                out_tokens.append(token)
+                i += 1
+                continue
+
+            if code == 0:
+                self._reset()
+                reset_seen = True
+                underline_relevant = True
+                out_tokens.append(token)
+            elif code in (38, 48):
+                channel = "fg" if code == 38 else "bg"
+                mode = self._int(tokens[i + 1]) if i + 1 < len(tokens) else None
+                if mode == 5 and i + 2 < len(tokens):
+                    index = self._int(tokens[i + 2])
+                    if index is not None:
+                        self._set_color(channel, Color("index", max(0, min(255, index))))
+                        out_tokens.extend(tokens[i:i + 3])
+                        i += 3
+                        continue
+                elif mode == 2 and i + 4 < len(tokens):
+                    rgb = [self._int(x) for x in tokens[i + 2:i + 5]]
+                    if all(x is not None for x in rgb):
+                        self._set_color(channel, Color("rgb", tuple(max(0, min(255, int(x))) for x in rgb)))
+                        out_tokens.extend(tokens[i:i + 5])
+                        i += 5
+                        continue
+                out_tokens.append(token)
+            elif 30 <= code <= 37:
+                self.fg = Color("index", code - 30)
+                out_tokens.append(token)
+            elif 90 <= code <= 97:
+                self.fg = Color("index", code - 90 + 8)
+                out_tokens.append(token)
+            elif 40 <= code <= 47:
+                self.bg = Color("index", code - 40)
+                out_tokens.append(token)
+            elif 100 <= code <= 107:
+                self.bg = Color("index", code - 100 + 8)
+                out_tokens.append(token)
+            elif code == 39:
+                self.fg = Color("default")
+                out_tokens.append(token)
+            elif code == 49:
+                self.bg = Color("default")
+                out_tokens.append(token)
+            elif code == 2:
+                self.faint = True
+                # Emulated below by adjusting the foreground color.
+            elif code == 8:
+                self.conceal = True
+            elif code == 9:
+                self.strike = True
+                underline_relevant = True
+            elif code == 22:
+                self.faint = False
+                out_tokens.append(token)  # also resets bold, as required by SGR
+            elif code == 28:
+                self.conceal = False
+            elif code == 29:
+                self.strike = False
+                underline_relevant = True
+            elif code == 4:
+                self.underline = True
+                underline_relevant = True
+                out_tokens.append(token)
+            elif code == 24:
+                self.underline = False
+                underline_relevant = True
+                out_tokens.append(token)
+            elif code == 7:
+                self.inverse = True
+                out_tokens.append(token)
+            elif code == 27:
+                self.inverse = False
+                out_tokens.append(token)
+            else:
+                out_tokens.append(token)
+            i += 1
+
+        output = bytearray()
+        if out_tokens:
+            output.extend(ESC + b"[" + ";".join(out_tokens).encode("ascii", "replace") + b"m")
+
+        # SGR 0 already removes any injected color override; a reset followed
+        # by another parameter in this same SGR is handled by re-applying the
+        # current effective style below.
+        if not reset_seen and self.synthetic_channel:
+            new_channel, _ = self._effective_override()
+            if new_channel != self.synthetic_channel:
+                old_color = self.fg if self.synthetic_channel == "fg" else self.bg
+                output.extend(ESC + b"[" + self._color_code(self.synthetic_channel, old_color) + b"m")
+                self.synthetic_channel = None
+
+        channel, target = self._effective_override()
+        if channel is not None and target is not None:
+            output.extend(ESC + b"[" + self._color_code(channel, target) + b"m")
+            self.synthetic_channel = channel
+        elif self.synthetic_channel:
+            old_channel = self.synthetic_channel
+            original_color = self.fg if old_channel == "fg" else self.bg
+            # Following SGR 0 the terminal already restored its base colors.
+            if not reset_seen:
+                output.extend(ESC + b"[" + self._color_code(old_channel, original_color) + b"m")
+            self.synthetic_channel = None
+
+        # SGR 9 has no native urxvt rendition bit. Make its underline fallback
+        # independent from the application's ordinary SGR 4/24 state.
+        if underline_relevant:
+            output.extend(ESC + (b"[4m" if (self.underline or self.strike) else b"[24m"))
+        return bytes(output)
+
+    def feed(self, data: bytes, final: bool = False) -> bytes:
+        buf = self.pending + data
+        self.pending = b""
+        output = bytearray()
+        i = 0
+        while i < len(buf):
+            esc = buf.find(ESC, i)
+            if esc < 0:
+                output.extend(buf[i:])
+                break
+            output.extend(buf[i:esc])
+            if esc + 1 >= len(buf):
+                self.pending = buf[esc:]
+                break
+            introducer = buf[esc + 1]
+            # OSC, DCS, SOS, PM and APC are control strings. Do not inspect
+            # bytes inside them for apparent CSI sequences; only their own
+            # terminators end the string. OSC additionally accepts BEL.
+            if introducer in (ord("]"), ord("P"), ord("X"), ord("^"), ord("_")):
+                osc = introducer == ord("]")
+                bel = buf.find(b"\x07", esc + 2) if osc else -1
+                st = buf.find(ESC + b"\\", esc + 2)
+                ends = [p for p in (bel, st) if p >= 0]
+                if not ends:
+                    self.pending = buf[esc:]
+                    break
+                end_at = min(ends)
+                end_after = end_at + (1 if end_at == bel else 2)
+                output.extend(buf[esc:end_after])
+                i = end_after
+                continue
+            if introducer != ord("["):
+                output.extend(buf[esc:esc + 2])
+                i = esc + 2
+                continue
+            end = esc + 2
+            while end < len(buf) and not (0x40 <= buf[end] <= 0x7e):
+                end += 1
+            if end >= len(buf):
+                self.pending = buf[esc:]
+                break
+            seq = buf[esc:end + 1]
+            params = seq[2:-1]
+            if seq[-1:] == b"m" and all(c in b"0123456789;:?" for c in params):
+                output.extend(self.transform_sgr(params.decode("ascii")))
+            else:
+                output.extend(seq)
+            i = end + 1
+        if final and self.pending:
+            output.extend(self.pending)
+            self.pending = b""
+        return bytes(output)
+
+
+def _set_winsize(fd: int, from_fd: int = 0) -> None:
+    try:
+        winsize = fcntl.ioctl(from_fd, TIOCGWINSZ, b"\0" * 8)
+        fcntl.ioctl(fd, TIOCSWINSZ, winsize)
+    except OSError:
+        pass
+
+
+def _write_all(fd: int, data: bytes) -> None:
+    view = memoryview(data)
+    while view:
+        written = os.write(fd, view)
+        view = view[written:]
+
+
+def _terminfo_exists(term: str) -> bool:
+    infocmp = shutil.which("infocmp")
+    if not infocmp:
+        return False
+    try:
+        cp = subprocess.run([infocmp, "-x", term], stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL, timeout=1.0, check=False)
+        return cp.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def main(argv: list[str]) -> int:
+    if argv and argv[0] == "--":
+        argv = argv[1:]
+    if not argv:
+        shell = os.environ.get("SHELL", "/bin/sh")
+        argv = [shell, "-l"]
+
+    requested_term = os.environ.get("URXVT_SGR_TERM", "urxvt-sgr")
+    if _terminfo_exists(requested_term):
+        os.environ["TERM"] = requested_term
+    # Keep the outer TERM if the optional entry was not installed. The filter
+    # still transforms explicit SGR sequences; this only affects capability
+    # discovery by curses/terminfo applications.
+
+    # Avoid starting an interactive nested pty without a tty.
+    if not os.isatty(0) or not os.isatty(1):
+        print("urxvt-sgr-proxy: stdin and stdout must be connected to a terminal", file=sys.stderr)
+        return 2
+
+    old_attrs = termios.tcgetattr(0)
+    master = -1
+    child_pid = -1
+    status = 1
+    stopping = False
+
+    def forward_signal(signum: int, _frame: object) -> None:
+        nonlocal stopping
+        stopping = True
+        if child_pid > 0:
+            try:
+                os.killpg(child_pid, signum)
+            except OSError:
+                try:
+                    os.kill(child_pid, signum)
+                except OSError:
+                    pass
+
+    old_handlers = {}
+    for sig in (signal.SIGHUP, signal.SIGTERM, signal.SIGQUIT):
+        old_handlers[sig] = signal.signal(sig, forward_signal)
+
+    filt = SGRFilter()
+    try:
+        child_pid, master = pty.fork()
+        if child_pid == 0:
+            # pty.fork makes this child a session leader with the slave as its
+            # controlling terminal. Restore default dispositions before exec.
+            for sig in (signal.SIGHUP, signal.SIGTERM, signal.SIGQUIT, signal.SIGINT, signal.SIGTSTP):
+                signal.signal(sig, signal.SIG_DFL)
+            try:
+                os.execvp(argv[0], argv)
+            except OSError as exc:
+                os.write(2, f"urxvt-sgr-proxy: cannot execute {argv[0]}: {exc}\n".encode())
+                os._exit(127)
+
+        _set_winsize(master, 0)
+        tty.setraw(0, termios.TCSANOW)
+
+        def winch(_sig: int, _frame: object) -> None:
+            if master >= 0:
+                _set_winsize(master, 0)
+
+        old_winch = signal.signal(signal.SIGWINCH, winch)
+        while True:
+            if stopping:
+                break
+            try:
+                readable, _, _ = select.select([0, master], [], [], 0.2)
+            except InterruptedError:
+                continue
+            if master in readable:
+                try:
+                    data = os.read(master, 65536)
+                except OSError as exc:
+                    # Linux PTY masters return EIO after the slave closes.
+                    if exc.errno in (5, 9):
+                        data = b""
+                    else:
+                        raise
+                if not data:
+                    break
+                converted = filt.feed(data)
+                if converted:
+                    _write_all(1, converted)
+            if 0 in readable:
+                data = os.read(0, 65536)
+                if not data:
+                    try:
+                        os.killpg(child_pid, signal.SIGHUP)
+                    except OSError:
+                        pass
+                    break
+                _write_all(master, data)
+            waited, wstatus = os.waitpid(child_pid, os.WNOHANG)
+            if waited == child_pid:
+                status = wstatus
+                # Drain any bytes already buffered on the PTY before exiting.
+                while True:
+                    try:
+                        ready, _, _ = select.select([master], [], [], 0)
+                        if not ready:
+                            break
+                        data = os.read(master, 65536)
+                        if not data:
+                            break
+                        converted = filt.feed(data)
+                        if converted:
+                            _write_all(1, converted)
+                    except OSError:
+                        break
+                break
+        # Flush an incomplete trailing escape sequence unchanged.
+        trailing = filt.feed(b"", final=True)
+        if trailing:
+            _write_all(1, trailing)
+        if status == 1:
+            try:
+                _, status = os.waitpid(child_pid, 0)
+            except ChildProcessError:
+                pass
+        if os.WIFEXITED(status):
+            return os.WEXITSTATUS(status)
+        if os.WIFSIGNALED(status):
+            return 128 + os.WTERMSIG(status)
+        return 1
+    finally:
+        try:
+            termios.tcsetattr(0, termios.TCSANOW, old_attrs)
+        except OSError:
+            pass
+        for sig, handler in old_handlers.items():
+            signal.signal(sig, handler)
+        try:
+            signal.signal(signal.SIGWINCH, old_winch)  # type: ignore[possibly-undefined]
+        except (UnboundLocalError, ValueError):
+            pass
+        if master >= 0:
+            try:
+                os.close(master)
+            except OSError:
+                pass
+        if child_pid > 0:
+            try:
+                os.waitpid(child_pid, os.WNOHANG)
+            except (ChildProcessError, OSError):
+                pass
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

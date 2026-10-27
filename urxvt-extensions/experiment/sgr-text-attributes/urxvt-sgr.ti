@@ -1,0 +1,3 @@
+urxvt-sgr|rxvt-unicode with SGR fallback renderer,
+        dim=\E[2m, invis=\E[8m, smxx=\E[9m, rmxx=\E[29m,
+        use=rxvt-unicode-256color,

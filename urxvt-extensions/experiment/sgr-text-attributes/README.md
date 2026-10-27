@@ -7,10 +7,10 @@ This is an **unpatched-urxvt workaround**, not a Perl extension. The urxvt Perl 
 ## What is emulated
 
 * `CSI 2 m` (faint): blend the foreground 50% towards the current background. The blend is quantized to the nearest xterm 256-color entry by default, which suits ordinary 256-color urxvt builds.
-* `CSI 8 m` (conceal): set the foreground to the current background. The effect is recalculated when foreground/background colors or reverse-video change.
-* `CSI 9 m` (crossed out): approximate with underline. This is deliberately an approximation; without a native strike-through glyph/rendition bit, a plugin cannot draw a true strike line across arbitrary glyphs.
+* `CSI 8 m` (conceal): set the effective foreground to the current displayed background. When that target is the terminal's default color, the relay resolves it to the configured RGB value before emitting a concrete color, rather than using `39`/`49` (which mean the default color of the output channel and can reveal white text on a black background). The effect is recalculated when foreground/background colors or reverse-video change.
+* `CSI 9 m` (crossed out): append Unicode U+0336 COMBINING LONG STROKE OVERLAY to printable characters while strike-through is active. This gives an actual strike-through visual in fonts that support the combining mark, without disturbing ordinary SGR underline state. It remains a text-level approximation, not a native per-cell rendition bit; complex emoji/grapheme clusters and fonts without this glyph can render imperfectly.
 
-The relevant resets are handled: `22` resets faint (and is passed through to reset bold too), `28` reveals text, `29` removes the strike-through approximation, and `0` resets all tracked state. The relay also handles `39`, `49`, `7`, `27`, ordinary ANSI colors and `38/48;5` or `38/48;2` color changes while one of the emulated attributes is active.
+The relevant resets are handled: `22` resets faint (and is passed through to reset bold too), `28` reveals text, `29` stops adding strike overlays, and `0` resets all tracked state. The relay also handles `39`, `49`, `7`, `27`, ordinary ANSI colors and `38/48;5` or `38/48;2` color changes while one of the emulated attributes is active.
 
 Faint uses the foreground/background values from X resources `URxvt.foreground`, `URxvt.background`, and `URxvt.color0` through `URxvt.color15` when `xrdb` is available. Override any of these with environment variables `URXVT_SGR_DEFAULT_FG`, `URXVT_SGR_DEFAULT_BG`, and `URXVT_SGR_COLOR0` ... `URXVT_SGR_COLOR15` (hex colors such as `#c0c0c0`). Set `URXVT_SGR_TRUECOLOR=1` to emit RGB overrides rather than nearest-256 palette colors, if your urxvt build handles direct-color SGR the way you want.
 
@@ -51,4 +51,4 @@ Run this inside the wrapped terminal:
 printf 'normal | faint: \033[2mfaint\033[22m | concealed: \033[8mhidden\033[28m | crossed: \033[9mstruck\033[29m\n'
 ```
 
-Expected: “faint” is less intense, “hidden” blends into its background, and “struck” is underlined. For resets, try the sequences independently as well as in combined SGR lists. Testing against your exact urxvt build and X resources is recommended before making it the default launcher.
+Expected: “faint” is less intense, “hidden” blends into its background, and “struck” has a stroke through each printable character. For resets, try the sequences independently as well as in combined SGR lists. Testing against your exact urxvt build and X resources is recommended before making it the default launcher.

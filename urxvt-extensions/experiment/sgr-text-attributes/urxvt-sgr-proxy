@@ -3,13 +3,14 @@
 
 SGR 2 (faint): blend the text colour towards the background.
 SGR 8 (conceal): set the effective foreground to the background.
-SGR 9 (crossed out): approximate with underline.
+SGR 9 (crossed out): append the Unicode combining long-stroke overlay to printable characters.
 
 This must sit between the application and urxvt because urxvt's Perl API does
 not expose incoming CSI/SGR sequences.  Uses only Python 3's standard library.
 """
 from __future__ import annotations
 
+import codecs
 import fcntl
 import os
 import pty
@@ -22,6 +23,7 @@ import subprocess
 import sys
 import termios
 import tty
+import unicodedata
 from dataclasses import dataclass
 from typing import Optional
 
@@ -139,14 +141,17 @@ class SGRFilter:
         self.faint = False
         self.conceal = False
         self.strike = False
-        self.underline = False
         self.inverse = False
         self.synthetic_channel: Optional[str] = None
+        # While strike-through is active, an incremental decoder lets UTF-8
+        # characters split across PTY reads remain intact. Invalid UTF-8 bytes
+        # are round-tripped with surrogateescape.
+        self.text_decoder = None
 
     def _reset(self) -> None:
         self.fg = Color("default")
         self.bg = Color("default")
-        self.faint = self.conceal = self.strike = self.underline = self.inverse = False
+        self.faint = self.conceal = self.strike = self.inverse = False
         self.synthetic_channel = None
 
     @staticmethod
@@ -183,7 +188,16 @@ class SGRFilter:
             channel = "fg"
             display_fg, display_bg = self.fg, self.bg
         if self.conceal:
-            target = display_bg
+            # "default" is contextual: foreground 39 means the terminal's
+            # default foreground, not its default background. Resolve a
+            # default-colored target to RGB before emitting it on the other
+            # channel (notably, conceal on a black default background must
+            # not turn into SGR 39, which usually restores white text).
+            if display_bg.kind == "default":
+                default_channel = "fg" if self.inverse else "bg"
+                target = Color("rgb", self.palette.rgb(display_bg, default_channel))
+            else:
+                target = display_bg
         else:
             f = self.palette.rgb(display_fg, "bg" if self.inverse else "fg")
             b = self.palette.rgb(display_bg, "fg" if self.inverse else "bg")
@@ -197,7 +211,6 @@ class SGRFilter:
         tokens = raw.split(";") if raw else ["0"]
         out_tokens: list[str] = []
         reset_seen = False
-        underline_relevant = False
         i = 0
         while i < len(tokens):
             token = tokens[i]
@@ -210,7 +223,6 @@ class SGRFilter:
             if code == 0:
                 self._reset()
                 reset_seen = True
-                underline_relevant = True
                 out_tokens.append(token)
             elif code in (38, 48):
                 channel = "fg" if code == 38 else "bg"
@@ -255,7 +267,6 @@ class SGRFilter:
                 self.conceal = True
             elif code == 9:
                 self.strike = True
-                underline_relevant = True
             elif code == 22:
                 self.faint = False
                 out_tokens.append(token)  # also resets bold, as required by SGR
@@ -263,14 +274,8 @@ class SGRFilter:
                 self.conceal = False
             elif code == 29:
                 self.strike = False
-                underline_relevant = True
-            elif code == 4:
-                self.underline = True
-                underline_relevant = True
-                out_tokens.append(token)
-            elif code == 24:
-                self.underline = False
-                underline_relevant = True
+            elif code in (4, 24):
+                # Preserve ordinary underline state independently of strike.
                 out_tokens.append(token)
             elif code == 7:
                 self.inverse = True
@@ -308,11 +313,49 @@ class SGRFilter:
                 output.extend(ESC + b"[" + self._color_code(old_channel, original_color) + b"m")
             self.synthetic_channel = None
 
-        # SGR 9 has no native urxvt rendition bit. Make its underline fallback
-        # independent from the application's ordinary SGR 4/24 state.
-        if underline_relevant:
-            output.extend(ESC + (b"[4m" if (self.underline or self.strike) else b"[24m"))
         return bytes(output)
+
+    @staticmethod
+    def _cross_out(text: str) -> str:
+        """Draw a visible strike using a zero-width Unicode overlay.
+
+        U+0336 is a combining long-stroke overlay supported by many terminal
+        fonts. Apply it to printable base characters, not controls, combining
+        marks, variation selectors, or format characters. This is a rendering
+        fallback rather than a native per-cell terminal rendition bit.
+        """
+        out: list[str] = []
+        for ch in text:
+            category = unicodedata.category(ch)
+            is_variation_selector = (0xFE00 <= ord(ch) <= 0xFE0F or
+                                      0xE0100 <= ord(ch) <= 0xE01EF)
+            is_emoji_modifier = 0x1F3FB <= ord(ch) <= 0x1F3FF
+            if (ch.isprintable() and not unicodedata.combining(ch)
+                    and not category.startswith("M")
+                    and not category.startswith("C")
+                    and not is_variation_selector and not is_emoji_modifier):
+                out.extend((ch, "̶"))
+            else:
+                out.append(ch)
+        return "".join(out)
+
+    def _text(self, data: bytes) -> bytes:
+        if not self.strike:
+            return data
+        if self.text_decoder is None:
+            self.text_decoder = codecs.getincrementaldecoder("utf-8")("surrogateescape")
+        decoded = self.text_decoder.decode(data, final=False)
+        return self._cross_out(decoded).encode("utf-8", "surrogateescape")
+
+    def _finish_text(self) -> bytes:
+        """Flush a possibly incomplete UTF-8 suffix before a control sequence."""
+        if self.text_decoder is None:
+            return b""
+        decoded = self.text_decoder.decode(b"", final=True)
+        self.text_decoder = None
+        # A suffix that was not a complete UTF-8 codepoint is represented by
+        # surrogateescape and is emitted byte-for-byte rather than decorated.
+        return decoded.encode("utf-8", "surrogateescape")
 
     def feed(self, data: bytes, final: bool = False) -> bytes:
         buf = self.pending + data
@@ -322,9 +365,12 @@ class SGRFilter:
         while i < len(buf):
             esc = buf.find(ESC, i)
             if esc < 0:
-                output.extend(buf[i:])
+                output.extend(self._text(buf[i:]))
                 break
-            output.extend(buf[i:esc])
+            output.extend(self._text(buf[i:esc]))
+            # A CSI/OSC/etc. sequence is a boundary for terminal text. If an
+            # incomplete UTF-8 suffix precedes it, flush the bytes unchanged.
+            output.extend(self._finish_text())
             if esc + 1 >= len(buf):
                 self.pending = buf[esc:]
                 break
@@ -362,9 +408,11 @@ class SGRFilter:
             else:
                 output.extend(seq)
             i = end + 1
-        if final and self.pending:
-            output.extend(self.pending)
-            self.pending = b""
+        if final:
+            output.extend(self._finish_text())
+            if self.pending:
+                output.extend(self.pending)
+                self.pending = b""
         return bytes(output)
 
 

@@ -85,7 +85,6 @@ class TreeModelRow(object):
 	def model(self):
 		return self.real_treemodelrow.model
 	def update(self, row_data):
-		#TODO treepath
 		"row_data can be a dict with column names as keys, or just a list of the new cells."
 		for col_ref, col_data in (row_data if isinstance(row_data, dict) else enumerate(row_data)):
 			self[col_ref] = col_data
@@ -292,6 +291,9 @@ class NamedColumnsOrganizedTreeStore(NamedColumnsTreeStore):
 
 		return treeiter
 
+	def move_path(self, row, new_treepath):
+		
+
 	def get_iter_by_orgpath(self, path):
 		rowref = self._rowrefs.get(path)
 		if rowref is None:
@@ -391,7 +393,7 @@ class TreeModelFilterSortIndex(TreeModelSortIndexed):
 		self.set_sort_column_id(col_num, sort_order)
 	# proxy methods:
 	def __getattribute__(self, attrname):
-		if attrname in ['get_column_num', 'get_column_name', 'get_columns', 'append', 'add_row', 'clear']:
+		if attrname in ['get_column_num', 'get_column_name', 'get_columns', 'append', 'add_row', 'move_path', 'clear']:
 			return object.__getattribute__(self.base_model, attrname)
 		elif attrname in ['set_visible_func', 'refilter']:
 			return object.__getattribute__(self.filtering_model, attrname)
@@ -1922,6 +1924,8 @@ class TreePath(object):
 		return TreePath(self.path[:-1])
 	def __repr__(self):
 		return '<%s %s>' % (self.__class__.__name__, repr(self.path))
+	def __cmp__(self, other):
+		return self.path.__cmp__(other.path)
 
 class GTabData(object):
 	def __init__(self):
@@ -2120,7 +2124,8 @@ class GTabData(object):
 		if existing_record is None:
 			cb_data['model'].add_row(row_cells, treepath=treepath)
 		else:
-			existing_record.update(row_cells, treepath=treepath)  # TODO treepath
+			existing_record.update(row_cells)
+			cb_data['model'].move_path(existing_record, new_treepath=treepath)
 		if self.tabdata_key_field is not None:
 			cb_data['existing_records_keys'].append(record_key)
 

@@ -274,25 +274,27 @@ class NamedColumnsOrganizedTreeStore(NamedColumnsTreeStore):
 		self._children = {}   # path -> [child paths]; may include children whose parent hasn't arrived yet
 
 	def add_row(self, row, treepath):
-		path = treepath.path
-		if path is None:
+		orgpath = treepath.path
+		if orgpath is None:
 			return self.append(None, row)
 
-		parent_path = treepath.parent.path
-		self._children.setdefault(parent_path, []).append(path)
+		parent_orgpath = treepath.parent.path
+		self._children.setdefault(parent_orgpath, []).append(orgpath)
 
 		# parent_iter is None if the parent is missing; the row waits at root level
-		treeiter = self.append(self.get_iter_by_orgpath(parent_path), row)
-		self._rowrefs[path] = gtk.TreeRowReference(self, self.get_path(treeiter))
+		treeiter = self.append(self.get_iter_by_orgpath(parent_orgpath), row)
+		self._rowrefs[orgpath] = gtk.TreeRowReference(self, self.get_path(treeiter))
 
 		# rows already listed as our children are orphans waiting at root level
-		for child in self._children.get(path, []):
+		for child in self._children.get(orgpath, []):
 			self._move_subtree(child, treeiter)
 
 		return treeiter
 
-	def move_path(self, row, new_treepath):
-		
+	def move_row(self, row, new_treepath):
+		assert row.model is self
+		# row.iter (is a TreeIter)and row.path (gtk TreeStore path) is available
+		# new_treepath is a TreePath() and has .path (organization path), .parent (which is also a TreePath())
 
 	def get_iter_by_orgpath(self, path):
 		rowref = self._rowrefs.get(path)
@@ -393,7 +395,7 @@ class TreeModelFilterSortIndex(TreeModelSortIndexed):
 		self.set_sort_column_id(col_num, sort_order)
 	# proxy methods:
 	def __getattribute__(self, attrname):
-		if attrname in ['get_column_num', 'get_column_name', 'get_columns', 'append', 'add_row', 'move_path', 'clear']:
+		if attrname in ['get_column_num', 'get_column_name', 'get_columns', 'append', 'add_row', 'move_row', 'clear']:
 			return object.__getattribute__(self.base_model, attrname)
 		elif attrname in ['set_visible_func', 'refilter']:
 			return object.__getattribute__(self.filtering_model, attrname)
@@ -1794,6 +1796,7 @@ def parse_cli_args():
 	parser.add_argument('--treepath-field', type=str, default=None, metavar='COLUMN', help='If treepath field is specified, a tree struture is rendered according to this field\'s values representing the row\'s position on the tree by comma-delimited tree path.')
 	parser.add_argument('--treepath-separator', type=str, default=',', metavar='STR')
 	parser.add_argument('--filter', action='append', default=[], type=str, metavar='FIELD:PATTERN', help='Filter FIELD with PATTERN')
+	parser.add_argument('--hide', action='append', default=[], type=str, metavar='COLUMN')  # TODO
 	activate_group = parser.add_mutually_exclusive_group()
 	activate_group.add_argument('--activate-command', type=str, metavar='COMMAND', help='System command to run when double clicked on a row.')
 	activate_group.add_argument('--activate-script', type=str, metavar='SCRIPT', help='Shell command(s) to run when double clicked on a row.')
@@ -2125,7 +2128,9 @@ class GTabData(object):
 			cb_data['model'].add_row(row_cells, treepath=treepath)
 		else:
 			existing_record.update(row_cells)
-			cb_data['model'].move_path(existing_record, new_treepath=treepath)
+			cb_data['model'].move_row(existing_record, new_treepath=treepath)
+			# this TreeModelRow may be distroyed by moving across levels on the tree:
+			existing_record = None
 		if self.tabdata_key_field is not None:
 			cb_data['existing_records_keys'].append(record_key)
 

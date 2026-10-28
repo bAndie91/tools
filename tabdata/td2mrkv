@@ -74,9 +74,14 @@ while(not eof STDIN)
 	
 	for my $col (@columns)
 	{
-		for my $cell_line (split /\n/, $Field[$col->{orig_idx}])
+		my @cell_lines = split /\n/, $Field[$col->{orig_idx}];
+		for my $cell_line (@cell_lines)
 		{
 			printf "%s%s%s\n", $col->{name}, $OptSeparator, $cell_line;
+		}
+		if(not @cell_lines)
+		{
+			printf "%s\n", $col->{name};
 		}
 	}
 	

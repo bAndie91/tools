@@ -294,7 +294,7 @@ class NamedColumnsOrganizedTreeStore(NamedColumnsTreeStore):
 	def move_row(self, row, new_treepath):
 		assert row.model is self
 		# row.iter (is a TreeIter)and row.path (gtk TreeStore path) is available
-		# new_treepath is a TreePath() and has .path (organization path), .parent (which is also a TreePath())
+		# new_treepath is a OrgPath() and has .path (organization path), .parent (which is also a OrgPath())
 
 	def get_iter_by_orgpath(self, path):
 		rowref = self._rowrefs.get(path)
@@ -1912,7 +1912,7 @@ def validate_activate_command(command):
 		raise
 
 
-class TreePath(object):
+class OrgPath(object):
 	def __init__(self, path, sep=','):
 		if isinstance(path, basestring):
 			path = path.split(sep)
@@ -1923,8 +1923,8 @@ class TreePath(object):
 	@property
 	def parent(self):
 		if self.path is None or len(self.path) <= 1:
-			return TreePath(None)
-		return TreePath(self.path[:-1])
+			return OrgPath(None)
+		return OrgPath(self.path[:-1])
 	def __repr__(self):
 		return '<%s %s>' % (self.__class__.__name__, repr(self.path))
 	def __cmp__(self, other):
@@ -1978,7 +1978,7 @@ class GTabData(object):
 		for row in tabdata_generator:
 			if treepath_field_idx is not None:
 				treepath = row[treepath_field_idx]
-			yield (row, TreePath(treepath, sep=cliargs.treepath_separator))
+			yield (row, OrgPath(treepath, sep=cliargs.treepath_separator))
 
 	def tabdata_generator_from_filehandle(self, fh, n_fields=0):
 		for line in iter(fh.readline, ''):

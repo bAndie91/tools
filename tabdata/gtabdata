@@ -260,56 +260,285 @@ class NamedColumnsTreeStore(gtk.TreeStore):
 			treeiter = successor_iter(self, row.iter)
 
 class NamedColumnsOrganizedTreeStore(NamedColumnsTreeStore):
-	"""Feed it add_row(row, treepath) in any order; it keeps the gtk.TreeStore
-	structure in sync with the logical paths.
+	"""Feed it add_node(row, treepath), move_node(node, new_treepath) and remove_node(node)
+	in any order; it keeps the gtk.TreeStore structure in sync with the organization paths.
 
-	- treepath.path is None -> plain root-level row, not addressable as a parent.
-	- A row whose parent has not arrived yet sits at root level (with all of its
-	  own descendants) until the parent shows up, then the whole subtree moves.
+	An organization path (treepath.path) is a tuple of components, any of which may be
+	an empty string. The parent of a node is the node holding the same path without its
+	last component. Nothing else knows or stores these paths.
+
+	- No path (None or empty) -> plain root-level node, which can not be a parent.
+	  Any other path is valid: ('',) is a root-level node which can have children
+	  like ('', 'x'), and ('a', '') is a sibling of ('a', 'b').
+	- A node whose parent is missing sits at the root level, together with its own
+	  descendants, until the parent shows up; then the whole subtree moves under it.
+	  The same happens the other way around when a parent is moved away or removed:
+	  its children go to what their paths say now, or to the root level.
+	- Cycles can not form: a parent is always a strict prefix of its child's path.
+	  Moving a node below its own (former) child just promotes the child first.
+	- Several nodes may hold the same path. The one which arrived last (was added
+	  or moved there) is the parent of the nodes below that path: it takes over the
+	  subtree of the previous one, which stays in its own parent. If the last one
+	  leaves or is removed, the subtree goes to the one before, or else to the root
+	  level.
+	- Moving a node within the same parent only updates its path; its position among
+	  the siblings is not touched. gtk can not move a node across parents, so then
+	  the node and its subtree are re-created.
+	- Nodes must be removed with remove_node() so that their subtree can be rescued.
+	  Nodes removed any other way (e.g. `del model[path]`) take their subtree with them;
+	  this is noticed and they are forgotten at the next call.
+	- Nodes are tracked by gtk.TreeRowReference, never by TreeIter or by path, because
+	  those are not reliable across removals and filtering/sorting.
 	"""
+
+	class _Entry(object):
+		__slots__ = ('orgpath', 'rowref')
+		def __init__(self, orgpath, rowref=None):
+			self.orgpath = orgpath  # tuple, or None for plain nodes
+			self.rowref = rowref    # where the node currently is in this model
 
 	def __init__(self, *pargs, **kwargs):
 		super(NamedColumnsOrganizedTreeStore, self).__init__(*pargs, **kwargs)
-		self._rowrefs = {}    # path -> TreeRowReference of the row's current place
-		self._children = {}   # path -> [child paths]; may include children whose parent hasn't arrived yet
+		self._reset_registry()
+		self._removing = False  # True while we remove rows ourselves
+		self.connect_after('row-deleted', self._on_row_deleted)
 
-	def add_row(self, row, treepath):
-		orgpath = treepath.path
-		if orgpath is None:
-			return self.append(None, row)
+	def _reset_registry(self):
+		self._holders = {}   # orgpath (None for plain nodes) -> [_Entry, ...] oldest first, the last one is the parent of what is below the path
+		self._children = {}  # orgpath -> set of orgpaths directly below it which have nodes; the parent itself may be missing
+		self._hints = {}     # tuple gtk path -> _Entry; may be stale, always verified before use
+		self._stale = False  # rows were removed behind our back, entries of dead rows are still registered
 
-		parent_orgpath = treepath.parent.path
-		self._children.setdefault(parent_orgpath, []).append(orgpath)
+	def _on_row_deleted(self, model, path):
+		if not self._removing:
+			self._stale = True
 
-		# parent_iter is None if the parent is missing; the row waits at root level
-		treeiter = self.append(self.get_iter_by_orgpath(parent_orgpath), row)
-		self._rowrefs[orgpath] = gtk.TreeRowReference(self, self.get_path(treeiter))
+	def clear(self):
+		self._reset_registry()
+		super(NamedColumnsOrganizedTreeStore, self).clear()
+		self._stale = False
 
-		# rows already listed as our children are orphans waiting at root level
-		for child in self._children.get(orgpath, []):
-			self._move_subtree(child, treeiter)
+	def add_node(self, row, treepath):
+		self._forget_dead_nodes()
+		orgpath = self._normalize(treepath)
+		# the parent iter is None if the parent is missing; then the node waits at root level
+		parent_iter = self._parent_iter_for(orgpath)
+		treeiter = self.append(parent_iter, row)
+		path = tuple(self.get_path(treeiter))
+		entry = self._Entry(orgpath, gtk.TreeRowReference(self, path))
+		self._hints[path] = entry
+		self._register(entry)
+		# we are the last holder of the path now: waiting nodes and those below the previous holder come under us
+		self._rehome_children(orgpath)
+		return self._iter_of(entry)
 
-		return treeiter
-
-	def move_row(self, row, new_treepath):
+	def move_node(self, row, new_treepath):
 		assert row.model is self
-		# row.iter (is a TreeIter)and row.path (gtk TreeStore path) is available
-		# new_treepath is a OrgPath() and has .path (organization path), .parent (which is also a OrgPath())
+		self._forget_dead_nodes()
+		entry = self._entry_of_row(row)
+		old_orgpath = entry.orgpath
+		new_orgpath = self._normalize(new_treepath)
+		if new_orgpath == old_orgpath:
+			return self._iter_of(entry)
 
-	def get_iter_by_orgpath(self, path):
-		rowref = self._rowrefs.get(path)
-		if rowref is None:
+		# leave the old path: whatever hung below it goes to the previous holder of that path, or to root
+		self._unregister(entry)
+		self._rehome_children(old_orgpath)
+		# take the new path: moves only if the parent differs, otherwise stays where it is
+		entry.orgpath = new_orgpath
+		self._register(entry)
+		self._attach(entry)
+		# as the last holder of the new path we take over what is below it
+		self._rehome_children(new_orgpath)
+		return self._iter_of(entry)
+
+	def remove_node(self, row):
+		assert row.model is self
+		self._forget_dead_nodes()
+		entry = self._entry_of_row(row)
+		# the subtree goes to the previous holder of the path, or to root
+		self._unregister(entry)
+		self._rehome_children(entry.orgpath)
+		self._remove_iter(self._iter_of(entry))
+
+	@staticmethod
+	def _normalize(treepath):
+		path = None if treepath is None else treepath.path
+		if path is None or len(path) == 0:
 			return None
-		return self.get_iter(rowref.get_path())
+		return tuple(path)
 
-	def _move_subtree(self, path, parent_iter):
-		old_iter = self.get_iter_by_orgpath(path)
-		values = self.get(old_iter, *range(self.get_n_columns()))
-		new_iter = self.append(parent_iter, values)
-		self._rowrefs[path] = gtk.TreeRowReference(self, self.get_path(new_iter))
-		for child in self._children.get(path, []):
-			self._move_subtree(child, new_iter)
-		self.remove(old_iter)
+	@staticmethod
+	def _parent_path(orgpath):
+		if orgpath is None or len(orgpath) < 2:
+			return None
+		return orgpath[:-1]
+
+	# --- bookkeeping ---
+
+	def _register(self, entry):
+		entries = self._holders.get(entry.orgpath)
+		if entries is None:
+			entries = self._holders[entry.orgpath] = []
+			parent = self._parent_path(entry.orgpath)
+			if parent is not None:
+				self._children.setdefault(parent, set()).add(entry.orgpath)
+		entries.append(entry)
+
+	def _unregister(self, entry):
+		entries = self._holders.get(entry.orgpath)
+		if entries is None:
+			return
+		for i, other in enumerate(entries):
+			if other is entry:
+				del entries[i]
+				break
+		if len(entries) == 0:
+			del self._holders[entry.orgpath]
+			parent = self._parent_path(entry.orgpath)
+			siblings = self._children.get(parent)
+			if siblings is not None:
+				siblings.discard(entry.orgpath)
+				if len(siblings) == 0:
+					del self._children[parent]
+
+	def _path_of(self, entry):
+		"""Current gtk path (tuple) of the entry's row, None if the row is gone."""
+		path = entry.rowref.get_path()
+		return None if path is None else tuple(path)
+
+	def _iter_of(self, entry):
+		return self.get_iter(self._path_of(entry))
+
+	def _entry_of_row(self, row):
+		path = tuple(row.path)
+		entry = self._hints.get(path)
+		if entry is None or self._path_of(entry) != path:
+			self._rebuild_hints()
+			entry = self._hints.get(path)
+		if entry is None:
+			# not added by add_node(): take it as a plain node where it is
+			entry = self._Entry(None, gtk.TreeRowReference(self, path))
+			self._register(entry)
+			self._hints[path] = entry
+		return entry
+
+	def _forget_dead_nodes(self):
+		if self._stale:
+			self._rebuild_hints()
+
+	def _rebuild_hints(self):
+		self._stale = False
+		self._hints = {}
+		for entries in list(self._holders.values()):
+			for entry in list(entries):
+				path = self._path_of(entry)
+				if path is None:
+					# the row was removed from the model behind our back
+					self._unregister(entry)
+				else:
+					self._hints[path] = entry
+
+	def _holder(self, orgpath):
+		"""The live entry which is the parent of the nodes below orgpath: the last one holding it."""
+		for entry in reversed(list(self._holders.get(orgpath, ()))):
+			if self._path_of(entry) is not None:
+				return entry
+			self._unregister(entry)
+		return None
+
+	def _parent_iter_for(self, orgpath):
+		"""TreeIter of the row under which a node of orgpath belongs; None means root level."""
+		parent = self._parent_path(orgpath)
+		if parent is None:
+			return None
+		holder = self._holder(parent)
+		if holder is None:
+			return None
+		return self._iter_of(holder)
+
+	def _same_row(self, iter_a, iter_b):
+		if iter_a is None or iter_b is None:
+			return iter_a is None and iter_b is None
+		return tuple(self.get_path(iter_a)) == tuple(self.get_path(iter_b))
+
+	def _raw_values(self, treeiter):
+		# not self.get(), which wraps the values
+		return list(super(NamedColumnsTreeStore, self).get(treeiter, *range(self.get_n_columns())))
+
+	def _remove_iter(self, treeiter):
+		self._removing = True
+		try:
+			self.remove(treeiter)
+		finally:
+			self._removing = False
+
+	# --- placing nodes ---
+
+	def _rehome_children(self, orgpath):
+		"""Put the nodes right below orgpath where their paths say: under the holder of orgpath or at root level."""
+		if orgpath is None:
+			return
+		children = []
+		for child_orgpath in self._children.get(orgpath, ()):
+			for entry in self._holders.get(child_orgpath, ()):
+				path = self._path_of(entry)
+				if path is not None:
+					children.append((path, entry))
+		# keep their order
+		children.sort(key=lambda path_entry: path_entry[0])
+		for path, entry in children:
+			self._attach(entry)
+
+	def _attach(self, entry):
+		"""Make sure the entry's row (with its subtree) is under the right parent."""
+		treeiter = self._iter_of(entry)
+		wanted_parent_iter = self._parent_iter_for(entry.orgpath)
+		if self._same_row(self.iter_parent(treeiter), wanted_parent_iter):
+			return treeiter
+		return self._relocate(entry, wanted_parent_iter)
+
+	def _entries_below(self, entry):
+		"""entry and the entries of its subtree, parents first."""
+		found = [entry]
+		row_path = self._path_of(entry)
+		for child_orgpath in list(self._children.get(entry.orgpath, ())):
+			for other in list(self._holders.get(child_orgpath, ())):
+				other_path = self._path_of(other)
+				if other_path is not None and other_path[:-1] == row_path:
+					found.extend(self._entries_below(other))
+		return found
+
+	def _relocate(self, entry, dst_parent_iter):
+		"""Re-create the entry's row and its subtree under dst_parent_iter (None: root level)."""
+		src_path = self._path_of(entry)
+		dst_parent_path = None
+		if dst_parent_iter is not None:
+			dst_parent_path = tuple(self.get_path(dst_parent_iter))
+			if dst_parent_path[:len(src_path)] == src_path:
+				# Not possible while the registry is in sync with the model, but better than a corrupt tree.
+				print("warning: not moving a row below itself", file=sys.stderr)
+				dst_parent_path = None
+
+		entry_by_path = dict([(self._path_of(e), e) for e in self._entries_below(entry)])
+		src_ref = gtk.TreeRowReference(self, src_path)
+		self._clone_subtree(src_path, dst_parent_path, entry_by_path)
+		self._remove_iter(self.get_iter(src_ref.get_path()))
+		return self._iter_of(entry)
+
+	def _clone_subtree(self, src_path, dst_parent_path, entry_by_path):
+		"""Append a copy of the row at src_path and its descendants under dst_parent_path, and re-point their entries to the copies.
+		Nothing but appending happens here, so the paths in play stay valid."""
+		dst_parent_iter = None if dst_parent_path is None else self.get_iter(dst_parent_path)
+		src_iter = self.get_iter(src_path)
+		dst_iter = self.append(dst_parent_iter, self._raw_values(src_iter))
+		dst_path = tuple(self.get_path(dst_iter))
+		entry = entry_by_path.get(src_path)
+		if entry is not None:
+			entry.rowref = gtk.TreeRowReference(self, dst_path)
+			self._hints[dst_path] = entry
+		for n in range(self.iter_n_children(src_iter)):
+			self._clone_subtree(src_path + (n,), dst_path, entry_by_path)
 
 
 def floatOrNone(s):
@@ -395,7 +624,7 @@ class TreeModelFilterSortIndex(TreeModelSortIndexed):
 		self.set_sort_column_id(col_num, sort_order)
 	# proxy methods:
 	def __getattribute__(self, attrname):
-		if attrname in ['get_column_num', 'get_column_name', 'get_columns', 'append', 'add_row', 'move_row', 'clear']:
+		if attrname in ['get_column_num', 'get_column_name', 'get_columns', 'append', 'add_node', 'move_node', 'remove_node', 'clear']:
 			return object.__getattribute__(self.base_model, attrname)
 		elif attrname in ['set_visible_func', 'refilter']:
 			return object.__getattribute__(self.filtering_model, attrname)
@@ -2125,10 +2354,10 @@ class GTabData(object):
 			record_key = row_cells[col_idx]
 			existing_record = cb_data['model'].get_row_by_key(self.tabdata_key_field, record_key)
 		if existing_record is None:
-			cb_data['model'].add_row(row_cells, treepath=treepath)
+			cb_data['model'].add_node(row_cells, treepath=treepath)
 		else:
 			existing_record.update(row_cells)
-			cb_data['model'].move_row(existing_record, new_treepath=treepath)
+			cb_data['model'].move_node(existing_record, new_treepath=treepath)
 			# this TreeModelRow may be distroyed by moving across levels on the tree:
 			existing_record = None
 		if self.tabdata_key_field is not None:

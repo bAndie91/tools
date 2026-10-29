@@ -100,13 +100,13 @@ class TreeModelRow(object):
 	def __repr__(self):
 		return '<%s %s>' % (self.__class__.__name__, self.as_dict())
 
-class TreeModelProxy(object):
-	@staticmethod
-	def _proxy_foreach(model, treepath, treeiter, _proxy_userdata):
-		func = _proxy_userdata['func']
-		userdata = _proxy_userdata['userdata']
-		derived_model = _proxy_userdata['derived_model']
-		return func(derived_model, treepath, treeiter, userdata)
+#class TreeModelProxy(object):
+#	@staticmethod
+#	def _proxy_foreach(model, treepath, treeiter, _proxy_userdata):
+#		func = _proxy_userdata['func']
+#		userdata = _proxy_userdata['userdata']
+#		derived_model = _proxy_userdata['derived_model']
+#		return func(derived_model, treepath, treeiter, userdata)
 
 class NamedColumnsTreeStoreCell(object):
 	def __init__(self, returntype, cell_data):
@@ -259,7 +259,42 @@ class NamedColumnsTreeStore(gtk.TreeStore):
 			yield answer
 			treeiter = successor_iter(self, row.iter)
 
-class NamedColumnsOrganizedTreeStore(NamedColumnsTreeStore):
+class IndexedNamedColumnsTreeStore(NamedColumnsTreeStore):
+	"""
+	Maintain a dict of dicts in self.index.
+	Keys of self.index are column names.
+	Keys of self.index[column_name] are cell data taken as row_key.
+	Value of self.index[column_name][row_key] is a TreeRowReference to the row of which key column's content is row_key.
+	Assume row_key is unique per row across the TreeStore.
+	A downstream model must be a NamedColumnsTreeStore.
+	"""
+	def __init__(self, *columns):
+		super(IndexedNamedColumnsTreeStore, self).__init__(*columns)
+		self.connect('row-inserted', self._on_row_inserted)
+		self.connect('row-changed', self._on_row_changed)
+		self.index = {}
+	def add_key_column(self, col_name):
+		if col_name not in self.index:
+			self.index[col_name] = {}
+	def _on_row_inserted(self, model, treepath, treeiter):
+		self._index_row(model, treepath)
+	def _on_row_changed(self, model, treepath, treeiter):
+		self._index_row(model, treepath)
+	def _index_row(self, model, treepath):
+		for col_name in self.index:
+			key = model[treepath][col_name]
+			self.index[col_name][key] = gtk.TreeRowReference(model, treepath)
+	def get_row_by_key(self, col_name, key):
+		rowref = self.index.get(col_name, {}).get(key)
+		if rowref is None or not rowref.valid():
+			return None
+		row = rowref.get_model()[rowref.get_path()]
+		if row[col_name] != key:
+			# row's key field was modified since last added
+			return None
+		return row
+
+class OrganizedIndexedNamedColumnsTreeStore(IndexedNamedColumnsTreeStore):
 	"""Feed it add_node(row, treepath), move_node(node, new_treepath) and remove_node(node)
 	in any order; it keeps the gtk.TreeStore structure in sync with the organization paths.
 
@@ -297,8 +332,8 @@ class NamedColumnsOrganizedTreeStore(NamedColumnsTreeStore):
 			self.orgpath = orgpath  # tuple, or None for plain nodes
 			self.rowref = rowref    # where the node currently is in this model
 
-	def __init__(self, *pargs, **kwargs):
-		super(NamedColumnsOrganizedTreeStore, self).__init__(*pargs, **kwargs)
+	def __init__(self, *columns):
+		super(OrganizedIndexedNamedColumnsTreeStore, self).__init__(*columns)
 		self._reset_registry()
 		self._removing = False  # True while we remove rows ourselves
 		self.connect_after('row-deleted', self._on_row_deleted)
@@ -315,7 +350,7 @@ class NamedColumnsOrganizedTreeStore(NamedColumnsTreeStore):
 
 	def clear(self):
 		self._reset_registry()
-		super(NamedColumnsOrganizedTreeStore, self).clear()
+		super(OrganizedIndexedNamedColumnsTreeStore, self).clear()
 		self._stale = False
 
 	def add_node(self, row, treepath):
@@ -353,7 +388,7 @@ class NamedColumnsOrganizedTreeStore(NamedColumnsTreeStore):
 		return self._iter_of(entry)
 
 	def remove_node(self, row):
-		assert row.get_model() is self
+		assert row.model is self
 		self._forget_dead_nodes()
 		entry = self._entry_of_row(row)
 		# the subtree goes to the previous holder of the path, or to root
@@ -411,7 +446,7 @@ class NamedColumnsOrganizedTreeStore(NamedColumnsTreeStore):
 		return self.get_iter(self._path_of(entry))
 
 	def _entry_of_row(self, row):
-		path = row.get_path()
+		path = row.path
 		entry = self._hints.get(path)
 		if entry is None or self._path_of(entry) != path:
 			self._rebuild_hints()
@@ -547,48 +582,12 @@ def floatOrNone(s):
 	except (ValueError, TypeError):
 		return None
 
-class TreeModelSortIndexed(gtk.TreeModelSort):
-	"""
-	Maintain a dict of dicts in self.index.
-	Keys of self.index are column names.
-	Keys of self.index[column_name] are cell data taken as row_key.
-	Value of self.index[column_name][row_key] is a TreeRowReference to the row of which key column's content is row_key.
-	Assume row_key is unique per row across the TreeStore.
-	A downstream model must be a NamedColumnsTreeStore.
-	"""
-	def __init__(self, model):
-		super(TreeModelSortIndexed, self).__init__(model)
-		while not isinstance(model, NamedColumnsTreeStore):
-			model = model.get_model()
-		model.connect('row-inserted', self._on_row_inserted)
-		model.connect('row-changed', self._on_row_changed)
-		self.index = {}
-	def add_key_column(self, col_name):
-		if col_name not in self.index:
-			self.index[col_name] = {}
-	def _on_row_inserted(self, model, treepath, treeiter):
-		self.index_row(model, treepath)
-	def _on_row_changed(self, model, treepath, treeiter):
-		self.index_row(model, treepath)
-	def index_row(self, model, treepath):
-		for col_name in self.index:
-			key = model[treepath][col_name]
-			self.index[col_name][key] = gtk.TreeRowReference(model, treepath)
-	def get_row_by_key(self, col_name, key):
-		rowref = self.index.get(col_name, {}).get(key)
-		if rowref is None or not rowref.valid():
-			return None
-		row = rowref.get_model()[rowref.get_path()]
-		if row[col_name] != key:
-			# row's key field was modified since last added
-			return None
-		return row
 
-class TreeModelFilterSortIndex(TreeModelSortIndexed):
+class TreeModelFilterSortIndexed(gtk.TreeModelSort):
 	def __init__(self, basemodel):
 		self.base_model = basemodel
 		self.filtering_model = self.base_model.filter_new()
-		super(TreeModelFilterSortIndex, self).__init__(self.filtering_model)
+		super(TreeModelFilterSortIndexed, self).__init__(self.filtering_model)
 		for colnum in range(self.get_n_columns()):
 			self.set_sort_func(colnum, self.mixdata_sorter, colnum)
 	def mixdata_sorter(self, model, iter1, iter2, colnum):
@@ -607,9 +606,9 @@ class TreeModelFilterSortIndex(TreeModelSortIndexed):
 			return self.filtering_model.convert_path_to_child_path(filtering_model_path)
 	def __getitem__(self, item):
 		return self.base_model[self.convert_item_to_basemodel_item(item)]
-	def foreach(self, func, userdata):
-		_proxy_userdata = {'func': func, 'userdata': userdata, 'derived_model': self}
-		super(TreeModelFilterSortIndex, self).foreach(TreeModelProxy._proxy_foreach, _proxy_userdata)
+	#def foreach(self, func, userdata):
+	#	_proxy_userdata = {'func': func, 'userdata': userdata, 'derived_model': self}
+	#	super(TreeModelFilterSortIndexed, self).foreach(TreeModelProxy._proxy_foreach, _proxy_userdata)
 	def get(self, row, *columns):
 		raise NotImplementedError()
 	def get_value(self, treeiter, column):
@@ -624,7 +623,10 @@ class TreeModelFilterSortIndex(TreeModelSortIndexed):
 		self.set_sort_column_id(col_num, sort_order)
 	# proxy methods:
 	def __getattribute__(self, attrname):
-		if attrname in ['get_column_num', 'get_column_name', 'get_columns', 'append', 'add_node', 'move_node', 'remove_node', 'clear']:
+		if attrname in ['get_column_num', 'get_column_name', 'get_columns', 
+				  'add_key_column',
+				  #'get_row_by_key',
+				  'add_node', 'move_node', 'remove_node', 'clear']:
 			return object.__getattribute__(self.base_model, attrname)
 		elif attrname in ['set_visible_func', 'refilter']:
 			return object.__getattribute__(self.filtering_model, attrname)
@@ -714,7 +716,7 @@ class TreeView(gtk.TreeView):
 
 	def set_model(self, base_model):
 		if base_model is not None:
-			self.derived_model = TreeModelFilterSortIndex(base_model)
+			self.derived_model = TreeModelFilterSortIndexed(base_model)
 			super(TreeView, self).set_model(self.derived_model)
 			self.set_filter_function(self.default_filtering_cb)
 			
@@ -2286,7 +2288,7 @@ class GTabData(object):
 			self.tabdata_key_field = None
 			with GtkThreadContext():
 				with self.proppersist_table.Deactivated:
-					self.main_table.set_model(NamedColumnsOrganizedTreeStore(*treemodel_columns))
+					self.main_table.set_model(OrganizedIndexedNamedColumnsTreeStore(*treemodel_columns))
 					self.main_table.set_columns([(col_name, col_name, 'text', idx) for idx, col_name in enumerate(columns)])
 		
 		if cliargs.auto_key_field and self.tabdata_key_field is None:
@@ -2313,10 +2315,10 @@ class GTabData(object):
 				tvc.set_filter_expr(pattern)
 
 	def load_data(self, data_rows_iterator):
-		tree_model = self.main_table.get_model()
+		base_model = self.main_table.get_model().base_model
 		cb_data = {
-			'existing_records_keys': [],
-			'model': tree_model,
+			'existing_records_keys': set(),
+			'model': base_model,
 		}
 		if self.tabdata_key_field is None:
 			with GtkThreadContext():
@@ -2344,11 +2346,11 @@ class GTabData(object):
 				}
 				def gather_former_rows(model, treepath, treeiter, cb_data):
 					if model[treepath][cb_data['tabdata_key_field']] not in cb_data['existing_records_keys']:
-						cb_data['former_rows'].append(gtk.TreeRowReference(model, treepath))
-				tree_model.foreach(gather_former_rows, cb_data_gather_former_rows)
+						cb_data['former_rows'].append(model[treepath])
+				base_model.foreach(gather_former_rows, cb_data_gather_former_rows)
 				# delete no longer existing rows
-				for rowref in cb_data_gather_former_rows['former_rows']:
-					tree_model.remove_node(rowref)
+				for row in cb_data_gather_former_rows['former_rows']:
+					base_model.remove_node(row)
 
 	def load_data_row(self, loop_var, context_handlers, cb_data):
 		row_cells, treepath = loop_var
@@ -2366,7 +2368,7 @@ class GTabData(object):
 			# this TreeModelRow may be distroyed by moving across levels on the tree:
 			existing_record = None
 		if self.tabdata_key_field is not None:
-			cb_data['existing_records_keys'].append(record_key)
+			cb_data['existing_records_keys'].add(record_key)
 
 	def after_load_table(self):
 		self.main_table.expand_all()

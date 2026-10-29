@@ -353,7 +353,7 @@ class NamedColumnsOrganizedTreeStore(NamedColumnsTreeStore):
 		return self._iter_of(entry)
 
 	def remove_node(self, row):
-		assert row.model is self
+		assert row.get_model() is self
 		self._forget_dead_nodes()
 		entry = self._entry_of_row(row)
 		# the subtree goes to the previous holder of the path, or to root
@@ -411,7 +411,7 @@ class NamedColumnsOrganizedTreeStore(NamedColumnsTreeStore):
 		return self.get_iter(self._path_of(entry))
 
 	def _entry_of_row(self, row):
-		path = tuple(row.path)
+		path = row.get_path()
 		entry = self._hints.get(path)
 		if entry is None or self._path_of(entry) != path:
 			self._rebuild_hints()
@@ -2313,9 +2313,10 @@ class GTabData(object):
 				tvc.set_filter_expr(pattern)
 
 	def load_data(self, data_rows_iterator):
+		tree_model = self.main_table.get_model()
 		cb_data = {
 			'existing_records_keys': [],
-			'model': self.main_table.get_model(),
+			'model': tree_model,
 		}
 		if self.tabdata_key_field is None:
 			with GtkThreadContext():
@@ -2336,14 +2337,18 @@ class GTabData(object):
 			# TODO TimedChunkProcessor
 			with GtkThreadContext(), GDKCursor(self.main_win.window, gtk.gdk.WATCH):
 				# gather rows no longer in the input data table
-				cb_data = {'existing_records_keys': cb_data['existing_records_keys'], 'tabdata_key_field': self.tabdata_key_field, 'former_rows': []}
+				cb_data_gather_former_rows = {
+					'existing_records_keys': cb_data['existing_records_keys'],
+					'tabdata_key_field': self.tabdata_key_field,
+					'former_rows': [],
+				}
 				def gather_former_rows(model, treepath, treeiter, cb_data):
 					if model[treepath][cb_data['tabdata_key_field']] not in cb_data['existing_records_keys']:
 						cb_data['former_rows'].append(gtk.TreeRowReference(model, treepath))
-				self.main_table.get_model().foreach(gather_former_rows, cb_data)
+				tree_model.foreach(gather_former_rows, cb_data_gather_former_rows)
 				# delete no longer existing rows
-				for rowref in cb_data['former_rows']:
-					del self.main_table.get_model()[rowref.get_path()]
+				for rowref in cb_data_gather_former_rows['former_rows']:
+					tree_model.remove_node(rowref)
 
 	def load_data_row(self, loop_var, context_handlers, cb_data):
 		row_cells, treepath = loop_var

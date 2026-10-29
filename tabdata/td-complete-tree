@@ -57,9 +57,15 @@ while(not eof STDIN)
 	$Parent{$path} = 1;
 	
 	my @path = split /\Q$OptPathSep\E/, $path;
-	my @parent = @path[0..$#path-1];
-	my $parent = join $OptPathSep, @parent;
-	$Parent{$parent} = 0 if $parent ne '' and not exists $Parent{$parent};
+	my $depth_removed = 0;
+	while(1)
+	{
+		$depth_removed++;
+		my @parent = @path[0..$#path - $depth_removed];
+		last unless @parent;
+		my $parent = join $OptPathSep, @parent;
+		$Parent{$parent} = 0 if not exists $Parent{$parent};
+	}
 	
 	my $leaf = $path[$#path];
 	$row[$Header{$OptIncompleteColumn}] = $leaf;

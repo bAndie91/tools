@@ -129,6 +129,8 @@ class NamedColumnsTreeStoreCell(object):
 	def __str__(self):
 		if self.data is None: return None
 		return str(self.value)
+	def __repr__(self):
+		return "<%s raw=%s>" % (self.__class__.__name__, repr(self.raw))
 	@property
 	def is_empty(self):
 		return self.data is None or self.data == ''
@@ -273,18 +275,37 @@ class IndexedNamedColumnsTreeStore(NamedColumnsTreeStore):
 		self.connect('row-inserted', self._on_row_inserted)
 		self.connect('row-changed', self._on_row_changed)
 		self.index = {}
+		self._default_index_name = None
 	def add_key_column(self, col_name):
+		if len(self.index) == 0:
+			self._default_index_name = col_name
 		if col_name not in self.index:
 			self.index[col_name] = {}
+	@property
+	def default_index_name(self):
+		if self._default_index_name is None:
+			raise KeyError("no default key is set")
+		return self._default_index_name
+	@default_index_name.setter
+	def default_index_name(self, col_name):
+		if col_name not in self.index:
+			raise KeyError("column is not a key: "+col_name)
+		self._default_index_name = col_name
+	@property
+	def default_index(self):
+		return self.index[self.default_index_name]
 	def _on_row_inserted(self, model, treepath, treeiter):
 		self._index_row(model, treepath)
 	def _on_row_changed(self, model, treepath, treeiter):
 		self._index_row(model, treepath)
 	def _index_row(self, model, treepath):
 		for col_name in self.index:
-			key = model[treepath][col_name]
+			key = model[treepath][col_name].raw
 			self.index[col_name][key] = gtk.TreeRowReference(model, treepath)
-	def get_row_by_key(self, col_name, key):
+	def get_indexed_row(self, key, index=None):
+		if index is None:
+			index = self.default_index_name
+		col_name = index
 		rowref = self.index.get(col_name, {}).get(key)
 		if rowref is None or not rowref.valid():
 			return None
@@ -2317,12 +2338,14 @@ class GTabData(object):
 	def load_data(self, data_rows_iterator):
 		base_model = self.main_table.get_model().base_model
 		cb_data = {
-			'existing_records_keys': set(),
+			'existing_keys': set(),
 			'model': base_model,
 		}
 		if self.tabdata_key_field is None:
 			with GtkThreadContext():
 				cb_data['model'].clear()
+		else:
+			old_data_keys = set(base_model.default_index.keys())
 
 		with ContextTransitionContext(GtkThreadContext(), GDKCursor(self.main_win.window, gtk.gdk.WATCH)):
 			data_processor = TimedChunkProcessor(
@@ -2336,21 +2359,14 @@ class GTabData(object):
 			data_processor.join()
 
 		if self.tabdata_key_field is not None:
+			obsolete_data_keys = old_data_keys - cb_data['existing_keys']
 			# TODO TimedChunkProcessor
 			with GtkThreadContext(), GDKCursor(self.main_win.window, gtk.gdk.WATCH):
-				# gather rows no longer in the input data table
-				cb_data_gather_former_rows = {
-					'existing_records_keys': cb_data['existing_records_keys'],
-					'tabdata_key_field': self.tabdata_key_field,
-					'former_rows': [],
-				}
-				def gather_former_rows(model, treepath, treeiter, cb_data):
-					if model[treepath][cb_data['tabdata_key_field']] not in cb_data['existing_records_keys']:
-						cb_data['former_rows'].append(model[treepath])
-				base_model.foreach(gather_former_rows, cb_data_gather_former_rows)
 				# delete no longer existing rows
-				for row in cb_data_gather_former_rows['former_rows']:
-					base_model.remove_node(row)
+				for key in obsolete_data_keys:
+					obsolete_row = base_model.get_indexed_row(key, index=self.tabdata_key_field)
+					if obsolete_row is not None:
+						base_model.remove_node(obsolete_row)
 
 	def load_data_row(self, loop_var, context_handlers, cb_data):
 		row_cells, treepath = loop_var
@@ -2359,7 +2375,7 @@ class GTabData(object):
 		if self.tabdata_key_field is not None:
 			col_idx = cb_data['model'].get_column_num(self.tabdata_key_field)
 			record_key = row_cells[col_idx]
-			existing_record = cb_data['model'].get_row_by_key(self.tabdata_key_field, record_key)
+			existing_record = cb_data['model'].get_indexed_row(record_key, index=self.tabdata_key_field)
 		if existing_record is None:
 			cb_data['model'].add_node(row_cells, treepath=treepath)
 		else:
@@ -2368,7 +2384,7 @@ class GTabData(object):
 			# this TreeModelRow may be distroyed by moving across levels on the tree:
 			existing_record = None
 		if self.tabdata_key_field is not None:
-			cb_data['existing_records_keys'].add(record_key)
+			cb_data['existing_keys'].add(record_key)
 
 	def after_load_table(self):
 		self.main_table.expand_all()

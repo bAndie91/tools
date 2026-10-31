@@ -2484,7 +2484,7 @@ class GTabData(object):
 		# restore sort-by column
 		if self.proppersist_table.props.get('sort-column') == tvc.name:
 			tv.set_sortby_column_by_name(tvc.name)
-			self.restore_sort_order_on_current_sortby_column
+			self.restore_sort_order_on_current_sortby_column()
 
 		
 		# column-specific properties

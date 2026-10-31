@@ -2483,8 +2483,10 @@ class GTabData(object):
 			tvc.set_visible(False)
 		# restore sort-by column
 		if self.proppersist_table.props.get('sort-column') == tvc.name:
+			sort_order_nick = self.proppersist_table.props.get('sort-order')
 			tv.set_sortby_column_by_name(tvc.name)
-			self.restore_sort_order_on_current_sortby_column()
+			if sort_order_nick:
+				self.set_sort_order_on_current_sortby_column(sort_order_nick)
 
 		
 		# column-specific properties
@@ -2508,17 +2510,17 @@ class GTabData(object):
 					pass
 	
 	def restore_sortby_column(self, tv, colname):
+		sort_order_nick = self.proppersist_table.props.get('sort-order')
 		try:
 			tv.set_sortby_column_by_name(colname)
 		except TreeView.ColumnNotFoundException:
 			pass
 		else:
-			self.restore_sort_order_on_current_sortby_column()
+			if sort_order_nick:
+				self.set_sort_order_on_current_sortby_column(sort_order_nick)
 	
-	def restore_sort_order_on_current_sortby_column(self):
-		sort_order = self.proppersist_table.props.get('sort-order')
-		if sort_order:
-			self.main_table.get_sortby_column().set_sort_order(getattr(gtk, 'SORT_'+sort_order.upper()))
+	def set_sort_order_on_current_sortby_column(self, sort_order_nick):
+		self.main_table.get_sortby_column().set_sort_order(getattr(gtk, 'SORT_'+sort_order_nick.upper()))
 		
 	def restore_hidden_columns(self, tv, columns):
 		for colname in columns:

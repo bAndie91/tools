@@ -659,6 +659,51 @@ def glib_callback_once(func, *args):
 	func(*args)
 	return False
 
+class MultilevelGtkIdleQueue(object):
+	def __init__(self):
+		self._queue = []
+		self._queue_level = 0
+		self._queue_running = False
+		self._item_scheduled = False
+	@property
+	def subqueue(self):
+		queue = self._queue
+		for level in range(self._queue_level):
+			queue = queue[0]['subqueue']
+		return queue
+	def add(self, *callback):
+		item = {'subqueue': [], 'callback': callback}
+		if self._queue_running:
+			self.subqueue.append(item)
+		else:
+			self._queue.append(item)
+			self._schedule()
+	def _schedule(self):
+		if not self._item_scheduled:
+			self._item_scheduled = True
+			callback = self.subqueue[0]['callback']
+			glib.idle_add(self._fire, *callback, priority=glib.PRIORITY_DEFAULT_IDLE)
+	def _next(self):
+		while len(self.subqueue) == 0:
+			# no more items on this level, destroy parent item
+			if self._queue_level == 0:
+				break
+			else:
+				self._queue_level -= 1
+				self.subqueue.pop(0)
+		if len(self.subqueue) > 0:
+			self._schedule()
+	def _fire(self, *callback):
+		self._item_scheduled = False
+		self._queue_level += 1
+		self._queue_running = True
+		try:
+			callback[0](*callback[1:])
+		finally:
+			self._queue_running = False
+			self._next()
+		return False
+
 class Debouncer(object):
 	def __init__(self, delay_ms, callback):
 		self.delay_ms = delay_ms
@@ -906,13 +951,13 @@ class TreeView(gtk.TreeView):
 			self._previous_widths[tvc.name] = tvc.get_width()
 			tvc.disable_ellipsize()
 			tvc.clear_width_requirement()
-		glib.idle_add(glib_callback_once, self._columns_autosize_set_autosize, cols, priority=glib.PRIORITY_DEFAULT_IDLE)
+		gtkidlequeue.add(self._columns_autosize_set_autosize, cols)
 	def _columns_autosize_set_autosize(self, cols):
 		for tvc in cols:
 			tvc.reset_fixed_width()
 			tvc.set_sizing(gtk.TREE_VIEW_COLUMN_AUTOSIZE)
 		#gtk.TreeView.columns_autosize(self)
-		glib.idle_add(glib_callback_once, self._columns_autosize_restore_resizable, cols, priority=glib.PRIORITY_DEFAULT_IDLE)
+		gtkidlequeue.add(self._columns_autosize_restore_resizable, cols)
 	def _columns_autosize_restore_resizable(self, cols):
 		for tvc in cols:
 			width = tvc.get_width()
@@ -1102,7 +1147,7 @@ class TreeViewColumn(gtk.TreeViewColumn):
 	def title(self, title):
 		self.header_label.set_text(title)
 	def __repr__(self):
-		return '<%s name="%s">' % (self.__class__.__name__, self.name)
+		return '<%s name="%s" width=%s fixed-width=%s min-width=%s max-width=%s>' % (self.__class__.__name__, self.name, self.get_width(), self.get_fixed_width(), self.get_min_width(), self.get_max_width())
 	def setup_events(self, *X):
 		# this method should be called when the TreeView is realized.
 		if not self.get_data('setup-events-done'):
@@ -2390,10 +2435,10 @@ class GTabData(object):
 		self.main_table.expand_all()
 		with self.proppersist_table.Deactivated, GtkThreadContext():
 			self.proppersist_table.apply_saved_properties()
-			# auto size newly learned columns
-			self._auto_size_new_columns()
-			# resize the app window if not yet resized by the user
-			gobject.idle_add(glib_callback_once, self._window_initial_resize)
+		# auto size newly learned columns
+		gtkidlequeue.add(self._auto_size_new_columns)
+		# resize the app window if not yet resized by the user
+		gtkidlequeue.add(self._window_initial_resize)
 	
 	def on_key_press(self, tv, event):
 		key = gtk.gdk.keyval_name(event.keyval)
@@ -2562,6 +2607,7 @@ if cliargs.activate_command is not None:
 if cliargs.activate_script is not None:
 	validate_activate_command(cliargs.activate_script)
 
+gtkidlequeue = MultilevelGtkIdleQueue()
 main_app = GTabData()
 main_app.main_win.title = Template(cliargs.title).render({'env': os.environ})
 main_app.main_win.set_icon_from_any(cliargs.icon)

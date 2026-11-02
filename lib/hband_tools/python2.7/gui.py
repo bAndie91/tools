@@ -298,6 +298,12 @@ class PropertyPersistor(object):
 		self.currently_applicating = False
 		self.add_properties(property_descriptors)
 	
+	def activate(self):
+		self.active = True
+
+	def deactivate(self):
+		self.active = False
+
 	def add_properties(self, property_descriptors):
 		for prop_name, trigger_signal, getter, applicator in property_descriptors:
 			if trigger_signal not in self.triggers:

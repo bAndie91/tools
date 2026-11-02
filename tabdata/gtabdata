@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import print_function
+from functools import partial
 import sys
 import traceback
 import os
@@ -655,6 +656,13 @@ class TreeModelFilterSortIndexed(gtk.TreeModelSort):
 			return object.__getattribute__(self, attrname)
 
 
+class NoneContext(object):
+	def __enter__(self):
+		return self
+	def __exit__(self, exc_type, exc, tb):
+		return False
+
+
 def glib_callback_once(func, *args):
 	func(*args)
 	return False
@@ -665,14 +673,24 @@ class MultilevelGtkIdleQueue(object):
 		self._queue_level = 0
 		self._queue_running = False
 		self._item_scheduled = False
-	@property
-	def subqueue(self):
+		self._contextmanager_for_all_added_items = None
+	def _queue_at_level(self, level):
 		queue = self._queue
-		for level in range(self._queue_level):
+		for x in range(level):
 			queue = queue[0]['subqueue']
 		return queue
-	def add(self, *callback):
-		item = {'subqueue': [], 'callback': callback}
+	@property
+	def subqueue(self):
+		return self._queue_at_level(self._queue_level)
+	def set_context(self, ctx):
+		self._contextmanager_for_all_added_items = ctx
+	def clear_context(self):
+		self._contextmanager_for_all_added_items = None
+	def add(self, *callback, **opts):
+		context = self._contextmanager_for_all_added_items
+		if 'context' in opts:
+			context = opts['context']
+		item = {'subqueue': [], 'callback': callback, 'context': context}
 		if self._queue_running:
 			self.subqueue.append(item)
 		else:
@@ -681,8 +699,8 @@ class MultilevelGtkIdleQueue(object):
 	def _schedule(self):
 		if not self._item_scheduled:
 			self._item_scheduled = True
-			callback = self.subqueue[0]['callback']
-			glib.idle_add(self._fire, *callback, priority=glib.PRIORITY_DEFAULT_IDLE)
+			qitem = self.subqueue[0]
+			glib.idle_add(self._fire, qitem, priority=glib.PRIORITY_DEFAULT_IDLE)
 	def _next(self):
 		while len(self.subqueue) == 0:
 			# no more items on this level, destroy parent item
@@ -693,12 +711,23 @@ class MultilevelGtkIdleQueue(object):
 				self.subqueue.pop(0)
 		if len(self.subqueue) > 0:
 			self._schedule()
-	def _fire(self, *callback):
+	def _fire(self, qitem):
 		self._item_scheduled = False
+		
+		contextmanager = qitem['context']
+		qlevel = self._queue_level
+		while contextmanager is None and qlevel > 0:
+			qlevel -= 1
+			contextmanager = self._queue_at_level(qlevel)[0]['context']
+		if contextmanager is None:
+			contextmanager = NoneContext
+		callback = qitem['callback']
+		
 		self._queue_level += 1
 		self._queue_running = True
 		try:
-			callback[0](*callback[1:])
+			with contextmanager():
+				callback[0](*callback[1:])
 		finally:
 			self._queue_running = False
 			self._next()
@@ -1604,12 +1633,6 @@ class ContextTransitionContext:
 		self.cm1.__exit__(None, None, None)
 		return is_suppressed
 
-class NoneContext(object):
-	def __enter__(self):
-		return self
-	def __exit__(self, exc_type, exc, tb):
-		return False
-
 class TimedChunkProcessor(object):
 	"""
 	Processes an iterator in time-bounded chunks, yielding control between chunks.
@@ -2435,10 +2458,10 @@ class GTabData(object):
 		self.main_table.expand_all()
 		with self.proppersist_table.Deactivated, GtkThreadContext():
 			self.proppersist_table.apply_saved_properties()
-		# auto size newly learned columns
-		gtkidlequeue.add(self._auto_size_new_columns)
+			# auto size newly learned columns
+			self._auto_size_new_columns()
 		# resize the app window if not yet resized by the user
-		gtkidlequeue.add(self._window_initial_resize)
+		gtkidlequeue.add(self._window_initial_resize, context=GtkThreadContext)
 	
 	def on_key_press(self, tv, event):
 		key = gtk.gdk.keyval_name(event.keyval)
@@ -2510,7 +2533,13 @@ class GTabData(object):
 
 
 	def _auto_size_new_columns(self):
+		# don't preserve automatically sized columns' widths:
+		gtkidlequeue.add(lambda *_: self.proppersist_table.deactivate())
+		gtkidlequeue.set_context(GtkThreadContext)
 		self.main_table.columns_autosize([col for col in self.main_table.get_columns() if not col.get_width() or col.get_width() == 1])
+		gtkidlequeue.clear_context()
+		# main_table.columns_autosize() queued some potentially preserved property changing procedures - turn prop preserver back on:
+		gtkidlequeue.add(lambda *_: self.proppersist_table.activate())
 
 	def _window_initial_resize(self):
 		if not self.main_win.property_persistor.props.get('geometry'):

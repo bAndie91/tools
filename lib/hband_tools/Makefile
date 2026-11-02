@@ -37,3 +37,7 @@ $(INSTALL_PREFIX):
 
 .PHONY: install
 install: $(INSTALL_TARGETS)
+
+.PHONY: uninstall
+uninstall:
+	$(error see `uninstall.sh´ for file paths what was ever installed by `make install´ here.)

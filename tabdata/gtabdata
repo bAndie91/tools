@@ -2394,14 +2394,16 @@ class GTabData(object):
 			with GtkThreadContext():
 				self.main_table.get_model().add_key_column(self.tabdata_key_field)
 		
-		for filter_field_pattern in cliargs.filter:
-			field, pattern = filter_field_pattern.split(':', 1)
-			try:
-				tvc = self.main_table.get_column_by_name(field)
-			except:
-				traceback.print_exc()
-			else:
-				tvc.set_filter_expr(pattern)
+		with GtkThreadContext():
+			for filter_field_pattern in cliargs.filter:
+				field, pattern = filter_field_pattern.split(':', 1)
+				try:
+					tvc = self.main_table.get_column_by_name(field)
+				except:
+					traceback.print_exc()
+				else:
+					with self.proppersist_column[field].Deactivated:
+						tvc.set_filter_expr(pattern)
 
 	def load_data(self, data_rows_iterator):
 		base_model = self.main_table.get_model().base_model

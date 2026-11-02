@@ -7,6 +7,7 @@ import gtk
 import gobject
 import xdg.BaseDirectory
 import fcntl
+import threading
 import traceback
 from .files import *
 import __main__
@@ -276,12 +277,19 @@ class Scrollable(gtk.ScrolledWindow):
 class DeactivatedPropertyPersistorContext(object):
 	def __init__(self, property_persistor):
 		self.property_persistor = property_persistor
+		self._suspend_counter = 0
+		self._lock = threading.Lock()
 	def __enter__(self):
-		self.original_active = self.property_persistor.active
-		self.property_persistor.active = False
+		with self._lock:
+			self.original_active = self.property_persistor.active
+			self._suspend_counter += 1
+			self.property_persistor.active = False
 		return self
 	def __exit__(self, exc_type, exc_value, traceback):
-		self.property_persistor.active = self.original_active
+		with self._lock:
+			self._suspend_counter -= 1
+			if self._suspend_counter <= 0:
+				self.property_persistor.active = self.original_active
 		return False
 
 class PropertyPersistor(object):

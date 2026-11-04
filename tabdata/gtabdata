@@ -721,9 +721,10 @@ class MultilevelGtkIdleQueue(object):
 		return False
 
 class Debouncer(object):
-	def __init__(self, delay_ms, callback):
+	def __init__(self, delay_ms, callback, timer_context=NoneContext):
 		self.delay_ms = delay_ms
 		self.callback = callback
+		self.timer_context = timer_context
 		self._timeout_id = None
 
 	def cancel(self):
@@ -732,13 +733,17 @@ class Debouncer(object):
 
 	def trigger(self):
 		self.cancel()
-		self._timeout_id = gobject.timeout_add(self.delay_ms, self.fire)
+		self._timeout_id = gobject.timeout_add(self.delay_ms, self._ignite)
 
+	def _ignite(self):
+		with self.timer_context():
+			self.fire()
+		return False  # False = don't repeat _ignite()
+	
 	def fire(self):
 		self.cancel()
 		self._timeout_id = None
-		self.callback()
-		return False  # False = don't repeat the timeout
+		return self.callback()
 
 class TreeView(gtk.TreeView):
 	__gsignals__ = {
@@ -771,11 +776,10 @@ class TreeView(gtk.TreeView):
 		self.connect('key-release-event', self._on_key_release)
 		self.connect('header-menu-popup', self._on_header_menu_popup)
 		self.connect_after('expose-event', self._on_expose)
-		self.filter_debouncer = Debouncer(1000, self._refilter)
+		self.filter_debouncer = Debouncer(1000, self._refilter, timer_context=GtkThreadContext)
 
 	def _refilter(self):
-		with GtkThreadContext():
-			self.derived_model.refilter()
+		self.derived_model.refilter()
 
 	def _on_expose(self, tv, event):
 		self._highlight_focused_cell(event)
@@ -979,18 +983,26 @@ class TreeView(gtk.TreeView):
 	def get_column_names(self):
 		return list([tvc.name for tvc in self.get_columns()])
 
-	def columns_autosize(self, cols=None):
+	def columns_autosize(self, cols=None, emit_signals=True):
 		if cols is None:
 			cols = self.get_columns()
-		for tvc in cols:
-			self._column_autosizing[tvc.name] = True
-			if tvc.name in self._previous_widths:
-				self._previous_previous_widths[tvc.name] = self._previous_widths[tvc.name]
-			self._previous_widths[tvc.name] = tvc.get_width()
-			tvc.disable_ellipsize()
-			tvc.clear_width_requirement()
-		gtkidlequeue.add(self._columns_autosize_set_autosize, cols)
-		gtkidlequeue.add(self._columns_autosize_end_autosize, cols)
+		try:
+			for tvc in cols:
+				if not emit_signals:
+					self._column_autosizing[tvc.name] = True
+				if tvc.name in self._previous_widths:
+					self._previous_previous_widths[tvc.name] = self._previous_widths[tvc.name]
+				self._previous_widths[tvc.name] = tvc.get_width()
+				tvc.disable_ellipsize()
+				tvc.clear_width_requirement()
+		except:
+			for tvc in cols:
+				if not emit_signals:
+					del self._column_autosizing[tvc.name]
+		else:
+			gtkidlequeue.add(self._columns_autosize_set_autosize, cols)
+			if not emit_signals:
+				gtkidlequeue.add(self._columns_autosize_end_autosize, cols)
 	def _columns_autosize_set_autosize(self, cols):
 		for tvc in cols:
 			tvc.reset_fixed_width()
@@ -2476,10 +2488,10 @@ class GTabData(object):
 			self.main_table.expand_all()  # TODO expand rows as they are added and remember expanded state by key
 			with self.proppersist_table.Deactivated:
 				self.proppersist_table.apply_saved_properties()
-				# auto size newly learned columns
-				self._auto_size_new_columns()
+			# auto size newly learned columns
+			self._auto_size_new_columns()
 		# resize the app window if not yet resized by the user
-		gtkidlequeue.add(self._window_initial_resize, context=GtkThreadContext)
+		gtkidlequeue.add(self._window_initial_resize)
 	
 	def on_key_press(self, tv, event):
 		key = gtk.gdk.keyval_name(event.keyval)
@@ -2551,7 +2563,7 @@ class GTabData(object):
 
 
 	def _auto_size_new_columns(self):
-		self.main_table.columns_autosize([col for col in self.main_table.get_columns() if not col.get_width() or col.get_width() == 1])
+		self.main_table.columns_autosize([col for col in self.main_table.get_columns() if not col.get_width() or col.get_width() == 1], emit_signals=False)
 
 	def _window_initial_resize(self):
 		if not self.main_win.property_persistor.props.get('geometry'):

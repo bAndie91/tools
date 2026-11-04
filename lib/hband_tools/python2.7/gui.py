@@ -281,7 +281,8 @@ class DeactivatedPropertyPersistorContext(object):
 		self._lock = threading.Lock()
 	def __enter__(self):
 		with self._lock:
-			self.original_active = self.property_persistor.active
+			if self._suspend_counter == 0:
+				self.original_active = self.property_persistor.active
 			self._suspend_counter += 1
 			self.property_persistor.active = False
 		return self

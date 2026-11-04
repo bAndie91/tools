@@ -674,6 +674,7 @@ class MultilevelGtkIdleQueue(object):
 		self._queue_running = False
 		self._item_scheduled = False
 		self._contextmanager_for_all_added_items = None
+		self._lock = threading.Lock()
 	def _queue_at_level(self, level):
 		queue = self._queue
 		for x in range(level):
@@ -682,51 +683,37 @@ class MultilevelGtkIdleQueue(object):
 	@property
 	def subqueue(self):
 		return self._queue_at_level(self._queue_level)
-	def set_context(self, ctx):
-		self._contextmanager_for_all_added_items = ctx
-	def clear_context(self):
-		self._contextmanager_for_all_added_items = None
 	def add(self, *callback, **opts):
-		context = self._contextmanager_for_all_added_items
-		if 'context' in opts:
-			context = opts['context']
-		item = {'subqueue': [], 'callback': callback, 'context': context}
-		if self._queue_running:
-			self.subqueue.append(item)
-		else:
-			self._queue.append(item)
-			self._schedule()
+		with self._lock:
+			item = {'subqueue': [], 'callback': callback}
+			if self._queue_running:
+				self.subqueue.append(item)
+			else:
+				self._queue.append(item)
+				self._schedule()
 	def _schedule(self):
 		if not self._item_scheduled:
 			self._item_scheduled = True
 			qitem = self.subqueue[0]
 			glib.idle_add(self._fire, qitem, priority=glib.PRIORITY_DEFAULT_IDLE)
 	def _next(self):
-		while len(self.subqueue) == 0:
-			# no more items on this level, destroy parent item
-			if self._queue_level == 0:
-				break
-			else:
-				self._queue_level -= 1
-				self.subqueue.pop(0)
-		if len(self.subqueue) > 0:
-			self._schedule()
+		with self._lock:
+			while len(self.subqueue) == 0:
+				# no more items on this level, destroy parent item
+				if self._queue_level == 0:
+					break
+				else:
+					self._queue_level -= 1
+					self.subqueue.pop(0)
+			if len(self.subqueue) > 0:
+				self._schedule()
 	def _fire(self, qitem):
 		self._item_scheduled = False
-		
-		contextmanager = qitem['context']
-		qlevel = self._queue_level
-		while contextmanager is None and qlevel > 0:
-			qlevel -= 1
-			contextmanager = self._queue_at_level(qlevel)[0]['context']
-		if contextmanager is None:
-			contextmanager = NoneContext
-		callback = qitem['callback']
-		
 		self._queue_level += 1
 		self._queue_running = True
+		callback = qitem['callback']
 		try:
-			with contextmanager():
+			with GtkThreadContext():
 				callback[0](*callback[1:])
 		finally:
 			self._queue_running = False
@@ -770,9 +757,11 @@ class TreeView(gtk.TreeView):
 		self._previous_widths = {}
 		self._previous_previous_widths = {}
 		self._stored_column_width = {}
+		self._column_autosizing = {}
 		self.set_reorderable(True)
 		self.set_headers_clickable(True)
 		self.set_rubber_banding(True)
+		self.set_enable_tree_lines(True)
 		self.get_selection().set_mode(gtk.SELECTION_MULTIPLE)
 		self.get_selection().connect('changed', self._on_selection_changed)
 		self.connect('button-press-event', self._on_button_click)
@@ -785,7 +774,8 @@ class TreeView(gtk.TreeView):
 		self.filter_debouncer = Debouncer(1000, self._refilter)
 
 	def _refilter(self):
-		self.derived_model.refilter()
+		with GtkThreadContext():
+			self.derived_model.refilter()
 
 	def _on_expose(self, tv, event):
 		self._highlight_focused_cell(event)
@@ -858,6 +848,12 @@ class TreeView(gtk.TreeView):
 					popup_menu.popup(None, None, None, event.button, event.time)
 			return True
 
+	def get_columns(self):
+		return [col for col in self._get_gtk_columns() if isinstance(col, TreeViewColumn)]
+
+	def _get_gtk_columns(self):
+		return super(TreeView, self).get_columns()
+	
 	def _on_realize(self, widget):
 		for tvc in self.get_columns():
 			self._column_setup_events(tvc)
@@ -867,8 +863,10 @@ class TreeView(gtk.TreeView):
 		self.set_data('layoutstash', {})
 
 	def set_columns(self, columns):
-		for col in self.get_columns(): self.remove_column(col)
-		return self.add_columns(columns)
+		for col in self._get_gtk_columns():
+			self.remove_column(col)
+		self.add_columns(columns)
+		self.append_spacer_column()
 	
 	def add_columns(self, columns):
 		for col_name, col_title, col_attr, col_num in columns:
@@ -889,16 +887,18 @@ class TreeView(gtk.TreeView):
 			tvc.set_data('original-position', len(self.get_columns()))
 			self.append_column(tvc)
 
-	def _on_column_width_change(self, col, gparam):
-		w = col.get_width()
-		if w != self._stored_column_width.get(col.name):
-			self.emit('column-width-changed', col, w)
-		self._stored_column_width[col.name] = w
-
 	def append_column(self, tvc):
+		"use .add_column() medthod from outside"
 		super(TreeView, self).append_column(tvc)
 		self._column_setup_events(tvc)
 		self.emit('column-added', tvc)
+	
+	def append_spacer_column(self):
+		tvc = gtk.TreeViewColumn()
+		tvc.set_sort_indicator(False)
+		tvc.set_resizable(False)
+		tvc.set_reorderable(False)
+		super(TreeView, self).append_column(tvc)
 
 	def _column_setup_events(self, tvc):
 		if hasattr(tvc, 'setup_events'):
@@ -950,8 +950,16 @@ class TreeView(gtk.TreeView):
 	def get_sortby_column(self):
 		return self.get_column_by_name( self.get_model().get_sort_column_name() )
 
+	def _on_column_width_change(self, col, gparam):
+		w = col.get_width()
+		if w != self._stored_column_width.get(col.name):
+			if col.name not in self._column_autosizing:
+				self.emit('column-width-changed', col, w)
+		self._stored_column_width[col.name] = w
+
 	def _on_column_visibility_changed(self, tvc, gparam):
-		self.emit('column-visibility-changed', tvc)
+		if tvc.name not in self._column_autosizing:
+			self.emit('column-visibility-changed', tvc)
 	
 	class ColumnNotFoundException(Exception):
 		pass
@@ -975,12 +983,14 @@ class TreeView(gtk.TreeView):
 		if cols is None:
 			cols = self.get_columns()
 		for tvc in cols:
+			self._column_autosizing[tvc.name] = True
 			if tvc.name in self._previous_widths:
 				self._previous_previous_widths[tvc.name] = self._previous_widths[tvc.name]
 			self._previous_widths[tvc.name] = tvc.get_width()
 			tvc.disable_ellipsize()
 			tvc.clear_width_requirement()
 		gtkidlequeue.add(self._columns_autosize_set_autosize, cols)
+		gtkidlequeue.add(self._columns_autosize_end_autosize, cols)
 	def _columns_autosize_set_autosize(self, cols):
 		for tvc in cols:
 			tvc.reset_fixed_width()
@@ -997,6 +1007,9 @@ class TreeView(gtk.TreeView):
 					self._previous_widths[tvc.name] = self._previous_previous_widths.get(tvc.name)
 			tvc.set_resizable(True)
 			tvc.enable_ellipsize()
+	def _columns_autosize_end_autosize(self, cols):
+		for tvc in cols:
+			del self._column_autosizing[tvc.name]
 	def restore_previous_widths(self, cols=None):
 		if cols is None:
 			cols = self.get_columns()
@@ -1036,6 +1049,7 @@ class TreeView(gtk.TreeView):
 		popup_menu.append(gtk.SeparatorMenuItem())
 		columns_submenu = SubmenuMenuItem(label='columns')
 		popup_menu.append(columns_submenu)
+		# TODO allow header context menu on the space column header too
 		for col in self.get_columns():
 			markup = glib.markup_escape_text(col.title)
 			if tv_col.name == col.name:
@@ -1322,6 +1336,7 @@ class CellRendererTextOverflow(gtk.GenericCellRenderer):
 		layoutstash = tv.get_data('layoutstash')
 		
 		def get_adjacent_columns():
+			# TODO overdraw the spacer column too
 			cols = tv.get_columns()
 			col_idx = cols.index(tvc)
 			adjacent_cols_names = []
@@ -2457,11 +2472,12 @@ class GTabData(object):
 			cb_data['existing_keys'].add(record_key)
 
 	def after_load_table(self):
-		self.main_table.expand_all()
-		with self.proppersist_table.Deactivated, GtkThreadContext():
-			self.proppersist_table.apply_saved_properties()
-			# auto size newly learned columns
-			self._auto_size_new_columns()
+		with GtkThreadContext():
+			self.main_table.expand_all()  # TODO expand rows as they are added and remember expanded state by key
+			with self.proppersist_table.Deactivated:
+				self.proppersist_table.apply_saved_properties()
+				# auto size newly learned columns
+				self._auto_size_new_columns()
 		# resize the app window if not yet resized by the user
 		gtkidlequeue.add(self._window_initial_resize, context=GtkThreadContext)
 	
@@ -2535,13 +2551,7 @@ class GTabData(object):
 
 
 	def _auto_size_new_columns(self):
-		# don't preserve automatically sized columns' widths:
-		gtkidlequeue.add(lambda *_: self.proppersist_table.deactivate())
-		gtkidlequeue.set_context(GtkThreadContext)
 		self.main_table.columns_autosize([col for col in self.main_table.get_columns() if not col.get_width() or col.get_width() == 1])
-		gtkidlequeue.clear_context()
-		# main_table.columns_autosize() queued some potentially preserved property changing procedures - turn prop preserver back on:
-		gtkidlequeue.add(lambda *_: self.proppersist_table.activate())
 
 	def _window_initial_resize(self):
 		if not self.main_win.property_persistor.props.get('geometry'):

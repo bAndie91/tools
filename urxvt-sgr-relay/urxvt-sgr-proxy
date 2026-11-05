@@ -448,7 +448,7 @@ def main(argv: list[str]) -> int:
         argv = argv[1:]
     if not argv:
         shell = os.environ.get("SHELL", "/bin/sh")
-        argv = [shell, "-l"]
+        argv = [shell,]
 
     requested_term = os.environ.get("URXVT_SGR_TERM", "urxvt-sgr")
     if _terminfo_exists(requested_term):

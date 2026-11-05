@@ -671,9 +671,8 @@ class MultilevelGtkIdleQueue(object):
 	def __init__(self):
 		self._queue = []
 		self._queue_level = 0
-		self._queue_running = False
+		self._running_thread = None
 		self._item_scheduled = False
-		self._contextmanager_for_all_added_items = None
 		self._lock = threading.Lock()
 	def _queue_at_level(self, level):
 		queue = self._queue
@@ -684,40 +683,40 @@ class MultilevelGtkIdleQueue(object):
 	def subqueue(self):
 		return self._queue_at_level(self._queue_level)
 	def add(self, *callback, **opts):
+		item = {'subqueue': [], 'callback': callback}
 		with self._lock:
-			item = {'subqueue': [], 'callback': callback}
-			if self._queue_running:
+			if self._running_thread is threading.current_thread():
 				self.subqueue.append(item)
 			else:
 				self._queue.append(item)
-				self._schedule()
+				if self._running_thread is None:
+					self._schedule()
 	def _schedule(self):
 		if not self._item_scheduled:
 			self._item_scheduled = True
-			qitem = self.subqueue[0]
-			glib.idle_add(self._fire, qitem, priority=glib.PRIORITY_DEFAULT_IDLE)
+			glib.idle_add(self._fire, self.subqueue[0], priority=glib.PRIORITY_DEFAULT_IDLE)
 	def _next(self):
-		with self._lock:
-			while len(self.subqueue) == 0:
-				# no more items on this level, destroy parent item
-				if self._queue_level == 0:
-					break
-				else:
-					self._queue_level -= 1
-					self.subqueue.pop(0)
-			if len(self.subqueue) > 0:
-				self._schedule()
+		while len(self.subqueue) == 0:
+			# no more items on this level, destroy parent item
+			if self._queue_level == 0:
+				break
+			self._queue_level -= 1
+			self.subqueue.pop(0)
+		if len(self.subqueue) > 0:
+			self._schedule()
 	def _fire(self, qitem):
-		self._item_scheduled = False
-		self._queue_level += 1
-		self._queue_running = True
+		with self._lock:
+			self._item_scheduled = False
+			self._queue_level += 1
+			self._running_thread = threading.current_thread()
 		callback = qitem['callback']
 		try:
 			with GtkThreadContext():
 				callback[0](*callback[1:])
 		finally:
-			self._queue_running = False
-			self._next()
+			with self._lock:
+				self._running_thread = None
+				self._next()
 		return False
 
 class Debouncer(object):
@@ -1007,7 +1006,6 @@ class TreeView(gtk.TreeView):
 		for tvc in cols:
 			tvc.reset_fixed_width()
 			tvc.set_sizing(gtk.TREE_VIEW_COLUMN_AUTOSIZE)
-		#gtk.TreeView.columns_autosize(self)
 		gtkidlequeue.add(self._columns_autosize_restore_resizable, cols)
 	def _columns_autosize_restore_resizable(self, cols):
 		for tvc in cols:

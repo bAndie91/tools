@@ -830,7 +830,8 @@ class TreeView(gtk.TreeView):
 	def _on_key_release(self, widget, event):
 		if event.keyval == gtk.gdk.keyval_from_name('space'):
 			iterpath, tv_col = self.get_cursor()
-			tv_col.cell_renderers[0].on_start_editing(event, widget, ','.join(map(str, iterpath)), self.get_background_area(iterpath, tv_col), self.get_cell_area(iterpath, tv_col), 0)
+			if hasattr(tv_col, 'cell_renderers'):
+				tv_col.cell_renderers[0].on_start_editing(event, widget, ','.join(map(str, iterpath)), self.get_background_area(iterpath, tv_col), self.get_cell_area(iterpath, tv_col), 0)
 		self._on_cursor_changed()
 
 	def _on_button_click(self, widget, event):
@@ -926,7 +927,7 @@ class TreeView(gtk.TreeView):
 
 	def _on_cursor_changed(self, _tv=None):
 		treepath, column = self.get_cursor()
-		if treepath is None or column is None:
+		if treepath is None or column is None or not isinstance(column, TreeViewColumn):
 			return
 		self.set_search_column(column.index)
 
@@ -1953,13 +1954,16 @@ def populate_row_context_menu(menu, items, macros):
 	menu.show_all()
 
 def gen_focus_data(treeview, c_treepath, tv_col):
-	column = None if tv_col is None else tv_col.name
+	column = None if tv_col is None or not isinstance(tv_col, TreeViewColumn) else tv_col.name
 	if c_treepath is None:
 		row = {}
 		cell = None
 	else:
 		row = treeview.get_model()[c_treepath]
-		cell = row[column].raw
+		if column is not None:
+			cell = row[column].raw
+		else:
+			cell = None
 	selected_treepaths = treeview.get_selection().get_selected_rows()[1]
 	return {
 		'column': column,

@@ -1023,40 +1023,46 @@ class TreeView(gtk.TreeView):
 				tvc.set_fixed_width(self._previous_widths[tvc.name])
 
 	def _on_header_menu_popup(self, tv, popup_menu, tv_col):
-		mi = ImageMenuItem(label=("don't filter" if tv_col.is_filtering_open else "filter (regexp) …"), icon=gtk.STOCK_FIND)
-		mi.connect('activate', lambda mi: tv_col.toggle_filtering())
-		popup_menu.append(mi)
+		if hasattr(tv_col, 'toggle_filtering'):
+			mi = ImageMenuItem(label=("don't filter" if tv_col.is_filtering_open else "filter (regexp) …"), icon=gtk.STOCK_FIND)
+			mi.connect('activate', lambda mi: tv_col.toggle_filtering())
+			popup_menu.append(mi)
 
-		if tv_col.get_text_alignment() == gtk.JUSTIFY_RIGHT:
-			mi = ImageMenuItem(label="align to left", icon=gtk.STOCK_JUSTIFY_LEFT)
-			mi.connect('activate', lambda mi, col: col.set_text_alignment(gtk.JUSTIFY_LEFT), tv_col)
-		else:
-			mi = ImageMenuItem(label="align to right", icon=gtk.STOCK_JUSTIFY_RIGHT)
-			mi.connect('activate', lambda mi, col: col.set_text_alignment(gtk.JUSTIFY_RIGHT), tv_col)
-		popup_menu.append(mi)
+		if hasattr(tv_col, 'set_text_alignment'):
+			if tv_col.get_text_alignment() == gtk.JUSTIFY_RIGHT:
+				mi = ImageMenuItem(label="align to left", icon=gtk.STOCK_JUSTIFY_LEFT)
+				mi.connect('activate', lambda mi, col: col.set_text_alignment(gtk.JUSTIFY_LEFT), tv_col)
+			else:
+				mi = ImageMenuItem(label="align to right", icon=gtk.STOCK_JUSTIFY_RIGHT)
+				mi.connect('activate', lambda mi, col: col.set_text_alignment(gtk.JUSTIFY_RIGHT), tv_col)
+			popup_menu.append(mi)
 
-		if tv_col.get_font_desc().get_family() == 'monospace':
-			mi = ImageMenuItem(label="propotional font", icon=gtk.STOCK_SELECT_FONT)
-			mi.connect('activate', lambda mi, col: col.set_font_desc(None), tv_col)
-		else:
-			mi = ImageMenuItem(label="monospace font", icon=gtk.STOCK_SELECT_FONT)
-			mi.connect('activate', lambda mi, col: col.set_font_desc('monospace'), tv_col)
-		popup_menu.append(mi)
+		if hasattr(tv_col, 'set_font_desc'):
+			if tv_col.get_font_desc().get_family() == 'monospace':
+				mi = ImageMenuItem(label="propotional font", icon=gtk.STOCK_SELECT_FONT)
+				mi.connect('activate', lambda mi, col: col.set_font_desc(None), tv_col)
+			else:
+				mi = ImageMenuItem(label="monospace font", icon=gtk.STOCK_SELECT_FONT)
+				mi.connect('activate', lambda mi, col: col.set_font_desc('monospace'), tv_col)
+			popup_menu.append(mi)
 
-		mi = ImageMenuItem(label="auto width")
-		mi.connect('activate', lambda mi, tv_col: self.columns_autosize([tv_col]), tv_col)
-		popup_menu.append(mi)
-		mi = ImageMenuItem(label="undo auto width", icon=gtk.STOCK_UNDO)
-		mi.connect('activate', lambda mi, tv_col: self.restore_previous_widths([tv_col]), tv_col)
-		mi.set_sensitive(tv_col.name in self._previous_widths)
-		popup_menu.append(mi)
+		if isinstance(tv_col, TreeViewDataColumn):
+			mi = ImageMenuItem(label="auto width")
+			mi.connect('activate', lambda mi, tv_col: self.columns_autosize([tv_col]), tv_col)
+			popup_menu.append(mi)
+			mi = ImageMenuItem(label="undo auto width", icon=gtk.STOCK_UNDO)
+			mi.connect('activate', lambda mi, tv_col: self.restore_previous_widths([tv_col]), tv_col)
+			mi.set_sensitive(tv_col.name in self._previous_widths)
+			popup_menu.append(mi)
 
-		popup_menu.append(gtk.SeparatorMenuItem())
+		if len(popup_menu.get_children()) > 0:
+			popup_menu.append(gtk.SeparatorMenuItem())
+		
 		columns_submenu = SubmenuMenuItem(label='columns')
 		popup_menu.append(columns_submenu)
 		for col in self.get_columns():
 			markup = glib.markup_escape_text(col.title)
-			if tv_col.name == col.name:
+			if hasattr(tv_col, 'name') and tv_col.name == col.name:
 				markup = '<b>' + markup + '</b>'
 			mi = CheckMenuItem(markup=markup)
 			mi.set_active(col.get_visible())
@@ -1095,11 +1101,8 @@ class TreeViewColumn(gtk.TreeViewColumn):
 
 	def __init__(self, *args):
 		super(TreeViewColumn, self).__init__(*args)
-		header_widget = gtk.VBox()
-		self.header_label = Label('')
-		header_widget.pack_start(self.header_label, expand=False, fill=False)
-		header_widget.show_all()
-		self.set_widget(header_widget)
+		self.set_widget(gtk.VBox())
+		self.set_clickable(True)
 
 	def setup_events(self, *X):
 		# this method should be called when the TreeView is realized.
@@ -1144,6 +1147,11 @@ class TreeViewDataColumn(TreeViewColumn):
 	}
 	def __init__(self, **opt):
 		super(TreeViewDataColumn, self).__init__(**opt)
+		header_widget = self.get_widget()
+		self.header_label = Label('')
+		header_widget.pack_start(self.header_label, expand=False, fill=False)
+		header_widget.show_all()
+		
 		self.attribute_mapping = {}
 		self.cellrenderers_left = []
 		self.cellrenderers_right = []

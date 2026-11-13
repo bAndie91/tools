@@ -894,9 +894,9 @@ class TreeView(gtk.TreeView):
 		self.emit('column-added', tvc)
 	
 	def append_spacer_column(self):
-		tvc = TreeViewSpacerColumn()
-		super(TreeView, self).append_column(tvc)
-		self._column_setup_events(tvc)
+		self.spacer_column = TreeViewSpacerColumn()
+		super(TreeView, self).append_column(self.spacer_column)
+		self._column_setup_events(self.spacer_column)
 
 	def _column_setup_events(self, tvc):
 		tvc.setup_events()
@@ -1138,6 +1138,11 @@ class TreeViewSpacerColumn(TreeViewColumn):
 		self.set_reorderable(False)
 		self.set_expand(True)
 
+		cr_txt = CellRendererTextOverflow()
+		cr_txt.set_data('treeviewcolumn', self)
+		self.pack_start(cr_txt, expand=True)
+		self.name = None
+
 class TreeViewDataColumn(TreeViewColumn):
 	__gsignals__ = {
 		'filter-expression-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (str,)),
@@ -1372,75 +1377,83 @@ class CellRendererTextOverflow(gtk.GenericCellRenderer):
 		treepath = cellinfo[0]
 		
 		if tv.get_data('last-drawn-row-treepath') != treepath or tv.get_data('layoutstash') is None:
+			# TODO make layoutstash class
 			tv.set_data('layoutstash', {})
 		tv.set_data('last-drawn-row-treepath', treepath)
 		layoutstash = tv.get_data('layoutstash')
 		
-		def get_adjacent_columns():
-			# TODO overdraw the spacer column too
-			cols = tv.get_columns()
-			col_idx = cols.index(tvc)
-			adjacent_cols_names = []
-			adjacent_cols_width = 0
-			col_idx_incr = 1 if align_left else -1
-			while True:
-				col_idx += col_idx_incr
-				if col_idx < 0 or col_idx >= len(cols): break
-				cell = model[treepath][cols[col_idx].name]
-				if cell.is_empty:
-					adjacent_cols_width += cols[col_idx].get_width()
-					adjacent_cols_names.append(cols[col_idx].name)
-				else:
-					break
-			return adjacent_cols_names, adjacent_cols_width
-		adjacent_cols_names, adjacent_cols_width = get_adjacent_columns()
-		overflow_width = cell_area.width + adjacent_cols_width
+		if isinstance(tvc, TreeViewDataColumn):
+			def get_adjacent_columns():
+				# TODO overdraw the spacer column too
+				cols = tv.get_columns()
+				col_idx = cols.index(tvc)
+				adjacent_cols_names = []
+				adjacent_cols_width = 0
+				col_idx_incr = 1 if align_left else -1
+				while True:
+					col_idx += col_idx_incr
+					if col_idx >= len(cols):
+						# add the last (spacer) column's width too
+						adjacent_cols_width += tv.spacer_column.get_width()
+						adjacent_cols_names.append(tv.spacer_column.name)
+						break
+					cell = model[treepath][cols[col_idx].name]
+					if cell.is_empty:
+						adjacent_cols_width += cols[col_idx].get_width()
+						adjacent_cols_names.append(cols[col_idx].name)
+					else:
+						break
+				return adjacent_cols_names, adjacent_cols_width
+			adjacent_cols_names, adjacent_cols_width = get_adjacent_columns()
+			overflow_width = cell_area.width + adjacent_cols_width
 
-		if overflow_width != cell_area.width:
-			possibly_overflow = True
-		else:
-			possibly_overflow = False
-		if possibly_overflow:
-			context = widget.get_pango_context()
-			layout = pango.Layout(context)
-			if markup:
-				layout.set_markup(markup)
-			elif text:
-				layout.set_text(text)
-			if markup or text:
-				layout.set_width(overflow_width * pango.SCALE)
-				layout.set_wrap(pango.WRAP_CHAR)
-				layout.set_alignment(self.get_property('pango-alignment'))
-				layout.set_ellipsize(pango.ELLIPSIZE_END if align_left else pango.ELLIPSIZE_START)
-				# TODO disable underlaying self.cr_txt ellipsize row-by-row if it's overdrawn
-				layout.set_font_description(self.get_property('font-desc'))
+			if overflow_width != cell_area.width:
+				possibly_overflow = True
+			else:
+				possibly_overflow = False
+			if possibly_overflow:
+				context = widget.get_pango_context()
+				layout = pango.Layout(context)
+				if markup:
+					layout.set_markup(markup)
+				elif text:
+					layout.set_text(text)
+				if markup or text:
+					layout.set_width(overflow_width * pango.SCALE)
+					layout.set_wrap(pango.WRAP_CHAR)
+					layout.set_alignment(self.get_property('pango-alignment'))
+					layout.set_ellipsize(pango.ELLIPSIZE_END if align_left else pango.ELLIPSIZE_START)
+					# TODO disable underlaying self.cr_txt ellipsize row-by-row if it's overdrawn
+					layout.set_font_description(self.get_property('font-desc'))
 
-				xpad, ypad = self.cr_txt.get_padding()
-				draw_area = cell_area.copy()
-				draw_area.x += xpad
-				draw_area.y += ypad
-				if align_right:
-					draw_area.x -= adjacent_cols_width + 2*xpad
-					draw_area.width = overflow_width
-					# draw on the left-hand side empty cells immediately, no need to stash the layout for later use:
-					self.draw_layout(window, widget, draw_area, layout, flags)
-					return True
-				else:
-					if not layoutstash.has_key(treepath):
-						layoutstash[treepath] = {}
-					for colname in layoutstash[treepath].keys():
-						if layoutstash[treepath][colname].has_key(tvc.name):
-							del layoutstash[treepath][colname][tvc.name]
-					for colname in adjacent_cols_names:
-						if not layoutstash[treepath].has_key(colname):
-							layoutstash[treepath][colname] = {}
-						layoutstash[treepath][colname][tvc.name] = (window, widget, draw_area, layout, flags)
-		else:
-			# this cell's text does not flow over, so delete earlier layouts, if any
-			for colname in layoutstash.get(treepath, {}).keys():
-				if layoutstash[treepath][colname].has_key(tvc.name):
-					del layoutstash[treepath][colname][tvc.name]
+					xpad, ypad = self.cr_txt.get_padding()
+					draw_area = cell_area.copy()
+					draw_area.x += xpad
+					draw_area.y += ypad
+					if align_right:
+						draw_area.x -= adjacent_cols_width + 2*xpad
+						draw_area.width = overflow_width
+						# draw on the left-hand side empty cells immediately, no need to stash the layout for later use:
+						self.draw_layout(window, widget, draw_area, layout, flags)
+						return True
+					else:  # align_left
+						if not layoutstash.has_key(treepath):
+							layoutstash[treepath] = {}
+						for colname in layoutstash[treepath].keys():
+							if layoutstash[treepath][colname].has_key(tvc.name):
+								del layoutstash[treepath][colname][tvc.name]
+						for colname in adjacent_cols_names:
+							if not layoutstash[treepath].has_key(colname):
+								layoutstash[treepath][colname] = {}
+							layoutstash[treepath][colname][tvc.name] = (window, widget, draw_area, layout, flags)
+			else:
+				# this cell's text does not flow over, so delete earlier layouts, if any
+				for colname in layoutstash.get(treepath, {}).keys():
+					if layoutstash[treepath][colname].has_key(tvc.name):
+						del layoutstash[treepath][colname][tvc.name]
+		
 		layout_overflowcells = layoutstash.get(treepath, {}).get(tvc.name, {})
+
 		if not markup and not text:
 			# current cell is empty, but redraw those cells which flow over to this one
 			for layout_args in layout_overflowcells.values():

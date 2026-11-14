@@ -682,8 +682,8 @@ class MultilevelGtkIdleQueue(object):
 	@property
 	def subqueue(self):
 		return self._queue_at_level(self._queue_level)
-	def add(self, *callback, **opts):
-		item = {'subqueue': [], 'callback': callback}
+	def add(self, *cb_pargs, **cb_kwargs):
+		item = {'subqueue': [], 'callback': cb_pargs, 'cb_kwargs': cb_kwargs}
 		with self._lock:
 			if self._running_thread is threading.current_thread():
 				self.subqueue.append(item)
@@ -712,7 +712,7 @@ class MultilevelGtkIdleQueue(object):
 		callback = qitem['callback']
 		try:
 			with GtkThreadContext():
-				callback[0](*callback[1:])
+				callback[0](*callback[1:], **qitem['cb_kwargs'])
 		finally:
 			with self._lock:
 				self._running_thread = None
@@ -978,6 +978,7 @@ class TreeView(gtk.TreeView):
 		return list([tvc.name for tvc in self.get_columns()])
 
 	def columns_autosize(self, cols=None, emit_signals=True):
+		# TODO probably move this to TreeViewColumn class
 		if cols is None:
 			cols = self.get_columns()
 		try:
@@ -1021,6 +1022,16 @@ class TreeView(gtk.TreeView):
 		for tvc in cols:
 			if self._previous_widths.get(tvc.name) is not None:
 				tvc.set_fixed_width(self._previous_widths[tvc.name])
+
+	def set_column_visibility(self, col, visible):
+		col.set_visible(visible)
+		if visible:
+			gtkidlequeue.add(self.after_column_unhide, col)
+	
+	def after_column_unhide(self, col):
+		w = col.get_width()
+		if not w or w == 1:
+			self.columns_autosize([col], emit_signals=False)
 
 	def _on_header_menu_popup(self, tv, popup_menu, tv_col):
 		if hasattr(tv_col, 'toggle_filtering'):
@@ -1066,7 +1077,7 @@ class TreeView(gtk.TreeView):
 				markup = '<b>' + markup + '</b>'
 			mi = CheckMenuItem(markup=markup)
 			mi.set_active(col.get_visible())
-			mi.connect('activate', lambda mi, col: col.set_visible(not col.get_visible()), col)
+			mi.connect('activate', lambda mi, col: self.set_column_visibility(col, not col.get_visible()), col)
 			columns_submenu.append(mi)
 		mi = MenuItem(label="auto width all columns")
 		mi.connect('activate', lambda mi: self.columns_autosize())
@@ -2535,6 +2546,7 @@ class GTabData(object):
 				self.proppersist_table.apply_saved_properties()
 			# auto size newly learned columns
 			self._auto_size_new_columns()
+			# TODO auto-size never-manually-sized columns?
 		# resize the app window if not yet resized by the user
 		gtkidlequeue.add(self._window_initial_resize)
 	

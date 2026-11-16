@@ -2547,7 +2547,6 @@ class GTabData(object):
 				self.proppersist_table.apply_saved_properties()
 			# auto size newly learned columns
 			self._auto_size_new_columns()
-			# TODO auto-size never-manually-sized columns?
 		# resize the app window if not yet resized by the user
 		gtkidlequeue.add(self._window_initial_resize)
 	
@@ -2626,8 +2625,9 @@ class GTabData(object):
 	def _window_initial_resize(self):
 		if not self.main_win.property_persistor.props.get('geometry'):
 			app_width, app_height = self.main_win.get_child().get_scrollable_window_size_request()
+			min_width, min_height = self.main_win.size_request()
 			scr = self.main_win.get_screen()
-			self.main_win.resize(min(app_width, scr.get_width()), min(app_height, scr.get_height()))
+			self.main_win.resize(max(min(app_width, scr.get_width()), min_width), max(min(app_height, scr.get_height()), min_height))
 	
 	def on_column_added(self, tv, tvc):
 		# restore width

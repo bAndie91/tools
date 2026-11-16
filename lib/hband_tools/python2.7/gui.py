@@ -273,6 +273,17 @@ class Scrollable(gtk.ScrolledWindow):
 				self.add(child)
 			else:
 				self.add_with_viewport(child)
+	def get_scrollable_window_size_request(self):
+		child = self.get_child()
+		child_w, child_h = child.size_request()
+		vsb_w = self.get_vscrollbar().size_request()[0]        # width of the vertical scrollbar
+		hsb_h = self.get_hscrollbar().size_request()[1]        # height of the horizontal scrollbar
+		spacing = self.style_get_property('scrollbar-spacing')
+		if spacing < 0:  # -1 means "use the built-in default"
+			spacing = 3  # DEFAULT_SCROLLBAR_SPACING constant inside gtkscrolledwindow.c
+		extra_w = vsb_w + spacing
+		extra_h = hsb_h + spacing
+		return child_w+extra_w, child_h+extra_h
 
 class DeactivatedPropertyPersistorContext(object):
 	def __init__(self, property_persistor):

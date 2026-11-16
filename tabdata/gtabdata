@@ -1146,6 +1146,7 @@ class TreeViewSpacerColumn(TreeViewColumn):
 		super(TreeViewSpacerColumn, self).__init__()
 		self.set_sort_indicator(False)
 		self.set_resizable(False)
+		self.set_sizing(gtk.TREE_VIEW_COLUMN_AUTOSIZE)
 		self.set_reorderable(False)
 		self.set_expand(True)
 
@@ -2624,9 +2625,9 @@ class GTabData(object):
 
 	def _window_initial_resize(self):
 		if not self.main_win.property_persistor.props.get('geometry'):
-			tv_width, tv_height = self.main_table.size_request()
+			app_width, app_height = self.main_win.get_child().get_scrollable_window_size_request()
 			scr = self.main_win.get_screen()
-			self.main_win.resize(min(tv_width, scr.get_width()), min(tv_height, scr.get_height()))
+			self.main_win.resize(min(app_width, scr.get_width()), min(app_height, scr.get_height()))
 	
 	def on_column_added(self, tv, tvc):
 		# restore width

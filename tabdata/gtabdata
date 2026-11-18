@@ -316,6 +316,40 @@ class IndexedNamedColumnsTreeStore(NamedColumnsTreeStore):
 			return None
 		return row
 
+#class BlockableSignalsGObject(object):
+#	@property
+#	def _signal_handler(self):
+#		try:
+#			return self.__dict__['_signal_handler_dict']
+#		except KeyError:
+#			d = self.__dict__['_signal_handler_dict'] = {}
+#			return d
+#	def connect(self, signal_name, *pargs, **kwargs):
+#		signal_id = super(BlockableSignalsGObject, self).connect(signal_name, *pargs, **kwargs)
+#		self._signal_handler[signal_id] = {'name': signal_name, 'func': pargs[0]}
+#		return signal_id
+#	def connect_after(self, signal_name, *pargs, **kwargs):
+#		signal_id = super(BlockableSignalsGObject, self).connect_after(signal_name, *pargs, **kwargs)
+#		self._signal_handler[signal_id] = {'name': signal_name, 'func': pargs[0]}
+#		return signal_id
+#	def disconnect(self, signal_id):
+#		ok = super(BlockableSignalsGObject, self).disconnect(signal_id)
+#		self._signal_handler.pop(signal_id, None)
+#		return ok
+#	def get_signals(self):
+#		return self._signal_handler
+#	def block_signal(self, signal_name):
+#		for sid, handler in self._signal_handler.items():
+#			if handler['name'] == signal_name:
+#				print('blocking', sid, handler)
+#				self.handler_block(self, sid)
+#	def unblock_signal(self, signal_name):
+#		for sid, handler in self._signal_handler.items():
+#			if handler['name'] == signal_name:
+#				print('unblocking', sid, handler)
+#				self.handler_unblock(self, sid)
+
+
 class OrganizedIndexedNamedColumnsTreeStore(IndexedNamedColumnsTreeStore):
 	"""Feed it add_node(row, treepath), move_node(node, new_treepath) and remove_node(node)
 	in any order; it keeps the gtk.TreeStore structure in sync with the organization paths.
@@ -645,9 +679,9 @@ class TreeModelFilterSortIndexed(gtk.TreeModelSort):
 		self.set_sort_column_id(col_num, sort_order)
 	# proxy methods:
 	def __getattribute__(self, attrname):
+		# list all properties/methods here which are meant to be accessed/called on the base model
 		if attrname in ['get_column_num', 'get_column_name', 'get_columns', 
 				  'add_key_column',
-				  #'get_row_by_key',
 				  'add_node', 'move_node', 'remove_node', 'clear']:
 			return object.__getattribute__(self.base_model, attrname)
 		elif attrname in ['set_visible_func', 'refilter']:
@@ -776,10 +810,24 @@ class TreeView(gtk.TreeView):
 		self.connect('header-menu-popup', self._on_header_menu_popup)
 		self.connect_after('expose-event', self._on_expose)
 		self.filter_debouncer = Debouncer(1000, self._refilter, timer_context=GtkThreadContext)
+		self._bulk_loading = False
 
 	def _refilter(self):
 		self.derived_model.refilter()
 
+	@property
+	def bulk_loading(self):
+		return self._bulk_loading
+	@bulk_loading.setter
+	def bulk_loading(self, v):
+		self._bulk_loading = v
+		if v:
+			# don't slow down bulk data loading
+			self.derived_model.set_sort_column_id(gtk.TREE_SORTABLE_UNSORTED_SORT_COLUMN_ID, gtk.SORT_ASCENDING)
+			# don't restore the sort order, the PropertyPersistor will do it anyways
+		else:
+			self._refilter()
+	
 	def _on_expose(self, tv, event):
 		self._highlight_focused_cell(event)
 		return False
@@ -817,6 +865,8 @@ class TreeView(gtk.TreeView):
 		self.derived_model.set_visible_func(func, user_data)
 	
 	def default_filtering_cb(self, model, treeiter, cb_data):
+		if self._bulk_loading:  # don't slow down bulk data loading by filtering on every addedd row
+			return True
 		all_column_filter_match = True
 		for col in self.get_columns():
 			if col.filter_regex_pattern is not None:
@@ -939,11 +989,13 @@ class TreeView(gtk.TreeView):
 			col = self.get_column_by_name(col_name)
 		else:
 			col = None
-		self.emit('sort-by-column-changed', col)
-		self.emit('column-sort-order-changed', col)
+		if not self._bulk_loading:
+			self.emit('sort-by-column-changed', col)
+			self.emit('column-sort-order-changed', col)
 
 	def _on_column_sort_order_changed(self, tvc, gparam):
-		self.emit('column-sort-order-changed', tvc)
+		if not self._bulk_loading:
+			self.emit('column-sort-order-changed', tvc)
 
 	def get_sortby_column(self):
 		return self.get_column_by_name( self.get_model().get_sort_column_name() )
@@ -2501,6 +2553,9 @@ class GTabData(object):
 		else:
 			old_data_keys = set(base_model.default_index.keys())
 
+		with GtkThreadContext():
+			self.main_table.bulk_loading = True
+
 		with ContextTransitionContext(GtkThreadContext(), GDKCursor(self.main_win.window, gtk.gdk.WATCH)):
 			data_processor = TimedChunkProcessor(
 				chunk_starter = lambda func: gobject.idle_add(glib_callback_once, func),
@@ -2542,6 +2597,7 @@ class GTabData(object):
 
 	def after_load_table(self):
 		with GtkThreadContext():
+			self.main_table.bulk_loading = False
 			self.main_table.expand_all()  # TODO expand rows as they are added and remember expanded state by key
 			with self.proppersist_table.Deactivated:
 				self.proppersist_table.apply_saved_properties()

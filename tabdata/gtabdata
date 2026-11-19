@@ -786,16 +786,12 @@ class TreeView(gtk.TreeView):
 		'column-width-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT, int)),
 		'sort-by-column-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
 		'column-sort-order-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
-		'column-visibility-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
+		'column-visibility-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT, int)),
 		'selection-change': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
 	}
 	def __init__(self, base_model):
 		super(TreeView, self).__init__(None)
 		self.set_model(base_model)
-		self._previous_widths = {}
-		self._previous_previous_widths = {}
-		self._stored_column_width = {}
-		self._column_autosizing = {}
 		self.set_reorderable(True)
 		self.set_headers_clickable(True)
 		self.set_rubber_banding(True)
@@ -820,6 +816,8 @@ class TreeView(gtk.TreeView):
 		return self._bulk_loading
 	@bulk_loading.setter
 	def bulk_loading(self, v):
+		# these measures involving bulk_loading do not make that much gain, so disabling it:
+		return
 		self._bulk_loading = v
 		if v:
 			# don't slow down bulk data loading
@@ -957,8 +955,8 @@ class TreeView(gtk.TreeView):
 			tvc.connect('button-press-event', self._on_column_click)
 			tvc.set_data('treeview-connect-done', True)
 		if isinstance(tvc, TreeViewDataColumn):
-			tvc.connect('notify::width', self._on_column_width_change)
-			tvc.connect('notify::visible', self._on_column_visibility_changed)
+			tvc.connect('width-changed', self._on_column_width_change)
+			tvc.connect('visibility-changed', self._on_column_visibility_changed)
 			tvc.connect('notify::sort-order', self._on_column_sort_order_changed)
 			tvc.connect('filter-expression-changed', lambda tvc, fexpr: self.filter_debouncer.trigger())
 			tvc.connect('filter-expression-keypress-return', lambda tvc: self.filter_debouncer.fire())
@@ -1003,16 +1001,11 @@ class TreeView(gtk.TreeView):
 	def get_sortby_column(self):
 		return self.get_column_by_name( self.get_model().get_sort_column_name() )
 
-	def _on_column_width_change(self, col, gparam):
-		w = col.get_width()
-		if w != self._stored_column_width.get(col.name):
-			if col.name not in self._column_autosizing:
-				self.emit('column-width-changed', col, w)
-		self._stored_column_width[col.name] = w
+	def _on_column_width_change(self, tvc, width):
+		self.emit('column-width-changed', tvc, width)
 
-	def _on_column_visibility_changed(self, tvc, gparam):
-		if tvc.name not in self._column_autosizing:
-			self.emit('column-visibility-changed', tvc)
+	def _on_column_visibility_changed(self, tvc, visible):
+		self.emit('column-visibility-changed', tvc, visible)
 	
 	class ColumnNotFoundException(Exception):
 		pass
@@ -1032,61 +1025,15 @@ class TreeView(gtk.TreeView):
 	def get_column_names(self):
 		return list([tvc.name for tvc in self.get_columns()])
 
-	def columns_autosize(self, cols=None, emit_signals=True):
-		# TODO probably move this to TreeViewColumn class
-		if cols is None:
-			cols = self.get_columns()
-		try:
-			for tvc in cols:
-				if not emit_signals:
-					self._column_autosizing[tvc.name] = True
-				if tvc.name in self._previous_widths:
-					self._previous_previous_widths[tvc.name] = self._previous_widths[tvc.name]
-				self._previous_widths[tvc.name] = tvc.get_width()
-				tvc.disable_ellipsize()
-				tvc.clear_width_requirement()
-		except:
-			for tvc in cols:
-				if not emit_signals:
-					del self._column_autosizing[tvc.name]
-		else:
-			gtkidlequeue.add(self._columns_autosize_set_autosize, cols)
-			if not emit_signals:
-				gtkidlequeue.add(self._columns_autosize_end_autosize, cols)
-	def _columns_autosize_set_autosize(self, cols):
-		for tvc in cols:
-			tvc.reset_fixed_width()
-			tvc.set_sizing(gtk.TREE_VIEW_COLUMN_AUTOSIZE)
-		gtkidlequeue.add(self._columns_autosize_restore_resizable, cols)
-	def _columns_autosize_restore_resizable(self, cols):
-		for tvc in cols:
-			width = tvc.get_width()
-			tvc.set_sizing(gtk.TREE_VIEW_COLUMN_FIXED)
-			if width > 1:
-				tvc.set_fixed_width(width)
-				if width == self._previous_widths[tvc.name]:
-					self._previous_widths[tvc.name] = self._previous_previous_widths.get(tvc.name)
-			tvc.set_resizable(True)
-			tvc.enable_ellipsize()
-	def _columns_autosize_end_autosize(self, cols):
-		for tvc in cols:
-			del self._column_autosizing[tvc.name]
-	def restore_previous_widths(self, cols=None):
+	def columns_autosize(self, cols=None):
 		if cols is None:
 			cols = self.get_columns()
 		for tvc in cols:
-			if self._previous_widths.get(tvc.name) is not None:
-				tvc.set_fixed_width(self._previous_widths[tvc.name])
-
-	def set_column_visibility(self, col, visible):
-		col.set_visible(visible)
-		if visible:
-			gtkidlequeue.add(self.after_column_unhide, col)
+			tvc.autosize_start()
 	
-	def after_column_unhide(self, col):
-		w = col.get_width()
-		if not w or w == 1:
-			self.columns_autosize([col], emit_signals=False)
+	def restore_previous_column_widths(self):
+		for tvc in self.get_columns():
+			tvc.restore_previous_width()
 
 	def _on_header_menu_popup(self, tv, popup_menu, tv_col):
 		if hasattr(tv_col, 'toggle_filtering'):
@@ -1114,11 +1061,11 @@ class TreeView(gtk.TreeView):
 
 		if isinstance(tv_col, TreeViewDataColumn):
 			mi = ImageMenuItem(label="auto width")
-			mi.connect('activate', lambda mi, tv_col: self.columns_autosize([tv_col]), tv_col)
+			mi.connect('activate', lambda mi, tv_col: tv_col.autosize_start(), tv_col)
 			popup_menu.append(mi)
 			mi = ImageMenuItem(label="undo auto width", icon=gtk.STOCK_UNDO)
-			mi.connect('activate', lambda mi, tv_col: self.restore_previous_widths([tv_col]), tv_col)
-			mi.set_sensitive(tv_col.name in self._previous_widths)
+			mi.connect('activate', lambda mi, tv_col: tv_col.restore_previous_width(), tv_col)
+			mi.set_sensitive(tv_col._autosize_previous_width is not None)
 			popup_menu.append(mi)
 
 		if len(popup_menu.get_children()) > 0:
@@ -1132,13 +1079,13 @@ class TreeView(gtk.TreeView):
 				markup = '<b>' + markup + '</b>'
 			mi = CheckMenuItem(markup=markup)
 			mi.set_active(col.get_visible())
-			mi.connect('activate', lambda mi, col: self.set_column_visibility(col, not col.get_visible()), col)
+			mi.connect('activate', lambda mi, tv_col: tv_col.toggle_visibility(), col)
 			columns_submenu.append(mi)
 		mi = MenuItem(label="auto width all columns")
 		mi.connect('activate', lambda mi: self.columns_autosize())
 		popup_menu.append(mi)
 		mi = ImageMenuItem(label="undo auto width all", icon=gtk.STOCK_UNDO)
-		mi.connect('activate', lambda mi: self.restore_previous_widths())
+		mi.connect('activate', lambda mi: self.restore_previous_column_widths())
 		popup_menu.append(mi)
 		mi = ImageMenuItem(label="reset columns order", icon=gtk.STOCK_REVERT_TO_SAVED)
 		mi.connect('activate', lambda mi: self.reset_columns_original_position())
@@ -1160,6 +1107,8 @@ class TreeView(gtk.TreeView):
 class TreeViewColumn(gtk.TreeViewColumn):
 	__gsignals__ = {
 		'button-press-event': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_BOOLEAN, (gobject.TYPE_PYOBJECT,)),
+		'width-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE, (int,)),
+		'visibility-changed': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE, (bool,)),
 	}
 
 	class NotSupportedAlignmentError(Exception):
@@ -1167,8 +1116,81 @@ class TreeViewColumn(gtk.TreeViewColumn):
 
 	def __init__(self, *args):
 		super(TreeViewColumn, self).__init__(*args)
+		self.connect_after('notify::width', self._on_width_changed)
+		self.connect_after('notify::visible', self._on_visibility_changed)
 		self.set_widget(gtk.VBox())
 		self.set_clickable(True)
+
+		self._saved_width = None
+		self.autosizing = False
+		self._autosize_previous_width = None
+		self._autosize_previous_previous_width = None
+
+	def autosize_start(self):
+		try:
+			self.autosizing = True
+			if self._autosize_previous_width is not None:
+				self._autosize_previous_previous_width = self._autosize_previous_width
+			self._autosize_previous_column_widths = self.get_width()
+			self.disable_ellipsize()
+			self.clear_width_requirement()
+		except:
+			self.autosize_end()
+		else:
+			gtkidlequeue.add(self._autosize_set)
+			gtkidlequeue.add(self._autosize_end)
+	
+	def _autosize_set(self):
+		self.reset_fixed_width()
+		self.set_sizing(gtk.TREE_VIEW_COLUMN_AUTOSIZE)
+		gtkidlequeue.add(self._autosize_conclude)
+
+	def reset_fixed_width(self):
+		self.set_fixed_width(1)
+
+	def clear_width_requirement(self):
+		if self.get_visible():
+			self.set_visible(False)
+			self.set_visible(True)
+
+	def _autosize_conclude(self):
+		width = self.get_width()
+		self.set_sizing(gtk.TREE_VIEW_COLUMN_FIXED)
+		if width > 1:
+			self.set_fixed_width(width)
+			if width == self._autosize_previous_width:
+				self._autosize_previous_width = self._autosize_previous_previous_width
+		self.set_resizable(True)
+		self.enable_ellipsize()
+
+	def _autosize_end(self):
+		self.autosizing = False
+	
+	def restore_previous_width(self):
+		if self._autosize_previous_width is not None:
+			self.set_fixed_width(self._autosize_previous_width)
+
+	def _on_width_changed(self, me, gparam):
+		w = self.get_width()
+		if w != self._saved_width:
+			if not self.autosizing:
+				self.emit('width-changed', w)
+			self._saved_width = w
+
+	def _on_visibility_changed(self, me, gparam):
+		if not self.autosizing:
+				self.emit('visibility-changed', self.get_visible())
+
+	def toggle_visibility(self):
+		visible = not self.get_visible()
+		self.set_visible(visible)
+		if visible:
+			gtkidlequeue.add(self._on_unhide)
+	
+	def _on_unhide(self):
+		w = self.get_width()
+		if not w or w == 1:
+			self.autosize_start()
 
 	def setup_events(self, *X):
 		# this method should be called when the TreeView is realized.
@@ -1271,13 +1293,6 @@ class TreeViewDataColumn(TreeViewColumn):
 	def cell_renderers(self):
 		return self.get_cell_renderers()
 	
-	def reset_fixed_width(self):
-		self.set_fixed_width(1)
-	def clear_width_requirement(self):
-		if self.get_visible():
-			self.set_visible(False)
-			self.set_visible(True)
-
 	def open_filtering(self):
 		self.filter_entrybox.show()
 		self.filter_entrybox.grab_focus()
@@ -2415,7 +2430,7 @@ class GTabData(object):
 
 		self.proppersist_table = PropertyPersistor(self.main_table, 'main_table', [
 			('columns-order',  'columns-changed',           lambda tv: merge_ordering(self.proppersist_table.props.get('columns-order') or [], tv.get_column_names()), self.restore_columns_order),
-			('hidden-columns', 'column-visibility-changed', lambda tv, tvc: [col.name for col in tv.get_columns() if not col.get_visible()], self.restore_hidden_columns),
+			('hidden-columns', 'column-visibility-changed', lambda tv, tvc, visible: [col.name for col in tv.get_columns() if not col.get_visible()], self.restore_hidden_columns),
 			('column-width',   'column-width-changed',      lambda tv, tvc, tvc_width: dict([(col.name, col.get_width()) for col in tv.get_columns()]), self.restore_columns_width),
 			('sort-column',    'sort-by-column-changed',    lambda tv, tvc: tvc.name if tvc is not None else None, self.restore_sortby_column),
 			('sort-order',     'column-sort-order-changed', lambda tv, tvc: tvc.get_sort_order().value_nick if tvc is not None else None, None),
@@ -2450,6 +2465,8 @@ class GTabData(object):
 			yield tabdata_decode_record(line.rstrip('\n'), n_fields=n_fields)
 	
 	def load_table(self):
+		self.main_table.set_show_expanders(cliargs.treepath_field is not None)
+		
 		if cliargs.db_query:
 			import sqlalchemy
 
@@ -2513,9 +2530,7 @@ class GTabData(object):
 	
 	def load_columns(self, columns):
 		if len(columns) != len(set(columns)):
-			with GtkThreadContext():
-				ErrorMessage("duplicated column names", title="gTabData: data header error", details="columns:\n"+'\n'.join(["- "+c for c in columns]))
-			raise ValueError("duplicated column names")
+			print("warning: duplicate column names", file=sys.stderr)
 
 		treemodel_columns = [(col_name, unicode) for col_name in columns]
 		if self.main_table.get_model() is None or treemodel_columns != self.main_table.get_model().get_columns():
@@ -2685,7 +2700,7 @@ class GTabData(object):
 
 
 	def _auto_size_new_columns(self):
-		self.main_table.columns_autosize([col for col in self.main_table.get_columns() if not col.get_width() or col.get_width() == 1], emit_signals=False)
+		self.main_table.columns_autosize([col for col in self.main_table.get_columns() if not col.get_width() or col.get_width() == 1])
 
 	def _window_initial_resize(self):
 		if not self.main_win.property_persistor.props.get('geometry'):

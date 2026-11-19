@@ -825,7 +825,10 @@ class TreeView(gtk.TreeView):
 			# don't slow down bulk data loading
 			self.derived_model.set_sort_column_id(gtk.TREE_SORTABLE_UNSORTED_SORT_COLUMN_ID, gtk.SORT_ASCENDING)
 			# don't restore the sort order, the PropertyPersistor will do it anyways
+			# detach the model to avoid costly redrawing
+			#super(TreeView, self).set_model(None)
 		else:
+			#super(TreeView, self).set_model(self.derived_model)
 			self._refilter()
 	
 	def _on_expose(self, tv, event):
@@ -2198,8 +2201,14 @@ def escape_td_sequence(s):
 	if s == '\x1B': return '\\e'
 	else: return '\\' + repr(s)[2]
 
+def tabdata_decode_cell(raw):
+	if '\\' in raw:
+		return re.sub(r'(\\[tnre\\])', lambda match: unescape_td_sequence(match.group(1)), raw)
+	else:
+		return raw
+
 def tabdata_decode_record(rawline, n_fields=0):
-	cells = [re.sub(r'(\\[tnre\\])', lambda match: unescape_td_sequence(match.group(1)), cell) for cell in rawline.split('\t', n_fields-1)]
+	cells = [tabdata_decode_cell(cell) for cell in rawline.split('\t', n_fields-1)]
 	if n_fields > 0:
 		cells = cells + [''] * (n_fields-len(cells))
 	return cells
@@ -2558,12 +2567,12 @@ class GTabData(object):
 
 		with ContextTransitionContext(GtkThreadContext(), GDKCursor(self.main_win.window, gtk.gdk.WATCH)):
 			data_processor = TimedChunkProcessor(
-				chunk_starter = lambda func: gobject.idle_add(glib_callback_once, func),
+				chunk_starter = lambda func: gobject.idle_add(glib_callback_once, func, priority=gobject.PRIORITY_DEFAULT_IDLE),
 				iterator = data_rows_iterator,
 				loop_context = CompositeContext(GtkThreadContext(),),
 				loop_func = self.load_data_row,
 				callback_param = cb_data,
-				timebox_sec = 0.4)
+				timebox_sec = 1.5)
 			data_processor.run()
 			data_processor.join()
 

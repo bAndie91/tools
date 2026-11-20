@@ -1,0 +1,17 @@
+#!/usr/bin/env perl
+
+for $f (@ARGV){
+	if(not open F,"<:raw",$f)
+	{
+		warn "$0: $f: $!\n";
+		next;
+	}
+	read F,$h,16;
+	($m,$hs,$v,$n)=unpack "a4 V V V",$h;
+	for(1..$n){
+		read F,$t,12; ($ty,$st,$pos)=unpack "V3",$t;
+		$s{$st}++ if $ty==0xfffd0002;
+	}
+	print "$f: ", join(" ", sort {$a<=>$b} keys %s), "\n";
+	%s=();
+}
